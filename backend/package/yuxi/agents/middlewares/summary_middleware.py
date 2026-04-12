@@ -10,7 +10,6 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable, Iterable, Mapping
 from functools import partial
-from pathlib import Path
 from typing import Any, Literal, cast, override
 
 from langchain.agents import AgentState
@@ -32,7 +31,7 @@ from langchain_core.messages.utils import (
 from langgraph.graph.message import REMOVE_ALL_MESSAGES
 from langgraph.runtime import Runtime
 
-from yuxi.utils.paths import OUTPUTS_DIR_NAME
+from yuxi.utils.paths import VIRTUAL_PATH_OUTPUTS
 
 TokenCounter = Callable[[Iterable[MessageLikeRepresentation]], int]
 
@@ -78,7 +77,7 @@ Messages to summarize:
 
 _DEFAULT_MESSAGES_TO_KEEP = 20
 _DEFAULT_FALLBACK_MESSAGE_COUNT = 15
-_OFFLOAD_DIR = "/summary_offload"  # 虚拟文件系统路径
+_OFFLOAD_DIR = "summary_offload"
 
 ContextFraction = tuple[Literal["fraction"], float]
 ContextTokens = tuple[Literal["tokens"], int]
@@ -95,14 +94,14 @@ def _get_approximate_token_counter(model: BaseChatModel) -> TokenCounter:
 
 
 def _get_content_str(content: Any) -> str | None:
-    """Convert ToolMessage content to string for size checking."""
+    """Convert plain-text ToolMessage content to string for size checking."""
     if isinstance(content, str):
         return content
     if isinstance(content, list):
         if len(content) == 1 and isinstance(content[0], dict) and content[0].get("type") == "text":
             return str(content[0].get("text", ""))
-        return str(content)
-    return str(content)
+        return None
+    return None
 
 
 def _format_offload_placeholder(file_path: str, content_sample: str) -> str:
@@ -115,7 +114,42 @@ def _format_offload_placeholder(file_path: str, content_sample: str) -> str:
     )
 
 
-def _offload_tool_result(msg: ToolMessage, threshold: int, token_counter: TokenCounter) -> dict[str, Any] | None:
+def _build_offload_file_path(msg: ToolMessage) -> str:
+    """Build a read_file-compatible virtual path for offloaded tool output."""
+    tool_name = msg.name or "unknown"
+    message_id = msg.id or str(uuid.uuid4())[:8]
+    safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in tool_name)
+    return f"{VIRTUAL_PATH_OUTPUTS}/{_OFFLOAD_DIR}/{safe_name}-{message_id}.txt"
+
+
+def _write_offloaded_content(runtime: Runtime, file_path: str, content: str) -> tuple[bool, dict[str, Any]]:
+    """Persist offloaded tool output into the active filesystem backend."""
+    from yuxi.agents.backends.composite import create_agent_composite_backend
+
+    backend = create_agent_composite_backend(runtime)
+    result = backend.write(file_path, content)
+    if result.error:
+        return False, {}
+    return True, result.files_update or {}
+
+
+async def _awrite_offloaded_content(runtime: Runtime, file_path: str, content: str) -> tuple[bool, dict[str, Any]]:
+    """Async variant of _write_offloaded_content."""
+    from yuxi.agents.backends.composite import create_agent_composite_backend
+
+    backend = create_agent_composite_backend(runtime)
+    result = await backend.awrite(file_path, content)
+    if result.error:
+        return False, {}
+    return True, result.files_update or {}
+
+
+def _offload_tool_result(
+    msg: ToolMessage,
+    threshold: int,
+    token_counter: TokenCounter,
+    runtime: Runtime,
+) -> dict[str, Any] | None:
     """卸载单个超阈值的工具结果.
 
     Args:
@@ -141,10 +175,7 @@ def _offload_tool_result(msg: ToolMessage, threshold: int, token_counter: TokenC
     tool_name = msg.name or "unknown"
     tool_call_id = msg.tool_call_id or ""
 
-    # 生成文件路径 (工具名称-xxx)
-    message_id = msg.id or str(uuid.uuid4())[:8]
-    safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in tool_name)
-    file_path = (Path(OUTPUTS_DIR_NAME) / f"{_OFFLOAD_DIR}/{safe_name}-{message_id}").as_posix()
+    file_path = _build_offload_file_path(msg)
 
     # 构建文件头部信息
     header_lines = [
@@ -156,17 +187,9 @@ def _offload_tool_result(msg: ToolMessage, threshold: int, token_counter: TokenC
     ]
     header = "\n".join(header_lines)
 
-    # 保存到 files 格式（包含头部信息）
-    from datetime import datetime
-
-    timestamp = datetime.now().isoformat()
-    files_update = {
-        file_path: {
-            "content": [header + content_str],
-            "created_at": timestamp,
-            "modified_at": timestamp,
-        }
-    }
+    written, files_update = _write_offloaded_content(runtime, file_path, header + content_str)
+    if not written:
+        return None
 
     # 创建预览内容
     preview_lines = content_str.splitlines()[:10]
@@ -175,11 +198,11 @@ def _offload_tool_result(msg: ToolMessage, threshold: int, token_counter: TokenC
     # 替换消息内容为占位符
     msg.content = _format_offload_placeholder(file_path, content_sample)
 
-    return files_update
+    return files_update or {}
 
 
 def _offload_tool_results(
-    messages: list[AnyMessage], threshold: int, token_counter: TokenCounter
+    messages: list[AnyMessage], threshold: int, token_counter: TokenCounter, runtime: Runtime
 ) -> tuple[dict[str, Any], list[AnyMessage]]:
     """扫描消息列表，卸载所有超阈值的工具结果.
 
@@ -198,10 +221,53 @@ def _offload_tool_results(
         if not isinstance(msg, ToolMessage):
             continue
 
-        result = _offload_tool_result(msg, threshold, token_counter)
-        if result:
+        result = _offload_tool_result(msg, threshold, token_counter, runtime)
+        if result is not None:
             files_update.update(result)
             modified_messages.append(msg)
+
+    return files_update, modified_messages
+
+
+async def _aoffload_tool_results(
+    messages: list[AnyMessage], threshold: int, token_counter: TokenCounter, runtime: Runtime
+) -> tuple[dict[str, Any], list[AnyMessage]]:
+    """Async variant of _offload_tool_results."""
+    files_update: dict[str, Any] = {}
+    modified_messages: list[AnyMessage] = []
+
+    for msg in messages:
+        if not isinstance(msg, ToolMessage):
+            continue
+
+        content_str = _get_content_str(msg.content)
+        if content_str is None:
+            continue
+
+        msg_tokens = token_counter([msg])
+        if msg_tokens <= threshold:
+            continue
+
+        tool_name = msg.name or "unknown"
+        tool_call_id = msg.tool_call_id or ""
+        file_path = _build_offload_file_path(msg)
+        header_lines = [
+            "=== Tool Invocation ===",
+            f"Tool: {tool_name}",
+            f"Tool Call ID: {tool_call_id}",
+            "=" * 40,
+            "",
+        ]
+        header = "\n".join(header_lines)
+        written, result = await _awrite_offloaded_content(runtime, file_path, header + content_str)
+        if not written:
+            continue
+
+        preview_lines = content_str.splitlines()[:10]
+        content_sample = "\n".join(line[:500] for line in preview_lines)
+        msg.content = _format_offload_placeholder(file_path, content_sample)
+        files_update.update(result)
+        modified_messages.append(msg)
 
     return files_update, modified_messages
 
@@ -322,7 +388,9 @@ class SummaryOffloadMiddleware(AgentMiddleware):
         files_update: dict[str, Any] = {}
         modified_messages: list[AnyMessage] = []
 
-        agg_files, agg_msgs = _offload_tool_results(messages, self.summary_offload_threshold, self.token_counter)
+        agg_files, agg_msgs = _offload_tool_results(
+            messages, self.summary_offload_threshold, self.token_counter, runtime
+        )
         files_update = agg_files
         modified_messages = agg_msgs
 
@@ -330,40 +398,55 @@ class SummaryOffloadMiddleware(AgentMiddleware):
         current_tokens = self.token_counter(messages)
         trigger_value = self._get_token_trigger_value()
 
-        retention_limit = float("inf")
-        if trigger_value:
+        if trigger_value is None:
+            system_msg_count = 1 if messages and messages[0].type == "system" else 0
+            messages_to_process = messages[1:] if system_msg_count else messages
+            cutoff_relative = self._determine_cutoff_index(messages_to_process)
+            cutoff_index = system_msg_count + cutoff_relative
+        else:
             retention_limit = trigger_value * self.max_retention_ratio
 
-        if current_tokens <= retention_limit:
-            if files_update:
-                return {"files": files_update, "messages": modified_messages}
-            return None
+            if current_tokens <= retention_limit:
+                if files_update:
+                    result: dict[str, Any] = {"messages": modified_messages}
+                    if files_update:
+                        result["files"] = files_update
+                    return result
+                return None
 
-        # 4. 超过 limit，需要 Eviction (Summary)
-        system_msg_count = 0
-        messages_to_process = messages
+            # 4. 超过 limit，需要 Eviction (Summary)
+            system_msg_count = 0
+            messages_to_process = messages
 
-        if messages and messages[0].type == "system":
-            system_msg_count = 1
-            messages_to_process = messages[1:]
+            if messages and messages[0].type == "system":
+                system_msg_count = 1
+                messages_to_process = messages[1:]
 
-        cutoff_relative = self._find_cutoff_by_token_limit(messages_to_process, int(retention_limit))
-        cutoff_index = system_msg_count + cutoff_relative
+            cutoff_relative = self._find_cutoff_by_token_limit(messages_to_process, int(retention_limit))
+            cutoff_index = system_msg_count + cutoff_relative
 
         if cutoff_index <= system_msg_count:
             if files_update:
-                return {"files": files_update, "messages": modified_messages}
+                result = {"messages": modified_messages}
+                if files_update:
+                    result["files"] = files_update
+                return result
             return None
 
-        messages_to_summarize, preserved_messages = self._partition_messages(messages, cutoff_index)
+        system_message = messages[0] if messages and messages[0].type == "system" else None
+        conversation_messages = messages[1:] if system_message is not None else messages
+
+        messages_to_summarize, preserved_messages = self._partition_messages(
+            conversation_messages, cutoff_index - system_msg_count
+        )
         summary = self._create_summary(messages_to_summarize)
         new_messages = self._build_new_messages(summary)
 
         # 如果有 System Message，需要保留在最前面
         final_messages = []
 
-        if system_msg_count > 0:
-            final_messages.append(messages[0])
+        if system_message is not None:
+            final_messages.append(system_message)
 
         final_messages.extend(new_messages)
         final_messages.extend(preserved_messages)
@@ -393,7 +476,9 @@ class SummaryOffloadMiddleware(AgentMiddleware):
         files_update: dict[str, Any] = {}
         modified_messages: list[AnyMessage] = []
 
-        agg_files, agg_msgs = _offload_tool_results(messages, self.summary_offload_threshold, self.token_counter)
+        agg_files, agg_msgs = await _aoffload_tool_results(
+            messages, self.summary_offload_threshold, self.token_counter, runtime
+        )
         files_update = agg_files
         modified_messages = agg_msgs
 
@@ -401,40 +486,55 @@ class SummaryOffloadMiddleware(AgentMiddleware):
         current_tokens = self.token_counter(messages)
         trigger_value = self._get_token_trigger_value()
 
-        retention_limit = float("inf")
-        if trigger_value:
+        if trigger_value is None:
+            system_msg_count = 1 if messages and messages[0].type == "system" else 0
+            messages_to_process = messages[1:] if system_msg_count else messages
+            cutoff_relative = self._determine_cutoff_index(messages_to_process)
+            cutoff_index = system_msg_count + cutoff_relative
+        else:
             retention_limit = trigger_value * self.max_retention_ratio
 
-        if current_tokens <= retention_limit:
-            if files_update:
-                return {"files": files_update, "messages": modified_messages}
-            return None
+            if current_tokens <= retention_limit:
+                if files_update:
+                    result: dict[str, Any] = {"messages": modified_messages}
+                    if files_update:
+                        result["files"] = files_update
+                    return result
+                return None
 
-        # 4. 超过 limit，需要 Eviction (Summary)
-        system_msg_count = 0
-        messages_to_process = messages
+            # 4. 超过 limit，需要 Eviction (Summary)
+            system_msg_count = 0
+            messages_to_process = messages
 
-        if messages and messages[0].type == "system":
-            system_msg_count = 1
-            messages_to_process = messages[1:]
+            if messages and messages[0].type == "system":
+                system_msg_count = 1
+                messages_to_process = messages[1:]
 
-        cutoff_relative = self._find_cutoff_by_token_limit(messages_to_process, int(retention_limit))
-        cutoff_index = system_msg_count + cutoff_relative
+            cutoff_relative = self._find_cutoff_by_token_limit(messages_to_process, int(retention_limit))
+            cutoff_index = system_msg_count + cutoff_relative
 
         if cutoff_index <= system_msg_count:
             if files_update:
-                return {"files": files_update, "messages": modified_messages}
+                result = {"messages": modified_messages}
+                if files_update:
+                    result["files"] = files_update
+                return result
             return None
 
-        messages_to_summarize, preserved_messages = self._partition_messages(messages, cutoff_index)
+        system_message = messages[0] if messages and messages[0].type == "system" else None
+        conversation_messages = messages[1:] if system_message is not None else messages
+
+        messages_to_summarize, preserved_messages = self._partition_messages(
+            conversation_messages, cutoff_index - system_msg_count
+        )
 
         summary = await self._acreate_summary(messages_to_summarize)
         new_messages = self._build_new_messages(summary)
 
         final_messages = []
 
-        if system_msg_count > 0:
-            final_messages.append(messages[0])
+        if system_message is not None:
+            final_messages.append(system_message)
 
         final_messages.extend(new_messages)
         final_messages.extend(preserved_messages)
