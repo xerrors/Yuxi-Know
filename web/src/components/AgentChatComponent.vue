@@ -86,19 +86,22 @@
         <div class="chat-main" ref="chatMainRef">
           <div class="chat-box">
             <div class="conv-box" v-for="(conv, index) in conversations" :key="index">
-              <AgentMessageComponent
-                v-for="(message, msgIndex) in conv.messages"
-                :message="message"
-                :key="msgIndex"
-                :is-processing="
-                  isProcessing &&
-                  conv.status === 'streaming' &&
-                  msgIndex === conv.messages.length - 1
-                "
-                :show-refs="showMsgRefs(message)"
-                @retry="retryMessage(message)"
-              >
-              </AgentMessageComponent>
+              <template v-for="(displayItem, itemIndex) in getConversationDisplayItems(conv)" :key="displayItem.key">
+                <AgentMessageComponent
+                  v-if="displayItem.type === 'message'"
+                  :message="displayItem.message"
+                  :is-processing="isDisplayMessageProcessing(conv, displayItem)"
+                  :show-refs="showMsgRefs(displayItem.message)"
+                  :hide-tool-calls="true"
+                  @retry="retryMessage(displayItem.message)"
+                >
+                </AgentMessageComponent>
+                <ToolCallsGroupComponent
+                  v-else
+                  :tool-calls="displayItem.toolCalls"
+                  :is-active="isToolGroupActive(conv, itemIndex, getConversationDisplayItems(conv))"
+                />
+              </template>
               <!-- 显示对话最后一个消息使用的模型 -->
               <RefsComponent
                 v-if="shouldShowRefs(conv)"
@@ -243,6 +246,7 @@ import AgentInputArea from '@/components/AgentInputArea.vue'
 import AgentMessageComponent from '@/components/AgentMessageComponent.vue'
 import ChatSidebarComponent from '@/components/ChatSidebarComponent.vue'
 import RefsComponent from '@/components/RefsComponent.vue'
+import ToolCallsGroupComponent from '@/components/ToolCallsGroupComponent.vue'
 import { PanelLeftOpen, MessageCirclePlus, LoaderCircle, Bot, Telescope } from 'lucide-vue-next'
 import { handleChatError, handleValidationError } from '@/utils/errorHandler'
 import { ScrollController } from '@/utils/scrollController'
@@ -1496,6 +1500,120 @@ const handleResizingChange = (isResizingState, clientX = 0) => {
 }
 
 // ==================== HELPER FUNCTIONS ====================
+const extractAssistantMessageBody = (message) => {
+  let content = typeof message?.content === 'string' ? message.content.trim() : ''
+  let reasoningContent = message?.additional_kwargs?.reasoning_content || ''
+
+  if (!reasoningContent && content) {
+    const thinkRegex = /<think>(.*?)<\/think>|<think>(.*?)$/s
+    const thinkMatch = content.match(thinkRegex)
+
+    if (thinkMatch) {
+      reasoningContent = (thinkMatch[1] || thinkMatch[2] || '').trim()
+      content = content.replace(thinkMatch[0], '').trim()
+    }
+  }
+
+  return { content, reasoningContent }
+}
+
+const hasVisibleAssistantBody = (message) => {
+  if (!message || message.type !== 'ai') return true
+
+  const { content, reasoningContent } = extractAssistantMessageBody(message)
+  return Boolean(
+    content ||
+      reasoningContent ||
+      message.error_type ||
+      message.extra_metadata?.error_type ||
+      message.isStoppedByUser
+  )
+}
+
+const getMessageToolCalls = (message) => {
+  if (!Array.isArray(message?.tool_calls)) return []
+
+  return message.tool_calls.filter((toolCall) => {
+    return (
+      toolCall &&
+      (toolCall.id || toolCall.name || toolCall.function?.name) &&
+      (toolCall.args !== undefined ||
+        toolCall.function?.arguments !== undefined ||
+        toolCall.tool_call_result !== undefined)
+    )
+  })
+}
+
+// 将 AI 消息拆成“正文块”和“工具块”，再跨消息合并相邻工具块。
+const getConversationDisplayItems = (conv) => {
+  if (!Array.isArray(conv?.messages) || conv.messages.length === 0) return []
+
+  const items = []
+  let pendingToolGroup = null
+
+  const flushToolGroup = () => {
+    if (pendingToolGroup && pendingToolGroup.toolCalls.length > 0) {
+      items.push(pendingToolGroup)
+    }
+    pendingToolGroup = null
+  }
+
+  conv.messages.forEach((message, index) => {
+    if (message.type !== 'ai') {
+      flushToolGroup()
+      items.push({
+        type: 'message',
+        key: message.id || `message-${index}`,
+        message,
+        sourceIndex: index
+      })
+      return
+    }
+
+    if (hasVisibleAssistantBody(message)) {
+      flushToolGroup()
+      items.push({
+        type: 'message',
+        key: message.id || `message-${index}`,
+        message,
+        sourceIndex: index
+      })
+    }
+
+    const toolCalls = getMessageToolCalls(message)
+    if (toolCalls.length === 0) return
+
+    if (!pendingToolGroup) {
+      pendingToolGroup = {
+        type: 'tool-group',
+        key: `tool-group-${message.id || index}`,
+        toolCalls: []
+      }
+    }
+    pendingToolGroup.toolCalls.push(...toolCalls)
+  })
+
+  flushToolGroup()
+  return items
+}
+
+const isDisplayMessageProcessing = (conv, displayItem) => {
+  return (
+    displayItem?.type === 'message' &&
+    isProcessing.value &&
+    conv?.status === 'streaming' &&
+    displayItem.sourceIndex === conv.messages.length - 1
+  )
+}
+
+const isToolGroupActive = (conv, itemIndex, displayItems) => {
+  return (
+    isProcessing.value &&
+    conv?.status === 'streaming' &&
+    itemIndex === displayItems.length - 1
+  )
+}
+
 const getLastMessage = (conv) => {
   if (!conv?.messages?.length) return null
   for (let i = conv.messages.length - 1; i >= 0; i--) {

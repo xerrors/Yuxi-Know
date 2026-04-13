@@ -63,15 +63,10 @@
         <span v-else>{{ message.error_type || '未知错误' }}</span>
       </div>
 
-      <div v-if="validToolCalls && validToolCalls.length > 0" class="tool-calls-container">
-        <div
-          v-for="(toolCall, index) in validToolCalls"
-          :key="toolCall.id || index"
-          class="tool-call-container"
-        >
-          <ToolCallRenderer :tool-call="toolCall" />
-        </div>
-      </div>
+      <ToolCallsGroupComponent
+        v-if="!hideToolCalls && validToolCalls.length > 0"
+        :tool-calls="validToolCalls"
+      />
 
       <div v-if="message.isStoppedByUser" class="retry-hint">
         你停止生成了本次回答
@@ -111,7 +106,7 @@ import { computed, ref } from 'vue'
 import { CaretRightOutlined } from '@ant-design/icons-vue'
 import RefsComponent from '@/components/RefsComponent.vue'
 import { Copy, Check } from 'lucide-vue-next'
-import { ToolCallRenderer } from '@/components/ToolCallingResult'
+import ToolCallsGroupComponent from '@/components/ToolCallsGroupComponent.vue'
 import { useAgentStore } from '@/stores/agent'
 import { useInfoStore } from '@/stores/info'
 import { useThemeStore } from '@/stores/theme'
@@ -144,6 +139,10 @@ const props = defineProps({
   },
   // 是否为最新消息
   isLatestMessage: {
+    type: Boolean,
+    default: false
+  },
+  hideToolCalls: {
     type: Boolean,
     default: false
   },
@@ -250,7 +249,7 @@ const validToolCalls = computed(() => {
     // 过滤掉无效的工具调用
     return (
       toolCall &&
-      (toolCall.id || toolCall.name) &&
+      (toolCall.id || toolCall.name || toolCall.function?.name) &&
       (toolCall.args !== undefined ||
         toolCall.function?.arguments !== undefined ||
         toolCall.tool_call_result !== undefined)
@@ -473,19 +472,6 @@ const parsedData = computed(() => {
     font-family: monospace;
     max-height: 200px;
     overflow-y: auto;
-  }
-
-  :deep(.tool-calls-container) {
-    width: 100%;
-    margin-top: 10px;
-
-    .tool-call-container {
-      margin-bottom: 10px;
-
-      &:last-child {
-        margin-bottom: 0;
-      }
-    }
   }
 }
 

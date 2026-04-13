@@ -1,5 +1,8 @@
 <template>
-  <div class="tool-call-display" :class="{ 'is-collapsed': !isExpanded }">
+  <div
+    class="tool-call-display"
+    :class="{ 'is-collapsed': !isExpanded, 'is-timeline': isTimeline }"
+  >
     <!-- Header Slot -->
     <div class="tool-header" @click="toggleExpand">
       <!-- Slot for completely overriding header (not recommended based on new requirement but kept for backward compat if needed, or remove if strict) -->
@@ -74,7 +77,7 @@
       </div>
 
       <!-- Result Slot -->
-      <div class="tool-result" v-if="hasResult">
+      <div class="tool-result" style="opacity: 0.8;" v-if="hasResult">
         <slot name="result" :tool-call="toolCall" :result-content="resultContent">
           <div class="tool-result-content" :data-tool-call-id="toolCall.id">
             <!-- Default rendering -->
@@ -111,6 +114,10 @@ const props = defineProps({
   hideParams: {
     type: Boolean,
     default: false
+  },
+  appearance: {
+    type: String,
+    default: 'card'
   }
 })
 
@@ -118,6 +125,7 @@ const agentStore = useAgentStore()
 const { availableTools } = storeToRefs(agentStore)
 
 const isExpanded = ref(props.defaultExpanded)
+const isTimeline = computed(() => props.appearance === 'timeline')
 
 const toggleExpand = () => {
   isExpanded.value = !isExpanded.value
@@ -198,33 +206,37 @@ const formatResultData = (data) => {
 
 <style lang="less" scoped>
 .tool-call-display {
-  outline: 1px solid var(--gray-150);
+  border: 1px solid var(--gray-100);
   border-radius: 8px;
   overflow: hidden;
   transition: all 0.2s ease;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 
   &:last-child {
     margin-bottom: 0;
   }
 
   .tool-header {
-    padding: 8px 12px;
-    font-size: 14px;
+    padding: 6px 10px;
+    font-size: 13px;
     font-weight: 500;
     color: var(--gray-800);
-    border-bottom: 1px solid var(--gray-100);
+    border-bottom: 1px solid var(--gray-50);
     display: flex;
     align-items: center;
     gap: 8px;
     cursor: pointer;
     user-select: none;
     position: relative;
-    transition: color 0.2s ease;
+    transition: background-color 0.2s ease;
 
-    .anticon {
-      color: var(--main-color);
-      font-size: 16px;
+    &:hover {
+      background-color: var(--gray-25);
+    }
+
+    &>span {
+      display: flex;
+      align-items: center;
     }
 
     .tool-name {
@@ -232,15 +244,9 @@ const formatResultData = (data) => {
       color: var(--main-700);
     }
 
-    span {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-
     .tool-loader {
-      margin-top: 2px;
-      color: var(--main-700);
+      margin-top: 0;
+      color: var(--main-600);
     }
 
     .tool-loader.rotate {
@@ -248,7 +254,7 @@ const formatResultData = (data) => {
     }
 
     .tool-loader.tool-success {
-      color: var(--main-color);
+      color: var(--color-success-500);
     }
 
     .tool-loader.tool-error {
@@ -261,7 +267,7 @@ const formatResultData = (data) => {
 
     .tool-expand-icon {
       margin-left: auto;
-      color: var(--gray-400);
+      color: var(--gray-300);
       display: flex;
       align-items: center;
     }
@@ -273,57 +279,49 @@ const formatResultData = (data) => {
       overflow: hidden;
       white-space: nowrap;
       text-overflow: ellipsis;
+      color: var(--gray-600);
 
       :deep(.sep-header) {
         display: flex;
         align-items: center;
         gap: 8px;
-        font-size: 14px;
+        font-size: 13px;
         width: 100%;
         overflow: hidden;
+
+        .note {
+          font-weight: 600;
+          color: var(--gray-700);
+          flex-shrink: 0;
+        }
+
+        .separator {
+          color: var(--gray-300);
+          flex-shrink: 0;
+        }
+
+        .description {
+          color: var(--gray-500);
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          min-width: 0;
+        }
       }
 
       :deep(.keywords) {
         color: var(--main-700);
         font-weight: 600;
-        font-size: 14px;
-      }
-
-      :deep(.note) {
-        font-weight: 600;
-        color: var(--main-700);
-        white-space: nowrap;
-        flex-shrink: 0;
-      }
-
-      :deep(span.code) {
-        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-      }
-
-      :deep(.separator) {
-        color: var(--gray-300);
-        flex-shrink: 0;
-      }
-
-      :deep(.description) {
-        color: var(--gray-700);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        min-width: 0;
       }
 
       :deep(.tag) {
-        font-size: 12px;
-        color: var(--gray-800);
+        font-size: 11px;
+        color: var(--gray-500);
         background-color: var(--gray-50);
         padding: 0px 4px;
         border-radius: 4px;
         margin-left: 8px;
-
-        &.tag-yes {
-          color: var(--main-500);
-        }
+        white-space: nowrap;
 
         &.success {
           color: var(--color-success-500);
@@ -343,13 +341,13 @@ const formatResultData = (data) => {
     .tool-params {
       padding: 8px 12px;
       background-color: var(--gray-25);
-      border-bottom: 1px solid var(--gray-150);
+      border-bottom: 1px solid var(--gray-50);
 
       .tool-params-content {
         margin: 0;
         font-size: 12px;
         overflow-x: auto;
-        color: var(--gray-700);
+        color: var(--gray-600);
         line-height: 1.5;
 
         pre {
@@ -358,21 +356,62 @@ const formatResultData = (data) => {
         }
       }
     }
-
-    .tool-result {
-      padding: 0;
-      background-color: transparent;
-
-      .tool-result-content {
-        padding: 0;
-        background-color: transparent;
-      }
-    }
   }
 
   &.is-collapsed {
     .tool-header {
       border-bottom: none;
+    }
+  }
+
+  &.is-timeline {
+    border: none;
+    border-radius: 0;
+    overflow: visible;
+    margin-bottom: 0;
+    padding-left: 0;
+    position: relative;
+
+    .tool-header {
+      padding: 4px 0;
+      background-color: transparent;
+      border-bottom: none;
+      color: var(--gray-500);
+      gap: 10px;
+
+      &:hover {
+        background-color: transparent;
+        color: var(--gray-700);
+      }
+
+      .tool-name {
+        color: var(--gray-600);
+      }
+
+      .tool-loader {
+        color: var(--gray-400);
+      }
+
+      .tool-expand-icon {
+        opacity: 0.5;
+      }
+
+      .tool-header-content {
+        font-size: 13px;
+        color: var(--gray-500);
+      }
+    }
+
+    .tool-content {
+      margin: 4px 0 8px 12px;
+      padding-left: 12px;
+      border-left: 1px solid var(--gray-100);
+
+      .tool-params {
+        padding: 4px 0 8px;
+        background-color: transparent;
+        border-bottom: none;
+      }
     }
   }
 }
@@ -397,7 +436,7 @@ const formatResultData = (data) => {
 
     .default-content {
       background: var(--gray-0);
-      padding: 12px;
+      padding: 8px 0px;
 
       pre {
         margin: 0;
@@ -408,7 +447,7 @@ const formatResultData = (data) => {
         word-break: break-word;
         max-height: 300px;
         overflow-y: auto;
-        background: var(--gray-50);
+        background: var(--gray-25);
         padding: 10px;
         border-radius: 4px;
       }

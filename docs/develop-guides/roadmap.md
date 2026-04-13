@@ -51,6 +51,7 @@
 - 修复前端依赖安全告警：通过 `pnpm.overrides` 将传递依赖 `flatted` 锁定到 `3.4.2`、`lodash-es` 锁定到 `4.18.1`，并同步更新 `pnpm-lock.yaml` 以消除 DriftGuard 报告的高危 CVE
 - 重写界面设计规范：参考 `DESIGN.md` 写法补充视觉气质、颜色 token、组件状态、布局层级、响应式与 Agent Prompt Guide，并基于该规范收敛首页视觉表现，移除装饰性渐变、重阴影、hover 位移和入场动画。
 - 修复对话摘要中间件的工具结果卸载链路：摘要触发时改为将大体积 `ToolMessage` 写入当前 agent 可见的 sandbox outputs 路径，修正 `summary_offload` 路径拼接错误、`messages` 触发条件下不会真正裁剪历史的问题，并避免将 system message 重复纳入摘要与最终消息列表；补充对应单元测试覆盖。
+- 调整智能体对话中的工具调用展示：连续工具调用默认折叠为“调用了 N 个工具”的轻量摘要，展开后改为弱化时间线样式，减少工具结果卡片对正文阅读节奏的干扰。
 
 ---
 

@@ -141,8 +141,7 @@ const todoListData = (content) => {
 <style lang="less" scoped>
 .todo-list-result {
   background: var(--gray-0);
-  border-radius: 8px;
-  padding: 12px;
+  padding: 0px;
 
   .todo-list {
     display: flex;
@@ -154,7 +153,7 @@ const todoListData = (content) => {
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    padding: 4px 8px;
+    padding: 4px 0px;
     // background: var(--gray-10);
     border-radius: 6px;
     // border: 1px solid var(--gray-150);

@@ -2,7 +2,7 @@
   <BaseToolCall :tool-call="toolCall">
     <template #header>
       <div class="sep-header">
-        <span class="subagent">{{ subagentType }}</span>
+        <span class="note">{{ subagentType }}</span>
         <span class="separator" v-if="shortDescription">|</span>
         <span class="description" v-if="shortDescription">{{ shortDescription }}</span>
       </div>
@@ -71,13 +71,6 @@ const shortDescription = computed(() => {
   font-size: 14px;
   width: 100%;
   overflow: hidden;
-
-  .subagent {
-    font-weight: 600;
-    color: var(--main-700);
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
 }
 
 .task-description {

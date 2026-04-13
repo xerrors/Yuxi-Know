@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  Bot,
   Calculator,
   CheckSquare,
   Database,
@@ -39,11 +40,15 @@ export const TOOL_ICON_MAP = {
   replace: FilePen,
   run_shell_command: Terminal,
   search_file_content: FolderSearch,
+  task: Bot,
   tavily_search: Globe,
   text_to_img_qwen_image: Image,
   write_file: FileEdit,
   write_todos: CheckSquare
 }
+
+// Keep intentionally hidden tool calls centralized so group summaries and renderers stay consistent.
+export const HIDDEN_TOOL_CALL_IDS = ['present_artifacts']
 
 export const getToolCallId = (toolCall) => toolCall?.name || toolCall?.function?.name || ''
 

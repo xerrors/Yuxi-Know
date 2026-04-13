@@ -2,12 +2,20 @@
   <BaseToolCall :tool-call="toolCall">
     <template #header>
       <div class="sep-header">
-        <span class="note">read_file</span>
-        <span class="separator" v-if="filePath">|</span>
-        <span class="description">
-          <span class="code">{{ filePath }}</span>
-          <span class="tag" v-if="lineRange">{{ lineRange }}</span>
-        </span>
+        <!-- 特殊处理：SKILL.md 文件显示为 Skill | <父目录名> -->
+        <template v-if="skillName">
+          <span class="note skill-note">Skill</span>
+          <span class="separator">|</span>
+          <span class="description skill-name">{{ skillName }}</span>
+        </template>
+        <template v-else>
+          <span class="note">Read</span>
+          <span class="separator" v-if="filePath">|</span>
+          <span class="description" :title="filePath">
+            <span class="code">{{ fileName }}</span>
+            <span class="tag" v-if="lineRange">{{ lineRange }}</span>
+          </span>
+        </template>
       </div>
     </template>
   </BaseToolCall>
@@ -37,6 +45,13 @@ const parsedArgs = computed(() => {
 
 const filePath = computed(() => parsedArgs.value.file_path || '')
 
+// 仅显示文件名，悬浮时通过 title 显示完整路径
+const fileName = computed(() => {
+  const path = filePath.value
+  if (!path) return ''
+  return path.replace(/\\/g, '/').split('/').pop()
+})
+
 const lineRange = computed(() => {
   const offset = parsedArgs.value.offset
   const limit = parsedArgs.value.limit
@@ -47,6 +62,16 @@ const lineRange = computed(() => {
   }
   return ''
 })
+
+// 若读取的是 SKILL.md 文件，提取上一级目录名作为技能名称
+// 例：mmm/xxx/SKILL.md → skillName = 'xxx'
+const skillName = computed(() => {
+  const path = filePath.value
+  if (!path.endsWith('SKILL.md')) return null
+  const parts = path.replace(/\\/g, '/').split('/')
+  // 取倒数第二段（SKILL.md 的父目录名）
+  return parts.length >= 2 ? parts[parts.length - 2] : null
+})
 </script>
 
 <style lang="less" scoped>
@@ -54,6 +79,16 @@ const lineRange = computed(() => {
   .tag {
     color: var(--color-primary-600);
     background-color: var(--color-primary-50);
+  }
+
+  // SKILL.md 专用样式
+  .skill-note {
+    color: var(--main-700);
+  }
+
+  .skill-name {
+    font-weight: 600;
+    color: var(--main-600);
   }
 }
 </style>
