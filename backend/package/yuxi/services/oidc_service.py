@@ -51,6 +51,9 @@ class OIDCConfig(BaseModel):
     username_claim: str = Field(default="preferred_username", description="用户名映射字段")
     email_claim: str = Field(default="email", description="邮箱映射字段")
     name_claim: str = Field(default="name", description="姓名映射字段")
+    use_raw_username: bool = Field(default=False, description="是否使用原始用户名（不带oidc前缀）")
+    fetch_department_info: bool = Field(default=False, description="是否从OIDC中获取部门信息")
+    department_claim: str = Field(default="department", description="部门信息映射字段")
 
     @classmethod
     def from_env(cls) -> "OIDCConfig":
@@ -82,6 +85,10 @@ class OIDCConfig(BaseModel):
             username_claim=_env("OIDC_USERNAME_CLAIM", "preferred_username"),
             email_claim=_env("OIDC_EMAIL_CLAIM", "email"),
             name_claim=_env("OIDC_NAME_CLAIM", "name"),
+            use_raw_username=os.environ.get("OIDC_USE_RAW_USERNAME", "false").lower() == "true",
+            fetch_department_info=os.environ.get("OIDC_FETCH_DEPARTMENT_INFO", "false").lower() == "true",
+            department_claim=_env("OIDC_DEPARTMENT_CLAIM", "department"),
+            force_prompt_login=os.environ.get("OIDC_FORCE_PROMPT_LOGIN", "true").lower() == "true",
         )
 
     def is_configured(self) -> bool:
@@ -125,10 +132,16 @@ class OIDCProviderMetadata:
                 response.raise_for_status()
                 metadata = response.json()
 
-            self.authorization_endpoint = metadata.get("authorization_endpoint")
-            self.token_endpoint = metadata.get("token_endpoint")
-            self.userinfo_endpoint = metadata.get("userinfo_endpoint")
-            self.end_session_endpoint = metadata.get("end_session_endpoint")
+            # 替换端点地址中的 localhost 为 host.docker.internal，以便容器内访问
+            def replace_localhost(url: str | None) -> str | None:
+                if url and "localhost" in url:
+                    return url.replace("localhost", "host.docker.internal")
+                return url
+
+            self.authorization_endpoint = replace_localhost(metadata.get("authorization_endpoint"))
+            self.token_endpoint = replace_localhost(metadata.get("token_endpoint"))
+            self.userinfo_endpoint = replace_localhost(metadata.get("userinfo_endpoint"))
+            self.end_session_endpoint = replace_localhost(metadata.get("end_session_endpoint"))
 
             # 登录 URL 生成至少需要 authorization_endpoint。
             if not self.authorization_endpoint:
@@ -277,6 +290,10 @@ class OIDCUtils:
             "nonce": nonce,
         }
 
+        # 如果配置强制登录，添加 prompt=login 参数
+        if oidc_config.force_prompt_login:
+            params["prompt"] = "login"
+
         query_string = urllib.parse.urlencode(params)
         return f"{metadata.authorization_endpoint}?{query_string}"
 
@@ -374,57 +391,84 @@ class OIDCUtils:
         if not name:
             name = username
 
+        department_name = None
+        department_description = None
+        if oidc_config.fetch_department_info:
+            department_name = userinfo.get(oidc_config.department_claim)
+            if not department_name:
+                department_name = userinfo.get("department")
+
+            # 获取部门描述
+            department_description = userinfo.get("department_description")
+            if not department_description:
+                department_description = userinfo.get("department_desc")
+
         return {
             "sub": sub,
             "username": username,
             "email": email,
             "name": name,
+            "department_name": department_name,
+            "department_description": department_description,
             "raw": userinfo,
         }
 
 
-async def get_or_create_oidc_department(db) -> Department | None:
-    """获取或创建 OIDC 用户的默认部门"""
-    dept_name = oidc_config.default_department
+async def get_or_create_oidc_department(db, dept_name_from_oidc: str | None = None, dept_desc_from_oidc: str | None = None) -> Department | None:
+    """获取或创建 OIDC 用户的部门"""
+    # 优先使用从 OIDC 获取的部门名称，否则使用默认部门名称
+    dept_name = dept_name_from_oidc or oidc_config.default_department
 
     result = await db.execute(select(Department).filter(Department.name == dept_name))
     dept = result.scalar_one_or_none()
 
-    if not dept:
-        dept = Department(
-            name=dept_name,
-            description=f"{dept_name}部门",
-        )
-        db.add(dept)
-        try:
-            await db.commit()
-            await db.refresh(dept)
-            logger.info(f"Created OIDC department: {dept_name}")
-        except IntegrityError:
-            await db.rollback()
-            result = await db.execute(select(Department).filter(Department.name == dept_name))
-            dept = result.scalar_one_or_none()
+    if dept:
+        # 部门已存在，直接返回
+        logger.info(f"Using existing department: {dept_name}")
+        return dept
+
+    # 部门不存在，创建新部门
+    dept = Department(
+        name=dept_name,
+        description=dept_desc_from_oidc or f"{dept_name}部门",
+    )
+    db.add(dept)
+    try:
+        await db.commit()
+        await db.refresh(dept)
+        logger.info(f"Created OIDC department: {dept_name}")
+    except IntegrityError:
+        # 并发创建时部门可能已存在，再次查询
+        await db.rollback()
+        result = await db.execute(select(Department).filter(Department.name == dept_name))
+        dept = result.scalar_one_or_none()
 
     return dept
 
 
 async def find_user_by_oidc_sub(db, sub: str) -> User | None:
     """通过 OIDC sub 查找用户"""
-    oidc_user_id = f"oidc:{sub}"
-
-    result = await db.execute(select(User).filter(User.user_id == oidc_user_id, User.is_deleted == 0))
+    # 方法1: 检查是否有用户的 user_id 直接等于 "oidc:{sub}"（标准 OIDC 用户）
+    standard_oidc_user_id = f"oidc:{sub}"
+    result = await db.execute(select(User).filter(User.user_id == standard_oidc_user_id, User.is_deleted == 0))
     user = result.scalar_one_or_none()
     if user:
         return user
 
+    # 方法2: 检查是否有用户的 user_id 包含 "oidc:" 前缀（兼容旧格式）
     legacy_result = await db.execute(
-        select(User).filter(User.user_id.like(f"{oidc_user_id}:%"), User.is_deleted == 0).order_by(User.id.asc())
+        select(User).filter(User.user_id.like(f"{standard_oidc_user_id}:%"), User.is_deleted == 0).order_by(User.id.asc())
     )
     legacy_users = list(legacy_result.scalars().all())
     if legacy_users:
         if len(legacy_users) > 1:
             logger.warning(f"Multiple legacy OIDC users matched for sub={sub}, use earliest id={legacy_users[0].id}")
         return legacy_users[0]
+
+    # 方法3: 如果启用了 use_raw_username，尝试通过 user_id 的原始值找到用户（需要先从用户信息中获取 username）
+    if oidc_config.use_raw_username:
+        # 注意：这里无法直接从 sub 获取 username，需要在调用处处理
+        pass
 
     return None
 
@@ -478,7 +522,20 @@ async def create_oidc_user(db, user_info: dict, department_id: int | None = None
 
     sub = user_info["sub"]
     preferred_username = user_info["name"] or user_info["username"]
-    user_id = f"oidc:{sub}"
+
+    # 根据配置决定用户ID是否带oidc前缀
+    if oidc_config.use_raw_username:
+        user_id = user_info["username"]
+        # 检查用户名是否已存在
+        result = await db.execute(select(User).filter(User.user_id == user_id, User.is_deleted == 0))
+        existing_user = result.scalar_one_or_none()
+        if existing_user:
+            # 如果用户已存在，先验证是否是同一个 sub 的旧用户（通过其他方式查找）
+            # 这里我们假设如果用户名已存在，就返回现有用户，让后续逻辑处理
+            logger.info(f"User with raw username {user_id} already exists, returning existing user")
+            return existing_user
+    else:
+        user_id = f"oidc:{sub}"
 
     random_password = secrets.token_urlsafe(32)
     password_hash = AuthUtils.hash_password(random_password)
@@ -590,7 +647,24 @@ async def oidc_callback_handler(code: str, state: str, db, request: Request | No
     if not sub:
         return _redirect_to_login_with_error("无法获取用户标识，请返回登录页重试")
 
-    user = await find_user_by_oidc_sub(db, sub)
+    # 查找用户
+    if oidc_config.use_raw_username:
+        # 使用原始用户名模式，先通过 username 查找用户
+        username = extracted_info["username"]
+        if username:
+            result = await db.execute(select(User).filter(User.user_id == username, User.is_deleted == 0))
+            user = result.scalar_one_or_none()
+            if user:
+                logger.info(f"Found existing user with raw username: {username}")
+            else:
+                # 如果没找到，再尝试通过 sub 查找（可能是旧用户）
+                user = await find_user_by_oidc_sub(db, sub)
+        else:
+            # 如果没有 username，通过 sub 查找
+            user = await find_user_by_oidc_sub(db, sub)
+    else:
+        # 标准 OIDC 模式，通过 sub 查找
+        user = await find_user_by_oidc_sub(db, sub)
 
     if user:
         await update_oidc_user_login(db, user)
@@ -601,7 +675,10 @@ async def oidc_callback_handler(code: str, state: str, db, request: Request | No
             user = await restore_deleted_oidc_user(db, deleted_user, extracted_info)
             logger.info(f"OIDC deleted user restored and logged in: {user.username}")
         else:
-            dept = await get_or_create_oidc_department(db)
+            # 从用户信息中获取部门信息
+            dept_name = extracted_info.get("department_name")
+            dept_desc = extracted_info.get("department_description")
+            dept = await get_or_create_oidc_department(db, dept_name, dept_desc)
             department_id = dept.id if dept else None
             user = await create_oidc_user(db, extracted_info, department_id)
     else:
