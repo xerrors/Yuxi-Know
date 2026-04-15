@@ -18,6 +18,11 @@ export const CHUNK_PRESET_OPTIONS = [
     value: 'laws',
     label: 'Laws',
     description: '法规分块：按法条层级组织与合并，适合法律法规、制度规范类文本。'
+  },
+  {
+    value: 'semantic',
+    label: 'Semantic',
+    description: '语义分块：利用嵌入和聚类算法进行语义切分，并自动增强标题上下文。'
   }
 ]
 

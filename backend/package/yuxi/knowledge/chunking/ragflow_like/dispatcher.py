@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from yuxi.knowledge.chunking.ragflow_like.parsers import book, general, laws, qa
+from yuxi.knowledge.chunking.ragflow_like.parsers import book, general, laws, qa, semantic
 from yuxi.knowledge.chunking.ragflow_like.presets import map_to_internal_parser_id, normalize_chunk_preset_id
 
 
@@ -42,6 +42,8 @@ def _dispatch_markdown_parser(
         return book.chunk_markdown(markdown_content, parser_config)
     if parser_id == "laws":
         return laws.chunk_markdown(filename, markdown_content, parser_config)
+    if parser_id == "semantic":
+        return semantic.chunk_markdown(markdown_content, parser_config)
 
     return general.chunk_markdown(markdown_content, parser_config)
 
