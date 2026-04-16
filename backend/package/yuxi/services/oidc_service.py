@@ -571,8 +571,13 @@ async def _create_oidc_binding_placeholder(db, sub: str, target_user: User) -> N
     random_password = secrets.token_urlsafe(32)
     password_hash = AuthUtils.hash_password(random_password)
 
+    # username 使用 oidc-binding-{sub_hash} 避免冲突，sub_hash 基于完整 sub 生成
+    import hashlib
+    sub_hash = hashlib.sha256(sub.encode()).hexdigest()[:8]
+    username = f"oidc-binding-{sub_hash}"
+
     placeholder_user = User(
-        username=f"oidc-binding-{sub[:8]}",
+        username=username,
         user_id=oidc_placeholder_id,
         phone_number=None,
         avatar=None,
