@@ -556,10 +556,9 @@ async def _create_oidc_binding_placeholder(db, sub: str, target_user: User) -> N
     占位用户标记为 is_deleted=1（不参与实际登录），仅用于存储绑定关系，
     find_user_by_oidc_sub 查询时会读取该占位记录并解析出绑定的真实用户，
     这样就能在不修改User表结构的前提下，保持绑定关系可验证，防止账号冒用。
-    """
-    from yuxi.repositories.user_repository import UserRepository
-    user_repo = UserRepository()
 
+    使用传入的同一个 db session，避免跨session一致性问题。
+    """
     # 占位用户格式: oidc:{sub}:{target_user_id}，这样find_user_by_oidc_sub可以解析出目标用户ID
     oidc_placeholder_id = f"oidc:{sub}:{target_user.id}"
     # 占位用户标记为 deleted，查询时需要特别包括deleted才能找到
@@ -572,21 +571,24 @@ async def _create_oidc_binding_placeholder(db, sub: str, target_user: User) -> N
     random_password = secrets.token_urlsafe(32)
     password_hash = AuthUtils.hash_password(random_password)
 
+    placeholder_user = User(
+        username=f"oidc-binding-{sub[:8]}",
+        user_id=oidc_placeholder_id,
+        phone_number=None,
+        avatar=None,
+        password_hash=password_hash,
+        role=target_user.role,
+        department_id=target_user.department_id,
+        is_deleted=1,  # 标记为deleted，不参与实际登录
+        last_login=utc_now_naive(),
+    )
+
     try:
-        await user_repo.create({
-            "username": f"oidc-binding-{sub[:8]}",
-            "user_id": oidc_placeholder_id,
-            "phone_number": None,
-            "avatar": None,
-            "password_hash": password_hash,
-            "role": target_user.role,
-            "department_id": target_user.department_id,
-            "is_deleted": 1,  # 标记为deleted，不参与实际登录
-            "last_login": utc_now_naive(),
-        })
+        db.add(placeholder_user)
+        await db.commit()
         logger.info(f"Created OIDC binding placeholder (deleted) for sub {sub} -> user {target_user.id} ({target_user.user_id})")
     except IntegrityError:
-        # 并发创建冲突，忽略
+        # 并发创建冲突，回滚后忽略
         await db.rollback()
         logger.info(f"OIDC binding placeholder already exists for sub {sub}")
 
