@@ -183,8 +183,13 @@
                             size="16"
                             class="agent-switcher-menu-icon"
                           />
-                          <span class="agent-switcher-menu-text">{{ agent.name || 'Unknown' }}</span>
-                          <span v-if="agent.id === currentAgentId" class="agent-switcher-menu-badge">
+                          <span class="agent-switcher-menu-text">{{
+                            agent.name || 'Unknown'
+                          }}</span>
+                          <span
+                            v-if="agent.id === currentAgentId"
+                            class="agent-switcher-menu-badge"
+                          >
                             当前
                           </span>
                         </div>
@@ -605,7 +610,10 @@ const conversationRows = computed(() => {
   if (currentThreadConfigNotice.value) {
     const insertAfterCount = Math.max(
       0,
-      Math.min(Number(currentThreadConfigNotice.value.insertAfterConversationCount) || 0, rows.length)
+      Math.min(
+        Number(currentThreadConfigNotice.value.insertAfterConversationCount) || 0,
+        rows.length
+      )
     )
     rows.splice(insertAfterCount, 0, {
       type: 'notice',
@@ -646,7 +654,10 @@ const showStartAgentSelector = computed(() => {
 })
 
 const showStartAgentDropdown = computed(() => {
-  return showStartAgentSelector.value && (startAgents.value.length >= 4 || localUIState.chatMainWidth < 380)
+  return (
+    showStartAgentSelector.value &&
+    (startAgents.value.length >= 4 || localUIState.chatMainWidth < 380)
+  )
 })
 
 const showStartAgentSegment = computed(() => {
@@ -859,7 +870,11 @@ const queuePendingThreadConfigNotice = (threadId) => {
 }
 
 const flushPendingThreadConfigNotice = (threadId) => {
-  if (!threadId || !currentThreadHasHistory.value || !threadPendingConfigNoticeMap.value[threadId]) {
+  if (
+    !threadId ||
+    !currentThreadHasHistory.value ||
+    !threadPendingConfigNoticeMap.value[threadId]
+  ) {
     return
   }
 
@@ -1419,7 +1434,11 @@ const selectChat = async (chatId) => {
       // 先更新当前线程，确保底部智能体名称与选中项即时同步。
       chatState.currentThreadId = chatId
 
-      if (!props.singleMode && targetChat?.agent_id && targetChat.agent_id !== currentAgentId.value) {
+      if (
+        !props.singleMode &&
+        targetChat?.agent_id &&
+        targetChat.agent_id !== currentAgentId.value
+      ) {
         await agentStore.selectAgent(targetChat.agent_id)
       }
 
@@ -1912,10 +1931,10 @@ const hasVisibleAssistantBody = (message) => {
   const { content, reasoningContent } = extractAssistantMessageBody(message)
   return Boolean(
     content ||
-      reasoningContent ||
-      message.error_type ||
-      message.extra_metadata?.error_type ||
-      message.isStoppedByUser
+    reasoningContent ||
+    message.error_type ||
+    message.extra_metadata?.error_type ||
+    message.isStoppedByUser
   )
 }
 
@@ -1997,9 +2016,7 @@ const isDisplayMessageProcessing = (conv, displayItem) => {
 
 const isToolGroupActive = (conv, itemIndex, displayItems) => {
   return (
-    isReplyLoading.value &&
-    conv?.status === 'streaming' &&
-    itemIndex === displayItems.length - 1
+    isReplyLoading.value && conv?.status === 'streaming' && itemIndex === displayItems.length - 1
   )
 }
 

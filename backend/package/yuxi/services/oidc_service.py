@@ -475,10 +475,7 @@ async def find_user_by_oidc_sub(db, sub: str) -> User | None:
     # 方法1: 检查是否有用户的 user_id 直接等于 "oidc:{sub}"（标准 OIDC 用户）
     standard_oidc_user_id = f"oidc:{sub}"
     # 占位绑定记录会被标记为 is_deleted=1，但我们仍需要查询它们来获取绑定关系
-    result = await db.execute(select(User).filter(
-        User.user_id == standard_oidc_user_id,
-        User.is_deleted == 0
-    ))
+    result = await db.execute(select(User).filter(User.user_id == standard_oidc_user_id, User.is_deleted == 0))
     user = result.scalar_one_or_none()
     if user:
         return user
@@ -486,10 +483,9 @@ async def find_user_by_oidc_sub(db, sub: str) -> User | None:
     # 方法2: 检查是否有绑定占位用户格式: "oidc:{sub}:{target_user_id}"（use_raw_username 绑定记录）
     # 绑定占位用户被标记为 is_deleted=1，需要包括deleted来查询
     legacy_result = await db.execute(
-        select(User).filter(
-            User.user_id.like(f"{standard_oidc_user_id}:%"),
-            User.is_deleted.in_([0, 1])
-        ).order_by(User.id.asc())
+        select(User)
+        .filter(User.user_id.like(f"{standard_oidc_user_id}:%"), User.is_deleted.in_([0, 1]))
+        .order_by(User.id.asc())
     )
     legacy_users = list(legacy_result.scalars().all())
     if legacy_users:
@@ -528,10 +524,7 @@ async def find_deleted_oidc_user_by_sub(db, sub: str) -> User | None:
 
     # 检查绑定占位格式 oidc:{sub}:{target_user_id}（占位本身是deleted，需要查询目标用户）
     legacy_result = await db.execute(
-        select(User).filter(
-            User.user_id.like(f"{oidc_user_id}:%"),
-            User.is_deleted == 1
-        ).order_by(User.id.asc())
+        select(User).filter(User.user_id.like(f"{oidc_user_id}:%"), User.is_deleted == 1).order_by(User.id.asc())
     )
     legacy_users = list(legacy_result.scalars().all())
     if legacy_users:
@@ -585,6 +578,7 @@ async def _create_oidc_binding_placeholder(db, sub: str, target_user: User) -> N
 
     # username 使用 oidc-binding-{sub_hash} 避免冲突，sub_hash 基于完整 sub 生成
     import hashlib
+
     sub_hash = hashlib.sha256(sub.encode()).hexdigest()[:8]
     username = f"oidc-binding-{sub_hash}"
 
@@ -604,8 +598,7 @@ async def _create_oidc_binding_placeholder(db, sub: str, target_user: User) -> N
         db.add(placeholder_user)
         await db.commit()
         logger.info(
-            f"Created OIDC binding placeholder (deleted) for sub {sub} -> "
-            f"user {target_user.id} ({target_user.user_id})"
+            f"Created OIDC binding placeholder (deleted) for sub {sub} -> user {target_user.id} ({target_user.user_id})"
         )
     except IntegrityError:
         # 并发创建冲突，回滚后忽略
@@ -661,8 +654,7 @@ async def create_oidc_user(db, user_info: dict, department_id: int | None = None
             if user_by_sub and user_by_sub.id == existing_user.id:
                 # sub 已经正确绑定到该用户，允许返回
                 logger.info(
-                    f"User with raw username {user_id} already exists and "
-                    f"bound to sub {sub}, returning existing user"
+                    f"User with raw username {user_id} already exists and bound to sub {sub}, returning existing user"
                 )
                 return existing_user
             elif user_by_sub is None:
