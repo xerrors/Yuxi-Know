@@ -470,19 +470,30 @@ async def find_user_by_oidc_sub(db, sub: str) -> User | None:
     """通过 OIDC sub 查找用户"""
     # 方法1: 检查是否有用户的 user_id 直接等于 "oidc:{sub}"（标准 OIDC 用户）
     standard_oidc_user_id = f"oidc:{sub}"
-    result = await db.execute(select(User).filter(User.user_id == standard_oidc_user_id, User.is_deleted == 0))
+    # 占位绑定记录会被标记为 is_deleted=1，但我们仍需要查询它们来获取绑定关系
+    result = await db.execute(select(User).filter(
+        User.user_id == standard_oidc_user_id,
+        User.is_deleted == 0
+    ))
     user = result.scalar_one_or_none()
     if user:
         return user
 
     # 方法2: 检查是否有绑定占位用户格式: "oidc:{sub}:{target_user_id}"（use_raw_username 绑定记录）
+    # 绑定占位用户被标记为 is_deleted=1，需要包括deleted来查询
     legacy_result = await db.execute(
-        select(User).filter(User.user_id.like(f"{standard_oidc_user_id}:%"), User.is_deleted == 0).order_by(User.id.asc())
+        select(User).filter(
+            User.user_id.like(f"{standard_oidc_user_id}:%"),
+            User.is_deleted.in_([0, 1])
+        ).order_by(User.id.asc())
     )
     legacy_users = list(legacy_result.scalars().all())
     if legacy_users:
         # 对于绑定占位用户，user_id 格式为 oidc:{sub}:{target_user_id}，解析出 target_user_id 并返回真实用户
         for placeholder in legacy_users:
+            if placeholder.is_deleted != 1:
+                # 非deleted占位，直接返回
+                return placeholder
             parts = placeholder.user_id.split(":")
             if len(parts) >= 3:
                 try:
@@ -494,7 +505,10 @@ async def find_user_by_oidc_sub(db, sub: str) -> User | None:
                         return target_user
                 except ValueError:
                     continue
-        # 如果没有解析出有效的目标用户，返回第一个legacy用户（向后兼容）
+        # 如果没有解析出有效的目标用户，返回第一个非deleted legacy用户（向后兼容）
+        for candidate in legacy_users:
+            if candidate.is_deleted == 0:
+                return candidate
         if len(legacy_users) > 1:
             logger.warning(f"Multiple legacy OIDC users matched for sub={sub}, use earliest id={legacy_users[0].id}")
         return legacy_users[0]
@@ -511,9 +525,12 @@ async def find_deleted_oidc_user_by_sub(db, sub: str) -> User | None:
     if deleted_user:
         return deleted_user
 
-    # 检查绑定占位格式 oidc:{sub}:{target_user_id}
+    # 检查绑定占位格式 oidc:{sub}:{target_user_id}（占位本身是deleted，需要查询目标用户）
     legacy_result = await db.execute(
-        select(User).filter(User.user_id.like(f"{oidc_user_id}:%"), User.is_deleted == 1).order_by(User.id.asc())
+        select(User).filter(
+            User.user_id.like(f"{oidc_user_id}:%"),
+            User.is_deleted == 1
+        ).order_by(User.id.asc())
     )
     legacy_users = list(legacy_result.scalars().all())
     if legacy_users:
@@ -535,8 +552,9 @@ async def find_deleted_oidc_user_by_sub(db, sub: str) -> User | None:
 async def _create_oidc_binding_placeholder(db, sub: str, target_user: User) -> None:
     """创建 OIDC sub 绑定占位用户（仅用于记录绑定关系，不用于登录）
 
-    在 use_raw_username 模式下，我们创建一个占位用户格式: oidc:{sub}:{target_user_id}，
-    以便通过 find_user_by_oidc_sub 解析出绑定的真实用户并返回，
+    在 use_raw_username 模式下，我们创建一个占位用户格式: oidc:{sub}:{target_user_id},
+    占位用户标记为 is_deleted=1（不参与实际登录），仅用于存储绑定关系，
+    find_user_by_oidc_sub 查询时会读取该占位记录并解析出绑定的真实用户，
     这样就能在不修改User表结构的前提下，保持绑定关系可验证，防止账号冒用。
     """
     from yuxi.repositories.user_repository import UserRepository
@@ -544,12 +562,13 @@ async def _create_oidc_binding_placeholder(db, sub: str, target_user: User) -> N
 
     # 占位用户格式: oidc:{sub}:{target_user_id}，这样find_user_by_oidc_sub可以解析出目标用户ID
     oidc_placeholder_id = f"oidc:{sub}:{target_user.id}"
-    result = await db.execute(select(User).filter(User.user_id == oidc_placeholder_id, User.is_deleted == 0))
+    # 占位用户标记为 deleted，查询时需要特别包括deleted才能找到
+    result = await db.execute(select(User).filter(User.user_id == oidc_placeholder_id, User.is_deleted.in_([0, 1])))
     if result.scalar_one_or_none():
         # 占位用户已存在，无需重复创建
         return
 
-    # 创建占位用户：使用随机密码，不用于实际登录，仅存储绑定关系
+    # 创建占位用户：使用随机密码，标记为deleted，不用于实际登录，仅存储绑定关系
     random_password = secrets.token_urlsafe(32)
     password_hash = AuthUtils.hash_password(random_password)
 
@@ -562,9 +581,10 @@ async def _create_oidc_binding_placeholder(db, sub: str, target_user: User) -> N
             "password_hash": password_hash,
             "role": target_user.role,
             "department_id": target_user.department_id,
+            "is_deleted": 1,  # 标记为deleted，不参与实际登录
             "last_login": utc_now_naive(),
         })
-        logger.info(f"Created OIDC binding placeholder for sub {sub} -> user {target_user.id} ({target_user.user_id})")
+        logger.info(f"Created OIDC binding placeholder (deleted) for sub {sub} -> user {target_user.id} ({target_user.user_id})")
     except IntegrityError:
         # 并发创建冲突，忽略
         await db.rollback()
