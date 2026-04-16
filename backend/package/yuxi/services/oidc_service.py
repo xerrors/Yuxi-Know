@@ -491,11 +491,6 @@ async def find_user_by_oidc_sub(db, sub: str) -> User | None:
             logger.warning(f"Multiple legacy OIDC users matched for sub={sub}, use earliest id={legacy_users[0].id}")
         return legacy_users[0]
 
-    # 方法3: 如果启用了 use_raw_username，尝试通过 user_id 的原始值找到用户（需要先从用户信息中获取 username）
-    if oidc_config.use_raw_username:
-        # 注意：这里无法直接从 sub 获取 username，需要在调用处处理
-        pass
-
     return None
 
 
