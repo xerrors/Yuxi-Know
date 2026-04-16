@@ -54,7 +54,7 @@ class OIDCConfig(BaseModel):
     use_raw_username: bool = Field(default=False, description="是否使用原始用户名（不带oidc前缀）")
     fetch_department_info: bool = Field(default=False, description="是否从OIDC中获取部门信息")
     department_claim: str = Field(default="department", description="部门信息映射字段")
-    force_prompt_login: bool = Field(default=True, description="是否强制用户重新登录（添加prompt=login参数）")
+    force_prompt_login: bool = Field(default=False, description="是否强制用户重新登录（添加prompt=login参数）")
 
     @classmethod
     def from_env(cls) -> "OIDCConfig":
