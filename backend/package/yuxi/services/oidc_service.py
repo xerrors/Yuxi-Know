@@ -590,10 +590,25 @@ async def create_oidc_user(db, user_info: dict, department_id: int | None = None
         result = await db.execute(select(User).filter(User.user_id == user_id, User.is_deleted == 0))
         existing_user = result.scalar_one_or_none()
         if existing_user:
-            # 如果用户已存在，先验证是否是同一个 sub 的旧用户（通过其他方式查找）
-            # 这里我们假设如果用户名已存在，就返回现有用户，让后续逻辑处理
-            logger.info(f"User with raw username {user_id} already exists, returning existing user")
-            return existing_user
+            # 用户已存在，必须验证当前sub是否已经绑定到这个用户
+            # 如果sub未绑定该用户，不能直接复用，存在账号冒用风险
+            user_by_sub = await find_user_by_oidc_sub(db, sub)
+            if user_by_sub and user_by_sub.id == existing_user.id:
+                # sub 已经正确绑定到该用户，允许返回
+                logger.info(f"User with raw username {user_id} already exists and bound to sub {sub}, returning existing user")
+                return existing_user
+            elif user_by_sub is None:
+                # sub 尚未绑定任何用户，可以将sub绑定到这个现有用户
+                logger.info(f"Binding new OIDC sub {sub} to existing user with raw username {user_id}")
+                await _create_oidc_binding_placeholder(db, sub, existing_user)
+                return existing_user
+            else:
+                # sub 已经绑定到另一个用户，冲突，拒绝创建
+                logger.warning(f"Cannot create OIDC user with raw username {user_id}: sub {sub} is already bound to another user {user_by_sub.id}, conflict")
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"用户名 {user_id} 已存在且OIDC标识 {sub} 已绑定到其他账号，请联系管理员处理冲突",
+                )
     else:
         user_id = f"oidc:{sub}"
 
