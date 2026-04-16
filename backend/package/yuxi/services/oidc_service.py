@@ -509,6 +509,45 @@ async def find_deleted_oidc_user_by_sub(db, sub: str) -> User | None:
     return legacy_result.scalar_one_or_none()
 
 
+async def _create_oidc_binding_placeholder(db, sub: str, target_user: User) -> None:
+    """创建 OIDC sub 绑定占位用户（仅用于记录绑定关系，不用于登录）
+
+    在 use_raw_username 模式下，我们仍然创建一个 oidc:{sub} 的占位用户，
+    以便通过 find_user_by_oidc_sub 可以查询到 sub 绑定到哪个用户，
+    这样就能在不修改User表结构的前提下，保持绑定关系可验证，防止账号冒用。
+    """
+    from yuxi.repositories.user_repository import UserRepository
+    user_repo = UserRepository()
+
+    oidc_user_id = f"oidc:{sub}"
+    result = await db.execute(select(User).filter(User.user_id == oidc_user_id, User.is_deleted == 0))
+    if result.scalar_one_or_none():
+        # 占位用户已存在，无需重复创建
+        return
+
+    # 创建占位用户：使用随机密码，soft deleted 标记不参与实际登录
+    # 但我们保留它存在只是为了记录 sub -> target_user 的绑定关系
+    random_password = secrets.token_urlsafe(32)
+    password_hash = AuthUtils.hash_password(random_password)
+
+    try:
+        await user_repo.create({
+            "username": f"oidc-binding-{sub[:8]}",
+            "user_id": oidc_user_id,
+            "phone_number": None,
+            "avatar": None,
+            "password_hash": password_hash,
+            "role": target_user.role,
+            "department_id": target_user.department_id,
+            "last_login": utc_now_naive(),
+        })
+        logger.info(f"Created OIDC binding placeholder for sub {sub} -> user {target_user.user_id}")
+    except IntegrityError:
+        # 并发创建冲突，忽略
+        await db.rollback()
+        logger.info(f"OIDC binding placeholder already exists for sub {sub}")
+
+
 async def build_unique_oidc_username(db, preferred_username: str, sub: str) -> str:
     """为 OIDC 用户生成不冲突的用户名"""
     base_username = preferred_username.strip() if preferred_username else ""
@@ -578,6 +617,11 @@ async def create_oidc_user(db, user_info: dict, department_id: int | None = None
                 }
             )
             logger.info(f"Created OIDC user: {new_user.username} ({user_id})")
+
+            # use_raw_username 模式下，创建占位用户记录绑定关系
+            if oidc_config.use_raw_username:
+                await _create_oidc_binding_placeholder(db, sub, new_user)
+
             return new_user
         except IntegrityError:
             existing_user = await find_user_by_oidc_sub(db, sub)
@@ -668,24 +712,50 @@ async def oidc_callback_handler(code: str, state: str, db, request: Request | No
     if not sub:
         return _redirect_to_login_with_error("无法获取用户标识，请返回登录页重试")
 
-    # 查找用户
+    # 查找用户：总是先通过 sub 查找，保证绑定关系可验证
+    user_by_sub = await find_user_by_oidc_sub(db, sub)
+
     if oidc_config.use_raw_username:
-        # 使用原始用户名模式，先通过 username 查找用户
+        # 使用原始用户名模式
         username = extracted_info["username"]
+        user = None
         if username:
             result = await db.execute(select(User).filter(User.user_id == username, User.is_deleted == 0))
-            user = result.scalar_one_or_none()
-            if user:
-                logger.info(f"Found existing user with raw username: {username}")
+            user_by_name = result.scalar_one_or_none()
+
+            if user_by_sub:
+                # sub 已经绑定到一个用户
+                if user_by_name and user_by_sub.id == user_by_name.id:
+                    # sub 绑定的用户就是找到的用户名用户 -> 验证通过
+                    user = user_by_name
+                    logger.info(f"OIDC user logged in with raw username: {username} (sub: {sub})")
+                else:
+                    # sub 已经绑定到另一个用户，存在冲突，拒绝登录
+                    conflict_name = user_by_sub.username if not user_by_name else user_by_name.username
+                    logger.warning(f"OIDC sub {sub} is already bound to a different user, login rejected to prevent account hijacking (conflict: {conflict_name})")
+                    return _redirect_to_login_with_error("OIDC标识已绑定到其他账号，请联系管理员处理绑定冲突")
             else:
-                # 如果没找到，再尝试通过 sub 查找（可能是旧用户）
-                user = await find_user_by_oidc_sub(db, sub)
+                # sub 尚未绑定到任何用户
+                if user_by_name:
+                    # 用户名存在，且 sub 没有绑定 -> 允许登录，并创建绑定记录
+                    # 在不修改表结构的情况下，我们创建一个占位用户 oidc:{sub} 来记录绑定关系
+                    # 这个占位用户不会被用来登录，仅用于存储sub -> 用户的绑定关系
+                    user = user_by_name
+                    logger.info(f"Binding new OIDC sub {sub} to existing user with raw username: {username}")
+                    # 创建绑定占位用户（后台静默创建，不影响现有用户）
+                    await _create_oidc_binding_placeholder(db, sub, user_by_name)
+                else:
+                    # 用户名不存在，需要创建新用户
+                    if oidc_config.auto_create_user:
+                        user = None  # 让后续逻辑创建
+                    else:
+                        return _redirect_to_login_with_error("用户不存在，请联系管理员开通账号")
         else:
-            # 如果没有 username，通过 sub 查找
-            user = await find_user_by_oidc_sub(db, sub)
+            # 没有获取到 username，回退到按sub查找
+            user = user_by_sub
     else:
         # 标准 OIDC 模式，通过 sub 查找
-        user = await find_user_by_oidc_sub(db, sub)
+        user = user_by_sub
 
     if user:
         await update_oidc_user_login(db, user)
