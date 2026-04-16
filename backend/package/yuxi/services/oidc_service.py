@@ -475,12 +475,26 @@ async def find_user_by_oidc_sub(db, sub: str) -> User | None:
     if user:
         return user
 
-    # 方法2: 检查是否有用户的 user_id 包含 "oidc:" 前缀（兼容旧格式）
+    # 方法2: 检查是否有绑定占位用户格式: "oidc:{sub}:{target_user_id}"（use_raw_username 绑定记录）
     legacy_result = await db.execute(
         select(User).filter(User.user_id.like(f"{standard_oidc_user_id}:%"), User.is_deleted == 0).order_by(User.id.asc())
     )
     legacy_users = list(legacy_result.scalars().all())
     if legacy_users:
+        # 对于绑定占位用户，user_id 格式为 oidc:{sub}:{target_user_id}，解析出 target_user_id 并返回真实用户
+        for placeholder in legacy_users:
+            parts = placeholder.user_id.split(":")
+            if len(parts) >= 3:
+                try:
+                    target_user_id = int(parts[2])
+                    result = await db.execute(select(User).filter(User.id == target_user_id, User.is_deleted == 0))
+                    target_user = result.scalar_one_or_none()
+                    if target_user:
+                        logger.debug(f"Resolved OIDC binding placeholder {placeholder.user_id} to user {target_user_id}")
+                        return target_user
+                except ValueError:
+                    continue
+        # 如果没有解析出有效的目标用户，返回第一个legacy用户（向后兼容）
         if len(legacy_users) > 1:
             logger.warning(f"Multiple legacy OIDC users matched for sub={sub}, use earliest id={legacy_users[0].id}")
         return legacy_users[0]
@@ -497,37 +511,52 @@ async def find_deleted_oidc_user_by_sub(db, sub: str) -> User | None:
     if deleted_user:
         return deleted_user
 
+    # 检查绑定占位格式 oidc:{sub}:{target_user_id}
     legacy_result = await db.execute(
         select(User).filter(User.user_id.like(f"{oidc_user_id}:%"), User.is_deleted == 1).order_by(User.id.asc())
     )
-    return legacy_result.scalar_one_or_none()
+    legacy_users = list(legacy_result.scalars().all())
+    if legacy_users:
+        for placeholder in legacy_users:
+            parts = placeholder.user_id.split(":")
+            if len(parts) >= 3:
+                try:
+                    target_user_id = int(parts[2])
+                    result = await db.execute(select(User).filter(User.id == target_user_id, User.is_deleted == 1))
+                    target_user = result.scalar_one_or_none()
+                    if target_user:
+                        return target_user
+                except ValueError:
+                    continue
+        return legacy_users[0]
+    return None
 
 
 async def _create_oidc_binding_placeholder(db, sub: str, target_user: User) -> None:
     """创建 OIDC sub 绑定占位用户（仅用于记录绑定关系，不用于登录）
 
-    在 use_raw_username 模式下，我们仍然创建一个 oidc:{sub} 的占位用户，
-    以便通过 find_user_by_oidc_sub 可以查询到 sub 绑定到哪个用户，
+    在 use_raw_username 模式下，我们创建一个占位用户格式: oidc:{sub}:{target_user_id}，
+    以便通过 find_user_by_oidc_sub 解析出绑定的真实用户并返回，
     这样就能在不修改User表结构的前提下，保持绑定关系可验证，防止账号冒用。
     """
     from yuxi.repositories.user_repository import UserRepository
     user_repo = UserRepository()
 
-    oidc_user_id = f"oidc:{sub}"
-    result = await db.execute(select(User).filter(User.user_id == oidc_user_id, User.is_deleted == 0))
+    # 占位用户格式: oidc:{sub}:{target_user_id}，这样find_user_by_oidc_sub可以解析出目标用户ID
+    oidc_placeholder_id = f"oidc:{sub}:{target_user.id}"
+    result = await db.execute(select(User).filter(User.user_id == oidc_placeholder_id, User.is_deleted == 0))
     if result.scalar_one_or_none():
         # 占位用户已存在，无需重复创建
         return
 
-    # 创建占位用户：使用随机密码，soft deleted 标记不参与实际登录
-    # 但我们保留它存在只是为了记录 sub -> target_user 的绑定关系
+    # 创建占位用户：使用随机密码，不用于实际登录，仅存储绑定关系
     random_password = secrets.token_urlsafe(32)
     password_hash = AuthUtils.hash_password(random_password)
 
     try:
         await user_repo.create({
             "username": f"oidc-binding-{sub[:8]}",
-            "user_id": oidc_user_id,
+            "user_id": oidc_placeholder_id,
             "phone_number": None,
             "avatar": None,
             "password_hash": password_hash,
@@ -535,7 +564,7 @@ async def _create_oidc_binding_placeholder(db, sub: str, target_user: User) -> N
             "department_id": target_user.department_id,
             "last_login": utc_now_naive(),
         })
-        logger.info(f"Created OIDC binding placeholder for sub {sub} -> user {target_user.user_id}")
+        logger.info(f"Created OIDC binding placeholder for sub {sub} -> user {target_user.id} ({target_user.user_id})")
     except IntegrityError:
         # 并发创建冲突，忽略
         await db.rollback()
