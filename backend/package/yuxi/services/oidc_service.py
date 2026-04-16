@@ -133,16 +133,10 @@ class OIDCProviderMetadata:
                 response.raise_for_status()
                 metadata = response.json()
 
-            # 替换端点地址中的 localhost 为 host.docker.internal，以便容器内访问
-            def replace_localhost(url: str | None) -> str | None:
-                if url and "localhost" in url:
-                    return url.replace("localhost", "host.docker.internal")
-                return url
-
-            self.authorization_endpoint = replace_localhost(metadata.get("authorization_endpoint"))
-            self.token_endpoint = replace_localhost(metadata.get("token_endpoint"))
-            self.userinfo_endpoint = replace_localhost(metadata.get("userinfo_endpoint"))
-            self.end_session_endpoint = replace_localhost(metadata.get("end_session_endpoint"))
+            self.authorization_endpoint = metadata.get("authorization_endpoint")
+            self.token_endpoint = metadata.get("token_endpoint")
+            self.userinfo_endpoint = metadata.get("userinfo_endpoint")
+            self.end_session_endpoint = metadata.get("end_session_endpoint")
 
             # 登录 URL 生成至少需要 authorization_endpoint。
             if not self.authorization_endpoint:
