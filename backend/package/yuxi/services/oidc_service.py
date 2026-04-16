@@ -54,6 +54,7 @@ class OIDCConfig(BaseModel):
     use_raw_username: bool = Field(default=False, description="是否使用原始用户名（不带oidc前缀）")
     fetch_department_info: bool = Field(default=False, description="是否从OIDC中获取部门信息")
     department_claim: str = Field(default="department", description="部门信息映射字段")
+    force_prompt_login: bool = Field(default=True, description="是否强制用户重新登录（添加prompt=login参数）")
 
     @classmethod
     def from_env(cls) -> "OIDCConfig":
@@ -416,31 +417,56 @@ class OIDCUtils:
 
 async def get_or_create_oidc_department(db, dept_name_from_oidc: str | None = None, dept_desc_from_oidc: str | None = None) -> Department | None:
     """获取或创建 OIDC 用户的部门"""
-    # 优先使用从 OIDC 获取的部门名称，否则使用默认部门名称
-    dept_name = dept_name_from_oidc or oidc_config.default_department
+    # 清理并验证从 OIDC 获取的部门名称
+    processed_dept_name = None
+    processed_dept_desc = None
 
-    result = await db.execute(select(Department).filter(Department.name == dept_name))
+    if dept_name_from_oidc:
+        # 去除首尾空格
+        processed_dept_name = dept_name_from_oidc.strip()
+        # 截断到 50 字符（匹配数据库限制）
+        if len(processed_dept_name) > 50:
+            processed_dept_name = processed_dept_name[:50]
+        # 如果处理后为空，放弃使用
+        if not processed_dept_name:
+            processed_dept_name = None
+
+    # 清理并验证从 OIDC 获取的部门描述
+    if dept_desc_from_oidc:
+        processed_dept_desc = dept_desc_from_oidc.strip()
+        # 截断到 255 字符（匹配数据库限制）
+        if len(processed_dept_desc) > 255:
+            processed_dept_desc = processed_dept_desc[:255]
+        if not processed_dept_desc:
+            processed_dept_desc = None
+
+    # 最终确定部门名称：优先使用处理后的OIDC部门名称，否则使用默认部门名称
+    final_dept_name = processed_dept_name or oidc_config.default_department
+    # 最终确定部门描述：优先使用处理后的OIDC部门描述，否则使用默认描述
+    final_dept_desc = processed_dept_desc or f"{final_dept_name}部门"
+
+    result = await db.execute(select(Department).filter(Department.name == final_dept_name))
     dept = result.scalar_one_or_none()
 
     if dept:
         # 部门已存在，直接返回
-        logger.info(f"Using existing department: {dept_name}")
+        logger.info(f"Using existing department: {final_dept_name}")
         return dept
 
     # 部门不存在，创建新部门
     dept = Department(
-        name=dept_name,
-        description=dept_desc_from_oidc or f"{dept_name}部门",
+        name=final_dept_name,
+        description=final_dept_desc,
     )
     db.add(dept)
     try:
         await db.commit()
         await db.refresh(dept)
-        logger.info(f"Created OIDC department: {dept_name}")
+        logger.info(f"Created OIDC department: {final_dept_name}")
     except IntegrityError:
         # 并发创建时部门可能已存在，再次查询
         await db.rollback()
-        result = await db.execute(select(Department).filter(Department.name == dept_name))
+        result = await db.execute(select(Department).filter(Department.name == final_dept_name))
         dept = result.scalar_one_or_none()
 
     return dept
