@@ -153,6 +153,37 @@
                 />
               </div>
 
+              <div v-else-if="showStartAgentDropdown" class="agent-switcher-wrapper">
+                <a-dropdown :trigger="['click']" placement="bottomCenter">
+                  <button type="button" class="agent-switcher-btn">
+                    <component :is="currentAgentIcon" size="16" class="agent-switcher-icon" />
+                    <span class="agent-switcher-text">{{ currentAgentName }}</span>
+                    <ChevronDown size="16" class="agent-switcher-chevron" />
+                  </button>
+                  <template #overlay>
+                    <a-menu class="agent-switcher-menu">
+                      <a-menu-item
+                        v-for="agent in startAgents"
+                        :key="agent.id"
+                        @click="handleStartAgentChange(agent.id)"
+                      >
+                        <div class="agent-switcher-menu-item">
+                          <component
+                            :is="getAgentIconComponent(agent.id)"
+                            size="16"
+                            class="agent-switcher-menu-icon"
+                          />
+                          <span class="agent-switcher-menu-text">{{ agent.name || 'Unknown' }}</span>
+                          <span v-if="agent.id === currentAgentId" class="agent-switcher-menu-badge">
+                            当前
+                          </span>
+                        </div>
+                      </a-menu-item>
+                    </a-menu>
+                  </template>
+                </a-dropdown>
+              </div>
+
               <AgentArtifactsCard
                 :artifacts="currentArtifacts"
                 :thread-id="currentChatId"
@@ -247,7 +278,14 @@ import AgentMessageComponent from '@/components/AgentMessageComponent.vue'
 import ChatSidebarComponent from '@/components/ChatSidebarComponent.vue'
 import RefsComponent from '@/components/RefsComponent.vue'
 import ToolCallsGroupComponent from '@/components/ToolCallsGroupComponent.vue'
-import { PanelLeftOpen, MessageCirclePlus, LoaderCircle, Bot, Telescope } from 'lucide-vue-next'
+import {
+  PanelLeftOpen,
+  MessageCirclePlus,
+  LoaderCircle,
+  Bot,
+  Telescope,
+  ChevronDown
+} from 'lucide-vue-next'
 import { handleChatError, handleValidationError } from '@/utils/errorHandler'
 import { ScrollController } from '@/utils/scrollController'
 import { AgentValidator } from '@/utils/agentValidator'
@@ -359,7 +397,8 @@ const threadAttachmentsMap = ref({})
 
 // 本地 UI 状态（仅在本组件使用）
 const localUIState = reactive({
-  isInitialRender: true
+  isInitialRender: true,
+  chatMainWidth: typeof window !== 'undefined' ? window.innerWidth : 0
 })
 
 // Agent Panel State
@@ -392,6 +431,7 @@ const currentAgent = computed(() => {
   if (!currentAgentId.value || !agents.value || !agents.value.length) return null
   return agents.value.find((a) => a.id === currentAgentId.value) || null
 })
+const startAgents = computed(() => agents.value || [])
 const chatsList = computed(() => threads.value || [])
 const currentChatId = computed(() => chatState.currentThreadId)
 const currentThread = computed(() => {
@@ -409,6 +449,7 @@ const currentThreadAgentName = computed(() => {
   }
   return currentAgentName.value
 })
+const currentAgentIcon = computed(() => getAgentIconComponent(currentAgentId.value))
 
 // 检查当前智能体是否支持文件上传
 const supportsFileUpload = computed(() => {
@@ -530,7 +571,7 @@ const getAgentIconComponent = (agentId) => {
 }
 
 const agentSegmentOptions = computed(() => {
-  return (agents.value || []).map((agent) => {
+  return startAgents.value.map((agent) => {
     const IconComponent = getAgentIconComponent(agent.id)
     return {
       label: () =>
@@ -543,8 +584,16 @@ const agentSegmentOptions = computed(() => {
   })
 })
 
+const showStartAgentSelector = computed(() => {
+  return !props.singleMode && !conversations.value.length && startAgents.value.length > 1
+})
+
+const showStartAgentDropdown = computed(() => {
+  return showStartAgentSelector.value && (startAgents.value.length >= 4 || localUIState.chatMainWidth < 380)
+})
+
 const showStartAgentSegment = computed(() => {
-  return !props.singleMode && !conversations.value.length && agentSegmentOptions.value.length > 1
+  return showStartAgentSelector.value && !showStartAgentDropdown.value
 })
 
 const handleStartAgentChange = async (agentId) => {
@@ -594,9 +643,11 @@ onMounted(() => {
     }
 
     if (window.ResizeObserver && chatMainRef.value) {
+      localUIState.chatMainWidth = chatMainRef.value.clientWidth || window.innerWidth
       chatMainResizeObserver = new ResizeObserver((entries) => {
         for (const entry of entries) {
           const width = entry.contentRect.width
+          localUIState.chatMainWidth = width
           const isTakingSpace = chatUIStore.isSidebarOpen && !isSidebarFloating.value
 
           if (isTakingSpace) {
@@ -1969,6 +2020,80 @@ watch(currentChatId, (threadId, oldThreadId) => {
   }
 }
 
+.agent-switcher-wrapper {
+  display: flex;
+  justify-content: center;
+  margin: 0 auto 18px;
+}
+
+.agent-switcher-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px 12px;
+  border: 1px solid var(--gray-150);
+  border-radius: 8px;
+  background: var(--gray-0);
+  color: var(--gray-900);
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+
+  &:hover {
+    background: var(--gray-0);
+    border-color: var(--gray-200);
+  }
+}
+
+.agent-switcher-icon,
+.agent-switcher-chevron {
+  flex-shrink: 0;
+  color: var(--gray-600);
+}
+
+.agent-switcher-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:deep(.agent-switcher-menu) {
+  min-width: 220px;
+}
+
+:deep(.agent-switcher-menu-item) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+:deep(.agent-switcher-menu-icon) {
+  flex-shrink: 0;
+  color: var(--gray-600);
+}
+
+:deep(.agent-switcher-menu-text) {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:deep(.agent-switcher-menu-badge) {
+  flex-shrink: 0;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--main-30);
+  color: var(--main-700);
+  font-size: 12px;
+}
+
 .example-questions {
   margin-top: 16px;
   text-align: center;
@@ -2182,6 +2307,15 @@ watch(currentChatId, (threadId, oldThreadId) => {
     :deep(.ant-segmented-item-label) {
       font-size: 12px;
     }
+  }
+
+  .agent-switcher-wrapper {
+    margin-bottom: 8px;
+  }
+
+  .agent-switcher-btn {
+    width: 100%;
+    justify-content: center;
   }
 
   .chat-header {
