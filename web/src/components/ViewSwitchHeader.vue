@@ -83,10 +83,10 @@ const selectItem = (item) => {
   align-items: center;
   height: 28px;
   padding: 0 10px;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
-  color: var(--gray-700);
+  color: var(--gray-600);
   font-size: 15px;
   font-weight: 500;
   line-height: 1;
@@ -94,16 +94,26 @@ const selectItem = (item) => {
   cursor: pointer;
   transition:
     background-color 0.2s ease,
-    color 0.2s ease;
+    color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 
   &:hover {
-    color: var(--main-color);
+    color: var(--gray-900);
     background-color: var(--gray-50);
   }
 
+  &:focus-visible {
+    outline: 2px solid var(--main-200);
+    outline-offset: 2px;
+  }
+
   &.active {
-    color: var(--main-color);
-    background-color: var(--main-40);
+    color: var(--main-700);
+    font-weight: 600;
+    background-color: var(--main-50);
+    border-color: var(--main-200);
+    box-shadow: 0 1px 2px rgba(1, 21, 31, 0.06);
   }
 }
 </style>

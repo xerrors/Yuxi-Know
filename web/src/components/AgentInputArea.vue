@@ -252,7 +252,7 @@ const getTodoStatusLabel = (status) => {
   padding: 6px 8px;
   // height: 28px;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--gray-600);
   cursor: pointer;
   transition: all 0.2s ease;

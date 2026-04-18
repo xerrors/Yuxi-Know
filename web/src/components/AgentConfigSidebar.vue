@@ -3,47 +3,27 @@
     <!-- 侧边栏头部 -->
     <div class="sidebar-header">
       <div class="header-top-row">
-        <div v-if="selectedAgentId" class="config-manage-row">
-          <a-select
-            :value="selectedAgentConfigId"
-            :options="configSwitchOptions"
-            class="config-switch-select"
-            placeholder="选择配置"
-            @update:value="handleConfigSwitch"
-          />
+        <div v-if="selectedAgentId" class="config-title-row">
+          <span class="config-title-text">{{ currentConfigName }}</span>
         </div>
         <div class="header-actions">
           <a-tooltip
             v-if="!isEmptyConfig && userStore.isAdmin"
             :title="isCurrentDefault ? '当前已是默认配置' : '设为默认配置'"
           >
-            <a-button
-              type="text"
-              shape="circle"
-              class="icon-btn lucide-icon-btn"
+            <button
+              type="button"
+              class="header-icon-action"
               :class="{ 'is-default': isCurrentDefault }"
               @click="setAsDefault"
             >
               <Star :size="18" :fill="isCurrentDefault ? 'currentColor' : 'none'" />
-            </a-button>
+            </button>
           </a-tooltip>
 
-          <a-tooltip v-if="!isEmptyConfig && userStore.isAdmin" title="删除配置">
-            <a-button
-              type="text"
-              shape="circle"
-              danger
-              class="icon-btn lucide-icon-btn"
-              @click="confirmDeleteConfig"
-              :disabled="isDeletingConfig"
-            >
-              <Trash2 :size="18" />
-            </a-button>
-          </a-tooltip>
-
-          <a-button type="text" size="small" @click="closeSidebar" class="icon-btn lucide-icon-btn">
+          <button type="button" @click="closeSidebar" class="header-icon-action">
             <X :size="16" />
-          </a-button>
+          </button>
         </div>
       </div>
     </div>
@@ -78,7 +58,6 @@
             <!-- 统一显示所有配置项 -->
             <template v-for="(value, key) in filteredConfigurableItems" :key="key">
               <a-form-item
-                v-if="shouldShowConfig(key, value)"
                 :label="getConfigLabel(key, value)"
                 :name="key"
                 class="config-item"
@@ -312,21 +291,19 @@
         >
           保存
         </a-button>
+
+        <a-tooltip v-if="!isEmptyConfig" title="删除配置">
+          <button
+            type="button"
+            class="footer-icon-btn"
+            @click="confirmDeleteConfig"
+            :disabled="isDeletingConfig"
+          >
+            <Trash2 :size="16" />
+          </button>
+        </a-tooltip>
       </div>
     </div>
-
-    <!-- 通用选择弹窗 -->
-
-    <a-modal
-      v-model:open="createConfigModalOpen"
-      title="新建配置"
-      :width="360"
-      :confirmLoading="createConfigLoading"
-      @ok="handleCreateConfig"
-      @cancel="closeCreateConfigModal"
-    >
-      <a-input v-model:value="createConfigName" placeholder="请输入配置名称" allow-clear />
-    </a-modal>
 
     <a-modal
       v-model:open="selectionModalOpen"
@@ -526,10 +503,6 @@ const liveSkillOptions = ref([])
 const liveMcpOptions = ref([])
 const liveSubagentOptions = ref([])
 const toolOptionsFromApi = ref([])
-const createConfigModalOpen = ref(false)
-const createConfigLoading = ref(false)
-const createConfigName = ref('')
-const CREATE_CONFIG_OPTION_VALUE = '__create_config__'
 const currentSegment = ref('model')
 const segmentOptions = [
   { label: '模型', value: 'model' },
@@ -543,6 +516,10 @@ const isEmptyConfig = computed(() => {
 
 const isCurrentDefault = computed(() => {
   return !!selectedConfigSummary.value?.is_default
+})
+
+const currentConfigName = computed(() => {
+  return selectedConfigSummary.value?.name || '当前配置'
 })
 
 const isReadOnlyConfig = computed(() => !userStore.isAdmin)
@@ -576,24 +553,6 @@ const filteredConfigurableItems = computed(() => {
     filtered[key] = configurableItems.value[key]
   })
   return filtered
-})
-
-const configSwitchOptions = computed(() => {
-  if (!selectedAgentId.value) return []
-  const list = agentConfigs.value[selectedAgentId.value] || []
-  const options = list.map((cfg) => ({
-    label: cfg.is_default ? `${cfg.name}（默认）` : cfg.name,
-    value: cfg.id
-  }))
-
-  if (userStore.isAdmin) {
-    options.push({
-      label: '+ 新建配置',
-      value: CREATE_CONFIG_OPTION_VALUE
-    })
-  }
-
-  return options
 })
 
 const loadLiveSkillOptions = async (force = false) => {
@@ -834,67 +793,11 @@ const filteredOptions = computed(() => {
 })
 
 // 方法
-const handleConfigSwitch = async (configId) => {
-  if (configId === CREATE_CONFIG_OPTION_VALUE) {
-    openCreateConfigModal()
-    return
-  }
-
-  if (!configId || configId === selectedAgentConfigId.value) return
-  try {
-    await agentStore.selectAgentConfig(configId)
-  } catch (error) {
-    console.error('切换配置出错:', error)
-    message.error('切换配置失败')
-  }
-}
-
 const updateConfigValue = (key, value) => {
   if (isReadOnlyConfig.value) return
   agentStore.updateAgentConfig({
     [key]: value
   })
-}
-
-const openCreateConfigModal = () => {
-  if (!userStore.isAdmin) return
-  createConfigName.value = ''
-  createConfigModalOpen.value = true
-}
-
-const closeCreateConfigModal = () => {
-  createConfigModalOpen.value = false
-  createConfigName.value = ''
-}
-
-const handleCreateConfig = async () => {
-  if (!userStore.isAdmin) return
-  if (!selectedAgentId.value) return
-  const name = createConfigName.value.trim()
-  if (!name) {
-    message.error('请输入配置名称')
-    return
-  }
-
-  createConfigLoading.value = true
-  try {
-    await agentStore.createAgentConfigProfile({
-      name,
-      setDefault: false,
-      fromCurrent: false
-    })
-    closeCreateConfigModal()
-    message.success('配置已创建')
-  } catch (error) {
-    console.error('创建配置出错:', error)
-    message.error(error.message || '创建配置失败')
-  } finally {
-    createConfigLoading.value = false
-  }
-}
-
-const shouldShowConfig = () => {
-  return true
 }
 
 const closeSidebar = () => {
@@ -1185,81 +1088,61 @@ const confirmDeleteConfig = async () => {
       width: 100%;
     }
 
-    .config-manage-row {
+    .config-title-row {
       display: flex;
       align-items: center;
       flex: 1;
       min-width: 0;
+    }
 
-      .config-switch-select {
-        flex: 1;
-        min-width: 0;
-
-        :deep(.ant-select-selector) {
-          height: 32px;
-          border-radius: 8px;
-          border-color: var(--gray-200);
-          padding: 0 10px;
-          transition: border-color 0.2s ease;
-        }
-
-        :deep(.ant-select-selection-search-input),
-        :deep(.ant-select-selection-item),
-        :deep(.ant-select-selection-placeholder) {
-          line-height: 30px;
-          font-size: 13px;
-        }
-
-        :deep(.ant-select.ant-select-focused .ant-select-selector),
-        :deep(.ant-select-selector:hover) {
-          border-color: var(--main-color);
-          box-shadow: none;
-        }
-      }
+    .config-title-text {
+      min-width: 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--gray-900);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .header-actions {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 4px;
       margin-left: auto;
     }
   }
 
-  .icon-btn {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    color: var(--gray-600);
-    border: 1px solid var(--gray-200);
-    background: var(--gray-0);
+  .header-icon-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
     padding: 0;
+    border: none;
+    background: transparent;
+    border-radius: 6px;
+    color: var(--gray-600);
     transition:
       color 0.2s ease,
-      border-color 0.2s ease,
       background-color 0.2s ease;
+    cursor: pointer;
 
     &:hover:not(:disabled) {
       color: var(--main-600);
-      border-color: var(--main-200);
-      background: var(--main-10);
+      background: var(--gray-100);
     }
 
-    &.is-default {
+    &.is-default,
+    &.is-default:hover:not(:disabled) {
       color: var(--color-warning-500);
-    }
-
-    &.ant-btn-dangerous:hover:not(:disabled) {
-      color: var(--color-error-700);
-      border-color: var(--color-error-100);
-      background: var(--color-error-50);
     }
 
     &:disabled {
       cursor: not-allowed;
       background: transparent;
       color: var(--gray-400);
-      border-color: var(--gray-200);
 
       &.is-default {
         opacity: 1;
@@ -1450,7 +1333,7 @@ const confirmDeleteConfig = async () => {
       align-items: center;
 
       .footer-main-btn {
-        width: 100%;
+        flex: 1;
         height: 36px;
         border-radius: 8px;
         font-size: 14px;
@@ -1482,6 +1365,36 @@ const confirmDeleteConfig = async () => {
           background-color: var(--gray-100);
           border-color: var(--gray-200);
           color: var(--gray-400);
+        }
+      }
+
+      .footer-icon-btn {
+        width: 36px;
+        height: 36px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        border: 1px solid var(--gray-200);
+        border-radius: 8px;
+        background: var(--gray-0);
+        color: var(--gray-500);
+        cursor: pointer;
+        transition:
+          color 0.2s ease,
+          border-color 0.2s ease,
+          background-color 0.2s ease;
+
+        &:hover:not(:disabled) {
+          color: var(--color-error-700);
+          border-color: var(--color-error-100);
+          background: var(--color-error-50);
+        }
+
+        &:disabled {
+          cursor: not-allowed;
+          color: var(--gray-400);
+          background: var(--gray-50);
         }
       }
     }
