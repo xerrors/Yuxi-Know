@@ -443,8 +443,10 @@ async def check_and_handle_interrupts(
 async def _ensure_thread_bound_agent_config(
     *,
     conv_repo: ConversationRepository,
+    agent_config_repo: AgentConfigRepository,
     thread_id: str,
     user_id: str,
+    department_id: int,
     agent_id: str,
     agent_config_id: int,
 ) -> None:
@@ -458,7 +460,22 @@ async def _ensure_thread_bound_agent_config(
 
     current_agent_config_id = (conversation.extra_metadata or {}).get("agent_config_id")
     if current_agent_config_id != int(agent_config_id):
-        await conv_repo.bind_agent_config(thread_id, agent_config_id)
+        # 检查目标配置是否存在于配置表中
+        config_item = await agent_config_repo.get_by_id(int(agent_config_id))
+        if config_item is None:
+            # 配置已损坏或已移除，切换到默认配置
+            logger.warning(
+                f"Config {agent_config_id} not found for thread {thread_id}, "
+                f"switching to default config for agent {agent_id}"
+            )
+            default_config = await agent_config_repo.get_or_create_default(
+                department_id=department_id,
+                agent_id=agent_id,
+                created_by=user_id,
+            )
+            await conv_repo.bind_agent_config(thread_id, default_config.id)
+        else:
+            await conv_repo.bind_agent_config(thread_id, agent_config_id)
 
 
 async def agent_chat(
@@ -562,10 +579,13 @@ async def agent_chat(
 
     try:
         conv_repo = ConversationRepository(db)
+        agent_config_repo = AgentConfigRepository(db)
         await _ensure_thread_bound_agent_config(
             conv_repo=conv_repo,
+            agent_config_repo=agent_config_repo,
             thread_id=thread_id,
             user_id=user_id,
+            department_id=current_user.department_id,
             agent_id=agent_id,
             agent_config_id=agent_config_id,
         )
@@ -765,10 +785,13 @@ async def stream_agent_chat(
 
     try:
         conv_repo = ConversationRepository(db)
+        agent_config_repo = AgentConfigRepository(db)
         await _ensure_thread_bound_agent_config(
             conv_repo=conv_repo,
+            agent_config_repo=agent_config_repo,
             thread_id=thread_id,
             user_id=user_id,
+            department_id=current_user.department_id,
             agent_id=agent_id,
             agent_config_id=agent_config_id,
         )
