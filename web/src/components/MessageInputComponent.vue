@@ -18,7 +18,7 @@
         </template>
         <a-button type="text" class="expand-btn">
           <template #icon>
-            <PlusOutlined :class="{ rotated: optionsExpanded }" />
+            <Paperclip :size="16" :class="{ rotated: optionsExpanded }" />
           </template>
         </a-button>
       </a-popover>
@@ -144,7 +144,8 @@
 
 <script setup>
 import { ref, computed, onMounted, nextTick, watch, onBeforeUnmount, useSlots } from 'vue'
-import { SendOutlined, ArrowUpOutlined, PauseOutlined, PlusOutlined } from '@ant-design/icons-vue'
+import { SendOutlined, ArrowUpOutlined, PauseOutlined } from '@ant-design/icons-vue'
+import { Paperclip } from 'lucide-vue-next'
 
 // 点击外部关闭下拉框
 const mentionDropdownRef = ref(null)

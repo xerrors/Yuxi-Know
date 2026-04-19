@@ -240,6 +240,8 @@ export function useAgentRunStream({
           if (RUN_TERMINAL_STATUSES.has(data.status)) {
             ts.activeRunId = null
             ts.lastRetryableJobTry = null
+            ts.replyLoadingVisible = false
+            ts.pendingRequestId = null
             clearActiveRunSnapshot(threadId)
             fetchThreadMessages({ agentId: unref(currentAgentId), threadId, delay: 200 }).finally(
               () => {
@@ -266,6 +268,8 @@ export function useAgentRunStream({
           ts.isStreaming = false
           ts.activeRunId = null
           ts.lastRetryableJobTry = null
+          ts.replyLoadingVisible = false
+          ts.pendingRequestId = null
           clearActiveRunSnapshot(threadId)
           fetchThreadMessages({ agentId: unref(currentAgentId), threadId, delay: 300 }).finally(
             () => {
@@ -288,6 +292,9 @@ export function useAgentRunStream({
             }
           }, 500)
         }
+      } else if (ts.activeRunId !== runId) {
+        ts.replyLoadingVisible = false
+        ts.pendingRequestId = null
       }
     } finally {
       if (ts.runStreamAbortController === runController) {
@@ -295,6 +302,8 @@ export function useAgentRunStream({
       }
       if (!ts.activeRunId) {
         ts.isStreaming = false
+        ts.replyLoadingVisible = false
+        ts.pendingRequestId = null
       }
     }
   }
@@ -337,6 +346,8 @@ export function useAgentRunStream({
     ts.activeRunId = null
     ts.runLastSeq = '0'
     ts.isStreaming = false
+    ts.replyLoadingVisible = false
+    ts.pendingRequestId = null
     clearActiveRunSnapshot(threadId)
   }
 

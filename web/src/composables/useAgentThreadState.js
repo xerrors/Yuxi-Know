@@ -12,6 +12,12 @@ export function useAgentThreadState({
   onBeforeResetThread = null,
   onBeforeCleanupThread = null
 }) {
+  const resetThreadUiState = (threadState) => {
+    if (!threadState) return
+    threadState.replyLoadingVisible = false
+    threadState.pendingRequestId = null
+  }
+
   const getThreadState = (threadId) => {
     if (!threadId) return null
     if (!chatState.threadStates[threadId]) {
@@ -22,6 +28,8 @@ export function useAgentThreadState({
         activeRunId: null,
         runLastSeq: '0',
         lastRetryableJobTry: null,
+        replyLoadingVisible: false,
+        pendingRequestId: null,
         onGoingConv: createOnGoingConvState(),
         agentState: null
       }
@@ -41,6 +49,7 @@ export function useAgentThreadState({
     threadState.streamAbortController.abort()
     threadState.streamAbortController = null
     threadState.isStreaming = false
+    resetThreadUiState(threadState)
   }
 
   const cleanupThreadState = (threadId) => {
@@ -83,6 +92,7 @@ export function useAgentThreadState({
       }
 
       threadState.onGoingConv = createOnGoingConvState()
+      resetThreadUiState(threadState)
       return
     }
 

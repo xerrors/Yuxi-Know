@@ -597,7 +597,10 @@ async def agent_chat(
                 content=query,
                 message_type=message_type,
                 image_content=image_content,
-                extra_metadata={"raw_message": human_message.model_dump()},
+                extra_metadata={
+                    "raw_message": human_message.model_dump(),
+                    "request_id": meta.get("request_id"),
+                },
             )
         except Exception as e:
             logger.error(f"Error saving user message: {e}")
@@ -803,7 +806,10 @@ async def stream_agent_chat(
                 content=query,
                 message_type=message_type,
                 image_content=image_content,
-                extra_metadata={"raw_message": human_message.model_dump()},
+                extra_metadata={
+                    "raw_message": human_message.model_dump(),
+                    "request_id": meta.get("request_id"),
+                },
             )
         except Exception as e:
             logger.error(f"Error saving user message: {e}")

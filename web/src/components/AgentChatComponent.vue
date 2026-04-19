@@ -123,7 +123,7 @@
             </template>
 
             <!-- 生成中的加载状态 - 增强条件支持主聊天和resume流程 -->
-            <div class="generating-status" v-if="isProcessing && conversations.length > 0">
+            <div class="generating-status" v-if="isReplyLoading && conversations.length > 0">
               <div class="generating-indicator">
                 <div class="loading-dots">
                   <div></div>
@@ -568,11 +568,15 @@ const historyConversations = computed(() => {
 
 const conversations = computed(() => {
   const historyConvs = historyConversations.value
+  const mergedOngoingMessages = stripDuplicatedOngoingHumanMessage(
+    historyConvs,
+    onGoingConvMessages.value
+  )
 
   // 如果有进行中的消息且线程状态显示正在流式处理，添加进行中的对话
-  if (onGoingConvMessages.value.length > 0) {
+  if (mergedOngoingMessages.length > 0) {
     const onGoingConv = {
-      messages: onGoingConvMessages.value,
+      messages: mergedOngoingMessages,
       status: 'streaming'
     }
     return [...historyConvs, onGoingConv]
@@ -654,6 +658,10 @@ const isStreaming = computed(() => {
   return threadState ? threadState.isStreaming : false
 })
 const isProcessing = computed(() => isStreaming.value)
+const isReplyLoading = computed(() => {
+  const threadState = currentThreadState.value
+  return Boolean(threadState?.replyLoadingVisible)
+})
 const isSendButtonDisabled = computed(() => {
   return (
     sendCooldownActive.value || ((!userInput.value || !currentAgent.value) && !isProcessing.value)
@@ -669,6 +677,85 @@ const startSendCooldown = () => {
     sendCooldownActive.value = false
     sendCooldownTimer = null
   }, 2000)
+}
+
+const createClientRequestId = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `req-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+const buildOptimisticHumanMessage = ({ requestId, text, imageContent = null }) => {
+  const message = {
+    id: requestId,
+    role: 'user',
+    type: 'human',
+    content: text,
+    message_type: imageContent ? 'multimodal_image' : 'text',
+    extra_metadata: {
+      request_id: requestId
+    }
+  }
+
+  if (imageContent) {
+    message.image_content = imageContent
+  }
+
+  return message
+}
+
+const getMessageRequestId = (message) => {
+  if (!message || typeof message !== 'object') return null
+
+  const metadataRequestId = message.extra_metadata?.request_id
+  if (typeof metadataRequestId === 'string' && metadataRequestId.trim()) {
+    return metadataRequestId.trim()
+  }
+
+  if (message.type === 'human' && typeof message.id === 'string' && message.id.trim()) {
+    return message.id.trim()
+  }
+
+  return null
+}
+
+// 历史消息已落库时，ongoing 里仍会保留当前轮的本地 user message；
+// 切回线程后按 request_id 去掉这条重复消息，只保留仍在流式更新的部分。
+const stripDuplicatedOngoingHumanMessage = (historyConvs, ongoingMessages) => {
+  if (!Array.isArray(historyConvs) || !historyConvs.length || !Array.isArray(ongoingMessages)) {
+    return ongoingMessages
+  }
+
+  const firstOngoingMessage = ongoingMessages[0]
+  if (!firstOngoingMessage || firstOngoingMessage.type !== 'human') {
+    return ongoingMessages
+  }
+
+  const lastHistoryConv = historyConvs[historyConvs.length - 1]
+  const historyMessages = Array.isArray(lastHistoryConv?.messages) ? lastHistoryConv.messages : []
+  const lastHistoryHuman = historyMessages.find((message) => message?.type === 'human')
+  if (!lastHistoryHuman) {
+    return ongoingMessages
+  }
+
+  const historyRequestId = getMessageRequestId(lastHistoryHuman)
+  const ongoingRequestId = getMessageRequestId(firstOngoingMessage)
+  if (!historyRequestId || !ongoingRequestId || historyRequestId !== ongoingRequestId) {
+    return ongoingMessages
+  }
+
+  return ongoingMessages.slice(1)
+}
+
+// 发送 runs 前先在前端插入一条用户消息，避免等待 worker 轮询后消息才出现。
+const insertOptimisticHumanMessage = (threadState, { requestId, text, imageContent = null }) => {
+  if (!threadState || !requestId) return
+  threadState.pendingRequestId = requestId
+  threadState.replyLoadingVisible = false
+  threadState.onGoingConv.msgChunks[requestId] = [
+    buildOptimisticHumanMessage({ requestId, text, imageContent })
+  ]
 }
 
 const CONFIG_CHANGE_NOTICE_MESSAGE =
@@ -1407,6 +1494,7 @@ const togglePinChat = async (chatId) => {
 
 const handleSendMessage = async ({ image } = {}) => {
   const text = userInput.value.trim()
+  const imageContent = image?.imageContent || null
   if ((!text && !image) || !currentAgent.value || isProcessing.value || sendCooldownActive.value)
     return
 
@@ -1461,13 +1549,22 @@ const handleSendMessage = async ({ image } = {}) => {
     }
 
     resetOnGoingConv(threadId)
+    const requestId = createClientRequestId()
+    insertOptimisticHumanMessage(threadState, {
+      requestId,
+      text,
+      imageContent
+    })
     threadState.isStreaming = true
     try {
       const runResp = await agentApi.createAgentRun({
         query: text,
         agent_config_id: selectedAgentConfigId.value,
         thread_id: threadId,
-        image_content: image?.imageContent
+        meta: {
+          request_id: requestId
+        },
+        image_content: imageContent
       })
       const runId = runResp?.run_id
       if (!runId) {
@@ -1476,6 +1573,9 @@ const handleSendMessage = async ({ image } = {}) => {
       await startRunStream(threadId, runId, 0)
     } catch (error) {
       threadState.isStreaming = false
+      threadState.replyLoadingVisible = false
+      threadState.pendingRequestId = null
+      resetOnGoingConv(threadId)
       handleChatError(error, 'send')
     }
     return
@@ -1839,7 +1939,7 @@ const getConversationDisplayItems = (conv) => {
 const isDisplayMessageProcessing = (conv, displayItem) => {
   return (
     displayItem?.type === 'message' &&
-    isProcessing.value &&
+    isReplyLoading.value &&
     conv?.status === 'streaming' &&
     displayItem.sourceIndex === conv.messages.length - 1
   )
@@ -1847,7 +1947,7 @@ const isDisplayMessageProcessing = (conv, displayItem) => {
 
 const isToolGroupActive = (conv, itemIndex, displayItems) => {
   return (
-    isProcessing.value &&
+    isReplyLoading.value &&
     conv?.status === 'streaming' &&
     itemIndex === displayItems.length - 1
   )

@@ -84,7 +84,24 @@ export function useAgentStreamHandler({
 
     switch (status) {
       case 'init':
-        threadState.onGoingConv.msgChunks[request_id] = [msg]
+        {
+          const resolvedRequestId = request_id || threadState.pendingRequestId
+          if (resolvedRequestId) {
+            threadState.pendingRequestId = resolvedRequestId
+            threadState.onGoingConv.msgChunks[resolvedRequestId] = [
+              {
+                ...msg,
+                id: msg?.id || resolvedRequestId,
+                extra_metadata: {
+                  ...(msg?.extra_metadata || {}),
+                  request_id: resolvedRequestId
+                }
+              }
+            ]
+          }
+        }
+        // 只有在服务端确认 init 后，才展示“正在回复”的加载动画。
+        threadState.replyLoadingVisible = true
         return false
 
       case 'loading':
@@ -106,6 +123,8 @@ export function useAgentStreamHandler({
         // Stop the loading indicator
         if (threadState) {
           threadState.isStreaming = false
+          threadState.replyLoadingVisible = false
+          threadState.pendingRequestId = null
 
           // Abort the stream controller to stop processing further events
           if (threadState.streamAbortController) {
@@ -118,6 +137,7 @@ export function useAgentStreamHandler({
       case 'ask_user_question_required':
       case 'human_approval_required':
         streamSmoother?.flushThread(threadId)
+        threadState.replyLoadingVisible = false
         console.log(`${debugPrefix}[approval_required]`, {
           threadId,
           currentAgentId: unref(currentAgentId)
@@ -159,6 +179,8 @@ export function useAgentStreamHandler({
         // 先标记流式结束，但保持消息显示直到历史记录加载完成
         if (threadState) {
           threadState.isStreaming = false
+          threadState.replyLoadingVisible = false
+          threadState.pendingRequestId = null
           console.log(`${debugPrefix}[finished]`, {
             threadId,
             currentAgentId: unref(currentAgentId),
@@ -188,6 +210,8 @@ export function useAgentStreamHandler({
         })
         if (threadState) {
           threadState.isStreaming = false
+          threadState.replyLoadingVisible = false
+          threadState.pendingRequestId = null
         }
         // 如果有 message 字段，显示提示（例如：敏感内容检测）
         if (chunkMessage) {

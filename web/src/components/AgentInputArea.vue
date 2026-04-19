@@ -357,9 +357,9 @@ const getTodoStatusLabel = (status) => {
 .todo-item {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 12px;
+  gap: 4px;
+  padding: 6px 6px;
+  border-radius: 6px;
   background: var(--light-70);
   box-shadow: inset 0 0 0 1px var(--light-70);
 }
