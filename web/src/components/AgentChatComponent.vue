@@ -85,32 +85,42 @@
         <!-- Main Chat Area -->
         <div class="chat-main" ref="chatMainRef">
           <div class="chat-box">
-            <div class="conv-box" v-for="(conv, index) in conversations" :key="index">
-              <template v-for="(displayItem, itemIndex) in getConversationDisplayItems(conv)" :key="displayItem.key">
-                <AgentMessageComponent
-                  v-if="displayItem.type === 'message'"
-                  :message="displayItem.message"
-                  :is-processing="isDisplayMessageProcessing(conv, displayItem)"
-                  :show-refs="showMsgRefs(displayItem.message)"
-                  :hide-tool-calls="true"
-                  @retry="retryMessage(displayItem.message)"
+            <template v-for="row in conversationRows" :key="row.key">
+              <div v-if="row.type === 'conversation'" class="conv-box">
+                <template
+                  v-for="(displayItem, itemIndex) in getConversationDisplayItems(row.conv)"
+                  :key="displayItem.key"
                 >
-                </AgentMessageComponent>
-                <ToolCallsGroupComponent
-                  v-else
-                  :tool-calls="displayItem.toolCalls"
-                  :is-active="isToolGroupActive(conv, itemIndex, getConversationDisplayItems(conv))"
+                  <AgentMessageComponent
+                    v-if="displayItem.type === 'message'"
+                    :message="displayItem.message"
+                    :is-processing="isDisplayMessageProcessing(row.conv, displayItem)"
+                    :show-refs="showMsgRefs(displayItem.message)"
+                    :hide-tool-calls="true"
+                    @retry="retryMessage(displayItem.message)"
+                  >
+                  </AgentMessageComponent>
+                  <ToolCallsGroupComponent
+                    v-else
+                    :tool-calls="displayItem.toolCalls"
+                    :is-active="
+                      isToolGroupActive(row.conv, itemIndex, getConversationDisplayItems(row.conv))
+                    "
+                  />
+                </template>
+                <!-- 显示对话最后一个消息使用的模型 -->
+                <RefsComponent
+                  v-if="shouldShowRefs(row.conv)"
+                  :message="getLastMessage(row.conv)"
+                  :show-refs="['model', 'copy', 'sources']"
+                  :is-latest-message="false"
+                  :sources="getConversationSources(row.conv)"
                 />
-              </template>
-              <!-- 显示对话最后一个消息使用的模型 -->
-              <RefsComponent
-                v-if="shouldShowRefs(conv)"
-                :message="getLastMessage(conv)"
-                :show-refs="['model', 'copy', 'sources']"
-                :is-latest-message="false"
-                :sources="getConversationSources(conv)"
-              />
-            </div>
+              </div>
+              <div v-else class="chat-inline-notice">
+                <span>{{ row.notice.message }}</span>
+              </div>
+            </template>
 
             <!-- 生成中的加载状态 - 增强条件支持主聊天和resume流程 -->
             <div class="generating-status" v-if="isProcessing && conversations.length > 0">
@@ -394,6 +404,11 @@ const hasMoreChats = ref(true) // 是否还有更多对话可加载
 const isLoadingMoreChats = ref(false) // 加载更多对话中
 const threadFilesMap = ref({})
 const threadAttachmentsMap = ref({})
+const threadConfigNoticeMap = ref({})
+const threadPendingConfigNoticeMap = ref({})
+const threadConfigSnapshotMap = ref({})
+const configNoticeSyncDepth = ref(0)
+const configNoticeScrollVersion = ref(0)
 
 // 本地 UI 状态（仅在本组件使用）
 const localUIState = reactive({
@@ -508,6 +523,11 @@ const { mentionConfig } = useAgentMentionConfig({
 })
 
 const currentThreadMessages = computed(() => threadMessages.value[currentChatId.value] || [])
+const currentThreadHasHistory = computed(() => currentThreadMessages.value.length > 0)
+const currentThreadConfigNotice = computed(() => {
+  if (!currentChatId.value) return null
+  return threadConfigNoticeMap.value[currentChatId.value] || null
+})
 
 // 计算是否显示Refs组件的条件
 const shouldShowRefs = computed(() => {
@@ -558,6 +578,28 @@ const conversations = computed(() => {
     return [...historyConvs, onGoingConv]
   }
   return historyConvs
+})
+
+const conversationRows = computed(() => {
+  const rows = conversations.value.map((conv, index) => ({
+    type: 'conversation',
+    key: conv.status === 'streaming' ? 'ongoing-conversation' : `history-${index}`,
+    conv
+  }))
+
+  if (currentThreadConfigNotice.value) {
+    const insertAfterCount = Math.max(
+      0,
+      Math.min(Number(currentThreadConfigNotice.value.insertAfterConversationCount) || 0, rows.length)
+    )
+    rows.splice(insertAfterCount, 0, {
+      type: 'notice',
+      key: currentThreadConfigNotice.value.id,
+      notice: currentThreadConfigNotice.value
+    })
+  }
+
+  return rows
 })
 
 // 智能体图标映射
@@ -627,6 +669,143 @@ const startSendCooldown = () => {
     sendCooldownActive.value = false
     sendCooldownTimer = null
   }, 2000)
+}
+
+const CONFIG_CHANGE_NOTICE_MESSAGE =
+  '在运行过程中切换或修改配置可能会影响最终效果，建议新建一个对话。'
+
+const withConfigNoticeSync = async (task) => {
+  configNoticeSyncDepth.value += 1
+  try {
+    return await task()
+  } finally {
+    configNoticeSyncDepth.value = Math.max(0, configNoticeSyncDepth.value - 1)
+  }
+}
+
+const buildThreadConfigSnapshot = () => {
+  return {
+    agentId: currentAgentId.value || '',
+    agentConfigId: selectedAgentConfigId.value ?? null,
+    configJson: JSON.stringify(agentConfig.value || {})
+  }
+}
+
+const clearThreadConfigTracking = (threadId) => {
+  if (!threadId) return
+
+  const nextNotices = { ...threadConfigNoticeMap.value }
+  delete nextNotices[threadId]
+  threadConfigNoticeMap.value = nextNotices
+
+  const nextPendingNotices = { ...threadPendingConfigNoticeMap.value }
+  delete nextPendingNotices[threadId]
+  threadPendingConfigNoticeMap.value = nextPendingNotices
+
+  const nextSnapshots = { ...threadConfigSnapshotMap.value }
+  delete nextSnapshots[threadId]
+  threadConfigSnapshotMap.value = nextSnapshots
+}
+
+const syncThreadConfigSnapshot = (threadId, options = {}) => {
+  if (!threadId) return
+
+  const { overwrite = true } = options
+  if (!overwrite && threadConfigSnapshotMap.value[threadId]) return
+  if (threadPendingConfigNoticeMap.value[threadId]) return
+
+  // 线程切换时先记录当前 UI 的配置快照，避免同步 thread 绑定配置时误报。
+  threadConfigSnapshotMap.value = {
+    ...threadConfigSnapshotMap.value,
+    [threadId]: buildThreadConfigSnapshot()
+  }
+}
+
+const upsertThreadConfigNotice = (threadId, insertAfterConversationCount) => {
+  if (!threadId) return
+
+  const existingNotice = threadConfigNoticeMap.value[threadId]
+  const nextNotice = {
+    id: existingNotice?.id || `config-change-notice-${threadId}`,
+    message: existingNotice?.message || CONFIG_CHANGE_NOTICE_MESSAGE,
+    insertAfterConversationCount
+  }
+  const shouldScroll =
+    !existingNotice || existingNotice.insertAfterConversationCount !== insertAfterConversationCount
+
+  threadConfigNoticeMap.value = {
+    ...threadConfigNoticeMap.value,
+    [threadId]: nextNotice
+  }
+
+  if (threadPendingConfigNoticeMap.value[threadId]) {
+    const nextPendingNotices = { ...threadPendingConfigNoticeMap.value }
+    delete nextPendingNotices[threadId]
+    threadPendingConfigNoticeMap.value = nextPendingNotices
+  }
+
+  if (shouldScroll) {
+    configNoticeScrollVersion.value += 1
+  }
+}
+
+const queuePendingThreadConfigNotice = (threadId) => {
+  if (!threadId) return
+  threadPendingConfigNoticeMap.value = {
+    ...threadPendingConfigNoticeMap.value,
+    [threadId]: {
+      id: `config-change-notice-${threadId}`,
+      message: CONFIG_CHANGE_NOTICE_MESSAGE
+    }
+  }
+}
+
+const flushPendingThreadConfigNotice = (threadId) => {
+  if (!threadId || !currentThreadHasHistory.value || !threadPendingConfigNoticeMap.value[threadId]) {
+    return
+  }
+
+  upsertThreadConfigNotice(threadId, conversations.value.length)
+}
+
+const maybeInsertThreadConfigNotice = () => {
+  const threadId = currentChatId.value
+  if (!threadId || configNoticeSyncDepth.value > 0) {
+    return
+  }
+
+  const previousSnapshot = threadConfigSnapshotMap.value[threadId]
+  const currentSnapshot = buildThreadConfigSnapshot()
+
+  if (!previousSnapshot) {
+    threadConfigSnapshotMap.value = {
+      ...threadConfigSnapshotMap.value,
+      [threadId]: currentSnapshot
+    }
+    return
+  }
+
+  if (
+    previousSnapshot.agentId === currentSnapshot.agentId &&
+    previousSnapshot.agentConfigId === currentSnapshot.agentConfigId &&
+    previousSnapshot.configJson === currentSnapshot.configJson
+  ) {
+    return
+  }
+
+  if (currentThreadHasHistory.value) {
+    upsertThreadConfigNotice(threadId, conversations.value.length)
+  } else if (chatUIStore.isLoadingMessages) {
+    // 历史线程仍在加载时先挂起提示，避免消息返回后把变更误当成新的基线。
+    queuePendingThreadConfigNotice(threadId)
+  } else {
+    return
+  }
+
+  threadConfigSnapshotMap.value = {
+    ...threadConfigSnapshotMap.value,
+    [threadId]: currentSnapshot
+  }
 }
 
 // ==================== SCROLL & RESIZE HANDLING ====================
@@ -798,6 +977,7 @@ const deleteThread = async (threadId) => {
     delete threadMessages.value[threadId]
     delete threadFilesMap.value[threadId]
     delete threadAttachmentsMap.value[threadId]
+    clearThreadConfigTracking(threadId)
 
     if (chatState.currentThreadId === threadId) {
       chatState.currentThreadId = null
@@ -1087,21 +1267,18 @@ const selectChat = async (chatId) => {
     isAgentPanelOpen.value = false
   }
 
-  // 先更新当前线程，确保底部智能体名称与选中项即时同步
-  chatState.currentThreadId = chatId
-
-  if (!props.singleMode && targetChat?.agent_id && targetChat.agent_id !== currentAgentId.value) {
-    try {
-      await agentStore.selectAgent(targetChat.agent_id)
-    } catch (error) {
-      chatState.currentThreadId = previousThreadId
-      handleChatError(error, 'load')
-      return
-    }
-  }
-
   try {
-    await syncSelectedConfigForThread(targetChat)
+    await withConfigNoticeSync(async () => {
+      // 先更新当前线程，确保底部智能体名称与选中项即时同步。
+      chatState.currentThreadId = chatId
+
+      if (!props.singleMode && targetChat?.agent_id && targetChat.agent_id !== currentAgentId.value) {
+        await agentStore.selectAgent(targetChat.agent_id)
+      }
+
+      await syncSelectedConfigForThread(targetChat)
+      syncThreadConfigSnapshot(chatId)
+    })
   } catch (error) {
     chatState.currentThreadId = previousThreadId
     handleChatError(error, 'load')
@@ -1121,6 +1298,7 @@ const selectChat = async (chatId) => {
   scrollController.scrollToBottomStaticForce()
   // await fetchAgentState(targetAgentId, chatId)
   await handleAgentStateRefresh(chatId)
+  syncThreadConfigSnapshot(chatId, { overwrite: false })
   await resumeActiveRunForThread(chatId)
 }
 
@@ -1779,6 +1957,35 @@ watch(
 )
 
 watch(
+  currentThreadMessages,
+  () => {
+    if (currentThreadHasHistory.value) {
+      flushPendingThreadConfigNotice(currentChatId.value)
+      syncThreadConfigSnapshot(currentChatId.value, { overwrite: false })
+    }
+  },
+  { deep: false }
+)
+
+watch(currentAgentId, (newAgentId, oldAgentId) => {
+  if (oldAgentId === undefined || newAgentId === oldAgentId) return
+  maybeInsertThreadConfigNotice()
+})
+
+watch(selectedAgentConfigId, (newConfigId, oldConfigId) => {
+  if (oldConfigId === undefined || newConfigId === oldConfigId) return
+  maybeInsertThreadConfigNotice()
+})
+
+watch(
+  () => JSON.stringify(agentConfig.value || {}),
+  (newConfigJson, oldConfigJson) => {
+    if (oldConfigJson === undefined || newConfigJson === oldConfigJson) return
+    maybeInsertThreadConfigNotice()
+  }
+)
+
+watch(
   conversations,
   () => {
     if (isProcessing.value) {
@@ -1786,6 +1993,15 @@ watch(
     }
   },
   { deep: true, flush: 'post' }
+)
+
+watch(
+  configNoticeScrollVersion,
+  () => {
+    if (!currentChatId.value) return
+    scrollController.scrollToBottom(true)
+  },
+  { flush: 'post' }
 )
 
 watch(currentChatId, (threadId, oldThreadId) => {
@@ -2174,6 +2390,16 @@ watch(currentChatId, (threadId, oldThreadId) => {
 .conv-box {
   display: flex;
   flex-direction: column;
+}
+
+.chat-inline-notice {
+  display: flex;
+  justify-content: center;
+  padding: 6px 16px 12px;
+  color: var(--gray-500);
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: center;
 }
 
 .bottom {
