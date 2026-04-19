@@ -4,7 +4,7 @@
       <div class="sep-header">
         <span class="note">grep</span>
         <span class="separator" v-if="pattern">|</span>
-        <span class="keywords">{{ pattern }}</span>
+        <span class="note">{{ pattern }}</span>
         <span class="separator" v-if="targetPath">|</span>
         <span class="description code">{{ targetPath }}</span>
         <span class="tag" v-if="outputMode">{{ outputMode }}</span>

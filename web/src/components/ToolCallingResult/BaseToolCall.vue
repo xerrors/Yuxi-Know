@@ -290,8 +290,8 @@ const formatResultData = (data) => {
         overflow: hidden;
 
         .note {
-          font-weight: 600;
-          color: var(--gray-700);
+          font-weight: 500;
+          color: var(--gray-600);
           flex-shrink: 0;
         }
 

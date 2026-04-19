@@ -4,7 +4,7 @@
       <div class="sep-header">
         <span class="note">search_file_content</span>
         <span class="separator" v-if="pattern">|</span>
-        <span class="keywords">{{ pattern }}</span>
+        <span class="note">{{ pattern }}</span>
         <span class="separator" v-if="dirPath">|</span>
         <span class="description code">{{ dirPath }}</span>
       </div>
