@@ -813,6 +813,8 @@ const scrollController = new ScrollController('.chat-main')
 const chatMainRef = ref(null)
 const isSidebarFloating = ref(false)
 let chatMainResizeObserver = null
+// 初始化延迟标志，避免首次挂载时 ResizeObserver 立即触发导致侧边栏意外关闭
+let isResizeObserverReady = false
 
 onMounted(() => {
   nextTick(() => {
@@ -824,6 +826,9 @@ onMounted(() => {
     if (window.ResizeObserver && chatMainRef.value) {
       localUIState.chatMainWidth = chatMainRef.value.clientWidth || window.innerWidth
       chatMainResizeObserver = new ResizeObserver((entries) => {
+        // 初始化期间跳过检查，等待 layout 稳定
+        if (!isResizeObserverReady) return
+
         for (const entry of entries) {
           const width = entry.contentRect.width
           localUIState.chatMainWidth = width
@@ -846,6 +851,11 @@ onMounted(() => {
       })
       chatMainResizeObserver.observe(chatMainRef.value)
     }
+
+    // 延迟 50ms 后启用 ResizeObserver 检查，确保 layout 已稳定
+    setTimeout(() => {
+      isResizeObserverReady = true
+    }, 50)
   })
   setTimeout(() => {
     localUIState.isInitialRender = false
