@@ -281,7 +281,18 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch, nextTick, computed, onUnmounted, h } from 'vue'
+import {
+  ref,
+  reactive,
+  onMounted,
+  watch,
+  nextTick,
+  computed,
+  onUnmounted,
+  onActivated,
+  onDeactivated,
+  h
+} from 'vue'
 import { message } from 'ant-design-vue'
 import AgentInputArea from '@/components/AgentInputArea.vue'
 import AgentMessageComponent from '@/components/AgentMessageComponent.vue'
@@ -902,6 +913,69 @@ const isSidebarFloating = ref(false)
 let chatMainResizeObserver = null
 // 初始化延迟标志，避免首次挂载时 ResizeObserver 立即触发导致侧边栏意外关闭
 let isResizeObserverReady = false
+let resizeObserverReadyTimer = null
+
+const armResizeObserver = () => {
+  if (resizeObserverReadyTimer) {
+    clearTimeout(resizeObserverReadyTimer)
+  }
+
+  isResizeObserverReady = false
+  // keep-alive 切页回来时等布局稳定后再恢复宽度判断，避免隐藏态宽度污染侧边栏状态。
+  resizeObserverReadyTimer = setTimeout(() => {
+    isResizeObserverReady = true
+  }, 50)
+}
+
+const stopChatMainResizeObserver = () => {
+  if (resizeObserverReadyTimer) {
+    clearTimeout(resizeObserverReadyTimer)
+    resizeObserverReadyTimer = null
+  }
+
+  isResizeObserverReady = false
+
+  if (chatMainResizeObserver) {
+    chatMainResizeObserver.disconnect()
+    chatMainResizeObserver = null
+  }
+}
+
+const startChatMainResizeObserver = () => {
+  if (!window.ResizeObserver || !chatMainRef.value || chatMainResizeObserver) {
+    return
+  }
+
+  localUIState.chatMainWidth = chatMainRef.value.clientWidth || window.innerWidth
+  chatMainResizeObserver = new ResizeObserver((entries) => {
+    // 初始化期间跳过检查，等待 layout 稳定
+    if (!isResizeObserverReady) return
+
+    for (const entry of entries) {
+      const width = entry.contentRect.width
+      if (!width) continue
+
+      localUIState.chatMainWidth = width
+      const isTakingSpace = chatUIStore.isSidebarOpen && !isSidebarFloating.value
+
+      if (isTakingSpace) {
+        if (width < 600) {
+          isSidebarFloating.value = true
+          chatUIStore.isSidebarOpen = false
+          localStorage.setItem('chat_sidebar_open', 'false')
+        }
+      } else {
+        if (width >= 880) {
+          isSidebarFloating.value = false
+        } else {
+          isSidebarFloating.value = true
+        }
+      }
+    }
+  })
+  chatMainResizeObserver.observe(chatMainRef.value)
+  armResizeObserver()
+}
 
 onMounted(() => {
   nextTick(() => {
@@ -910,50 +984,26 @@ onMounted(() => {
       chatMainContainer.addEventListener('scroll', scrollController.handleScroll, { passive: true })
     }
 
-    if (window.ResizeObserver && chatMainRef.value) {
-      localUIState.chatMainWidth = chatMainRef.value.clientWidth || window.innerWidth
-      chatMainResizeObserver = new ResizeObserver((entries) => {
-        // 初始化期间跳过检查，等待 layout 稳定
-        if (!isResizeObserverReady) return
-
-        for (const entry of entries) {
-          const width = entry.contentRect.width
-          localUIState.chatMainWidth = width
-          const isTakingSpace = chatUIStore.isSidebarOpen && !isSidebarFloating.value
-
-          if (isTakingSpace) {
-            if (width < 600) {
-              isSidebarFloating.value = true
-              chatUIStore.isSidebarOpen = false
-              localStorage.setItem('chat_sidebar_open', 'false')
-            }
-          } else {
-            if (width >= 880) {
-              isSidebarFloating.value = false
-            } else {
-              isSidebarFloating.value = true
-            }
-          }
-        }
-      })
-      chatMainResizeObserver.observe(chatMainRef.value)
-    }
-
-    // 延迟 50ms 后启用 ResizeObserver 检查，确保 layout 已稳定
-    setTimeout(() => {
-      isResizeObserverReady = true
-    }, 50)
+    startChatMainResizeObserver()
   })
   setTimeout(() => {
     localUIState.isInitialRender = false
   }, 300)
 })
 
+onActivated(() => {
+  nextTick(() => {
+    startChatMainResizeObserver()
+  })
+})
+
+onDeactivated(() => {
+  stopChatMainResizeObserver()
+})
+
 onUnmounted(() => {
   scrollController.cleanup()
-  if (chatMainResizeObserver) {
-    chatMainResizeObserver.disconnect()
-  }
+  stopChatMainResizeObserver()
   if (sendCooldownTimer) {
     clearTimeout(sendCooldownTimer)
     sendCooldownTimer = null
