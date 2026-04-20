@@ -36,7 +36,7 @@
           :disabled="chatUIStore.creatingNewChat"
         >
           <LoaderCircle v-if="chatUIStore.creatingNewChat" size="18" class="loading-icon" />
-          <MessageSquarePlus v-else size="18" />
+          <MessageCirclePlus v-else size="18" />
           创建新对话
         </button>
       </div>
@@ -112,7 +112,7 @@ import { computed, h } from 'vue'
 import { message, Modal } from 'ant-design-vue'
 import {
   PanelLeftClose,
-  MessageSquarePlus,
+  MessageCirclePlus,
   LoaderCircle,
   Pin,
   PinOff,
@@ -318,15 +318,15 @@ const togglePin = (chatId) => {
     height: 100%;
 
     &.sidebar-open {
-      box-shadow: 4px 0 16px rgba(0, 0, 0, 0.08);
-      border-right: none;
+      box-shadow: 4px 0 16px var(--dark-5);
+      border-right: 1px solid var(--gray-50);
     }
   }
 
   &.sidebar-open {
     width: 280px;
     max-width: 300px;
-    border-right: 1px solid var(--gray-200);
+    border-right: 1px solid var(--gray-150);
   }
 
   .sidebar-header {

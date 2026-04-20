@@ -156,6 +156,13 @@ const downloadingMarkdown = ref(false)
 const sourcePreviewLoading = ref(false)
 const sourcePreviewUrl = ref('')
 
+const revokeSourcePreviewUrl = () => {
+  if (sourcePreviewUrl.value) {
+    window.URL.revokeObjectURL(sourcePreviewUrl.value)
+    sourcePreviewUrl.value = ''
+  }
+}
+
 // 主题设置
 const theme = computed(() => (themeStore.isDark ? 'dark' : 'light'))
 
@@ -236,13 +243,6 @@ const afterOpenChange = (open) => {
     revokeSourcePreviewUrl()
     store.selectedFile = null
     viewMode.value = 'markdown'
-  }
-}
-
-const revokeSourcePreviewUrl = () => {
-  if (sourcePreviewUrl.value) {
-    window.URL.revokeObjectURL(sourcePreviewUrl.value)
-    sourcePreviewUrl.value = ''
   }
 }
 

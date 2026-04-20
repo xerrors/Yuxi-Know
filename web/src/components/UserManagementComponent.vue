@@ -132,7 +132,6 @@
           <a-input
             v-model:value="userManagement.form.username"
             placeholder="请输入用户名（2-20个字符）"
-            size="large"
             @blur="validateAndGenerateUserId"
             :maxlength="20"
           />
@@ -141,23 +140,19 @@
           </div>
         </a-form-item>
 
-        <!-- 显示自动生成的用户ID -->
+        <!-- 显示自动生成的用户ID（仅添加用户时显示） -->
         <a-form-item
-          v-if="userManagement.form.generatedUserId || userManagement.editMode"
+          v-if="userManagement.form.generatedUserId && !userManagement.editMode"
           label="用户ID"
           class="form-item"
         >
           <a-input
             :value="userManagement.form.generatedUserId"
             placeholder="自动生成"
-            size="large"
             disabled
-            :addon-before="userManagement.editMode ? '已存在ID' : '登录ID'"
+            :addon-before="'登录ID'"
           />
-          <div v-if="!userManagement.editMode" class="help-text">
-            此ID将用于登录，根据用户名自动生成
-          </div>
-          <div v-else class="help-text">编辑模式下不能修改用户ID</div>
+          <div class="help-text">此ID将用于登录，根据用户名自动生成</div>
         </a-form-item>
 
         <!-- 手机号字段 -->
@@ -165,7 +160,6 @@
           <a-input
             v-model:value="userManagement.form.phoneNumber"
             placeholder="请输入手机号（可选，可用于登录）"
-            size="large"
             :maxlength="11"
           />
           <div v-if="userManagement.form.phoneError" class="error-text">
@@ -186,7 +180,6 @@
             <a-input-password
               v-model:value="userManagement.form.password"
               placeholder="请输入密码"
-              size="large"
             />
           </a-form-item>
 
@@ -194,7 +187,6 @@
             <a-input-password
               v-model:value="userManagement.form.confirmPassword"
               placeholder="请再次输入密码"
-              size="large"
             />
           </a-form-item>
         </template>
@@ -204,11 +196,11 @@
           label="角色"
           class="form-item"
         >
-          <a-input value="超级管理员" size="large" disabled />
+          <a-input value="超级管理员" disabled />
           <div class="help-text">超级管理员账户无法修改角色</div>
         </a-form-item>
         <a-form-item v-else label="角色" class="form-item">
-          <a-select v-model:value="userManagement.form.role" size="large">
+          <a-select v-model:value="userManagement.form.role">
             <a-select-option value="user">普通用户</a-select-option>
             <a-select-option value="admin" v-if="userStore.isSuperAdmin">管理员</a-select-option>
           </a-select>
@@ -218,7 +210,6 @@
         <a-form-item v-if="userStore.isSuperAdmin" label="部门" class="form-item">
           <a-select
             v-model:value="userManagement.form.departmentId"
-            size="large"
             placeholder="请选择部门"
           >
             <a-select-option
@@ -237,7 +228,7 @@
 
 <script setup>
 import { reactive, onMounted, watch } from 'vue'
-import { notification, Modal } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 import { useUserStore } from '@/stores/user'
 import { departmentApi } from '@/apis'
 import { Plus, Pencil, Trash2, User, UserLock, UserStar } from 'lucide-vue-next'
@@ -407,7 +398,7 @@ const handleUserFormSubmit = async () => {
   try {
     // 简单验证
     if (!userManagement.form.username.trim()) {
-      notification.error({ message: '用户名不能为空' })
+      message.error('用户名不能为空')
       return
     }
 
@@ -416,24 +407,24 @@ const handleUserFormSubmit = async () => {
       userManagement.form.username.trim().length < 2 ||
       userManagement.form.username.trim().length > 20
     ) {
-      notification.error({ message: '用户名长度必须在 2-20 个字符之间' })
+      message.error('用户名长度必须在 2-20 个字符之间')
       return
     }
 
     // 验证手机号
     if (userManagement.form.phoneNumber && !validatePhoneNumber(userManagement.form.phoneNumber)) {
-      notification.error({ message: '请输入正确的手机号格式' })
+      message.error('请输入正确的手机号格式')
       return
     }
 
     if (userManagement.displayPasswordFields) {
       if (!userManagement.form.password) {
-        notification.error({ message: '密码不能为空' })
+        message.error('密码不能为空')
         return
       }
 
       if (userManagement.form.password !== userManagement.form.confirmPassword) {
-        notification.error({ message: '两次输入的密码不一致' })
+        message.error('两次输入的密码不一致')
         return
       }
     }
@@ -464,7 +455,7 @@ const handleUserFormSubmit = async () => {
       }
 
       await userStore.updateUser(userManagement.editUserId, updateData)
-      notification.success({ message: '用户更新成功' })
+      message.success('用户更新成功')
     } else {
       // 创建新用户
       const createData = {
@@ -484,7 +475,7 @@ const handleUserFormSubmit = async () => {
       }
 
       await userStore.createUser(createData)
-      notification.success({ message: '用户创建成功' })
+      message.success('用户创建成功')
     }
 
     // 重新获取用户列表
@@ -492,10 +483,7 @@ const handleUserFormSubmit = async () => {
     userManagement.modalVisible = false
   } catch (error) {
     console.error('用户操作失败:', error)
-    notification.error({
-      message: '操作失败',
-      description: error.message || '请稍后重试'
-    })
+    message.error(error.message || '操作失败，请稍后重试')
   } finally {
     userManagement.loading = false
   }
@@ -505,7 +493,7 @@ const handleUserFormSubmit = async () => {
 const confirmDeleteUser = (user) => {
   // 自己不能删除自己
   if (user.id === userStore.userId) {
-    notification.error({ message: '不能删除自己的账户' })
+    message.error('不能删除自己的账户')
     return
   }
 
@@ -520,15 +508,12 @@ const confirmDeleteUser = (user) => {
       try {
         userManagement.loading = true
         await userStore.deleteUser(user.id)
-        notification.success({ message: '用户删除成功' })
+        message.success('用户删除成功')
         // 重新获取用户列表
         await fetchUsers()
       } catch (error) {
         console.error('删除用户失败:', error)
-        notification.error({
-          message: '删除失败',
-          description: error.message || '请稍后重试'
-        })
+        message.error(error.message || '删除失败，请稍后重试')
       } finally {
         userManagement.loading = false
       }
@@ -776,30 +761,31 @@ onMounted(async () => {
 
 .user-modal {
   :deep(.ant-modal-header) {
-    padding: 20px 24px;
+    padding: 20px 24px 16px;
     border-bottom: 1px solid var(--gray-150);
 
     .ant-modal-title {
-      font-size: 16px;
+      font-size: 17px;
       font-weight: 600;
       color: var(--gray-900);
     }
   }
 
   :deep(.ant-modal-body) {
-    padding: 24px;
+    padding: 20px 24px 24px;
   }
 
   .user-form {
     .form-item {
-      margin-bottom: 20px;
+      margin-bottom: 16px;
 
       :deep(.ant-form-item-label) {
-        padding-bottom: 4px;
+        padding-bottom: 6px;
 
         label {
-          font-weight: 500;
-          color: var(--gray-900);
+          font-weight: 600;
+          font-size: 13px;
+          color: var(--gray-800);
         }
       }
     }
@@ -820,10 +806,15 @@ onMounted(async () => {
 
     .password-toggle {
       margin-bottom: 16px;
+      padding: 12px 16px;
+      background: var(--gray-25);
+      border-radius: 8px;
+      border: 1px solid var(--gray-100);
 
       :deep(.ant-checkbox-wrapper) {
         font-weight: 500;
-        color: var(--gray-600);
+        color: var(--gray-700);
+        font-size: 13px;
       }
     }
   }

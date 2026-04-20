@@ -501,7 +501,6 @@ const deleteDatabase = () => {
 
 .tags-section {
   display: flex;
-  gap: 6px;
   align-items: center;
   flex-wrap: wrap;
 }
