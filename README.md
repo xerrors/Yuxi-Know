@@ -14,10 +14,10 @@
 
 </div>
 
-![arch](https://xerrors.oss-cn-shanghai.aliyuncs.com/github/image-20260331204645479.png)
+![arch](https://xerrors.oss-cn-shanghai.aliyuncs.com/github/68747470733a2f2f786572726f72732e6f73732d636e2d7368616e676861692e616c6979756e63732e636f6d2f6769746875622f696d6167652d32303236303333313230343634353437392e706e67.png)
 
 
-**图由 Nano Banana 2 生成*
+**图由 GPT-Image-2 生成*
 
 ## 核心特性
 
@@ -205,7 +205,6 @@ docker compose up --build
 - [DeerFlow](https://github.com/bytedance/deer-flow) - 参考了其 Sandbox 智能体架构的实现思路
 - [RAGflow](https://github.com/infiniflow/ragflow) - 参考了其文档 Text Chunking 的分块策略
 - [LangGraph](https://github.com/langchain-ai/langgraph) - 多智能体编排框架，本项目的核心架构基础
-- 项目 Logo 由 Nano Banana 2 生成
 
 ## 参与贡献
 
