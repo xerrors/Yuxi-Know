@@ -57,7 +57,11 @@
             />
             <!-- 统一显示所有配置项 -->
             <template v-for="(value, key) in filteredConfigurableItems" :key="key">
-              <a-form-item :label="getConfigLabel(key, value)" :name="key" class="config-item">
+              <a-form-item
+                :label="getConfigLabel(key, value)"
+                :name="key"
+                class="config-item"
+              >
                 <p v-if="value.description" class="config-description">{{ value.description }}</p>
 
                 <!-- <div>{{ value }}</div> -->
