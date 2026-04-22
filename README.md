@@ -14,7 +14,7 @@
 
 </div>
 
-![arch](https://xerrors.oss-cn-shanghai.aliyuncs.com/github/68747470733a2f2f786572726f72732e6f73732d636e2d7368616e676861692e616c6979756e63732e636f6d2f6769746875622f696d6167652d32303236303333313230343634353437392e706e67.png)
+![arch](https://xerrors.oss-cn-shanghai.aliyuncs.com/github/gpt-iamge-2-arch.png)
 
 
 **图由 GPT-Image-2 生成*
@@ -91,8 +91,6 @@
 详见 [changelog](docs/develop-guides/changelog.md)
 
 </details>
-
-![image-20260326130753514](https://xerrors.oss-cn-shanghai.aliyuncs.com/github/image-20260326130753514.png)
 
 ## 快速开始
 
