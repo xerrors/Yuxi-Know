@@ -196,7 +196,7 @@ def chunk_markdown(
             i += 1
             continue
         elif token.type == "ordered_list_open":
-            _flush_content(result, current_content, title_stack, max_length, embed_fn)
+            # _flush_content(result, current_content, title_stack, max_length, embed_fn)
             list_content = []
             j = i + 1
             list_item_counter = 1
@@ -219,7 +219,7 @@ def chunk_markdown(
             i = j + 1
             continue
         elif token.type == "bullet_list_open":
-            _flush_content(result, current_content, title_stack, max_length, embed_fn)
+            # _flush_content(result, current_content, title_stack, max_length, embed_fn)
             list_content = []
             j = i + 1
             while j < len(tokens) and tokens[j].type != "bullet_list_close":
@@ -271,7 +271,7 @@ def chunk_markdown(
             i += 1
             continue
         elif token.type == "math_block":
-            _flush_content(result, current_content, title_stack, max_length, embed_fn)
+            # _flush_content(result, current_content, title_stack, max_length, embed_fn)
             current_content.append(f"$ {token.content} $")
             _flush_content(result, current_content, title_stack, max_length, embed_fn, special_element="Math Block")
             i += 1
