@@ -2,6 +2,7 @@
   "name": "yuxi-web",
   "version": "0.6.1",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "server": "vite serve --host",
