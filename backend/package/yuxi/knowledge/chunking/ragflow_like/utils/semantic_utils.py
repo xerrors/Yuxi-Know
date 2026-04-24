@@ -21,9 +21,7 @@ def _ensure_punkt_tab() -> None:
     try:
         nltk.data.find("tokenizers/punkt_tab")
     except LookupError as e:
-        raise RuntimeError(
-            "缺少 NLTK 资源 punkt_tab。请先执行: python -m nltk.downloader punkt_tab"
-        ) from e
+        raise RuntimeError("缺少 NLTK 资源 punkt_tab。请先执行: python -m nltk.downloader punkt_tab") from e
 
     _punkt_checked = True
 
@@ -122,7 +120,10 @@ def find_best_num_clusters(embeddings: Any, min_clusters: int = 2, max_clusters:
 
 
 def semantic_chunking_with_auto_clusters(
-    text: str, embed_fn: Callable[[list[str]], Any] | None, token_count_fn: Callable[[str], int], max_chunk_size: int = 512
+    text: str,
+    embed_fn: Callable[[list[str]], Any] | None,
+    token_count_fn: Callable[[str], int],
+    max_chunk_size: int = 512,
 ) -> list[str]:
     """
     对传入的文本进行语义切分，过程中会自动选择最佳的聚集数量。
