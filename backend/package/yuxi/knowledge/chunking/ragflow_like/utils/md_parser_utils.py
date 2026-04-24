@@ -85,7 +85,7 @@ def extract_table_block(tokens: list[Any], i: int, original_lines: list[str]) ->
 
 
 def split_text_by_length_and_newline(
-    text: str, max_length: int, embed_fn: Callable[[list[str]], Any], token_count_fn: Callable[[str], int]
+    text: str, max_length: int, embed_fn: Callable[[list[str]], Any] | None, token_count_fn: Callable[[str], int]
 ) -> list[str]:
     """
     层次化文本切分策略。

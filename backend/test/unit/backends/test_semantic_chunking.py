@@ -1,7 +1,5 @@
 import pytest
 import numpy as np
-import os
-import json
 
 # 现在可以安全地导入了，因为顶层不再有重型依赖
 from yuxi.knowledge.chunking.ragflow_like.parsers import semantic
@@ -244,7 +242,7 @@ def test_semantic_chunking_basic(embed_fn, sample_markdown):
 
     # 配置切分参数
     parser_config = {
-        "chunk_token_num": 800,  # 针对标准文档调整 token 数
+        "chunk_token_num": 1000,  # 针对标准文档调整 token 数
         "overlapped_percent": 0.1
     }
 
@@ -304,14 +302,11 @@ def test_semantic_chunking_basic(embed_fn, sample_markdown):
     print(f"\n[测试成功] 文档成功切分为 {len(chunks)} 个片段")
     print(f"识别到的关键技术词汇: {found_keywords}")
 
-    # 将切分后的内容写入到 resource 目录
-    output_dir = os.path.join(os.path.dirname(__file__), "resource")
-    os.makedirs(output_dir, exist_ok=True)
-    
-    output_path = os.path.join(output_dir, "semantic_chunks.json")
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(chunks, f, ensure_ascii=False, indent=2)
-    print(f"切分内容已保存至: {output_path}")
+    # 直接输出到控制台预览切分结果，避免文件副作用
+    print("\n--- 语义切分结果开始 ---")
+    for idx, chunk in enumerate(chunks, 1):
+        print(f"\n[Chunk {idx}]\n{chunk}")
+    print("\n--- 语义切分结果结束 ---")
    
 def test_heading_inference():
     """测试标题层级推断工具类"""

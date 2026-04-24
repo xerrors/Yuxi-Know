@@ -9,11 +9,23 @@ from nltk.tokenize import sent_tokenize
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.metrics import silhouette_score
 
-# 模块加载的时候先检查是否已经下载了punkt_tab模型（用于识别句子的边界）
-try:
-    nltk.data.find("tokenizers/punkt_tab")
-except LookupError:
-    nltk.download("punkt_tab")
+_punkt_checked = False
+
+
+def _ensure_punkt_tab() -> None:
+    """首次使用分句能力时检查 NLTK punkt_tab 资源，缺失时给出可操作错误。"""
+    global _punkt_checked
+    if _punkt_checked:
+        return
+
+    try:
+        nltk.data.find("tokenizers/punkt_tab")
+    except LookupError as e:
+        raise RuntimeError(
+            "缺少 NLTK 资源 punkt_tab。请先执行: python -m nltk.downloader punkt_tab"
+        ) from e
+
+    _punkt_checked = True
 
 
 def split_sentences_chinese(text: str) -> list[str]:
@@ -25,7 +37,7 @@ def split_sentences_chinese(text: str) -> list[str]:
     - 使用正向/反向预查处理引号：确保如果标点后面紧跟引号（”’"），该引号会被保留在当前句子末尾，而不是被切分到下一句。
     - 返回去除两端空格且非空的句子列表。
     """
-    pattern = r'(?<=[。！？])(?![”’"])|(?<=[。！？])(?![”’"])|(?<=[。！？][”’"])'
+    pattern = r'(?<=[。！？][”’"])|(?<=[。！？])(?![”’"])'
     sentences = re.split(pattern, text)
     return [s.strip() for s in sentences if s.strip()]
 
@@ -50,6 +62,8 @@ def split_mixed_sentences(text: str) -> list[str]:
     Returns:
         List[str]: 分割后的句子列表。
     """
+    _ensure_punkt_tab()
+
     chunks = re.split(r"(\n+)", text)
     sentences = []
 
@@ -108,7 +122,7 @@ def find_best_num_clusters(embeddings: Any, min_clusters: int = 2, max_clusters:
 
 
 def semantic_chunking_with_auto_clusters(
-    text: str, embed_fn: Callable[[list[str]], Any], token_count_fn: Callable[[str], int], max_chunk_size: int = 512
+    text: str, embed_fn: Callable[[list[str]], Any] | None, token_count_fn: Callable[[str], int], max_chunk_size: int = 512
 ) -> list[str]:
     """
     对传入的文本进行语义切分，过程中会自动选择最佳的聚集数量。
@@ -117,26 +131,43 @@ def semantic_chunking_with_auto_clusters(
     - 先将文本中的句子按语言进行分发，英文/混合文本使用NLTK的sent_tokenize，中文文本使用split_sentences_chinese。
     - 对每个句子进行嵌入向量化。
     - 确定最佳的聚类数量（根据轮廓系数）。
-    - 对句子进行聚类，将每个聚类中的句子连接起来，形成一个分块。
-
+    - 对句子进行聚类后，按原文顺序遍历：当聚类标签变化或达到长度上限时切分，形成连续分块。
+    - 如果嵌入模型缺失，则退化为原始切分方式
     """
     sentences = split_mixed_sentences(text)
     if len(sentences) < 2:
         return [text.strip()]
 
-    # 向量化每个句子, 得到他们的嵌入向量
-    embeddings = embed_fn(sentences)
-
     # 计算每个句子的token数量
     sentence_token_counts = [token_count_fn(s) for s in sentences]
     total_tokens = sum(sentence_token_counts)
 
-    # 决定合适的聚集数量，需要保证每个分块的token数量都不超过max_chunk_size
-    best_k = max(total_tokens // max_chunk_size, 1) + 1
+    # 如果没有提供向量化函数，或者整体未超长，则直接进行简单合并/返回
+    if embed_fn is None or total_tokens <= max_chunk_size:
+        chunks = []
+        current_chunk = ""
+        current_chunk_tokens = 0
+        for s, cnt in zip(sentences, sentence_token_counts):
+            if current_chunk_tokens + cnt > max_chunk_size and current_chunk:
+                chunks.append(current_chunk.strip())
+                current_chunk = s
+                current_chunk_tokens = cnt
+            else:
+                current_chunk += s
+                current_chunk_tokens += cnt
+        if current_chunk:
+            chunks.append(current_chunk.strip())
+        return chunks
+
+    # 向量化每个句子, 得到他们的嵌入向量
+    embeddings = embed_fn(sentences)
+
+    # 决定合适的聚集数量：超长时按上限向上取整，避免整除时多切一块
+    best_k = (total_tokens + max_chunk_size - 1) // max_chunk_size
     best_k = min(best_k, len(sentences))
 
     # 根据指定的聚集数量、相似度判断方式、联动方式，对句子进行聚类
-    # 这里返回的labels是一个每个句子的聚类标签列表，例如[0,0,1,2,2]，相同ID的句子被聚类到同一个分块中
+    # labels 是每个句子的聚类标签列表（如 [0,0,1,2,2]），后续会按原文顺序在标签变化处切分连续分块
     labels = AgglomerativeClustering(n_clusters=best_k, metric="cosine", linkage="average").fit_predict(embeddings)
 
     chunks = []
