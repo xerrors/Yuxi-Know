@@ -4,15 +4,19 @@
       <div class="user-info-dropdown" :data-align="showRole ? 'left' : 'center'">
         <div class="user-avatar">
           <img
-            v-if="userStore.avatar"
-            :src="userStore.avatar"
+            v-if="avatarSrc"
+            :src="avatarSrc"
             :alt="userStore.username"
             class="avatar-image"
+            @error="handleAvatarError"
           />
           <CircleUser v-else />
           <!-- <div class="user-role-badge" :class="userRoleClass"></div> -->
         </div>
-        <div v-if="showRole">{{ userStore.username }}</div>
+        <div v-if="showRole" class="user-name">{{ userStore.username }}</div>
+        <div v-if="slots.actions" class="user-info-actions">
+          <slot name="actions" />
+        </div>
       </div>
       <template #overlay>
         <a-menu>
@@ -71,10 +75,11 @@
           <div class="avatar-container">
             <div class="avatar-display">
               <img
-                v-if="userStore.avatar"
-                :src="userStore.avatar"
+                v-if="avatarSrc"
+                :src="avatarSrc"
                 :alt="userStore.username"
                 class="large-avatar"
+                @error="handleAvatarError"
               />
               <div v-else class="default-avatar">
                 <CircleUser :size="60" />
@@ -177,7 +182,7 @@
 </template>
 
 <script setup>
-import { computed, ref, inject, h } from 'vue'
+import { computed, ref, inject, h, useSlots, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import DebugComponent from '@/components/DebugComponent.vue'
@@ -197,6 +202,7 @@ import { useThemeStore } from '@/stores/theme'
 const router = useRouter()
 const userStore = useUserStore()
 const themeStore = useThemeStore()
+const slots = useSlots()
 
 // 预定义图标组件，避免 Vue 警告
 const BookOpenIcon = h(BookOpen, { size: '16' })
@@ -205,6 +211,7 @@ const MoonIcon = h(Moon, { size: '16' })
 const TerminalIcon = h(Terminal, { size: '16' })
 const SettingsIcon = h(Settings, { size: '16' })
 const LogOutIcon = h(LogOut, { size: '16' })
+const DEFAULT_AVATAR_URL = 'https://xerrors.oss-cn-shanghai.aliyuncs.com/github/default.jpeg'
 
 // 调试面板状态
 const showDebug = ref(false)
@@ -216,10 +223,35 @@ const { openSettingsModal } = inject('settingsModal', {})
 const profileModalVisible = ref(false)
 const avatarUploading = ref(false)
 const profileEditing = ref(false)
+const avatarLoadFailed = ref(false)
+const defaultAvatarLoadFailed = ref(false)
 const editedProfile = ref({
   username: '',
   phone_number: ''
 })
+
+// 用户头像不可用时回退到公共默认头像；默认头像异常时再显示图标占位。
+const avatarSrc = computed(() => {
+  if (userStore.avatar && !avatarLoadFailed.value) return userStore.avatar
+  if (!defaultAvatarLoadFailed.value) return DEFAULT_AVATAR_URL
+  return ''
+})
+
+const handleAvatarError = () => {
+  if (userStore.avatar && !avatarLoadFailed.value) {
+    avatarLoadFailed.value = true
+    return
+  }
+  defaultAvatarLoadFailed.value = true
+}
+
+watch(
+  () => userStore.avatar,
+  () => {
+    avatarLoadFailed.value = false
+    defaultAvatarLoadFailed.value = false
+  }
+)
 
 defineProps({
   showRole: {
@@ -413,7 +445,9 @@ const handleAvatarChange = async (info) => {
   align-items: center;
   justify-content: center;
   color: var(--gray-800);
-  // margin-bottom: 16px;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Noto Sans SC', 'Roboto', 'HarmonyOS Sans SC', 'Segoe UI',
+    'Helvetica Neue', Arial, sans-serif;
 }
 
 .user-info-dropdown {
@@ -421,6 +455,7 @@ const handleAvatarChange = async (info) => {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 
   &[data-align='center'] {
     justify-content: center;
@@ -431,9 +466,25 @@ const handleAvatarChange = async (info) => {
   }
 }
 
+.user-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-info-actions {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+}
+
 .user-avatar {
-  width: 32px;
-  height: 32px;
+  @avatar-size: 32px;
+  width: @avatar-size;
+  height: @avatar-size;
+  min-width: @avatar-size;
+  flex: 0 0 @avatar-size;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -452,7 +503,9 @@ const handleAvatarChange = async (info) => {
   .avatar-image {
     width: 100%;
     height: 100%;
-    object-fit: contain;
+    display: block;
+    box-sizing: border-box;
+    object-fit: cover;
     border-radius: 50%;
     border: 2px solid var(--gray-150);
   }
@@ -554,8 +607,11 @@ const handleAvatarChange = async (info) => {
         .large-avatar {
           width: 80px;
           height: 80px;
+          display: block;
+          box-sizing: border-box;
           border-radius: 50%;
           object-fit: cover;
+          margin: 0 auto;
           border: 3px solid var(--gray-150);
           box-shadow: 0 2px 8px var(--shadow-2);
         }

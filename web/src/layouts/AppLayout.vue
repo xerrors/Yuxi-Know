@@ -1,10 +1,20 @@
 <script setup>
-import { ref, reactive, onMounted, computed, provide } from 'vue'
-import { RouterLink, RouterView, useRoute } from 'vue-router'
+import { ref, reactive, onMounted, computed, provide, watch } from 'vue'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { GithubOutlined } from '@ant-design/icons-vue'
-import { Bot, LibraryBig, BarChart3, ClipboardList, Blocks } from 'lucide-vue-next'
+import {
+  LibraryBig,
+  BarChart3,
+  ClipboardList,
+  Blocks,
+  PanelLeftClose,
+  PanelLeftOpen,
+  MessageCirclePlus
+} from 'lucide-vue-next'
 
 import { useConfigStore } from '@/stores/config'
+import { useAgentStore } from '@/stores/agent'
+import { useChatThreadsStore } from '@/stores/chatThreads'
 import { useDatabaseStore } from '@/stores/database'
 import { useInfoStore } from '@/stores/info'
 import { useTaskerStore } from '@/stores/tasker'
@@ -14,13 +24,18 @@ import UserInfoComponent from '@/components/UserInfoComponent.vue'
 import DebugComponent from '@/components/DebugComponent.vue'
 import TaskCenterDrawer from '@/components/TaskCenterDrawer.vue'
 import SettingsModal from '@/components/SettingsModal.vue'
+import ConversationNavSection from '@/components/ConversationNavSection.vue'
 
 const configStore = useConfigStore()
+const agentStore = useAgentStore()
+const chatThreadsStore = useChatThreadsStore()
 const databaseStore = useDatabaseStore()
 const infoStore = useInfoStore()
 const taskerStore = useTaskerStore()
 const userStore = useUserStore()
 const { activeCount: activeCountRef, isDrawerOpen } = storeToRefs(taskerStore)
+const { threads, currentThreadId, hasMoreThreads, isLoadingMoreThreads } =
+  storeToRefs(chatThreadsStore)
 
 const layoutSettings = reactive({
   showDebug: false,
@@ -36,6 +51,8 @@ const showDebugModal = ref(false)
 
 // Add state for settings modal
 const showSettingsModal = ref(false)
+
+const sidebarCollapsed = ref(false)
 
 // Provide settings modal methods to child components
 const openSettingsModal = () => {
@@ -80,10 +97,9 @@ const fetchGithubStars = async () => {
 }
 
 onMounted(async () => {
-  // 加载信息配置
-  await infoStore.loadInfoConfig()
-  // 加载知识库数据（普通用户加载可访问知识库）
-  await getRemoteDatabase()
+  // 加载信息配置与知识库数据无依赖，可并行
+  await Promise.all([infoStore.loadInfoConfig(), getRemoteDatabase()])
+  await initAgentNavigation()
   // 仅管理员加载系统配置和任务中心数据
   if (userStore.isAdmin) {
     await getRemoteConfig()
@@ -92,11 +108,13 @@ onMounted(async () => {
   }
 })
 
-// 打印当前页面的路由信息，使用 vue3 的 setup composition API
 const route = useRoute()
-console.log(route)
+const router = useRouter()
 
 const activeTaskCount = computed(() => activeCountRef.value || 0)
+const organizationName = computed(() => {
+  return infoStore.organization.name || infoStore.branding.name || 'Yuxi'
+})
 
 // 下面是导航菜单部分，添加智能体项
 const isLiteMode = import.meta.env.VITE_LITE_MODE === 'true'
@@ -104,10 +122,11 @@ const isLiteMode = import.meta.env.VITE_LITE_MODE === 'true'
 const mainList = computed(() => {
   const items = [
     {
-      name: '智能体',
+      name: '创建新对话',
       path: '/agent',
-      icon: Bot,
-      activeIcon: Bot
+      icon: MessageCirclePlus,
+      activeIcon: MessageCirclePlus,
+      action: true
     }
   ]
 
@@ -147,6 +166,75 @@ const isNavItemActive = (item) => {
   return activePaths.some((path) => route.path === path || route.path.startsWith(`${path}/`))
 }
 
+const setSidebarCollapsed = (collapsed) => {
+  sidebarCollapsed.value = collapsed
+}
+
+const toggleSidebar = () => {
+  setSidebarCollapsed(!sidebarCollapsed.value)
+}
+
+const initAgentNavigation = async () => {
+  try {
+    if (!agentStore.isInitialized) {
+      await agentStore.initialize()
+    }
+    await chatThreadsStore.loadThreads()
+  } catch (error) {
+    console.warn('加载对话导航失败:', error)
+  }
+}
+
+const handleSelectChat = (threadId) => {
+  if (!threadId) return
+  chatThreadsStore.setCurrentThreadId(threadId)
+  router.push({ name: 'AgentCompWithThreadId', params: { thread_id: threadId } })
+}
+
+const handleDeleteChat = async (threadId) => {
+  if (!threadId) return
+  try {
+    await chatThreadsStore.deleteThread(threadId)
+    if (route.params.thread_id === threadId) {
+      await router.replace({ name: 'AgentComp' })
+    }
+  } catch (error) {
+    console.warn('删除对话失败:', error)
+  }
+}
+
+const handleRenameChat = async ({ chatId, title }) => {
+  try {
+    await chatThreadsStore.updateThread(chatId, title)
+  } catch (error) {
+    console.warn('重命名对话失败:', error)
+  }
+}
+
+const handleTogglePinChat = async (threadId) => {
+  const thread = threads.value.find((item) => item.id === threadId)
+  if (!thread) return
+  try {
+    await chatThreadsStore.updateThread(threadId, null, !thread.is_pinned)
+    await chatThreadsStore.loadThreads()
+    if (currentThreadId.value) {
+      chatThreadsStore.setCurrentThreadId(currentThreadId.value)
+    }
+  } catch (error) {
+    console.warn('更新置顶状态失败:', error)
+  }
+}
+
+watch(
+  () => [route.path, route.params.thread_id],
+  () => {
+    if (!route.path.startsWith('/agent')) return
+    const threadId = typeof route.params.thread_id === 'string' ? route.params.thread_id : null
+    chatThreadsStore.setCurrentThreadId(threadId)
+  },
+  { immediate: true }
+)
+
 // Provide settings modal methods to child components
 provide('settingsModal', {
   openSettingsModal
@@ -154,12 +242,35 @@ provide('settingsModal', {
 </script>
 
 <template>
-  <div class="app-layout" :class="{ 'use-top-bar': layoutSettings.useTopBar }">
-    <div v-if="userStore.isAdmin" class="header" :class="{ 'top-bar': layoutSettings.useTopBar }">
-      <div class="logo circle">
-        <router-link to="/">
-          <img :src="infoStore.organization.avatar" />
+  <div
+    class="app-layout"
+    :class="{ 'use-top-bar': layoutSettings.useTopBar, 'sidebar-collapsed': sidebarCollapsed }"
+  >
+    <div class="header" :class="{ 'top-bar': layoutSettings.useTopBar }">
+      <div class="sidebar-brand" @click.stop>
+        <router-link v-if="!sidebarCollapsed" to="/" class="brand-link">
+          <img :src="infoStore.organization.avatar" class="brand-avatar" />
+          <span class="brand-name">{{ organizationName }}</span>
         </router-link>
+        <button
+          v-else
+          type="button"
+          class="brand-link brand-expand-button"
+          aria-label="展开侧边栏"
+          @click="setSidebarCollapsed(false)"
+        >
+          <img :src="infoStore.organization.avatar" class="brand-avatar brand-avatar-image" />
+          <PanelLeftOpen class="brand-expand-icon" size="20" />
+        </button>
+        <button
+          v-if="!sidebarCollapsed"
+          type="button"
+          class="sidebar-toggle"
+          aria-label="折叠侧边栏"
+          @click="toggleSidebar"
+        >
+          <PanelLeftClose size="18" />
+        </button>
       </div>
       <div class="nav">
         <!-- 使用mainList渲染导航项 -->
@@ -169,52 +280,75 @@ provide('settingsModal', {
           :to="item.path"
           v-show="!item.hidden"
           class="nav-item"
-          :class="{ active: isNavItemActive(item) }"
-          active-class="active"
+          :class="{ active: !item.action && isNavItemActive(item), 'primary-action': item.action }"
+          :active-class="item.action ? '' : 'active'"
+          @click.stop
         >
-          <a-tooltip placement="right">
+          <a-tooltip placement="right" :open="sidebarCollapsed ? undefined : false">
             <template #title>{{ item.name }}</template>
             <component
               class="icon"
               :is="isNavItemActive(item) ? item.activeIcon : item.icon"
-              size="22"
+              size="18"
             />
           </a-tooltip>
+          <span class="nav-text">{{ item.name }}</span>
         </RouterLink>
       </div>
-      <div class="fill"></div>
-      <div class="github nav-item">
-        <a-tooltip placement="right">
-          <template #title>欢迎 Star</template>
-          <a href="https://github.com/xerrors/Yuxi" target="_blank" class="github-link">
-            <GithubOutlined class="icon" />
-            <span v-if="githubStars > 0" class="github-stars">
-              <span class="star-count">{{ (githubStars / 1000).toFixed(1) }}k</span>
-            </span>
-          </a>
-        </a-tooltip>
+      <div class="fill">
+        <ConversationNavSection
+          v-if="!sidebarCollapsed"
+          class="sidebar-conversations"
+          :current-chat-id="currentThreadId"
+          :chats-list="threads"
+          :has-more-chats="hasMoreThreads"
+          :is-loading-more="isLoadingMoreThreads"
+          @select-chat="handleSelectChat"
+          @delete-chat="handleDeleteChat"
+          @rename-chat="handleRenameChat"
+          @toggle-pin="handleTogglePinChat"
+          @load-more-chats="() => chatThreadsStore.loadMoreThreads()"
+        />
       </div>
-      <div
-        v-if="userStore.isAdmin"
-        class="nav-item task-center"
-        :class="{ active: isDrawerOpen }"
-        @click="taskerStore.openDrawer()"
-      >
-        <a-tooltip placement="right">
-          <template #title>任务中心</template>
-          <a-badge
-            :count="activeTaskCount"
-            :overflow-count="99"
-            class="task-center-badge"
-            size="small"
-          >
-            <ClipboardList class="icon" size="22" />
-          </a-badge>
-        </a-tooltip>
-      </div>
-      <!-- 用户信息组件 -->
-      <div class="nav-item user-info">
-        <UserInfoComponent />
+      <div class="foo">
+
+        <div class="github nav-item" @click.stop>
+          <a-tooltip placement="right" :open="sidebarCollapsed ? undefined : false">
+            <template #title>欢迎 Star</template>
+            <a href="https://github.com/xerrors/Yuxi" target="_blank" class="github-link">
+              <GithubOutlined class="icon" />
+              <span class="nav-text">GitHub</span>
+              <span v-if="githubStars > 0" class="github-stars">
+                <span class="star-count">{{ (githubStars / 1000).toFixed(1) }}k</span>
+              </span>
+            </a>
+          </a-tooltip>
+        </div>
+        <!-- 用户信息组件 -->
+        <div class="nav-item user-info" @click.stop>
+          <UserInfoComponent :show-role="!sidebarCollapsed">
+            <template v-if="userStore.isAdmin" #actions>
+              <a-tooltip placement="top" title="任务中心">
+                <button
+                  class="user-task-center"
+                  :class="{ active: isDrawerOpen }"
+                  type="button"
+                  aria-label="任务中心"
+                  @click.stop="taskerStore.openDrawer()"
+                >
+                  <a-badge
+                    :count="activeTaskCount"
+                    :overflow-count="99"
+                    class="task-center-badge"
+                    size="small"
+                  >
+                    <ClipboardList class="icon" size="16" />
+                  </a-badge>
+                </button>
+              </a-tooltip>
+            </template>
+          </UserInfoComponent>
+        </div>
       </div>
     </div>
     <router-view v-slot="{ Component, route }" id="app-router-view">
@@ -244,7 +378,12 @@ provide('settingsModal', {
 
 <style lang="less" scoped>
 // Less 变量定义
-@header-width: 50px;
+@sidebar-width: 252px;
+@sidebar-collapsed-width: 56px;
+@sidebar-padding: 6px 8px;
+@sidebar-item-height: 40px;
+@sidebar-item-padding-x: 10px;
+@sidebar-icon-size: 18px;
 
 .app-layout {
   display: flex;
@@ -269,66 +408,158 @@ div.header,
 .header {
   display: flex;
   flex-direction: column;
-  flex: 0 0 @header-width;
+  flex: 0 0 @sidebar-width;
   justify-content: flex-start;
-  align-items: center;
-  background-color: var(--main-0);
+  align-items: stretch;
+  gap: 16px;
+  background-color: var(--main-5);
   height: 100%;
-  width: @header-width;
+  width: @sidebar-width;
   border-right: 1px solid var(--gray-100);
+  padding: @sidebar-padding;
+  overflow: hidden;
+  transition:
+    width 0.18s ease,
+    flex-basis 0.18s ease;
 
   .nav {
     display: flex;
+    flex: 0 0 auto;
     flex-direction: column;
-    justify-content: center;
-    align-items: center;
+    justify-content: flex-start;
+    align-items: stretch;
     position: relative;
-    // height: 45px;
-    gap: 16px;
+    gap: 4px;
+  }
+
+  .sidebar-conversations {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .sidebar-brand,
+  :deep(.conversation-nav-section:not(.sidebar-conversations)),
+  .github,
+  .user-info {
+    flex-shrink: 0;
   }
 
   .fill {
-    flex-grow: 1;
+    flex: 1 1 0;
+    min-height: 0;
   }
 
-  .logo {
-    width: 34px;
-    height: 34px;
-    margin: 6px 0 20px 0;
+  .sidebar-brand {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: @sidebar-item-height;
+    gap: 8px;
+  }
 
-    img {
-      width: 100%;
-      height: 100%;
-      border-radius: 4px; // 50% for circle
-    }
+  .brand-link {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    min-width: 0;
+    height: @sidebar-item-height;
+    color: var(--gray-900);
+    text-decoration: none;
+    border: 0;
+    background: transparent;
+    padding: 0 6px;
+    cursor: pointer;
+  }
 
-    & > a {
-      text-decoration: none;
-      font-size: 24px;
-      font-weight: bold;
-      color: var(--gray-900);
+  .brand-avatar {
+    flex: 0 0 28px;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    object-fit: cover;
+  }
+
+  .brand-name {
+    min-width: 0;
+    margin-left: 10px;
+    overflow: hidden;
+    color: var(--gray-1000);
+    font-size: 15px;
+    font-weight: 650;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sidebar-toggle {
+    display: inline-flex;
+    flex: 0 0 32px;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--gray-600);
+    cursor: pointer;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      color 0.2s ease;
+
+    &:hover,
+    &:focus-visible {
+      border-color: var(--main-50);
+      background: var(--main-20);
+      color: var(--main-color);
+      outline: none;
     }
   }
 
   .nav-item {
     display: flex;
     align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    padding: 4px;
+    justify-content: flex-start;
+    width: 100%;
+    height: @sidebar-item-height;
+    padding: 0 @sidebar-item-padding-x;
     border: 1px solid transparent;
-    border-radius: 12px;
+    border-radius: 8px;
     background-color: transparent;
     color: var(--gray-700);
-    font-size: 20px;
+    font-size: 14px;
+    font-weight: 600;
     transition:
       background-color 0.2s ease-in-out,
+      border-color 0.2s ease-in-out,
       color 0.2s ease-in-out;
     margin: 0;
     text-decoration: none;
     cursor: pointer;
     outline: none;
+
+    .icon {
+      flex: 0 0 @sidebar-icon-size;
+      width: @sidebar-icon-size;
+      height: @sidebar-icon-size;
+    }
+
+    .nav-text {
+      min-width: 0;
+      max-width: 140px;
+      margin-left: 8px;
+      overflow: hidden;
+      line-height: 20px;
+      font-weight: 500;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      transition:
+        opacity 0.12s ease,
+        margin-left 0.18s ease,
+        max-width 0.18s ease;
+    }
 
     & > svg:focus {
       outline: none;
@@ -338,9 +569,25 @@ div.header,
     }
 
     &.active {
-      background-color: var(--gray-100);
-      font-weight: bold;
+      border-color: transparent;
+      background-color: var(--main-30);
+      font-weight: 600;
       color: var(--main-color);
+    }
+
+    &.primary-action {
+      margin-bottom: 8px;
+      border-color: var(--gray-150);
+      background-color: var(--gray-0);
+      color: var(--main-color);
+      box-shadow: 0 3px 4px rgba(0, 10, 20, 0.02);
+
+      &:hover {
+        border-color: var(--gray-200);
+        background-color: var(--gray-0);
+        color: var(--main-color);
+        box-shadow: 0 3px 4px rgba(0, 10, 20, 0.07);
+      }
     }
 
     &.warning {
@@ -348,29 +595,46 @@ div.header,
     }
 
     &:hover {
+      border-color: transparent;
+      background-color: var(--main-20);
       color: var(--main-color);
     }
 
     &.github {
-      padding: 10px 12px;
-      margin-bottom: 16px;
+      margin-bottom: 8px;
       &:hover {
-        background-color: transparent;
-        border: 1px solid transparent;
+        border-color: transparent;
       }
 
       .github-link {
         display: flex;
-        flex-direction: column;
         align-items: center;
+        width: 100%;
+        min-width: 0;
         color: inherit;
+        text-decoration: none;
+      }
+
+      .icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: @sidebar-icon-size;
+        line-height: 1;
       }
 
       .github-stars {
         display: flex;
         align-items: center;
+        max-width: 48px;
+        margin-left: auto;
+        overflow: hidden;
         font-size: 12px;
-        margin-top: 4px;
+        color: var(--gray-500);
+        white-space: nowrap;
+        transition:
+          opacity 0.12s ease,
+          max-width 0.18s ease;
 
         .star-icon {
           color: var(--color-warning-500);
@@ -390,16 +654,6 @@ div.header,
     &.docs {
       display: none;
     }
-    &.task-center {
-      margin-bottom: 16px;
-
-      .task-center-badge {
-        width: 100%;
-        display: flex;
-        justify-content: center;
-      }
-    }
-
     &.theme-toggle-nav {
       .theme-toggle-icon {
         display: flex;
@@ -418,6 +672,138 @@ div.header,
     }
     &.user-info {
       margin-bottom: 8px;
+      padding: 0 3px;
+      overflow: hidden;
+
+      :deep(.user-info-component) {
+        width: 100%;
+      }
+
+      :deep(.user-info-dropdown) {
+        width: 100%;
+        height: @sidebar-item-height;
+        border-radius: 8px;
+        transition:
+          background-color 0.2s ease,
+          color 0.2s ease;
+      }
+
+      :deep(.user-info-dropdown:hover) {
+        background: var(--main-20);
+        color: var(--main-color);
+      }
+      :deep(.user-name) {
+        flex: 1 1 auto;
+      }
+
+      :deep(.user-task-center) {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border: 1px solid transparent;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--gray-600);
+        cursor: pointer;
+        transition:
+          background-color 0.2s ease,
+          color 0.2s ease;
+
+        &:hover,
+        &.active {
+          background: var(--main-30);
+          color: var(--main-color);
+        }
+
+        .task-center-badge {
+          display: flex;
+          justify-content: center;
+        }
+
+        .icon {
+          display: block;
+          width: 16px;
+          height: 16px;
+        }
+      }
+    }
+  }
+}
+
+.app-layout.sidebar-collapsed {
+  .header {
+    flex-basis: @sidebar-collapsed-width;
+    width: @sidebar-collapsed-width;
+    align-items: stretch;
+    padding: @sidebar-padding;
+
+    .sidebar-brand {
+      justify-content: flex-start;
+      width: 100%;
+    }
+
+    .brand-expand-button {
+      flex: 0 0 @sidebar-item-height;
+      justify-content: center;
+      width: @sidebar-item-height;
+      padding: 0 6px;
+      border-radius: 8px;
+
+      .brand-expand-icon {
+        display: none;
+        width: @sidebar-icon-size;
+        height: @sidebar-icon-size;
+        color: var(--main-color);
+      }
+
+      &:hover,
+      &:focus-visible {
+        background: var(--main-20);
+        outline: none;
+
+        .brand-avatar-image {
+          display: none;
+        }
+
+        .brand-expand-icon {
+          display: block;
+        }
+      }
+    }
+
+    .nav {
+      align-items: stretch;
+      width: 100%;
+    }
+
+    .nav-item {
+      justify-content: flex-start;
+      width: @sidebar-item-height;
+      padding: 0 10px;
+
+      .nav-text,
+      .github-stars {
+        max-width: 0;
+        margin-left: 0;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      &.github {
+        .github-link {
+          justify-content: flex-start;
+        }
+      }
+
+      &.user-info {
+        padding: 0;
+        :deep(.user-info-actions) {
+          display: none;
+        }
+      }
     }
   }
 }
@@ -541,9 +927,6 @@ div.header,
       }
     }
 
-    &.task-center {
-      margin-bottom: 0;
-    }
   }
 }
 </style>

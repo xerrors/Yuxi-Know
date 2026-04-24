@@ -79,7 +79,7 @@
 <script setup>
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
-import { ChevronDown, Download, Eye, FolderOutput, LoaderCircle, Save } from 'lucide-vue-next'
+import { ChevronDown, Download, FolderOutput, LoaderCircle, Save } from 'lucide-vue-next'
 import { threadApi } from '@/apis/agent_api'
 import AgentFilePreview from '@/components/AgentFilePreview.vue'
 import { getFileIcon, getFileIconColor } from '@/utils/file_utils'

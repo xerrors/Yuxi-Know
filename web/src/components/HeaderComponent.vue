@@ -45,7 +45,6 @@ defineProps({
   backdrop-filter: blur(10px);
   padding: 8px 16px;
   height: 50px;
-  border-bottom: 1px solid var(--gray-150);
   position: sticky;
   top: 0;
   z-index: 1000;
