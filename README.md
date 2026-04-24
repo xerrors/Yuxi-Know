@@ -97,7 +97,7 @@
 克隆代码，并初始化
 
 ```
-git clone --branch v0.6.0 --depth 1 https://github.com/xerrors/Yuxi.git
+git clone --branch v0.6.1 --depth 1 https://github.com/xerrors/Yuxi.git
 cd Yuxi
 
 # Linux/macOS

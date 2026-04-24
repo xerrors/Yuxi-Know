@@ -8,5 +8,5 @@ def test_import_yuxi_does_not_eagerly_import_knowledge(monkeypatch):
 
     import yuxi
 
-    assert yuxi.get_version() == "0.6.0"
+    assert yuxi.get_version() == yuxi.__version__
     assert "yuxi.knowledge" not in sys.modules

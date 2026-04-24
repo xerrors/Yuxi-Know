@@ -7,7 +7,12 @@ from importlib import import_module  # noqa: E402
 
 from yuxi.config import config as config  # noqa: E402
 
-__version__ = "0.6.0"
+try:
+    from importlib.metadata import version
+
+    __version__ = version("yuxi")
+except Exception:
+    __version__ = "unknown"
 
 executor = ThreadPoolExecutor()  # noqa: E402
 

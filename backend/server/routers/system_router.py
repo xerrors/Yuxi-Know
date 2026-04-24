@@ -113,7 +113,11 @@ async def load_info_config():
         # 异步读取配置文件
         async with aiofiles.open(config_path, encoding="utf-8") as file:
             content = await file.read()
-            config = yaml.safe_load(content)
+
+        # 注入版本号占位符
+        content = content.replace("{{YUXI_VERSION}}", get_version())
+
+        config = yaml.safe_load(content)
 
         return config
 
