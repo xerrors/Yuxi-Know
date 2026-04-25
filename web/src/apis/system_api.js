@@ -97,25 +97,6 @@ export const ocrApi = {
 // =============================================================================
 
 export const chatModelApi = {
-  /**
-   * 获取指定聊天模型的状态
-   * @param {string} provider - 模型提供商
-   * @param {string} modelName - 模型名称
-   * @returns {Promise} - 模型状态
-   */
-  getModelStatus: async (provider, modelName) => {
-    return apiAdminGet(
-      `/api/system/chat-models/status?provider=${encodeURIComponent(provider)}&model_name=${encodeURIComponent(modelName)}`
-    )
-  },
-
-  /**
-   * 获取所有聊天模型的状态
-   * @returns {Promise} - 所有模型状态
-   */
-  getAllModelsStatus: async () => {
-    return apiAdminGet('/api/system/chat-models/all/status')
-  }
 }
 
 // =============================================================================
@@ -164,17 +145,45 @@ export const customProviderApi = {
    */
   deleteCustomProvider: async (providerId) => {
     return apiAdminDelete(`/api/system/custom-providers/${encodeURIComponent(providerId)}`)
+  }
+}
+
+// =============================================================================
+// === 独立模型供应商配置分组 ===
+// =============================================================================
+
+export const modelProviderApi = {
+  getProviders: async () => {
+    return apiAdminGet('/api/system/model-providers')
   },
 
-  /**
-   * 测试自定义供应商连接
-   * @param {string} providerId - 供应商ID
-   * @param {string} modelName - 要测试的模型名称
-   * @returns {Promise} - 测试结果
-   */
-  testCustomProvider: async (providerId, modelName) => {
-    return apiAdminPost(`/api/system/custom-providers/${encodeURIComponent(providerId)}/test`, {
-      model_name: modelName
-    })
+  getV2Models: async (modelType = 'chat') => {
+    return apiAdminGet(`/api/system/model-providers/models/v2?model_type=${modelType}`)
+  },
+
+  getCacheStatus: async () => {
+    return apiAdminGet('/api/system/model-providers/models/cache-status')
+  },
+
+  getModelStatusBySpec: async (spec) => {
+    return apiAdminGet(`/api/system/model-providers/models/status?spec=${encodeURIComponent(spec)}`)
+  },
+
+  createProvider: async (payload) => {
+    return apiAdminPost('/api/system/model-providers', payload)
+  },
+
+  updateProvider: async (providerId, payload) => {
+    return apiAdminPut(`/api/system/model-providers/${encodeURIComponent(providerId)}`, payload)
+  },
+
+  deleteProvider: async (providerId) => {
+    return apiAdminDelete(`/api/system/model-providers/${encodeURIComponent(providerId)}`)
+  },
+
+  fetchRemoteModels: async (providerId) => {
+    return apiAdminGet(
+      `/api/system/model-providers/${encodeURIComponent(providerId)}/remote-models`
+    )
   }
 }

@@ -5,12 +5,14 @@
         <div class="section-title">自定义供应商</div>
         <p class="section-description">添加自定义的LLM供应商，支持OpenAI兼容的API格式。</p>
       </div>
-      <a-button type="primary" @click="openAddCustomProviderModal" class="add-btn lucide-icon-btn">
-        <template #icon>
-          <Plus :size="16" />
-        </template>
-        添加自定义供应商
-      </a-button>
+      <a-tooltip title="目前已经全量迁移到新版本的模型配置中，旧版本仅做兼容处理，不再支持新增">
+        <a-button type="primary" disabled class="add-btn lucide-icon-btn">
+          <template #icon>
+            <Plus :size="16" />
+          </template>
+          添加自定义供应商
+        </a-button>
+      </a-tooltip>
     </div>
 
     <div class="custom-providers-section">
@@ -26,17 +28,6 @@
             <span class="provider-id">ID: {{ providerId }}</span>
           </div>
           <div class="provider-actions">
-            <a-button
-              type="text"
-              size="small"
-              class="lucide-icon-btn"
-              @click="testCustomProvider(providerId, provider.default)"
-            >
-              <template #icon>
-                <PlugZap :size="14" />
-              </template>
-              测试连接
-            </a-button>
             <a-button
               type="text"
               size="small"
@@ -118,14 +109,15 @@
             <div class="model-name">{{ modelNames[item].name }}</div>
           </div>
           <div class="provider-meta">
+            <a-tooltip title="已迁移至新版模型配置">
             <a-button
               type="text"
               class="expand-button lucide-icon-btn"
-              @click.stop="openProviderConfig(item)"
-              title="配置模型"
+              disabled
             >
               <Settings :size="14" /> 已选 {{ modelNames[item].models?.length || 0 }} 个模型
             </a-button>
+          </a-tooltip>
           </div>
         </div>
         <div class="card-body-wrapper" :class="{ expanded: expandedModels[item] }">
@@ -389,8 +381,7 @@ import {
   Search,
   Plus,
   Pencil,
-  Trash2,
-  PlugZap
+  Trash2
 } from 'lucide-vue-next'
 import { useConfigStore } from '@/stores/config'
 import { modelIcons } from '@/utils/modelIcon'
@@ -767,31 +758,6 @@ const deleteCustomProvider = async (providerId) => {
     await configStore.refreshConfig()
   } catch (error) {
     message.error(`删除失败: ${error.message || error.response?.data?.detail || '未知错误'}`)
-  }
-}
-
-// 测试自定义供应商连接
-const testCustomProvider = async (providerId, modelName) => {
-  try {
-    message.loading({ content: '正在测试连接...', key: 'test-connection', duration: 0 })
-
-    const result = await customProviderApi.testCustomProvider(providerId, modelName)
-
-    if (result.status?.status === 'available') {
-      message.success({ content: '连接测试成功', key: 'test-connection', duration: 2 })
-    } else {
-      message.error({
-        content: `连接测试失败: ${result.status?.message || '未知错误'}`,
-        key: 'test-connection',
-        duration: 3
-      })
-    }
-  } catch (error) {
-    message.error({
-      content: `测试失败: ${error.message || error.response?.data?.detail || '未知错误'}`,
-      key: 'test-connection',
-      duration: 3
-    })
   }
 }
 </script>

@@ -564,19 +564,19 @@ const parsedData = computed(() => {
     'Microsoft YaHei', 'Hiragino Sans GB', 'Source Han Sans CN', 'Courier New', monospace;
 
   #preview-only-preview {
-    font-size: 1rem;
+    font-size: 0.95rem;
     line-height: 1.75;
     color: var(--gray-1000);
   }
 
   h1,
   h2 {
-    font-size: 1.2rem;
+    font-size: 1.1rem;
   }
 
   h3,
   h4 {
-    font-size: 1.1rem;
+    font-size: 1.05rem;
   }
 
   h5,

@@ -97,6 +97,19 @@ const router = createRouter({
       ]
     },
     {
+      path: '/model-config',
+      name: 'model-config',
+      component: AppLayout,
+      children: [
+        {
+          path: '',
+          name: 'ModelConfigComp',
+          component: () => import('../views/ModelConfigView.vue'),
+          meta: { keepAlive: false, requiresAuth: true, requiresAdmin: true }
+        }
+      ]
+    },
+    {
       path: '/extensions',
       name: 'extensions',
       component: AppLayout,

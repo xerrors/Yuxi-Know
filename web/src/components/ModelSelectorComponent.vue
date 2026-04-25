@@ -6,13 +6,12 @@
           <a-tooltip :title="displayModelText" placement="right">
             <span class="model-text text"> {{ displayModelText }} </span>
           </a-tooltip>
-          <span class="model-provider">{{ displayModelProvider }}</span>
         </div>
         <div class="model-status-controls">
           <span
-            v-if="currentModelStatus"
+            v-if="state.currentModelStatus"
             class="model-status-indicator"
-            :class="currentModelStatus.status"
+            :class="state.currentModelStatus.status"
             :title="getCurrentModelStatusTooltip()"
           >
             {{ modelStatusIcon }}
@@ -32,11 +31,27 @@
     </div>
     <template #overlay>
       <a-menu class="scrollable-menu">
-        <a-menu-item-group
-          v-for="(item, key) in modelKeys"
-          :key="key"
-          :title="modelNames[item]?.name"
-        >
+        <!-- v2 模型列表（新版本，优先显示） -->
+        <a-menu-item-group v-for="(providerData, providerId) in v2Models" :key="`v2-${providerId}`">
+          <template #title>
+            <span>{{ providerId }}</span>
+            <a-tag color="success" size="small" class="provider-tag">v2</a-tag>
+          </template>
+          <a-menu-item
+            v-for="model in providerData.models"
+            :key="model.spec"
+            @click="handleSelectV2Model(model.spec)"
+          >
+            {{ model.display_name }}
+          </a-menu-item>
+        </a-menu-item-group>
+
+        <!-- v1 模型列表（Legacy，弱化处理） -->
+        <a-menu-item-group v-for="(item, key) in modelKeys" :key="key">
+          <template #title>
+            <span>{{ modelNames[item]?.name }}</span>
+            <a-tag color="warning" size="small" class="provider-tag">Legacy</a-tag>
+          </template>
           <a-menu-item
             v-for="(model, idx) in modelNames[item]?.models"
             :key="`${item}-${idx}`"
@@ -51,18 +66,14 @@
 </template>
 
 <script setup>
-import { computed, reactive } from 'vue'
+import { computed, reactive, ref, onMounted } from 'vue'
 import { useConfigStore } from '@/stores/config'
-import { chatModelApi } from '@/apis/system_api'
+import { modelProviderApi } from '@/apis/system_api'
 
 const props = defineProps({
   model_spec: {
     type: String,
     default: ''
-  },
-  sep: {
-    type: String,
-    default: '/'
   },
   placeholder: {
     type: String,
@@ -77,6 +88,21 @@ const props = defineProps({
 
 const configStore = useConfigStore()
 const emit = defineEmits(['select-model'])
+
+// v2 模型数据
+const v2Models = ref({})
+
+// 加载 v2 模型列表
+onMounted(async () => {
+  try {
+    const response = await modelProviderApi.getV2Models('chat')
+    if (response.success) {
+      v2Models.value = response.data || {}
+    }
+  } catch (error) {
+    console.warn('Failed to load v2 models:', error)
+  }
+})
 
 // 状态管理
 const state = reactive({
@@ -93,7 +119,6 @@ const modelKeys = computed(() => {
   return Object.keys(modelStatus.value || {}).filter((key) => modelStatus.value?.[key])
 })
 
-const resolvedSep = computed(() => props.sep || '/')
 const resolvedSize = computed(() => props.size || 'small')
 const modelSelectClasses = computed(() => ({
   'model-select--middle': resolvedSize.value === 'middle',
@@ -105,46 +130,25 @@ const buttonSize = computed(() => {
   return 'small'
 })
 
-const resolvedModel = computed(() => {
-  const spec = props.model_spec || ''
-  const sep = resolvedSep.value
-  if (spec && sep) {
-    const index = spec.indexOf(sep)
-    if (index !== -1) {
-      const provider = spec.slice(0, index)
-      const name = spec.slice(index + sep.length)
-      if (provider && name) {
-        return { provider, name }
-      }
-    }
-  }
-  return { provider: '', name: '' }
-})
-
-const displayModelProvider = computed(() => resolvedModel.value.provider || '')
-const displayModelName = computed(() => resolvedModel.value.name || '')
-const displayModelText = computed(() => displayModelName.value || props.placeholder)
+const displayModelText = computed(() => props.model_spec || props.placeholder)
 
 // 当前模型状态
-const currentModelStatus = computed(() => {
-  return state.currentModelStatus
-})
 
 // 检查当前模型状态
 const checkCurrentModelStatus = async () => {
-  const { provider, name } = resolvedModel.value
-  if (!provider || !name) return
+  const spec = props.model_spec
+  if (!spec) return
 
   try {
     state.checkingStatus = true
-    const response = await chatModelApi.getModelStatus(provider, name)
-    if (response.status) {
-      state.currentModelStatus = response.status
+    const response = await modelProviderApi.getModelStatusBySpec(spec)
+    if (response.data) {
+      state.currentModelStatus = response.data
     } else {
       state.currentModelStatus = null
     }
   } catch (error) {
-    console.error(`检查当前模型 ${provider}/${name} 状态失败:`, error)
+    console.error(`检查模型 ${spec} 状态失败:`, error)
     state.currentModelStatus = { status: 'error', message: error.message }
   } finally {
     state.checkingStatus = false
@@ -152,7 +156,7 @@ const checkCurrentModelStatus = async () => {
 }
 
 const modelStatusIcon = computed(() => {
-  const status = currentModelStatus.value
+  const status = state.currentModelStatus
   if (!status) return '○'
   if (status.status === 'available') return '✓'
   if (status.status === 'unavailable') return '✗'
@@ -162,7 +166,7 @@ const modelStatusIcon = computed(() => {
 
 // 获取当前模型状态提示文本
 const getCurrentModelStatusTooltip = () => {
-  const status = currentModelStatus.value
+  const status = state.currentModelStatus
   if (!status) return '状态未知'
 
   let statusText = ''
@@ -174,11 +178,14 @@ const getCurrentModelStatusTooltip = () => {
   return `${statusText}: ${message}`
 }
 
-// 选择模型的方法
+// 选择 v1 模型的方法（Legacy）
 const handleSelectModel = async (provider, name) => {
-  const sep = resolvedSep.value || '/'
-  const separator = sep || '/'
-  const spec = `${provider}${separator}${name}`
+  const spec = `${provider}/${name}`
+  emit('select-model', spec)
+}
+
+// 选择 v2 模型的方法
+const handleSelectV2Model = (spec) => {
   emit('select-model', spec)
 }
 </script>
@@ -195,7 +202,6 @@ const handleSelectModel = async (provider, name) => {
 @status-check-button-padding: 0 4px;
 @status-check-button-font-size: 12px;
 @status-indicator-font-size: 11px;
-@model-provider-color: var(--gray-500);
 
 // 主选择器样式
 .model-select {
@@ -249,11 +255,6 @@ const handleSelectModel = async (provider, name) => {
         color: var(--gray-1000);
         white-space: nowrap;
       }
-
-      .model-provider {
-        color: @model-provider-color;
-        margin-left: 4px;
-      }
     }
 
     // 状态控制区域
@@ -292,6 +293,14 @@ const handleSelectModel = async (provider, name) => {
       }
     }
   }
+}
+
+// Provider 标签样式
+.provider-tag {
+  margin-left: 6px;
+  font-size: 10px;
+  line-height: 1;
+  vertical-align: middle;
 }
 
 // 滚动菜单样式

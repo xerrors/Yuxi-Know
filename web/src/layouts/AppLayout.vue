@@ -7,6 +7,7 @@ import {
   BarChart3,
   ClipboardList,
   Blocks,
+  Cpu,
   PanelLeftClose,
   PanelLeftOpen,
   MessageCirclePlus
@@ -149,6 +150,13 @@ const mainList = computed(() => {
         activeIcon: Blocks
       })
     }
+
+    items.push({
+      name: '模型配置',
+      path: '/model-config',
+      icon: Cpu,
+      activeIcon: Cpu
+    })
 
     items.push({
       name: 'Dashboard',
@@ -311,7 +319,6 @@ provide('settingsModal', {
         />
       </div>
       <div class="foo">
-
         <div class="github nav-item" @click.stop>
           <a-tooltip placement="right" :open="sidebarCollapsed ? undefined : false">
             <template #title>欢迎 Star</template>
@@ -926,7 +933,6 @@ div.header,
         }
       }
     }
-
   }
 }
 </style>

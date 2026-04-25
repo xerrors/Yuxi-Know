@@ -27,14 +27,6 @@
               </div>
             </div>
             <div class="item-actions">
-              <!-- <button
-                v-if="file.canPreview"
-                class="item-action-btn"
-                title="预览"
-                @click.stop="openPreview(file)"
-              >
-                <Eye :size="15" />
-              </button> -->
               <button class="item-action-btn" title="下载" @click.stop="downloadFile(file)">
                 <Download :size="15" />
               </button>
