@@ -680,14 +680,22 @@ onMounted(() => {
   margin-bottom: 20px;
 }
 .databases {
-  padding: 12px 16px;
+  padding: 12px var(--page-padding);
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 16px;
 }
 
-.database,
-.graphbase {
+.database {
+  width: 100%;
+  padding: 10px var(--page-padding);
+  border-radius: 8px;
+  height: 144px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  position: relative; // 为绝对定位的锁定图标提供参考
+  overflow: hidden;
   background: linear-gradient(45deg, var(--gray-0) 0%, var(--gray-25) 100%);
   box-shadow: 0px 1px 2px 0px var(--shadow-2);
   border: 1px solid var(--gray-50);
@@ -698,19 +706,6 @@ onMounted(() => {
     background: linear-gradient(45deg, var(--gray-0) 0%, var(--main-30) 100%);
     box-shadow: 0px 1px 5px var(--shadow-3);
   }
-}
-
-.dbcard,
-.database {
-  width: 100%;
-  padding: 8px 12px;
-  border-radius: 8px;
-  height: 140px;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  position: relative; // 为绝对定位的锁定图标提供参考
-  overflow: hidden;
 
   .private-lock-icon {
     position: absolute;

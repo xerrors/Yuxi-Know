@@ -403,8 +403,8 @@ const formatResultData = (data) => {
     }
 
     .tool-content {
-      margin: 4px 0 8px 12px;
-      padding-left: 12px;
+      margin: 4px 0 8px 8px;
+      padding-left: 8px;
       border-left: 1px solid var(--gray-100);
 
       .tool-params {

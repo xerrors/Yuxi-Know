@@ -116,7 +116,7 @@ const getSatisfactionClass = () => {
 
   .stats-grid {
     display: grid;
-    padding: 0 16px;
+    padding: 0 var(--page-padding);
     grid-template-columns: repeat(6, 1fr);
     gap: 16px;
 

@@ -1,8 +1,11 @@
 <template>
   <section class="conversation-nav-section" :class="{ collapsed }">
     <div v-if="showHistory && !collapsed" class="history-panel">
-      <div class="history-label">对话历史</div>
-      <div class="conversation-list">
+      <div class="history-label" @click="listCollapsed = !listCollapsed">
+        <span>对话历史</span>
+        <ChevronDown :size="14" class="collapse-icon" :class="{ collapsed: listCollapsed }" />
+      </div>
+      <div v-show="!listCollapsed" class="conversation-list">
         <template v-if="sortedChats.length > 0">
           <div
             v-for="chat in sortedChats"
@@ -69,9 +72,9 @@
 </template>
 
 <script setup>
-import { computed, h } from 'vue'
+import { computed, h, ref } from 'vue'
 import { message, Modal } from 'ant-design-vue'
-import { MoreVertical, Pencil, Pin, PinOff, Trash2 } from 'lucide-vue-next'
+import { ChevronDown, MoreVertical, Pencil, Pin, PinOff, Trash2 } from 'lucide-vue-next'
 import { parseToShanghai } from '@/utils/time'
 
 const props = defineProps({
@@ -108,6 +111,8 @@ const emit = defineEmits([
   'toggle-pin',
   'load-more-chats'
 ])
+
+const listCollapsed = ref(false)
 
 const sortedChats = computed(() => {
   return [...props.chatsList].sort((a, b) => {
@@ -181,10 +186,32 @@ const renameChat = async (chatId) => {
 }
 
 .history-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 4px 8px;
   color: var(--gray-500);
+  cursor: pointer;
   font-size: 12px;
   font-weight: 600;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+
+  &:hover {
+    background: var(--main-20);
+  }
+
+  &:active {
+    background: var(--main-30);
+  }
+}
+
+.collapse-icon {
+  transition: transform 0.2s ease;
+
+  &.collapsed {
+    transform: rotate(-90deg);
+  }
 }
 
 .conversation-list {
@@ -208,7 +235,7 @@ const renameChat = async (chatId) => {
   background: transparent;
   color: var(--gray-700);
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
   text-align: left;
   transition:
     background-color 0.2s ease,
@@ -294,6 +321,10 @@ const renameChat = async (chatId) => {
   height: 24px;
   padding: 0;
   color: var(--gray-600);
+}
+
+.pinned-indicator {
+  color: var(--gray-400);
 }
 
 .empty-list {
