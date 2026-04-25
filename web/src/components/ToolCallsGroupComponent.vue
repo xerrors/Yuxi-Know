@@ -151,6 +151,7 @@ const toggleToolCallsExpanded = () => {
   .tool-calls-summary {
     appearance: none;
     width: auto;
+    max-width: 100%;
     display: inline-flex;
     align-items: center;
     gap: 8px;

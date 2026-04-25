@@ -39,7 +39,7 @@ body {
 
 .layout-container {
   width: 100%;
-  padding: 0px 30px;
+  padding: 0 var(--page-padding);
 
   h2 {
     margin: 20px 0 10px 0;
