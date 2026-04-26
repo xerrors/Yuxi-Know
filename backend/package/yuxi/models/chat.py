@@ -133,6 +133,11 @@ def select_model(model_provider=None, model_name=None, model_spec=None):
         if model_cache.is_v2_spec(model_spec):
             return select_model_v2(model_spec)
 
+    logger.warning(
+        f"旧版本的模型选择逻辑已废弃，建议尽快迁移至新的模型配置；"
+        f"当前模型选择参数: provider={model_provider}, model_name={model_name}, spec={model_spec}"
+    )
+
     if model_spec:
         spec_provider, spec_model_name = split_model_spec(model_spec)
         model_provider = model_provider or spec_provider

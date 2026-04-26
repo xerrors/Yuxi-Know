@@ -100,55 +100,6 @@ export const chatModelApi = {
 }
 
 // =============================================================================
-// === 自定义供应商管理分组 ===
-// =============================================================================
-
-export const customProviderApi = {
-  /**
-   * 获取所有自定义供应商
-   * @returns {Promise} - 自定义供应商列表
-   */
-  getCustomProviders: async () => {
-    return apiAdminGet('/api/system/custom-providers')
-  },
-
-  /**
-   * 添加自定义供应商
-   * @param {string} providerId - 供应商ID
-   * @param {Object} providerData - 供应商配置数据
-   * @returns {Promise} - 添加结果
-   */
-  addCustomProvider: async (providerId, providerData) => {
-    return apiAdminPost('/api/system/custom-providers', {
-      provider_id: providerId,
-      provider_data: providerData
-    })
-  },
-
-  /**
-   * 更新自定义供应商
-   * @param {string} providerId - 供应商ID
-   * @param {Object} providerData - 供应商配置数据
-   * @returns {Promise} - 更新结果
-   */
-  updateCustomProvider: async (providerId, providerData) => {
-    return apiAdminPut(
-      `/api/system/custom-providers/${encodeURIComponent(providerId)}`,
-      providerData
-    )
-  },
-
-  /**
-   * 删除自定义供应商
-   * @param {string} providerId - 供应商ID
-   * @returns {Promise} - 删除结果
-   */
-  deleteCustomProvider: async (providerId) => {
-    return apiAdminDelete(`/api/system/custom-providers/${encodeURIComponent(providerId)}`)
-  }
-}
-
-// =============================================================================
 // === 独立模型供应商配置分组 ===
 // =============================================================================
 

@@ -58,21 +58,6 @@
             {{ model.display_name }}
           </a-menu-item>
         </a-menu-item-group>
-
-        <!-- v1 模型列表（Legacy，弱化处理） -->
-        <a-menu-item-group v-for="(item, key) in modelKeys" :key="key">
-          <template #title>
-            <span>{{ modelNames[item]?.name }}</span>
-            <a-tag color="warning" size="small" class="provider-tag">Legacy</a-tag>
-          </template>
-          <a-menu-item
-            v-for="(model, idx) in modelNames[item]?.models"
-            :key="`${item}-${idx}`"
-            @click="handleSelectModel(item, model)"
-          >
-            {{ model }}
-          </a-menu-item>
-        </a-menu-item-group>
       </a-menu>
     </template>
   </a-dropdown>
@@ -80,7 +65,6 @@
 
 <script setup>
 import { computed, reactive, ref } from 'vue'
-import { useConfigStore } from '@/stores/config'
 import { modelProviderApi } from '@/apis/system_api'
 import { RefreshCw } from 'lucide-vue-next'
 
@@ -100,7 +84,6 @@ const props = defineProps({
   }
 })
 
-const configStore = useConfigStore()
 const emit = defineEmits(['select-model'])
 
 // v2 模型数据：每次展开下拉时实时从后端拉取
@@ -148,15 +131,6 @@ const state = reactive({
   currentModelStatus: null, // 当前模型状态
   checkingStatus: false, // 是否正在检查状态
   refreshingCache: false // 是否正在刷新缓存
-})
-
-// 从configStore中获取所需数据
-const modelNames = computed(() => configStore.config?.model_names)
-const modelStatus = computed(() => configStore.config?.model_provider_status)
-
-// 筛选 modelStatus 中为真的key
-const modelKeys = computed(() => {
-  return Object.keys(modelStatus.value || {}).filter((key) => modelStatus.value?.[key])
 })
 
 const resolvedSize = computed(() => props.size || 'small')
@@ -216,12 +190,6 @@ const getCurrentModelStatusTooltip = () => {
 
   const message = status.message || '无详细信息'
   return `${statusText}: ${message}`
-}
-
-// 选择 v1 模型的方法（Legacy）
-const handleSelectModel = async (provider, name) => {
-  const spec = `${provider}/${name}`
-  emit('select-model', spec)
 }
 
 // 选择 v2 模型的方法

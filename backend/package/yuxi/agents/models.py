@@ -80,6 +80,11 @@ def load_chat_model(fully_specified_name: str, **kwargs) -> BaseChatModel:
             f"Available chat models ({len(available_specs)}): {available_ids}"
         )
 
+    logger.warning(
+        f"旧版本的模型选择逻辑已废弃，建议尽快迁移至新的模型配置；"
+        f"当前模型选择参数: {fully_specified_name=}"
+    )
+
     # v1 逻辑：spec 必须包含 /
     if "/" not in fully_specified_name:
         raise ValueError(
