@@ -15,6 +15,7 @@ from yuxi.repositories.model_provider_repository import (
     update_model_provider,
 )
 from yuxi.config.builtin_providers import BUILTIN_PROVIDERS
+from yuxi.services.model_cache import is_v2_spec_format
 from yuxi.storage.postgres.models_business import ModelProvider
 
 VALID_MODEL_TYPES = {"chat", "embedding", "rerank"}
@@ -375,7 +376,7 @@ async def test_model_status_by_spec(spec: str) -> dict:
     from yuxi.services.model_cache import model_cache
 
     # V2: 从缓存识别模型类型并分派
-    if ":" in spec:
+    if is_v2_spec_format(spec):
         info = model_cache.get_model_info(spec)
         if info:
             if info.model_type == "embedding":

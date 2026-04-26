@@ -7,6 +7,7 @@ import httpx
 import requests
 
 from yuxi import config
+from yuxi.services.model_cache import is_v2_spec_format
 from yuxi.utils import get_docker_safe_url, hashstr, logger
 
 
@@ -288,7 +289,7 @@ def get_embedding_model_info_by_id(model_id: str) -> dict:
               api_key 已从环境变量解析为实际值。
     """
     # V2 spec 检测
-    if isinstance(model_id, str) and ":" in model_id:
+    if isinstance(model_id, str) and is_v2_spec_format(model_id):
         from yuxi.services.model_cache import model_cache
 
         info = model_cache.get_model_info(model_id)
@@ -321,8 +322,8 @@ def select_embedding_model(model_id):
     V1 格式: provider/model_name（斜杠分隔）
     V2 格式: provider_id:model_id（冒号分隔）
     """
-    # V2 spec 检测：包含 ":" 且存在于缓存中
-    if isinstance(model_id, str) and ":" in model_id:
+    # V2 spec 检测：第一个特殊字符为冒号且存在于缓存中
+    if isinstance(model_id, str) and is_v2_spec_format(model_id):
         from yuxi.services.model_cache import model_cache
 
         if model_cache.is_v2_spec(model_id):
@@ -385,7 +386,7 @@ async def test_embedding_model_status_by_spec(spec: str) -> dict:
     V2 spec 格式: provider_id:model_id（冒号分隔）
     """
     try:
-        if ":" in spec:
+        if is_v2_spec_format(spec):
             from yuxi.services.model_cache import model_cache
 
             if model_cache.is_v2_spec(spec):

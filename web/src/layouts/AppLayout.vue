@@ -7,7 +7,7 @@ import {
   BarChart3,
   ClipboardList,
   Blocks,
-  Cpu,
+  Box,
   PanelLeftClose,
   PanelLeftOpen,
   MessageCirclePlus
@@ -154,8 +154,8 @@ const mainList = computed(() => {
     items.push({
       name: '模型配置',
       path: '/model-config',
-      icon: Cpu,
-      activeIcon: Cpu
+      icon: Box,
+      activeIcon: Box
     })
 
     items.push({

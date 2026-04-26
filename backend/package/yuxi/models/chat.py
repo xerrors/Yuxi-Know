@@ -5,6 +5,7 @@ from openai import AsyncOpenAI
 from tenacity import before_sleep_log, retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from yuxi import config
+from yuxi.services.model_cache import is_v2_spec_format
 from yuxi.utils import logger
 
 
@@ -126,12 +127,15 @@ def select_model_v2(spec: str) -> OpenAIBase:
 
 def select_model(model_provider=None, model_name=None, model_spec=None):
     """根据模型提供者选择模型"""
-    # v2 判断：如果 spec 包含冒号且在缓存中存在，走 v2 路径
-    if model_spec and ":" in model_spec:
+    if model_spec and is_v2_spec_format(model_spec):
         from yuxi.services.model_cache import model_cache
 
         if model_cache.is_v2_spec(model_spec):
             return select_model_v2(model_spec)
+
+        available = model_cache.get_all_specs("chat")
+        available_ids = [s.spec for s in available[:10]]
+        raise ValueError(f"未找到 V2 模型: '{model_spec}'。可用聊天模型 ({len(available)}): {available_ids}")
 
     logger.warning(
         f"旧版本的模型选择逻辑已废弃，建议尽快迁移至新的模型配置；"

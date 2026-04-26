@@ -5,6 +5,7 @@ from langchain.chat_models import BaseChatModel, init_chat_model
 from pydantic import SecretStr
 
 from yuxi import config
+from yuxi.services.model_cache import is_v2_spec_format
 from yuxi.utils import get_docker_safe_url
 from yuxi.utils.logging_config import logger
 
@@ -64,8 +65,8 @@ def load_chat_model(fully_specified_name: str, **kwargs) -> BaseChatModel:
     """
     Load a chat model from a fully specified name.
     """
-    # v2 判断：如果 spec 包含冒号，尝试走 v2 路径
-    if ":" in fully_specified_name:
+    # v2 判断：第一个特殊字符为冒号则走 v2 路径
+    if is_v2_spec_format(fully_specified_name):
         from yuxi.services.model_cache import model_cache
 
         info = model_cache.get_model_info(fully_specified_name)

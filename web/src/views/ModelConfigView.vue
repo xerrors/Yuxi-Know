@@ -661,14 +661,6 @@ onMounted(loadProviders)
           </div>
         </div>
       </div>
-
-      <!-- Empty State -->
-      <a-empty v-if="!filteredProviders.length" :image="false" description="暂无供应商">
-        <a-button type="primary" class="lucide-icon-btn" @click="openCreateProviderModal">
-          <Plus :size="14" />
-          新增供应商
-        </a-button>
-      </a-empty>
     </div>
 
     <!-- Provider Edit Modal -->
@@ -1182,7 +1174,7 @@ onMounted(loadProviders)
   width: 40px;
   height: 40px;
   border-radius: 8px;
-  background: var(--main-50);
+  background: #e1f6fb;  // 固定使用浅色背景，确保图标清晰可见
   overflow: hidden;
 
   img {

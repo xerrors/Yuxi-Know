@@ -293,7 +293,7 @@ const renameChat = async (chatId) => {
 .conversation-actions {
   position: absolute;
   top: 50%;
-  right: 8px;
+  right: 4px;
   display: flex;
   align-items: center;
   opacity: 0;

@@ -22,6 +22,22 @@ _DEFAULT_REDIS_URL = "redis://redis:6379/0"
 _CACHE_TTL_SECONDS = 5
 
 
+def is_v2_spec_format(spec: str) -> bool:
+    """判断 spec 是否为 V2 格式（基于格式特征而非缓存查找）。
+
+    V2 格式的特征是第一个特殊字符为冒号（provider_id:model_id），
+    V1 格式的特征是第一个特殊字符为斜杠（provider/model_name）。
+    Provider ID 中不包含斜杠，因此第一个特殊字符决定了格式类型。
+    """
+    colon_pos = spec.find(":")
+    slash_pos = spec.find("/")
+    if colon_pos == -1:
+        return False
+    if slash_pos == -1:
+        return True
+    return colon_pos < slash_pos
+
+
 @dataclass(frozen=True)
 class ModelInfo:
     """不可变的模型信息，供运行时使用。"""
@@ -245,8 +261,8 @@ def resolve_model_spec(spec: str) -> ModelInfo:
     if not spec:
         raise ValueError("spec 不能为空")
 
-    # V2: 优先查找缓存
-    if ":" in spec:
+    # V2: 第一个特殊字符为冒号则走 v2 路径
+    if is_v2_spec_format(spec):
         info = model_cache.get_model_info(spec)
         if info:
             return info
