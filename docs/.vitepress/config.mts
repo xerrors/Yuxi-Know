@@ -11,7 +11,8 @@ export default defineConfig({
   ignoreDeadLinks: [
     /localhost/,
     /CONTRIBUTING$/,
-    /docker-compose\.yml$/
+    /docker-compose\.yml$/,
+    /^\.\/intro\//
   ],
   markdown: {
     config: (md) => {

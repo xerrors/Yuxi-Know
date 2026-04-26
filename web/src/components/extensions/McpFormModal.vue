@@ -18,7 +18,11 @@
 
     <a-form v-if="formMode === 'form'" layout="vertical" class="extension-form">
       <a-form-item label="MCP 名称" required class="form-item">
-        <a-input v-model:value="form.name" placeholder="请输入 MCP 名称（唯一标识）" :disabled="editMode" />
+        <a-input
+          v-model:value="form.name"
+          placeholder="请输入 MCP 名称（唯一标识）"
+          :disabled="editMode"
+        />
       </a-form-item>
       <a-form-item label="描述" class="form-item">
         <a-input v-model:value="form.description" placeholder="请输入 MCP 描述" />
@@ -44,17 +48,31 @@
           <a-input v-model:value="form.url" placeholder="https://example.com/mcp" />
         </a-form-item>
         <a-form-item label="HTTP 请求头" class="form-item">
-          <a-textarea v-model:value="form.headersText" placeholder='JSON 格式，如：{"Authorization": "Bearer xxx"}' :rows="3" />
+          <a-textarea
+            v-model:value="form.headersText"
+            placeholder='JSON 格式，如：{"Authorization": "Bearer xxx"}'
+            :rows="3"
+          />
         </a-form-item>
         <a-row :gutter="16">
           <a-col :span="12">
             <a-form-item label="HTTP 超时（秒）" class="form-item">
-              <a-input-number v-model:value="form.timeout" :min="1" :max="300" style="width: 100%" />
+              <a-input-number
+                v-model:value="form.timeout"
+                :min="1"
+                :max="300"
+                style="width: 100%"
+              />
             </a-form-item>
           </a-col>
           <a-col :span="12">
             <a-form-item label="SSE 读取超时（秒）" class="form-item">
-              <a-input-number v-model:value="form.sse_read_timeout" :min="1" :max="300" style="width: 100%" />
+              <a-input-number
+                v-model:value="form.sse_read_timeout"
+                :min="1"
+                :max="300"
+                style="width: 100%"
+              />
             </a-form-item>
           </a-col>
         </a-row>
@@ -64,14 +82,24 @@
           <a-input v-model:value="form.command" placeholder="例如：npx 或 /path/to/server" />
         </a-form-item>
         <a-form-item label="参数" class="form-item">
-          <a-select v-model:value="form.args" mode="tags" placeholder="输入参数后回车添加，如：-m" style="width: 100%" />
+          <a-select
+            v-model:value="form.args"
+            mode="tags"
+            placeholder="输入参数后回车添加，如：-m"
+            style="width: 100%"
+          />
         </a-form-item>
         <a-form-item label="环境变量" class="form-item">
           <McpEnvEditor v-model="form.env" />
         </a-form-item>
       </template>
       <a-form-item label="标签" class="form-item">
-        <a-select v-model:value="form.tags" mode="tags" placeholder="输入标签后回车添加" style="width: 100%" />
+        <a-select
+          v-model:value="form.tags"
+          mode="tags"
+          placeholder="输入标签后回车添加"
+          style="width: 100%"
+        />
       </a-form-item>
     </a-form>
 
@@ -79,7 +107,7 @@
       <a-textarea
         v-model:value="jsonContent"
         :rows="15"
-        placeholder='请输入 JSON 配置'
+        placeholder="请输入 JSON 配置"
         class="json-textarea"
       />
       <div class="json-actions">
@@ -129,7 +157,10 @@ const form = reactive({
 })
 
 const isStdioTransport = computed(
-  () => String(form.transport || '').trim().toLowerCase() === 'stdio'
+  () =>
+    String(form.transport || '')
+      .trim()
+      .toLowerCase() === 'stdio'
 )
 
 watch(

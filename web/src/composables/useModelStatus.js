@@ -23,7 +23,8 @@ export function useModelStatus() {
   const getStatusTooltip = (key) => {
     const status = statusMap[key]
     if (!status) return '状态未知'
-    const text = { available: '可用', unavailable: '不可用', error: '错误' }[status.status] || '未知'
+    const text =
+      { available: '可用', unavailable: '不可用', error: '错误' }[status.status] || '未知'
     return `${text}: ${status.message || '无详细信息'}`
   }
 
@@ -44,5 +45,12 @@ export function useModelStatus() {
     }
   }
 
-  return { statusMap, getStatusIcon, getStatusClass, getStatusTooltip, checkV2Status, checkV2Statuses }
+  return {
+    statusMap,
+    getStatusIcon,
+    getStatusClass,
+    getStatusTooltip,
+    checkV2Status,
+    checkV2Statuses
+  }
 }

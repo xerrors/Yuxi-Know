@@ -530,12 +530,33 @@ const deleteDatabase = () => {
   background: var(--gray-100);
   color: var(--gray-600);
 
-  &.tag-purple  { background: #f3e8ff; color: #7c3aed; }
-  &.tag-blue    { background: var(--color-info-50); color: var(--color-info-700); }
-  &.tag-red     { background: var(--color-error-50); color: var(--color-error-700); }
-  &.tag-green   { background: var(--color-success-50); color: var(--color-success-700); }
-  &.tag-gold    { background: #fef3c7; color: #d97706; }
-  &.tag-cyan    { background: #cffafe; color: #0891b2; }
-  &.tag-orange  { background: #fff7ed; color: #ea580c; }
+  &.tag-purple {
+    background: #f3e8ff;
+    color: #7c3aed;
+  }
+  &.tag-blue {
+    background: var(--color-info-50);
+    color: var(--color-info-700);
+  }
+  &.tag-red {
+    background: var(--color-error-50);
+    color: var(--color-error-700);
+  }
+  &.tag-green {
+    background: var(--color-success-50);
+    color: var(--color-success-700);
+  }
+  &.tag-gold {
+    background: #fef3c7;
+    color: #d97706;
+  }
+  &.tag-cyan {
+    background: #cffafe;
+    color: #0891b2;
+  }
+  &.tag-orange {
+    background: #fff7ed;
+    color: #ea580c;
+  }
 }
 </style>

@@ -14,8 +14,14 @@
       </template>
     </PageShoulder>
 
-    <div v-if="filteredEnabledServers.length === 0 && filteredDisabledServers.length === 0" class="extension-card-grid-empty-state">
-      <a-empty :image="false" :description="searchQuery ? '无匹配 MCP' : '暂无 MCP，点击上方按钮添加'" />
+    <div
+      v-if="filteredEnabledServers.length === 0 && filteredDisabledServers.length === 0"
+      class="extension-card-grid-empty-state"
+    >
+      <a-empty
+        :image="false"
+        :description="searchQuery ? '无匹配 MCP' : '暂无 MCP，点击上方按钮添加'"
+      />
     </div>
 
     <template v-else>
@@ -89,7 +95,10 @@ const formModalVisible = ref(false)
 
 const filteredServers = computed(() => {
   const sorted = [...servers.value].sort((a, b) =>
-    String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hans-CN', { sensitivity: 'base', numeric: true })
+    String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hans-CN', {
+      sensitivity: 'base',
+      numeric: true
+    })
   )
   if (!searchQuery.value) return sorted
   const q = searchQuery.value.toLowerCase()
@@ -98,8 +107,12 @@ const filteredServers = computed(() => {
   )
 })
 
-const filteredEnabledServers = computed(() => filteredServers.value.filter((item) => !!item.enabled))
-const filteredDisabledServers = computed(() => filteredServers.value.filter((item) => !item.enabled))
+const filteredEnabledServers = computed(() =>
+  filteredServers.value.filter((item) => !!item.enabled)
+)
+const filteredDisabledServers = computed(() =>
+  filteredServers.value.filter((item) => !item.enabled)
+)
 
 const getTransportColor = (transport) => {
   const colors = { sse: 'orange', stdio: 'green', streamable_http: 'blue' }
@@ -109,7 +122,8 @@ const getTransportColor = (transport) => {
 const mcpTags = (server) => {
   const tags = []
   if (server.created_by === 'system') tags.push({ name: '内置' })
-  if (server.transport) tags.push({ name: server.transport, color: getTransportColor(server.transport) })
+  if (server.transport)
+    tags.push({ name: server.transport, color: getTransportColor(server.transport) })
   return tags
 }
 

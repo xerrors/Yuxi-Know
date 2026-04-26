@@ -101,7 +101,12 @@ const emit = defineEmits(['update:value', 'change'])
 
 const v2Models = ref({})
 const v1ModelStatuses = reactive({})
-const { statusMap: v2ModelStatuses, getStatusIcon: getV2StatusIcon, getStatusClass: getV2StatusClass, getStatusTooltip: getV2StatusTooltip, checkV2Status, checkV2Statuses } = useModelStatus()
+const {
+  getStatusIcon: getV2StatusIcon,
+  getStatusClass: getV2StatusClass,
+  getStatusTooltip: getV2StatusTooltip,
+  checkV2Statuses
+} = useModelStatus()
 const state = reactive({
   checkingStatus: false
 })

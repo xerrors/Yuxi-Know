@@ -12,7 +12,9 @@
       </div>
       <div class="extension-card-info">
         <span class="extension-card-name" :title="title">{{ title }}</span>
-        <span v-if="subtitle" class="extension-card-subtitle" :title="subtitle">{{ subtitle }}</span>
+        <span v-if="subtitle" class="extension-card-subtitle" :title="subtitle">{{
+          subtitle
+        }}</span>
       </div>
       <div class="extension-card-status">
         <slot name="status" />
@@ -23,17 +25,17 @@
             class="card-action-btn"
             :class="`card-action-btn--${actionVariant || 'primary'}`"
             @click.stop="$emit('actionClick')"
-          >{{ actionLabel }}</button>
+          >
+            {{ actionLabel }}
+          </button>
           <template v-else-if="status">
             <span
               v-if="status.label"
               class="card-status-tag"
               :class="`card-status-tag--${status.level || 'info'}`"
-            >{{ status.label }}</span>
-            <span
-              class="card-status-dot"
-              :class="`card-status-dot--${statusDotColor}`"
-            ></span>
+              >{{ status.label }}</span
+            >
+            <span class="card-status-dot" :class="`card-status-dot--${statusDotColor}`"></span>
           </template>
         </template>
       </div>
@@ -52,7 +54,10 @@
       </div>
     </div>
 
-    <div v-if="$slots.tags || (normalizedTags && normalizedTags.length > 0)" class="extension-card-tags">
+    <div
+      v-if="$slots.tags || (normalizedTags && normalizedTags.length > 0)"
+      class="extension-card-tags"
+    >
       <slot name="tags">
         <span
           v-for="(tag, idx) in normalizedTags"
@@ -60,7 +65,8 @@
           class="card-tag"
           :class="tag.color ? `tag-${tag.color}` : ''"
           :style="tag.bgColor ? { backgroundColor: tag.bgColor } : {}"
-        >{{ tag.name }}</span>
+          >{{ tag.name }}</span
+        >
       </slot>
     </div>
 
@@ -116,7 +122,9 @@ const normalizedTags = computed(() => {
   border: 1px solid var(--gray-150);
   background: linear-gradient(45deg, var(--gray-0) 0%, var(--gray-25) 100%);
   cursor: pointer;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
   overflow: hidden;
 
   &:hover {
@@ -206,7 +214,6 @@ const normalizedTags = computed(() => {
     gap: 6px;
   }
 
-
   .info-row {
     display: flex;
     align-items: center;
@@ -260,13 +267,34 @@ const normalizedTags = computed(() => {
   background: var(--gray-100);
   color: var(--gray-600);
 
-  &.tag-purple  { background: #f3e8ff; color: #7c3aed; }
-  &.tag-blue    { background: var(--color-info-50); color: var(--color-info-700); }
-  &.tag-red     { background: var(--color-error-50); color: var(--color-error-700); }
-  &.tag-green   { background: var(--color-success-50); color: var(--color-success-700); }
-  &.tag-gold    { background: #fef3c7; color: #d97706; }
-  &.tag-cyan    { background: #cffafe; color: #0891b2; }
-  &.tag-orange  { background: #fff7ed; color: #ea580c; }
+  &.tag-purple {
+    background: #f3e8ff;
+    color: #7c3aed;
+  }
+  &.tag-blue {
+    background: var(--color-info-50);
+    color: var(--color-info-700);
+  }
+  &.tag-red {
+    background: var(--color-error-50);
+    color: var(--color-error-700);
+  }
+  &.tag-green {
+    background: var(--color-success-50);
+    color: var(--color-success-700);
+  }
+  &.tag-gold {
+    background: #fef3c7;
+    color: #d97706;
+  }
+  &.tag-cyan {
+    background: #cffafe;
+    color: #0891b2;
+  }
+  &.tag-orange {
+    background: #fff7ed;
+    color: #ea580c;
+  }
 }
 
 .card-action-btn {
@@ -282,13 +310,17 @@ const normalizedTags = computed(() => {
   font-size: 11px;
   font-weight: 600;
   line-height: 1;
-  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease;
   cursor: pointer;
   appearance: none;
   background: var(--main-50);
   color: var(--main-700);
 
-  &:hover, &:focus {
+  &:hover,
+  &:focus {
     outline: none;
     border-color: var(--main-200);
     background: var(--main-50);
@@ -299,7 +331,8 @@ const normalizedTags = computed(() => {
     background: var(--color-error-50);
     color: var(--color-error-700);
 
-    &:hover, &:focus {
+    &:hover,
+    &:focus {
       border-color: var(--color-error-200);
       background: var(--color-error-50);
       color: var(--color-error-800);
@@ -319,7 +352,8 @@ const normalizedTags = computed(() => {
   font-size: 11px;
   font-weight: 600;
 
-  &--success, &--on {
+  &--success,
+  &--on {
     background: var(--color-success-50);
     color: var(--color-success-700);
   }

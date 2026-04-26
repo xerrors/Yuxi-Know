@@ -125,7 +125,7 @@ const refreshCache = async () => {
 }
 
 // 状态管理
-const { statusMap: modelStatusMap, getStatusIcon, getStatusTooltip } = useModelStatus()
+useModelStatus()
 const state = reactive({
   currentModelStatus: null,
   checkingStatus: false,
@@ -196,7 +196,6 @@ const handleSelectV2Model = (spec) => {
 
 <style lang="less" scoped>
 @import '@/assets/css/model-selector-common.less';
-
 
 // 状态检查按钮
 .status-check-button {

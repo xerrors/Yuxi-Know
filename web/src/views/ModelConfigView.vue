@@ -256,7 +256,6 @@ function getProviderInfo(provider) {
   ]
 }
 
-
 function getProviderStatus(provider) {
   if (!provider.is_enabled) return { label: '未启用', level: 'info' }
   if (provider.credential_status === 'warning') return { label: '凭证缺失', level: 'warning' }

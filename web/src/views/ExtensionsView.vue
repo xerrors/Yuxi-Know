@@ -53,9 +53,11 @@ const extensionTabs = [
 ]
 
 const isDetailPage = computed(() => {
-  return route.path.startsWith('/extensions/mcp/') ||
+  return (
+    route.path.startsWith('/extensions/mcp/') ||
     route.path.startsWith('/extensions/subagent/') ||
     route.path.startsWith('/extensions/skill/')
+  )
 })
 
 const activeChildLoading = computed(() => {

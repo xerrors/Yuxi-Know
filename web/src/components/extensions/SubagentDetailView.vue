@@ -140,7 +140,11 @@
     >
       <a-form layout="vertical" class="extension-form">
         <a-form-item label="名称" required class="form-item">
-          <a-input v-model:value="form.name" placeholder="请输入 SubAgent 名称（唯一标识）" disabled />
+          <a-input
+            v-model:value="form.name"
+            placeholder="请输入 SubAgent 名称（唯一标识）"
+            disabled
+          />
         </a-form-item>
         <a-form-item label="描述" class="form-item">
           <a-input v-model:value="form.description" placeholder="请输入 SubAgent 描述" />
@@ -166,7 +170,9 @@
               class="model-selector-full"
               @select-model="handleModelSelect"
             />
-            <a-button v-if="form.model" type="link" size="small" @click="form.model = ''">清空</a-button>
+            <a-button v-if="form.model" type="link" size="small" @click="form.model = ''"
+              >清空</a-button
+            >
           </div>
         </a-form-item>
       </a-form>

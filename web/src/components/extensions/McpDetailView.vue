@@ -40,7 +40,9 @@
             :class="[
               'lucide-icon-btn',
               'extension-panel-action',
-              server?.enabled === false ? 'extension-panel-action-primary' : 'extension-panel-action-danger'
+              server?.enabled === false
+                ? 'extension-panel-action-primary'
+                : 'extension-panel-action-danger'
             ]"
           >
             <Plus v-if="server?.enabled === false" :size="14" />
@@ -68,21 +70,31 @@
                   <div class="info-item">
                     <label>传输类型</label>
                     <span>
-                      <a-tag :color="getTransportColor(server.transport)">{{ server.transport }}</a-tag>
+                      <a-tag :color="getTransportColor(server.transport)">{{
+                        server.transport
+                      }}</a-tag>
                     </span>
                   </div>
-                  <div class="info-item" v-if="Array.isArray(server.tags) && server.tags.length > 0">
+                  <div
+                    class="info-item"
+                    v-if="Array.isArray(server.tags) && server.tags.length > 0"
+                  >
                     <label>标签</label>
                     <span>
                       <a-tag v-for="tag in server.tags" :key="tag">{{ tag }}</a-tag>
                     </span>
                   </div>
-                  <template v-if="server.transport === 'streamable_http' || server.transport === 'sse'">
+                  <template
+                    v-if="server.transport === 'streamable_http' || server.transport === 'sse'"
+                  >
                     <div class="info-item" v-if="server.url">
                       <label>MCP URL</label>
                       <span class="code-inline text-break-all">{{ server.url }}</span>
                     </div>
-                    <div class="info-item" v-if="server.headers && Object.keys(server.headers).length > 0">
+                    <div
+                      class="info-item"
+                      v-if="server.headers && Object.keys(server.headers).length > 0"
+                    >
                       <label>请求头</label>
                       <pre class="code-pre">{{ JSON.stringify(server.headers, null, 2) }}</pre>
                     </div>
@@ -103,7 +115,9 @@
                     <div class="info-item" v-if="server.args && server.args.length > 0">
                       <label>参数</label>
                       <span>
-                        <a-tag v-for="(arg, index) in server.args" :key="index" size="small">{{ arg }}</a-tag>
+                        <a-tag v-for="(arg, index) in server.args" :key="index" size="small">{{
+                          arg
+                        }}</a-tag>
                       </span>
                     </div>
                     <div class="info-item" v-if="server.env && Object.keys(server.env).length > 0">
@@ -184,7 +198,10 @@
                       <div class="tool-description" v-if="tool.description">
                         {{ tool.description }}
                       </div>
-                      <a-collapse v-if="tool.parameters && Object.keys(tool.parameters).length > 0" ghost>
+                      <a-collapse
+                        v-if="tool.parameters && Object.keys(tool.parameters).length > 0"
+                        ghost
+                      >
                         <a-collapse-panel key="params" header="参数">
                           <div class="params-list">
                             <div
@@ -194,10 +211,16 @@
                             >
                               <div class="param-header">
                                 <span class="param-name">{{ paramName }}</span>
-                                <span class="param-required" v-if="tool.required?.includes(paramName)">必填</span>
+                                <span
+                                  class="param-required"
+                                  v-if="tool.required?.includes(paramName)"
+                                  >必填</span
+                                >
                                 <span class="param-type">{{ param.type || 'any' }}</span>
                               </div>
-                              <div class="param-desc" v-if="param.description">{{ param.description }}</div>
+                              <div class="param-desc" v-if="param.description">
+                                {{ param.description }}
+                              </div>
                             </div>
                           </div>
                         </a-collapse-panel>
@@ -272,7 +295,9 @@ const filteredTools = computed(() => {
   if (!toolSearchText.value) return tools.value
   const search = toolSearchText.value.toLowerCase()
   return tools.value.filter(
-    (t) => t.name.toLowerCase().includes(search) || (t.description && t.description.toLowerCase().includes(search))
+    (t) =>
+      t.name.toLowerCase().includes(search) ||
+      (t.description && t.description.toLowerCase().includes(search))
   )
 })
 

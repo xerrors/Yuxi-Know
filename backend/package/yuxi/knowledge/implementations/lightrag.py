@@ -302,7 +302,9 @@ class LightRagKB(KnowledgeBase):
             ),
         )
 
-    async def index_file(self, db_id: str, file_id: str, operator_id: str | None = None, params: dict | None = None) -> dict:
+    async def index_file(
+        self, db_id: str, file_id: str, operator_id: str | None = None, params: dict | None = None
+    ) -> dict:
         """
         Index parsed file (Status: INDEXING -> INDEXED/ERROR_INDEXING)
 
@@ -395,7 +397,7 @@ class LightRagKB(KnowledgeBase):
 
                 logger.info(
                     f"Indexed file {file_id} into LightRAG with {len(chunks)} chunks, "
-                    f"chunk_preset_id={processing_params.get('chunk_preset_id')}"
+                    f"chunk_preset_id={params.get('chunk_preset_id')}"
                 )
 
                 # Update status

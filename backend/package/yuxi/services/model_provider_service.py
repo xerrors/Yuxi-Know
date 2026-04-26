@@ -7,6 +7,7 @@ from typing import Any
 
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
+from yuxi.config.builtin_providers import BUILTIN_PROVIDERS
 from yuxi.repositories.model_provider_repository import (
     create_model_provider,
     delete_model_provider,
@@ -14,7 +15,6 @@ from yuxi.repositories.model_provider_repository import (
     list_model_providers,
     update_model_provider,
 )
-from yuxi.config.builtin_providers import BUILTIN_PROVIDERS
 from yuxi.services.model_cache import is_v2_spec_format
 from yuxi.storage.postgres.models_business import ModelProvider
 

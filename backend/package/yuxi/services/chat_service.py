@@ -263,6 +263,7 @@ async def save_messages_from_langgraph_state(
         elif msg_type == "tool":
             await _save_tool_message(conv_repo, msg_dict)
 
+
 def _extract_interrupt_info(state) -> Any | None:
     """从 LangGraph state 中提取中断信息"""
     if hasattr(state, "tasks") and state.tasks:
@@ -1086,7 +1087,7 @@ async def stream_agent_resume(
         except Exception as e:
             logger.error(f"Error saving messages from LangGraph state: {e}")
             logger.error(traceback.format_exc())
-            yield make_chunk(status="warning", message=f"消息保存失败: {e}", meta=meta)
+            yield make_resume_chunk(status="warning", message=f"消息保存失败: {e}", meta=meta)
 
         yield make_resume_chunk(status="finished", meta=meta)
 

@@ -114,7 +114,9 @@ function emitChange(item) {
   line-height: 1;
   text-decoration: none;
   cursor: pointer;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
 
   &:hover {
     color: var(--gray-900);

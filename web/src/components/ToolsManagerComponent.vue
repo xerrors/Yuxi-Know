@@ -55,11 +55,7 @@
               @click="selectTool(tool)"
             >
               <div class="item-header">
-                <component
-                  :is="getToolIcon(tool.id) || Wrench"
-                  :size="16"
-                  class="item-icon"
-                />
+                <component :is="getToolIcon(tool.id) || Wrench" :size="16" class="item-icon" />
                 <span class="item-name">{{ tool.name }}</span>
               </div>
               <div class="item-details item-details-inline">

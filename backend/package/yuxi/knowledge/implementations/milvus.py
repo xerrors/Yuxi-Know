@@ -284,7 +284,9 @@ class MilvusKB(KnowledgeBase):
         """将文本分割成块"""
         return chunk_markdown(text, file_id, filename, params)
 
-    async def index_file(self, db_id: str, file_id: str, operator_id: str | None = None, params: dict | None = None) -> dict:
+    async def index_file(
+        self, db_id: str, file_id: str, operator_id: str | None = None, params: dict | None = None
+    ) -> dict:
         """
         Index parsed file (Status: INDEXING -> INDEXED/ERROR_INDEXING)
 

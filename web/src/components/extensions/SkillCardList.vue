@@ -2,7 +2,11 @@
   <div class="skill-cards-page extension-page-root">
     <PageShoulder search-placeholder="搜索技能..." v-model:search="searchQuery">
       <template #actions>
-        <a-button @click="handleOpenRemoteInstall" :disabled="loading || importing" class="lucide-icon-btn">
+        <a-button
+          @click="handleOpenRemoteInstall"
+          :disabled="loading || importing"
+          class="lucide-icon-btn"
+        >
           <Computer :size="14" />
           <span>远程安装</span>
         </a-button>
@@ -26,12 +30,17 @@
       </template>
     </PageShoulder>
 
-    <div v-if="filteredInstalledSkills.length === 0 && filteredUninstalledBuiltinSkills.length === 0" class="extension-card-grid-empty-state">
+    <div
+      v-if="filteredInstalledSkills.length === 0 && filteredUninstalledBuiltinSkills.length === 0"
+      class="extension-card-grid-empty-state"
+    >
       <a-empty :image="false" description="无匹配技能" />
     </div>
 
     <template v-else>
-      <div v-if="filteredInstalledSkills.length" class="extension-section-header">已添加 Skills</div>
+      <div v-if="filteredInstalledSkills.length" class="extension-section-header">
+        已添加 Skills
+      </div>
       <ExtensionCardGrid>
         <ExtensionCard
           v-for="skill in filteredInstalledSkills"
@@ -46,7 +55,9 @@
         </ExtensionCard>
       </ExtensionCardGrid>
 
-      <div v-if="filteredUninstalledBuiltinSkills.length" class="extension-section-header">可添加 Skills</div>
+      <div v-if="filteredUninstalledBuiltinSkills.length" class="extension-section-header">
+        可添加 Skills
+      </div>
       <ExtensionCardGrid v-if="filteredUninstalledBuiltinSkills.length">
         <ExtensionCard
           v-for="skill in filteredUninstalledBuiltinSkills"
@@ -102,13 +113,24 @@
             />
           </a-form-item>
           <div class="remote-install-actions">
-            <a-button :loading="listingRemoteSkills" :disabled="installingRemoteSkill" @click="handleListRemoteSkills">
+            <a-button
+              :loading="listingRemoteSkills"
+              :disabled="installingRemoteSkill"
+              @click="handleListRemoteSkills"
+            >
               查看可安装 Skills
             </a-button>
-            <a-button type="primary" :loading="installingRemoteSkill" :disabled="listingRemoteSkills" @click="handleInstallRemoteSkill">
+            <a-button
+              type="primary"
+              :loading="installingRemoteSkill"
+              :disabled="listingRemoteSkills"
+              @click="handleInstallRemoteSkill"
+            >
               安装
             </a-button>
-            <span v-if="remoteInstallStatusText" class="remote-install-status">{{ remoteInstallStatusText }}</span>
+            <span v-if="remoteInstallStatusText" class="remote-install-status">{{
+              remoteInstallStatusText
+            }}</span>
           </div>
           <div v-if="remoteSkillOptions.length" class="remote-skill-summary">
             共发现 {{ remoteSkillOptions.length }} 个 skills，可按输入内容筛选候选项。
@@ -174,9 +196,10 @@ const installedSkillCards = computed(() => {
           ...skill,
           sourceType: 'builtin',
           sourceLabel: '内置',
-          status: skill.status === 'update_available'
-            ? { label: '更新可用', level: 'warning' }
-            : { label: '已安装', level: 'success' }
+          status:
+            skill.status === 'update_available'
+              ? { label: '更新可用', level: 'warning' }
+              : { label: '已安装', level: 'success' }
         }
       ])
   )
@@ -194,7 +217,9 @@ const installedSkillCards = computed(() => {
 const filteredInstalledSkills = computed(() => installedSkillCards.value.filter(matchesSearch))
 
 const filteredUninstalledBuiltinSkills = computed(() => {
-  return (builtinSkills.value || []).filter((skill) => skill.status === 'not_installed' && matchesSearch(skill))
+  return (builtinSkills.value || []).filter(
+    (skill) => skill.status === 'not_installed' && matchesSearch(skill)
+  )
 })
 
 const filteredRemoteSkillOptions = computed(() =>
@@ -208,7 +233,8 @@ const remoteInstallStatusText = computed(() => {
   if (!remoteInstallProgress.visible || !remoteInstallProgress.total) return ''
   const progressText = `[${remoteInstallProgress.completed}/${remoteInstallProgress.total}]`
   const currentSkill = remoteInstallProgress.currentSkill || ''
-  const failedText = remoteInstallProgress.failed > 0 ? `, ${remoteInstallProgress.failed} failed` : ''
+  const failedText =
+    remoteInstallProgress.failed > 0 ? `, ${remoteInstallProgress.failed} failed` : ''
   return `${progressText} ${currentSkill}${failedText}`.trim()
 })
 
@@ -401,12 +427,16 @@ onMounted(() => {
   fetchSkills()
 })
 
-defineExpose({ fetchSkills, handleImportUpload, openRemoteInstallModal: handleOpenRemoteInstall, loading })
+defineExpose({
+  fetchSkills,
+  handleImportUpload,
+  openRemoteInstallModal: handleOpenRemoteInstall,
+  loading
+})
 </script>
 
 <style lang="less" scoped>
 @import '@/assets/css/extensions.less';
-
 </style>
 
 <style lang="less" scoped>

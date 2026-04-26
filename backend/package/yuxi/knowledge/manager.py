@@ -415,7 +415,9 @@ class KnowledgeBaseManager:
         kb_instance = await self._get_kb_for_database(db_id)
         return await kb_instance.parse_file(db_id, file_id, operator_id)
 
-    async def index_file(self, db_id: str, file_id: str, operator_id: str | None = None, params: dict | None = None) -> dict:
+    async def index_file(
+        self, db_id: str, file_id: str, operator_id: str | None = None, params: dict | None = None
+    ) -> dict:
         """Index parsed file"""
         kb_instance = await self._get_kb_for_database(db_id)
         return await kb_instance.index_file(db_id, file_id, operator_id, params=params)

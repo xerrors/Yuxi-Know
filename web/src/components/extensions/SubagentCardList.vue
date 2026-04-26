@@ -14,7 +14,10 @@
       </template>
     </PageShoulder>
 
-    <div v-if="filteredEnabledSubAgents.length === 0 && filteredDisabledSubAgents.length === 0" class="extension-card-grid-empty-state">
+    <div
+      v-if="filteredEnabledSubAgents.length === 0 && filteredDisabledSubAgents.length === 0"
+      class="extension-card-grid-empty-state"
+    >
       <a-empty :image="false" :description="searchQuery ? '无匹配 SubAgent' : '暂无 SubAgent'" />
     </div>
 
@@ -27,7 +30,7 @@
           :title="agent.name"
           :description="agent.description || '暂无描述'"
           :default-icon="BotIcon"
-          :tags="agent.is_builtin ? [{ name: '内置' }] : [{name: '添加'}]"
+          :tags="agent.is_builtin ? [{ name: '内置' }] : [{ name: '添加' }]"
           :status="{ label: '已添加', level: 'success' }"
           @click="navigateToDetail(agent)"
         >
@@ -42,7 +45,7 @@
           :title="agent.name"
           :description="agent.description || '暂无描述'"
           :default-icon="BotIcon"
-          :tags="agent.is_builtin ? [{ name: '内置' }] : [{name: '添加'}]"
+          :tags="agent.is_builtin ? [{ name: '内置' }] : [{ name: '添加' }]"
           action-label="添加"
           @click="navigateToDetail(agent)"
           @action-click="handleSetAgentEnabled(agent, true)"
@@ -88,7 +91,9 @@
               class="model-selector-full"
               @select-model="handleModelSelect"
             />
-            <a-button v-if="form.model" type="link" size="small" @click="form.model = ''">清空</a-button>
+            <a-button v-if="form.model" type="link" size="small" @click="form.model = ''"
+              >清空</a-button
+            >
           </div>
         </a-form-item>
       </a-form>

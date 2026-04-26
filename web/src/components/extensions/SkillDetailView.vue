@@ -19,7 +19,11 @@
       </div>
       <div class="detail-actions">
         <a-space :size="8">
-          <span v-if="currentSkillStatusLabel" class="panel-status-chip" :class="{ warning: currentSkillStatusTone === 'warning' }">
+          <span
+            v-if="currentSkillStatusLabel"
+            class="panel-status-chip"
+            :class="{ warning: currentSkillStatusTone === 'warning' }"
+          >
             {{ currentSkillStatusLabel }}
           </span>
           <button
@@ -66,7 +70,9 @@
           <div v-if="!isInstalledSkill" class="builtin-uninstalled-state">
             <h3>{{ currentSkill.description }}</h3>
             <p>版本 {{ currentSkill.version }}</p>
-            <a-button type="primary" @click="handleInstallBuiltin(currentSkill)">安装内置 Skill</a-button>
+            <a-button type="primary" @click="handleInstallBuiltin(currentSkill)"
+              >安装内置 Skill</a-button
+            >
           </div>
 
           <a-tabs v-else v-model:activeKey="activeTab" class="minimal-tabs">
@@ -79,9 +85,15 @@
                   <div class="tree-header">
                     <span class="label">项目结构</span>
                     <div class="tree-actions">
-                      <a-tooltip v-if="!isBuiltinInstalledSkill" title="新建文件"><button @click="openCreateModal(false)"><FilePlus :size="14" /></button></a-tooltip>
-                      <a-tooltip v-if="!isBuiltinInstalledSkill" title="新建目录"><button @click="openCreateModal(true)"><FolderPlus :size="14" /></button></a-tooltip>
-                      <a-tooltip title="刷新"><button @click="reloadTree"><RotateCw :size="14" /></button></a-tooltip>
+                      <a-tooltip v-if="!isBuiltinInstalledSkill" title="新建文件"
+                        ><button @click="openCreateModal(false)"><FilePlus :size="14" /></button
+                      ></a-tooltip>
+                      <a-tooltip v-if="!isBuiltinInstalledSkill" title="新建目录"
+                        ><button @click="openCreateModal(true)"><FolderPlus :size="14" /></button
+                      ></a-tooltip>
+                      <a-tooltip title="刷新"
+                        ><button @click="reloadTree"><RotateCw :size="14" /></button
+                      ></a-tooltip>
                     </div>
                   </div>
                   <div class="tree-content">
@@ -127,7 +139,11 @@
                     </div>
                   </div>
                   <div class="editor-main">
-                    <a-empty v-if="!selectedPath || selectedIsDir" description="选择文件以开始编辑" class="mt-40" />
+                    <a-empty
+                      v-if="!selectedPath || selectedIsDir"
+                      description="选择文件以开始编辑"
+                      class="mt-40"
+                    />
                     <template v-else>
                       <MdPreview
                         v-if="viewMode === 'preview'"
@@ -172,13 +188,34 @@
                 <div class="config-form">
                   <a-form layout="vertical">
                     <a-form-item label="工具依赖 (Tools)">
-                      <a-select v-model:value="dependencyForm.tool_dependencies" mode="multiple" :options="toolDependencyOptions" placeholder="选择工具..." allow-clear show-search />
+                      <a-select
+                        v-model:value="dependencyForm.tool_dependencies"
+                        mode="multiple"
+                        :options="toolDependencyOptions"
+                        placeholder="选择工具..."
+                        allow-clear
+                        show-search
+                      />
                     </a-form-item>
                     <a-form-item label="MCP 依赖 (Model Context Protocol)">
-                      <a-select v-model:value="dependencyForm.mcp_dependencies" mode="multiple" :options="mcpDependencyOptions" placeholder="选择 MCP 服务..." allow-clear show-search />
+                      <a-select
+                        v-model:value="dependencyForm.mcp_dependencies"
+                        mode="multiple"
+                        :options="mcpDependencyOptions"
+                        placeholder="选择 MCP 服务..."
+                        allow-clear
+                        show-search
+                      />
                     </a-form-item>
                     <a-form-item label="Skill 依赖">
-                      <a-select v-model:value="dependencyForm.skill_dependencies" mode="multiple" :options="skillDependencyOptions" placeholder="选择 Skill..." allow-clear show-search />
+                      <a-select
+                        v-model:value="dependencyForm.skill_dependencies"
+                        mode="multiple"
+                        :options="skillDependencyOptions"
+                        placeholder="选择 Skill..."
+                        allow-clear
+                        show-search
+                      />
                     </a-form-item>
                   </a-form>
                 </div>
@@ -270,11 +307,17 @@ const dependencyForm = reactive({
 })
 
 const isInstalledSkill = computed(() => {
-  return !!(currentSkill.value && (currentSkill.value.installed_record || currentSkill.value.dir_path))
+  return !!(
+    currentSkill.value &&
+    (currentSkill.value.installed_record || currentSkill.value.dir_path)
+  )
 })
 
 const isBuiltinInstalledSkill = computed(() => {
-  return !!(isInstalledSkill.value && (currentSkill.value?.is_builtin || currentSkill.value?.installed_record))
+  return !!(
+    isInstalledSkill.value &&
+    (currentSkill.value?.is_builtin || currentSkill.value?.installed_record)
+  )
 })
 
 const currentSkillStatusLabel = computed(() => {
@@ -312,7 +355,9 @@ const mcpDependencyOptions = computed(() =>
   (dependencyOptions.mcps || []).map((i) => ({ label: i, value: i }))
 )
 const skillDependencyOptions = computed(() =>
-  (dependencyOptions.skills || []).filter((s) => s !== currentSkill.value?.slug).map((i) => ({ label: i, value: i }))
+  (dependencyOptions.skills || [])
+    .filter((s) => s !== currentSkill.value?.slug)
+    .map((i) => ({ label: i, value: i }))
 )
 
 const goBack = () => {
@@ -451,7 +496,13 @@ const handleTreeSelect = async (keys, info) => {
 }
 
 const saveCurrentFile = async () => {
-  if (!currentSkill.value || !selectedPath.value || selectedIsDir.value || isBuiltinInstalledSkill.value) return
+  if (
+    !currentSkill.value ||
+    !selectedPath.value ||
+    selectedIsDir.value ||
+    isBuiltinInstalledSkill.value
+  )
+    return
   savingFile.value = true
   try {
     await skillApi.updateSkillFile(currentSkill.value.slug, {
@@ -521,7 +572,11 @@ const handleUpdateBuiltin = async (record) => {
 const confirmDeleteSkill = () => {
   const target = currentSkill.value
   if (!target) return
-  const isBuiltinTarget = !!(target?.is_builtin || target?.installed_record || target?.sourceType === 'builtin')
+  const isBuiltinTarget = !!(
+    target?.is_builtin ||
+    target?.installed_record ||
+    target?.sourceType === 'builtin'
+  )
   const actionText = isBuiltinTarget ? '卸载' : '删除'
   Modal.confirm({
     title: `确认${actionText}技能「${target.slug}」？`,
