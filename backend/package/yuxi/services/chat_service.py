@@ -245,29 +245,23 @@ async def save_messages_from_langgraph_state(
     config_dict: dict,
     trace_info: dict[str, Any] | None = None,
 ) -> None:
-    try:
-        messages = await _get_langgraph_messages(agent_instance, config_dict)
-        if messages is None:
-            return
+    messages = await _get_langgraph_messages(agent_instance, config_dict)
+    if messages is None:
+        return
 
-        existing_ids = await _get_existing_message_ids(conv_repo, thread_id)
+    existing_ids = await _get_existing_message_ids(conv_repo, thread_id)
 
-        for msg in messages:
-            msg_dict = msg.model_dump() if hasattr(msg, "model_dump") else {}
-            msg_type = msg_dict.get("type", "unknown")
+    for msg in messages:
+        msg_dict = msg.model_dump() if hasattr(msg, "model_dump") else {}
+        msg_type = msg_dict.get("type", "unknown")
 
-            if msg_type == "human" or getattr(msg, "id", None) in existing_ids:
-                continue
+        if msg_type == "human" or getattr(msg, "id", None) in existing_ids:
+            continue
 
-            if msg_type == "ai":
-                await _save_ai_message(conv_repo, thread_id, msg_dict, trace_info=trace_info)
-            elif msg_type == "tool":
-                await _save_tool_message(conv_repo, msg_dict)
-
-    except Exception as e:
-        logger.error(f"Error saving messages from LangGraph state: {e}")
-        logger.error(traceback.format_exc())
-
+        if msg_type == "ai":
+            await _save_ai_message(conv_repo, thread_id, msg_dict, trace_info=trace_info)
+        elif msg_type == "tool":
+            await _save_tool_message(conv_repo, msg_dict)
 
 def _extract_interrupt_info(state) -> Any | None:
     """从 LangGraph state 中提取中断信息"""
@@ -648,13 +642,23 @@ async def agent_chat(
         except Exception:
             agent_state = {}
 
-        await save_messages_from_langgraph_state(
-            agent_instance=agent,
-            thread_id=thread_id,
-            conv_repo=conv_repo,
-            config_dict=langgraph_config,
-            trace_info=trace_info,
-        )
+        try:
+            await save_messages_from_langgraph_state(
+                agent_instance=agent,
+                thread_id=thread_id,
+                conv_repo=conv_repo,
+                config_dict=langgraph_config,
+                trace_info=trace_info,
+            )
+        except Exception as e:
+            logger.error(f"Error saving messages from LangGraph state: {e}")
+            logger.error(traceback.format_exc())
+            return {
+                "status": "error",
+                "error_type": "save_message_error",
+                "error_message": f"消息保存失败: {e}",
+                "request_id": meta.get("request_id"),
+            }
 
         return {
             "status": "finished",
@@ -895,13 +899,18 @@ async def stream_agent_chat(
             yield make_chunk(status="agent_state", agent_state=agent_state, meta=meta)
 
         # 先存储数据库，再返回 finished，避免前端查询时数据未落库
-        await save_messages_from_langgraph_state(
-            agent_instance=agent,
-            thread_id=thread_id,
-            conv_repo=conv_repo,
-            config_dict=langgraph_config,
-            trace_info=trace_info,
-        )
+        try:
+            await save_messages_from_langgraph_state(
+                agent_instance=agent,
+                thread_id=thread_id,
+                conv_repo=conv_repo,
+                config_dict=langgraph_config,
+                trace_info=trace_info,
+            )
+        except Exception as e:
+            logger.error(f"Error saving messages from LangGraph state: {e}")
+            logger.error(traceback.format_exc())
+            yield make_chunk(status="warning", message=f"消息保存失败: {e}", meta=meta)
 
         yield make_chunk(status="finished", meta=meta)
 
@@ -1066,13 +1075,18 @@ async def stream_agent_resume(
 
         # 先存储数据库，再返回 finished，避免前端查询时数据未落库
         conv_repo = ConversationRepository(db)
-        await save_messages_from_langgraph_state(
-            agent_instance=agent,
-            thread_id=thread_id,
-            conv_repo=conv_repo,
-            config_dict=langgraph_config,
-            trace_info=trace_info,
-        )
+        try:
+            await save_messages_from_langgraph_state(
+                agent_instance=agent,
+                thread_id=thread_id,
+                conv_repo=conv_repo,
+                config_dict=langgraph_config,
+                trace_info=trace_info,
+            )
+        except Exception as e:
+            logger.error(f"Error saving messages from LangGraph state: {e}")
+            logger.error(traceback.format_exc())
+            yield make_chunk(status="warning", message=f"消息保存失败: {e}", meta=meta)
 
         yield make_resume_chunk(status="finished", meta=meta)
 
