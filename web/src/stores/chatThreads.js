@@ -36,7 +36,10 @@ export const useChatThreadsStore = defineStore('chatThreads', () => {
       const fetchedThreads = await threadApi.getThreads(agentId, PAGE_SIZE, 0)
       threads.value = fetchedThreads || []
       hasMoreThreads.value = Boolean(fetchedThreads && fetchedThreads.length >= PAGE_SIZE)
-      if (currentThreadId.value && !threads.value.find((thread) => thread.id === currentThreadId.value)) {
+      if (
+        currentThreadId.value &&
+        !threads.value.find((thread) => thread.id === currentThreadId.value)
+      ) {
         currentThreadId.value = null
       }
       return threads.value

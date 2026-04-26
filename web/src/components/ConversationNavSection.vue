@@ -343,5 +343,4 @@ const renameChat = async (chatId) => {
   color: var(--main-color);
   font-size: 12px;
 }
-
 </style>

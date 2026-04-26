@@ -40,16 +40,11 @@
             <div class="col-item">
               <div class="setting-label">{{ items?.reranker?.des }}</div>
               <div class="setting-content">
-                <a-select
-                  class="full-width"
+                <RerankModelSelector
                   :value="configStore.config?.reranker"
                   @change="handleChange('reranker', $event)"
-                  placeholder="请选择重排序模型"
-                >
-                  <a-select-option v-for="(name, idx) in rerankerChoices" :key="idx" :value="name"
-                    >{{ name }}
-                  </a-select-option>
-                </a-select>
+                  style="width: 100%"
+                />
               </div>
             </div>
           </div>
@@ -187,17 +182,13 @@ import { useUserStore } from '@/stores/user'
 import { Globe } from 'lucide-vue-next'
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue'
 import EmbeddingModelSelector from '@/components/EmbeddingModelSelector.vue'
+import RerankModelSelector from '@/components/RerankModelSelector.vue'
 
 const configStore = useConfigStore()
 const agentStore = useAgentStore()
 const userStore = useUserStore()
 const items = computed(() => configStore.config?._config_items || {})
 const isSettingDefaultAgent = ref(false)
-
-const rerankerChoices = computed(() => {
-  return Object.keys(configStore?.config?.reranker_names || {}) || []
-})
-
 const agentOptions = computed(() =>
   (agentStore.agents || []).map((agent) => ({
     label: agent.name || 'Unknown',

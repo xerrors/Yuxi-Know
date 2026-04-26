@@ -14,8 +14,8 @@
       <template #description>
         项目已启用新版的模型配置，自定义程度更高，且支持 Embedding / Rerank 模型，您可以
         <a @click="goToNewModelConfig">点击此处</a>
-        跳转到新版模型配置页面。
-        已配置模型将会在 0.6.x 期间继续使用，0.7 版本将不再支持老版的模型调用。
+        跳转到新版模型配置页面。 已配置模型将会在 0.6.x 期间继续使用，0.7
+        版本将不再支持老版的模型调用。
         为了更加稳定的模型调用和更好的用户体验，建议尽快迁移到新的模型配置。
       </template>
     </a-alert>
@@ -25,7 +25,9 @@
     </div>
 
     <div v-for="item in tableData" :key="item.id" class="provider-block">
-      <h4 class="provider-name">{{ item.name }} <span class="provider-id">({{ item.id }})</span></h4>
+      <h4 class="provider-name">
+        {{ item.name }} <span class="provider-id">({{ item.id }})</span>
+      </h4>
       <a-descriptions bordered :column="1" size="small">
         <a-descriptions-item label="API地址">{{ item.base_url }}</a-descriptions-item>
         <a-descriptions-item label="默认模型">{{ item.default }}</a-descriptions-item>
@@ -34,7 +36,9 @@
           <a v-if="item.url" :href="item.url" target="_blank">{{ item.url }}</a>
           <span v-else>无</span>
         </a-descriptions-item>
-        <a-descriptions-item label="可用模型">{{ item.models?.join(', ') || '无' }}</a-descriptions-item>
+        <a-descriptions-item label="可用模型">{{
+          item.models?.join(', ') || '无'
+        }}</a-descriptions-item>
       </a-descriptions>
     </div>
   </div>

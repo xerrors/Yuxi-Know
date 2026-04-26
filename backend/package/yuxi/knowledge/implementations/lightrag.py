@@ -14,7 +14,7 @@ from yuxi import config
 from yuxi.knowledge.base import FileStatus, KnowledgeBase
 from yuxi.knowledge.chunking.ragflow_like.dispatcher import chunk_markdown
 from yuxi.knowledge.chunking.ragflow_like.presets import resolve_chunk_processing_params
-from yuxi.knowledge.utils.kb_utils import get_embedding_config
+from yuxi.models.embed import get_embedding_model_info_by_id
 from yuxi.plugins.parser.unified import Parser
 from yuxi.utils import hashstr, logger
 from yuxi.utils.datetime_utils import utc_isoformat
@@ -262,7 +262,7 @@ class LightRagKB(KnowledgeBase):
 
     def _get_embedding_func(self, embed_info: dict):
         """获取 embedding 函数"""
-        config_dict = get_embedding_config(embed_info)
+        config_dict = get_embedding_model_info_by_id(embed_info["model_id"])
         logger.debug(f"Embedding config dict: {config_dict}")
 
         if config_dict.get("model_id") and config_dict["model_id"].startswith("ollama"):

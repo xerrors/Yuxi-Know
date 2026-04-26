@@ -324,9 +324,7 @@ def _validate_models_capabilities(enabled_models: list[dict], capabilities: set[
     """校验 enabled_models 中所有模型的 type 都在 provider capabilities 范围内。"""
     for model in enabled_models or []:
         if model["type"] not in capabilities:
-            raise ValueError(
-                f"模型 {model['id']} 的 type={model['type']} 不在 provider 能力 {sorted(capabilities)} 内"
-            )
+            raise ValueError(f"模型 {model['id']} 的 type={model['type']} 不在 provider 能力 {sorted(capabilities)} 内")
 
 
 def _normalize_payload(data: dict[str, Any], *, partial: bool = False) -> dict[str, Any]:
@@ -519,7 +517,7 @@ async def ensure_builtin_model_providers_in_db(db: AsyncSession) -> None:
         payload["enabled_models"] = provider_def.get("enabled_models", [])
         payload["headers_json"] = payload.get("headers_json") or {}
         payload["extra_json"] = payload.get("extra_json") or {}
-        payload["is_enabled"] = False
+        payload["is_enabled"] = provider_id == "siliconflow-cn"
         payload["is_builtin"] = True
         payload["created_by"] = "system"
         payload["updated_by"] = "system"

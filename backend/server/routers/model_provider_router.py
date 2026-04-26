@@ -234,8 +234,23 @@ async def get_model_status_by_spec(
     spec: str,
     current_user: User = Depends(get_admin_user),
 ):
-    """根据 full spec 检查模型状态（自动识别 V1/V2）。"""
+    """根据 full spec 检查模型状态（自动识别 V1/V2、Chat/Embedding）。
+
+    V2 spec 格式: provider_id:model_id（冒号分隔）
+    优先从缓存获取模型类型，根据类型分派到对应的测试函数。
+    """
     from yuxi.models.chat import test_chat_model_status_by_spec
+
+    # 尝试从缓存获取模型类型，区分 Chat 和 Embedding
+    if ":" in spec:
+        from yuxi.services.model_cache import model_cache
+
+        info = model_cache.get_model_info(spec)
+        if info and info.model_type == "embedding":
+            from yuxi.models.embed import test_embedding_model_status_by_spec
+
+            result = await test_embedding_model_status_by_spec(spec)
+            return {"success": True, "data": result}
 
     result = await test_chat_model_status_by_spec(spec)
     return {"success": True, "data": result}

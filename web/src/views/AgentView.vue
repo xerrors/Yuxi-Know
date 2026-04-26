@@ -167,13 +167,8 @@ const route = useRoute()
 const router = useRouter()
 
 // 从 agentStore 中获取响应式状态
-const {
-  selectedAgentId,
-  defaultAgentId,
-  selectedAgentConfigId,
-  agentConfigs,
-  isLoadingConfig
-} = storeToRefs(agentStore)
+const { selectedAgentId, defaultAgentId, selectedAgentConfigId, agentConfigs, isLoadingConfig } =
+  storeToRefs(agentStore)
 
 const syncingRouteThread = ref(false)
 

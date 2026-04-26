@@ -95,7 +95,9 @@ const filteredProviders = computed(() => {
 })
 
 const providerStats = computed(() => {
-  let enabled = 0, warning = 0, models = 0
+  let enabled = 0,
+    warning = 0,
+    models = 0
   for (const p of providers.value) {
     if (p.is_enabled) {
       enabled++
@@ -989,8 +991,7 @@ onMounted(loadProviders)
               </a-button>
             </div>
           </div>
-          <div class="remote-fetch-actions">
-          </div>
+          <div class="remote-fetch-actions"></div>
         </div>
       </div>
     </a-modal>
