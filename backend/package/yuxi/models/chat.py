@@ -104,7 +104,7 @@ class GeneralResponse:
 def select_model_v2(spec: str) -> OpenAIBase:
     """根据 v2 spec（provider_id:model_id）选择聊天模型。
 
-    v2 spec 格式使用冒号分隔，如: siliconflow-cn:Pro/deepseek-ai/DeepSeek-V3.2
+    v2 spec 格式使用冒号分隔，如: siliconflow-cn:deepseek-ai/DeepSeek-V4-Flash
     数据来源为数据库中的 model_providers 表，通过全局缓存访问。
     """
     from yuxi.services.model_cache import model_cache

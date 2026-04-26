@@ -22,7 +22,7 @@ class DeepContext(BaseContext):
     )
 
     subagents_model: Annotated[str, {"__template_metadata__": {"kind": "llm"}}] = field(
-        default="siliconflow/Pro/deepseek-ai/DeepSeek-V3.2",
+        default="siliconflow-cn:deepseek-ai/DeepSeek-V4-Flash",
         metadata={
             "name": "Sub-agent Model",
             "description": "子智能体的默认模型，会被子智能体的配置覆盖。",
