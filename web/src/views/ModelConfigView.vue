@@ -46,10 +46,12 @@ const providerForm = reactive({
 
 // Model form state
 const showModelModal = ref(false)
+const isCreating = ref(false) // true=手动添加新模型，false=编辑已有模型
 const editingModel = reactive({
   id: '',
   display_name: '',
   type: 'chat',
+  source: 'remote', // 'manual'|'remote'：区分手动添加，控制 stale 视觉警告跳过
   protocol_override: null,
   base_url_override: null,
   context_length: null,
@@ -92,12 +94,17 @@ const filteredProviders = computed(() => {
   })
 })
 
-const providerStats = computed(() => ({
-  total: providers.value.length,
-  enabled: providers.value.filter((p) => p.is_enabled).length,
-  warning: providers.value.filter((p) => p.is_enabled && p.credential_status === 'warning').length,
-  models: providers.value.reduce((sum, p) => sum + (p.enabled_models?.length || 0), 0)
-}))
+const providerStats = computed(() => {
+  let enabled = 0, warning = 0, models = 0
+  for (const p of providers.value) {
+    if (p.is_enabled) {
+      enabled++
+      if (p.credential_status === 'warning') warning++
+    }
+    models += p.enabled_models?.length || 0
+  }
+  return { total: providers.value.length, enabled, warning, models }
+})
 
 // ============ Helpers ============
 const getProviderIcon = (provider) => {
@@ -155,11 +162,18 @@ const getInputModalities = (model) => {
   return []
 }
 
+const remoteIdsMap = computed(() => {
+  const map = {}
+  for (const [providerId, models] of Object.entries(remoteModelsMap.value)) {
+    map[providerId] = new Set(models.map((m) => m.id))
+  }
+  return map
+})
+
 const isModelStale = (model, providerId) => {
-  // Only check stale if remote models have been loaded
+  if (model.source === 'manual') return false
   if (!remoteModelsLoaded.value[providerId]) return false
-  const remoteIds = new Set((remoteModelsMap.value[providerId] || []).map((m) => m.id))
-  return model.enabled && !remoteIds.has(model.id)
+  return model.enabled && !remoteIdsMap.value[providerId]?.has(model.id)
 }
 
 // Remote models filtered by search query per provider
@@ -191,6 +205,14 @@ const remoteModelTypeOptions = computed(() => {
     { label: `Embedding ${counts.embedding || 0}`, value: 'embedding' },
     { label: `Rerank ${counts.rerank || 0}`, value: 'rerank' }
   ]
+})
+
+// Model Config Modal 的 type 下拉选项：基于 provider.capabilities 限定
+// 旧数据 capabilities 为空时回退到全集，保持现状
+const editingModelTypeOptions = computed(() => {
+  const caps = currentProviderForModels.value?.capabilities
+  const types = Array.isArray(caps) && caps.length ? caps : ['chat', 'embedding', 'rerank']
+  return types.map((c) => ({ value: c, label: c }))
 })
 
 const parseJsonObject = (text, label) => {
@@ -353,7 +375,8 @@ const openModelsModal = (provider) => {
   if (!remoteModelsLoaded.value[provider.provider_id]) {
     remoteModelsMap.value[provider.provider_id] = []
   }
-  remoteModelSearch.value[provider.provider_id] = remoteModelSearch.value[provider.provider_id] || ''
+  remoteModelSearch.value[provider.provider_id] =
+    remoteModelSearch.value[provider.provider_id] || ''
   remoteModelTypeFilter.value[provider.provider_id] = 'all'
   showModelsModal.value = true
 }
@@ -381,6 +404,7 @@ const normalizeModel = (model = {}) => ({
   id: model.id || '',
   display_name: model.display_name || model.name || model.id || '',
   type: model.type && model.type !== 'unknown' ? model.type : 'chat',
+  source: model.source || 'remote',
   protocol_override: model.protocol_override || null,
   base_url_override: model.base_url_override || null,
   context_length: model.context_length || null,
@@ -401,6 +425,7 @@ const addModelFromRemote = async (providerId, remoteModel) => {
   }
 
   const newModel = normalizeModel(remoteModel)
+  newModel.source = 'remote' // 远端拉取的模型显式标注，避免后续被误判为旧数据
   newModel.enabled = true
   const newEnabledModels = [...enabledModels, newModel]
 
@@ -418,7 +443,30 @@ const addModelFromRemote = async (providerId, remoteModel) => {
 }
 
 const openModelConfigModal = (model) => {
-  Object.assign(editingModel, { ...model })
+  Object.assign(editingModel, normalizeModel(model))
+  isCreating.value = false
+  showModelModal.value = true
+}
+
+// 手动添加模型：弹出与编辑共用的 Model Config Modal，但 id 字段可编辑、type 选项受 provider 能力约束
+const openCreateModal = (provider) => {
+  if (!provider) return
+  const types = provider.capabilities?.length ? provider.capabilities : ['chat']
+  const defaultType = types[0]
+  Object.assign(editingModel, {
+    id: '',
+    display_name: '',
+    type: defaultType,
+    source: 'manual',
+    protocol_override: null,
+    base_url_override: null,
+    context_length: null,
+    dimension: null,
+    batch_size: null,
+    supported_parameters: [],
+    extra: {}
+  })
+  isCreating.value = true
   showModelModal.value = true
 }
 
@@ -431,15 +479,31 @@ const saveModelConfig = async () => {
     )
     if (!provider) return
 
-    const enabledModels = (provider.enabled_models || []).map((m) =>
-      m.id === editingModel.id ? { ...editingModel } : m
-    )
+    let enabledModels
+    if (isCreating.value) {
+      const newId = (editingModel.id || '').trim()
+      if (!newId) {
+        message.error('请填写模型 ID')
+        return
+      }
+      if ((provider.enabled_models || []).some((m) => m.id === newId)) {
+        message.error('模型 ID 已存在')
+        return
+      }
+      const newModel = { ...editingModel, id: newId, source: 'manual', enabled: true }
+      enabledModels = [...(provider.enabled_models || []), newModel]
+    } else {
+      enabledModels = (provider.enabled_models || []).map((m) =>
+        m.id === editingModel.id ? { ...editingModel } : m
+      )
+    }
 
     await modelProviderApi.updateProvider(currentProviderForModels.value.provider_id, {
       enabled_models: enabledModels
     })
-    message.success('模型配置已保存')
+    message.success(isCreating.value ? '模型已添加' : '模型配置已保存')
     showModelModal.value = false
+    isCreating.value = false
     await loadProviders()
     // Refresh current provider reference
     currentProviderForModels.value = providers.value.find(
@@ -778,9 +842,30 @@ onMounted(loadProviders)
       <div v-if="currentProviderForModels" class="models-modal-content">
         <!-- Enabled Models Section -->
         <div class="models-section">
-          <h4 class="models-section-title">
-            已启用模型 ({{ currentProviderForModels.enabled_models?.length || 0 }})
-          </h4>
+          <div class="enabled-header">
+            <h4 class="models-section-title">
+              已启用模型 ({{ currentProviderForModels.enabled_models?.length || 0 }})
+            </h4>
+            <div class="actions">
+              <a-button
+                size="small"
+                type="primary"
+                class="lucide-icon-btn"
+                :loading="remoteLoading"
+                @click="fetchRemoteModels(currentProviderForModels.provider_id)"
+              >
+                获取远程模型
+              </a-button>
+              <a-button
+                size="small"
+                class="lucide-icon-btn"
+                @click="openCreateModal(currentProviderForModels)"
+              >
+                <Plus :size="14" />
+                <span>手动添加</span>
+              </a-button>
+            </div>
+          </div>
           <div class="models-table" v-if="currentProviderForModels.enabled_models?.length">
             <div class="table-head">
               <span class="col-name">模型</span>
@@ -801,6 +886,12 @@ onMounted(loadProviders)
               </div>
               <span class="col-type">
                 <span class="type-tag" :class="model.type">{{ model.type }}</span>
+                <span
+                  v-if="model.source === 'manual'"
+                  class="type-tag manual"
+                  title="管理员手动添加"
+                  >手动</span
+                >
               </span>
               <span class="col-context">{{ formatContextLength(model.context_length) }}</span>
               <span class="col-dim">
@@ -827,7 +918,7 @@ onMounted(loadProviders)
               </span>
             </div>
           </div>
-          <a-empty v-else :image="false" description="暂无已启用模型" />
+          <a-empty v-else description="暂无已启用模型" />
         </div>
 
         <!-- Remote Models Section -->
@@ -864,10 +955,7 @@ onMounted(loadProviders)
                 <span class="type-tag" :class="remoteModel.type || 'chat'">
                   {{ remoteModel.type || 'chat' }}
                 </span>
-                <template
-                  v-for="mod in (getInputModalities(remoteModel) || [])"
-                  :key="mod"
-                >
+                <template v-for="mod in getInputModalities(remoteModel) || []" :key="mod">
                   <span class="modality-tag">{{ mod }}</span>
                 </template>
               </div>
@@ -902,15 +990,6 @@ onMounted(loadProviders)
             </div>
           </div>
           <div class="remote-fetch-actions">
-            <a-button
-              type="primary"
-              class="lucide-icon-btn"
-              :loading="remoteLoading"
-              @click="fetchRemoteModels(currentProviderForModels.provider_id)"
-            >
-              <RefreshCw :size="14" v-if="!remoteLoading" />
-              获取远程模型
-            </a-button>
           </div>
         </div>
       </div>
@@ -919,13 +998,19 @@ onMounted(loadProviders)
     <!-- Model Config Modal -->
     <a-modal
       v-model:open="showModelModal"
-      title="模型配置"
+      :title="isCreating ? '手动添加模型' : '模型配置'"
       :width="520"
       :confirm-loading="saving"
       @ok="saveModelConfig"
     >
       <div class="modal-form">
-        <div class="model-id-display">
+        <div v-if="isCreating" class="form-row">
+          <label class="form-label">
+            <span>模型 ID <span class="required-mark">*</span></span>
+            <a-input v-model:value="editingModel.id" placeholder="例如 BAAI/bge-m3" allow-clear />
+          </label>
+        </div>
+        <div v-else class="model-id-display">
           <span class="info-label">模型 ID</span>
           <code>{{ editingModel.id }}</code>
         </div>
@@ -937,11 +1022,11 @@ onMounted(loadProviders)
           </label>
           <label class="form-label">
             <span>模型类型</span>
-            <a-select v-model:value="editingModel.type">
-              <a-select-option value="chat">chat</a-select-option>
-              <a-select-option value="embedding">embedding</a-select-option>
-              <a-select-option value="rerank">rerank</a-select-option>
-            </a-select>
+            <a-select
+              v-model:value="editingModel.type"
+              :options="editingModelTypeOptions"
+              :disabled="editingModelTypeOptions.length === 1"
+            />
           </label>
         </div>
 
@@ -1386,6 +1471,10 @@ onMounted(loadProviders)
   font-size: 11px;
   font-weight: 500;
 
+  & + & {
+    margin-left: 4px;
+  }
+
   &.chat {
     background: var(--color-info-50);
     color: var(--color-info-700);
@@ -1399,6 +1488,11 @@ onMounted(loadProviders)
   &.rerank {
     background: var(--color-warning-50);
     color: var(--color-warning-900);
+  }
+
+  &.manual {
+    background: var(--gray-200);
+    color: var(--gray-700);
   }
 }
 
@@ -1447,6 +1541,24 @@ onMounted(loadProviders)
 
 .remote-list {
   border-top: 1px solid var(--gray-100);
+}
+
+.enabled-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+
+  .models-section-title {
+    margin: 0;
+  }
+
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
 }
 
 .remote-header {
@@ -1539,13 +1651,6 @@ onMounted(loadProviders)
 
 .models-empty {
   padding: 24px;
-}
-
-.remote-fetch-actions {
-  display: flex;
-  justify-content: flex-start;
-  padding-top: 8px;
-  border-top: 1px solid var(--gray-100);
 }
 
 // ============ Modal Form ============

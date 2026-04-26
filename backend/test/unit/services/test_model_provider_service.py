@@ -194,3 +194,96 @@ def test_check_credential_status_both_empty_warning():
         api_key_env = None
 
     assert _check_credential_status(Provider()) == "warning"
+
+
+# ==================== 手动添加模型 / source 字段 ====================
+
+
+def test_normalize_payload_default_model_source_is_remote():
+    """未显式指定 source 时，规范化后默认填入 remote，向后兼容旧数据。"""
+    payload = _normalize_payload(
+        {
+            "provider_id": "openrouter-local",
+            "display_name": "OpenRouter Local",
+            "base_url": "https://openrouter.ai/api/v1",
+            "enabled_models": [{"id": "anthropic/claude-sonnet-4.5", "type": "chat"}],
+        }
+    )
+
+    assert payload["enabled_models"][0]["source"] == "remote"
+
+
+def test_normalize_payload_accepts_manual_source():
+    """source=manual 表示管理员手动添加的模型，规范化保留该标签。"""
+    payload = _normalize_payload(
+        {
+            "provider_id": "custom-local",
+            "display_name": "Custom Local",
+            "base_url": "https://example.com/v1",
+            "capabilities": ["chat"],
+            "enabled_models": [
+                {"id": "my-chat-model", "type": "chat", "source": "manual"}
+            ],
+        }
+    )
+
+    assert payload["enabled_models"][0]["source"] == "manual"
+
+
+def test_normalize_payload_rejects_invalid_source():
+    """source 仅允许 manual 或 remote，其他取值视为非法。"""
+    with pytest.raises(ValueError, match="source 必须是"):
+        _normalize_payload(
+            {
+                "provider_id": "custom-local",
+                "display_name": "Custom Local",
+                "base_url": "https://example.com/v1",
+                "enabled_models": [
+                    {"id": "x", "type": "chat", "source": "custom"}
+                ],
+            }
+        )
+
+
+def test_normalize_payload_rejects_model_type_not_in_capabilities():
+    """provider 仅声明 chat 能力时，不允许写入 embedding 类型的模型。"""
+    with pytest.raises(ValueError, match="不在 provider 能力"):
+        _normalize_payload(
+            {
+                "provider_id": "chat-only",
+                "display_name": "Chat Only",
+                "base_url": "https://example.com/v1",
+                "capabilities": ["chat"],
+                "enabled_models": [
+                    {"id": "rogue-embedding", "type": "embedding", "dimension": 1024}
+                ],
+            }
+        )
+
+
+def test_normalize_payload_allows_model_type_within_capabilities():
+    """provider 同时声明 chat + embedding 时，两类模型均可正常写入。"""
+    payload = _normalize_payload(
+        {
+            "provider_id": "multi-cap",
+            "display_name": "Multi Cap",
+            "base_url": "https://example.com/v1",
+            "capabilities": ["chat", "embedding"],
+            "embedding_base_url": "https://example.com/v1/embeddings",
+            "embedding_models_endpoint": "/embeddings/models",
+            "enabled_models": [
+                {"id": "chat-1", "type": "chat", "source": "manual"},
+                {
+                    "id": "embed-1",
+                    "type": "embedding",
+                    "source": "manual",
+                    "dimension": 1024,
+                },
+            ],
+        }
+    )
+
+    types = [model["type"] for model in payload["enabled_models"]]
+    sources = [model["source"] for model in payload["enabled_models"]]
+    assert types == ["chat", "embedding"]
+    assert sources == ["manual", "manual"]

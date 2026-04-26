@@ -180,10 +180,19 @@ async def get_remote_models(
         detail = e.response.text
         if e.response.status_code == 401:
             raise HTTPException(status_code=502, detail="远端 API 认证失败，请检查 API Key 配置")
-        raise HTTPException(status_code=e.response.status_code, detail=f"远端 /models 请求失败: {detail}")
+        raise HTTPException(status_code=e.response.status_code, detail=f"Models 请求失败: {detail}")
     except Exception as e:
         logger.error(f"拉取远端模型失败 {provider_id}: {e}")
         raise HTTPException(status_code=400, detail=f"拉取远端模型失败: {e}")
+
+
+@model_providers.post("/models/cache/refresh")
+async def refresh_model_cache(
+    current_user: User = Depends(get_admin_user),
+):
+    """强制刷新模型缓存，从数据库重新加载所有供应商配置到 Redis。"""
+    await _refresh_model_cache()
+    return {"success": True, "message": "缓存已刷新", "model_count": len(model_cache.get_all_specs())}
 
 
 @model_providers.get("/models/v2")

@@ -1,5 +1,5 @@
 <template>
-  <a-dropdown trigger="click">
+  <a-dropdown trigger="click" @open-change="handleOpenChange">
     <div class="model-select" :class="modelSelectClasses" @click.prevent>
       <div class="model-select-content">
         <div class="model-info">
@@ -16,6 +16,19 @@
           >
             {{ modelStatusIcon }}
           </span>
+          <a-tooltip title="刷新缓存">
+            <a-button
+              type="text"
+              :loading="state.refreshingCache"
+              @click.stop="refreshCache"
+              :disabled="state.refreshingCache"
+              class="cache-refresh-button"
+            >
+              <template #icon>
+                <RefreshCw :size="13" :class="{ 'spin': state.refreshingCache }" />
+              </template>
+            </a-button>
+          </a-tooltip>
           <a-button
             :size="buttonSize"
             type="text"
@@ -66,9 +79,10 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, onMounted } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useConfigStore } from '@/stores/config'
 import { modelProviderApi } from '@/apis/system_api'
+import { RefreshCw } from 'lucide-vue-next'
 
 const props = defineProps({
   model_spec: {
@@ -89,11 +103,14 @@ const props = defineProps({
 const configStore = useConfigStore()
 const emit = defineEmits(['select-model'])
 
-// v2 模型数据
+// v2 模型数据：每次展开下拉时实时从后端拉取
 const v2Models = ref({})
+const loadingV2Models = ref(false)
 
-// 加载 v2 模型列表
-onMounted(async () => {
+// 拉取 v2 模型列表
+const fetchV2Models = async () => {
+  if (loadingV2Models.value) return
+  loadingV2Models.value = true
   try {
     const response = await modelProviderApi.getV2Models('chat')
     if (response.success) {
@@ -101,13 +118,36 @@ onMounted(async () => {
     }
   } catch (error) {
     console.warn('Failed to load v2 models:', error)
+  } finally {
+    loadingV2Models.value = false
   }
-})
+}
+
+// 下拉展开时触发实时刷新（仅在打开瞬间触发，关闭时忽略）
+const handleOpenChange = (open) => {
+  if (open) fetchV2Models()
+}
+
+// 强制刷新缓存
+const refreshCache = async () => {
+  if (state.refreshingCache) return
+  state.refreshingCache = true
+  try {
+    await modelProviderApi.refreshModelCache()
+    // 刷新后重新拉取模型列表
+    await fetchV2Models()
+  } catch (error) {
+    console.error('Failed to refresh cache:', error)
+  } finally {
+    state.refreshingCache = false
+  }
+}
 
 // 状态管理
 const state = reactive({
   currentModelStatus: null, // 当前模型状态
-  checkingStatus: false // 是否正在检查状态
+  checkingStatus: false, // 是否正在检查状态
+  refreshingCache: false // 是否正在刷新缓存
 })
 
 // 从configStore中获取所需数据
@@ -291,7 +331,31 @@ const handleSelectV2Model = (spec) => {
         font-size: @status-check-button-font-size;
         padding: @status-check-button-padding;
       }
+
+      // 缓存刷新按钮
+      .cache-refresh-button {
+        font-size: @status-check-button-font-size;
+        padding: @status-check-button-padding;
+        display: flex;
+        align-items: center;
+        width: 24px;
+        background-color: transparent;
+      }
     }
+  }
+}
+
+// 刷新图标旋转动画
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
   }
 }
 

@@ -165,6 +165,10 @@ export const modelProviderApi = {
     return apiAdminGet('/api/system/model-providers/models/cache-status')
   },
 
+  refreshModelCache: async () => {
+    return apiAdminPost('/api/system/model-providers/models/cache/refresh')
+  },
+
   getModelStatusBySpec: async (spec) => {
     return apiAdminGet(`/api/system/model-providers/models/status?spec=${encodeURIComponent(spec)}`)
   },
