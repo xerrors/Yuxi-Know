@@ -85,6 +85,9 @@ class ModelCache:
     """基于 Redis 的模型缓存，所有写入均走 Redis，保证跨进程一致。
 
     查询接口使用本地内存缓存（带 TTL），避免热路径反复反序列化 JSON。
+
+    注意：本类使用同步 Redis 客户端（redis-py），因为 LangGraph 在初始化模型时
+    通过同步路径调用 get_model_info()。后续可统一升级为异步客户端（redis.asyncio）。
     """
 
     def __init__(self) -> None:
@@ -170,7 +173,7 @@ class ModelCache:
         所有修改操作（启动初始化、CRUD）都通过此方法写入，
         保证 Redis 中的数据始终是最新的。
         """
-        from yuxi.services.model_provider_service import _resolve_api_key
+        from yuxi.services.model_provider_service import resolve_api_key
 
         new_cache: dict[str, ModelInfo] = {}
 
@@ -178,7 +181,7 @@ class ModelCache:
             if not provider.is_enabled:
                 continue
 
-            api_key = _resolve_api_key(provider)
+            api_key = resolve_api_key(provider)
 
             for model in provider.enabled_models or []:
                 model_type = model.get("type", "chat")
@@ -228,3 +231,51 @@ class ModelCache:
 
 # 全局单例
 model_cache = ModelCache()
+
+
+def resolve_model_spec(spec: str) -> ModelInfo:
+    """统一入口：根据 spec 自动识别 V1/V2 格式并返回 ModelInfo。
+
+    V2 格式（优先）: provider_id:model_id（冒号分隔），从 model_cache 查找
+    V1 格式: provider/model_name（斜杠分隔），从 config.model_names 查找
+
+    Raises:
+        ValueError: spec 格式无效或模型未找到
+    """
+    if not spec:
+        raise ValueError("spec 不能为空")
+
+    # V2: 优先查找缓存
+    if ":" in spec:
+        info = model_cache.get_model_info(spec)
+        if info:
+            return info
+        raise ValueError(f"未找到 V2 模型: {spec}")
+
+    # V1: 从 config 查找（兼容旧版）
+    if "/" in spec:
+        from yuxi import config
+
+        provider, model_name = spec.split("/", 1)
+        model_info = config.model_names.get(provider)
+        if not model_info:
+            raise ValueError(f"未找到 V1 模型提供者: {provider}")
+
+        import os
+
+        from yuxi.utils import get_docker_safe_url
+
+        api_key = os.getenv(model_info.env) or model_info.env
+        return ModelInfo(
+            provider_id=provider,
+            model_id=model_name,
+            model_type="chat",
+            display_name=f"{provider}/{model_name}",
+            api_key=api_key,
+            base_url=get_docker_safe_url(model_info.base_url),
+            provider_type="openai",
+        )
+
+    raise ValueError(
+        f"无效的模型 spec: '{spec}'。V1 格式要求 'provider/model_name'，V2 格式要求 'provider_id:model_id'"
+    )

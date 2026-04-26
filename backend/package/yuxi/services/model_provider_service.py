@@ -14,251 +14,13 @@ from yuxi.repositories.model_provider_repository import (
     list_model_providers,
     update_model_provider,
 )
+from yuxi.config.builtin_providers import BUILTIN_PROVIDERS
 from yuxi.storage.postgres.models_business import ModelProvider
 
 VALID_MODEL_TYPES = {"chat", "embedding", "rerank"}
 VALID_MODEL_SOURCES = {"manual", "remote"}
 VALID_PROVIDER_TYPES = {"openai", "anthropic", "gemini", "ollama", "openrouter", "lmstudio"}
 _PROVIDER_ID_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{1,99}$")
-DEFAULT_MODELS_ENDPOINT = ""
-DEFAULT_EMBEDDING_MODELS_ENDPOINT = ""
-
-_DEFAULT_BUILTIN_PROVIDERS: list[dict[str, Any]] = [
-    {
-        "provider_id": "openai",
-        "display_name": "OpenAI",
-        "base_url": "https://api.openai.com/v1",
-        "api_key_env": "OPENAI_API_KEY",
-        "models_endpoint": "https://api.openai.com/v1/models",
-    },
-    {
-        "provider_id": "anthropic",
-        "display_name": "Anthropic",
-        "base_url": "https://api.anthropic.com",
-        "api_key_env": "ANTHROPIC_API_KEY",
-        "models_endpoint": "https://api.anthropic.com/models",
-    },
-    {
-        "provider_id": "google",
-        "display_name": "Google Gemini",
-        "base_url": "https://generativelanguage.googleapis.com",
-        "api_key_env": "GEMINI_API_KEY",
-        "models_endpoint": "https://generativelanguage.googleapis.com/v1beta/models",
-    },
-    {
-        "provider_id": "ollama-cloud",
-        "display_name": "Ollama",
-        "base_url": "http://localhost:11434",
-        "models_endpoint": "http://localhost:11434/api/tags",
-    },
-    {
-        "provider_id": "lmstudio",
-        "display_name": "LM Studio",
-        "base_url": "http://localhost:1234/v1",
-        "models_endpoint": "http://localhost:1234/v1/models",
-    },
-    {
-        "provider_id": "deepseek",
-        "display_name": "DeepSeek",
-        "base_url": "https://api.deepseek.com",
-        "api_key_env": "DEEPSEEK_API_KEY",
-        "models_endpoint": "https://api.deepseek.com/models",
-    },
-    {
-        "provider_id": "alibaba",
-        "display_name": "DashScope",
-        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        "api_key_env": "DASHSCOPE_API_KEY",
-        "models_endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1/models",
-    },
-    {
-        "provider_id": "alibaba-coding-plan-cn",
-        "display_name": "Aliyun Coding Plan",
-        "base_url": "https://coding.dashscope.aliyuncs.com/v1",
-        "api_key_env": "DASHSCOPE_API_KEY",
-        "models_endpoint": "https://coding.dashscope.aliyuncs.com/v1/models",
-    },
-    {
-        "provider_id": "alibaba-coding-plan",
-        "display_name": "Aliyun Coding Plan (International)",
-        "base_url": "https://coding-intl.dashscope.aliyuncs.com/v1",
-        "api_key_env": "DASHSCOPE_API_KEY",
-        "models_endpoint": "https://coding-intl.dashscope.aliyuncs.com/v1/models",
-    },
-    {
-        "provider_id": "zhipuai",
-        "display_name": "Zhipu (BigModel)",
-        "base_url": "https://open.bigmodel.cn/api/paas/v4",
-        "api_key_env": "ZHIPUAI_API_KEY",
-        "models_endpoint": "https://open.bigmodel.cn/api/paas/v4/models",
-    },
-    {
-        "provider_id": "zhipuai-coding-plan",
-        "display_name": "Zhipu Coding Plan (BigModel)",
-        "base_url": "https://open.bigmodel.cn/api/coding/paas/v4",
-        "api_key_env": "ZHIPUAI_API_KEY",
-        "models_endpoint": "https://open.bigmodel.cn/api/coding/paas/v4/models",
-    },
-    {
-        "provider_id": "zai",
-        "display_name": "Zhipu (Z.AI)",
-        "base_url": "https://api.z.ai/api/paas/v4",
-        "api_key_env": "ZAI_API_KEY",
-        "models_endpoint": "https://api.z.ai/api/paas/v4/models",
-    },
-    {
-        "provider_id": "zai-coding-plan",
-        "display_name": "Zhipu Coding Plan (Z.AI)",
-        "base_url": "https://api.z.ai/api/coding/paas/v4",
-        "api_key_env": "ZAI_API_KEY",
-        "models_endpoint": "https://api.z.ai/api/coding/paas/v4/models",
-    },
-    {
-        "provider_id": "moonshotai-cn",
-        "display_name": "Moonshot",
-        "base_url": "https://api.moonshot.cn/v1",
-        "api_key_env": "MOONSHOT_API_KEY",
-        "models_endpoint": "https://api.moonshot.cn/v1/models",
-    },
-    {
-        "provider_id": "moonshotai",
-        "display_name": "Moonshot (International)",
-        "base_url": "https://api.moonshot.ai/v1",
-        "api_key_env": "MOONSHOT_API_KEY",
-        "models_endpoint": "https://api.moonshot.ai/v1/models",
-    },
-    {
-        "provider_id": "minimax-cn",
-        "display_name": "MiniMax",
-        "base_url": "https://api.minimaxi.com/v1",
-        "api_key_env": "MINIMAX_API_KEY",
-        "models_endpoint": "https://api.minimaxi.com/v1/models",
-    },
-    {
-        "provider_id": "minimax",
-        "display_name": "MiniMax (International)",
-        "base_url": "https://api.minimax.io/v1",
-        "api_key_env": "MINIMAX_API_KEY",
-        "models_endpoint": "https://api.minimax.io/v1/models",
-    },
-    {
-        "provider_id": "openrouter",
-        "display_name": "OpenRouter",
-        "base_url": "https://openrouter.ai/api/v1",
-        "api_key_env": "OPENROUTER_API_KEY",
-        "capabilities": ["chat", "embedding"],
-        "embedding_base_url": "https://openrouter.ai/api/v1/embeddings",
-        "models_endpoint": "https://openrouter.ai/api/v1/models",
-        "embedding_models_endpoint": "https://openrouter.ai/api/v1/embeddings/models",
-    },
-    {
-        "provider_id": "modelscope",
-        "display_name": "ModelScope",
-        "base_url": "https://api-inference.modelscope.cn/v1",
-        "api_key_env": "MODELSCOPE_ACCESS_TOKEN",
-        "models_endpoint": "https://api-inference.modelscope.cn/v1/models",
-    },
-    {
-        "provider_id": "opencode",
-        "display_name": "OpenCode",
-        "base_url": "https://opencode.ai/zen/v1",
-        "models_endpoint": "https://opencode.ai/zen/v1/models",
-    },
-    {
-        "provider_id": "siliconflow-cn",
-        "display_name": "SiliconFlow",
-        "base_url": "https://api.siliconflow.cn/v1",
-        "embedding_base_url": "https://api.siliconflow.cn/v1/embeddings",
-        "rerank_base_url": "https://api.siliconflow.cn/v1/rerank",
-        "api_key_env": "SILICONFLOW_API_KEY",
-        "capabilities": ["chat", "embedding", "rerank"],
-        "models_endpoint": "https://api.siliconflow.cn/v1/models?sub_type=chat",
-        "embedding_models_endpoint": "https://api.siliconflow.cn/v1/models?sub_type=embedding",
-        "rerank_models_endpoint": "https://api.siliconflow.cn/v1/models?sub_type=reranker",
-        "enabled_models": [
-            {"id": "Pro/deepseek-ai/DeepSeek-V3.2", "type": "chat", "display_name": "Pro/deepseek-ai/DeepSeek-V3.2"},
-            {"id": "Pro/MiniMaxAI/MiniMax-M2.5", "type": "chat", "display_name": "Pro/MiniMaxAI/MiniMax-M2.5"},
-            {
-                "id": "Pro/BAAI/bge-m3",
-                "type": "embedding",
-                "display_name": "Pro/BAAI/bge-m3",
-                "dimension": 1024,
-                "batch_size": 40,
-            },
-            {
-                "id": "BAAI/bge-m3",
-                "type": "embedding",
-                "display_name": "BAAI/bge-m3",
-                "dimension": 1024,
-                "batch_size": 40,
-            },
-            {
-                "id": "Qwen/Qwen3-Embedding-0.6B",
-                "type": "embedding",
-                "display_name": "Qwen/Qwen3-Embedding-0.6B",
-                "dimension": 1024,
-                "batch_size": 40,
-            },
-            {
-                "id": "Pro/BAAI/bge-reranker-v2-m3",
-                "type": "rerank",
-                "display_name": "Pro/BAAI/bge-reranker-v2-m3",
-            },
-            {
-                "id": "BAAI/bge-reranker-v2-m3",
-                "type": "rerank",
-                "display_name": "BAAI/bge-reranker-v2-m3",
-            },
-        ],
-    },
-    {
-        "provider_id": "siliconflow",
-        "display_name": "SiliconFlow (International)",
-        "base_url": "https://api.siliconflow.com/v1",
-        "embedding_base_url": "https://api.siliconflow.com/v1/embeddings",
-        "rerank_base_url": "https://api.siliconflow.com/v1/rerank",
-        "api_key_env": "SILICONFLOW_API_KEY",
-        "capabilities": ["chat", "embedding", "rerank"],
-        "models_endpoint": "https://api.siliconflow.com/v1/models?sub_type=chat",
-        "embedding_models_endpoint": "https://api.siliconflow.com/v1/models?sub_type=embedding",
-        "rerank_models_endpoint": "https://api.siliconflow.com/v1/models?sub_type=reranker",
-        "enabled_models": [
-            {"id": "deepseek-ai/DeepSeek-V3.2", "type": "chat", "display_name": "deepseek-ai/DeepSeek-V3.2"},
-            {"id": "MiniMaxAI/MiniMax-M2.5", "type": "chat", "display_name": "MiniMaxAI/MiniMax-M2.5"},
-            {
-                "id": "Pro/BAAI/bge-m3",
-                "type": "embedding",
-                "display_name": "Pro/BAAI/bge-m3",
-                "dimension": 1024,
-                "batch_size": 40,
-            },
-            {
-                "id": "BAAI/bge-m3",
-                "type": "embedding",
-                "display_name": "BAAI/bge-m3",
-                "dimension": 1024,
-                "batch_size": 40,
-            },
-            {
-                "id": "Qwen/Qwen3-Embedding-0.6B",
-                "type": "embedding",
-                "display_name": "Qwen/Qwen3-Embedding-0.6B",
-                "dimension": 1024,
-                "batch_size": 40,
-            },
-            {
-                "id": "Pro/BAAI/bge-reranker-v2-m3",
-                "type": "rerank",
-                "display_name": "Pro/BAAI/bge-reranker-v2-m3",
-            },
-            {
-                "id": "BAAI/bge-reranker-v2-m3",
-                "type": "rerank",
-                "display_name": "BAAI/bge-reranker-v2-m3",
-            },
-        ],
-    },
-]
 
 
 def _normalize_list(value: Any) -> list:
@@ -297,11 +59,12 @@ def _normalize_model_item(model: dict[str, Any]) -> dict[str, Any]:
     normalized["extra"] = _normalize_dict(model.get("extra"))
 
     if model_type == "embedding":
-        dimension = normalized.get("dimension")
+        dimension = model.get("dimension")
         if dimension not in (None, ""):
             normalized["dimension"] = int(dimension)
-        if normalized.get("batch_size") not in (None, ""):
-            normalized["batch_size"] = int(normalized["batch_size"])
+        batch_size = model.get("batch_size")
+        if batch_size not in (None, ""):
+            normalized["batch_size"] = int(batch_size)
 
     return normalized
 
@@ -346,16 +109,14 @@ def _normalize_payload(data: dict[str, Any], *, partial: bool = False) -> dict[s
             raise ValueError("base_url 不能为空")
         payload["base_url"] = base_url
 
-    for endpoint_field, default_endpoint in (
-        ("models_endpoint", DEFAULT_MODELS_ENDPOINT),
-        ("embedding_models_endpoint", DEFAULT_EMBEDDING_MODELS_ENDPOINT),
-        ("rerank_models_endpoint", None),
+    for endpoint_field in (
+        "models_endpoint",
+        "embedding_models_endpoint",
+        "rerank_models_endpoint",
     ):
         if endpoint_field in payload:
             endpoint = str(payload.get(endpoint_field) or "").strip()
-            payload[endpoint_field] = endpoint or default_endpoint
-        elif not partial and default_endpoint is not None:
-            payload[endpoint_field] = default_endpoint
+            payload[endpoint_field] = endpoint
 
     provider_type = payload.get("provider_type")
     if provider_type is None and not partial:
@@ -364,55 +125,29 @@ def _normalize_payload(data: dict[str, Any], *, partial: bool = False) -> dict[s
         if provider_type not in VALID_PROVIDER_TYPES:
             raise ValueError(f"provider_type 必须是 {', '.join(sorted(VALID_PROVIDER_TYPES))} 之一")
 
-    if "capabilities" in payload:
-        payload["capabilities"] = _normalize_list(payload.get("capabilities"))
-    elif not partial:
-        payload["capabilities"] = []
-
-    capabilities = set(payload.get("capabilities") or [])
-    if "embedding" in capabilities:
-        embedding_base_url = str(payload.get("embedding_base_url") or "").strip()
-        if not embedding_base_url:
-            raise ValueError("embedding provider 必须配置 embedding_base_url")
-        payload["embedding_base_url"] = embedding_base_url
-        embedding_endpoint = str(payload.get("embedding_models_endpoint") or "").strip()
-        if embedding_endpoint and not embedding_endpoint.startswith(("http://", "https://")):
-            raise ValueError("embedding_models_endpoint 必须是完整的 HTTP URL")
-        payload["embedding_models_endpoint"] = embedding_endpoint
-    if "rerank" in capabilities:
-        rerank_base_url = str(payload.get("rerank_base_url") or "").strip()
-        if not rerank_base_url:
-            raise ValueError("rerank provider 必须配置 rerank_base_url")
-        payload["rerank_base_url"] = rerank_base_url
-        rerank_endpoint = str(payload.get("rerank_models_endpoint") or "").strip()
-        if rerank_endpoint and not rerank_endpoint.startswith(("http://", "https://")):
-            raise ValueError("rerank_models_endpoint 必须是完整的 HTTP URL")
-        payload["rerank_models_endpoint"] = rerank_endpoint
-
-    if "enabled_models" in payload:
-        payload["enabled_models"] = _normalize_model_list(payload.get("enabled_models"))
-    elif not partial:
-        payload["enabled_models"] = []
-
-    if "headers_json" in payload:
-        payload["headers_json"] = _normalize_dict(payload.get("headers_json"))
-    elif not partial:
-        payload["headers_json"] = {}
-
-    if "extra_json" in payload:
-        payload["extra_json"] = _normalize_dict(payload.get("extra_json"))
-    elif not partial:
-        payload["extra_json"] = {}
-
-    if "is_enabled" in payload:
-        payload["is_enabled"] = bool(payload["is_enabled"])
-    elif not partial:
-        payload["is_enabled"] = True
-
-    if "is_builtin" in payload:
-        payload["is_builtin"] = bool(payload["is_builtin"])
-    elif not partial:
-        payload["is_builtin"] = False
+    # 声明式字段默认值：partial 模式下仅规范化传入值，非 partial 补全默认值
+    _FIELD_DEFAULTS: dict[str, Any] = {
+        "capabilities": [],
+        "enabled_models": [],
+        "headers_json": {},
+        "extra_json": {},
+        "is_enabled": True,
+        "is_builtin": False,
+    }
+    _FIELD_NORMALIZERS = {
+        "capabilities": _normalize_list,
+        "enabled_models": _normalize_model_list,
+        "headers_json": _normalize_dict,
+        "extra_json": _normalize_dict,
+        "is_enabled": bool,
+        "is_builtin": bool,
+    }
+    for field, default in _FIELD_DEFAULTS.items():
+        if field in payload:
+            normalizer = _FIELD_NORMALIZERS.get(field)
+            payload[field] = normalizer(payload[field]) if normalizer else payload[field]
+        elif not partial:
+            payload[field] = default
 
     # 仅当本次 payload 同时携带 capabilities 与 enabled_models 时做一致性校验，
     # 防止前端把超出 provider.capabilities 的模型 type 写入。
@@ -425,7 +160,8 @@ def _normalize_payload(data: dict[str, Any], *, partial: bool = False) -> dict[s
     return payload
 
 
-def _resolve_api_key(provider: ModelProvider) -> str | None:
+def resolve_api_key(provider: ModelProvider) -> str | None:
+    """解析 provider 的 API Key，优先直接配置，其次从环境变量读取。"""
     if provider.api_key:
         return provider.api_key
     if provider.api_key_env:
@@ -433,7 +169,7 @@ def _resolve_api_key(provider: ModelProvider) -> str | None:
     return None
 
 
-def _check_credential_status(provider: ModelProvider) -> str:
+def check_credential_status(provider: ModelProvider) -> str:
     """检查 provider 的凭证配置状态。仅对启用的 provider 做校验。"""
     if not provider.is_enabled:
         return "ok"
@@ -444,7 +180,7 @@ def _check_credential_status(provider: ModelProvider) -> str:
     return "warning"
 
 
-def _models_url(base_url: str, endpoint: str | None = DEFAULT_MODELS_ENDPOINT) -> str:
+def _models_url(base_url: str, endpoint: str | None = None) -> str:
     base = base_url.rstrip("/")
     if not endpoint:
         return base
@@ -502,7 +238,7 @@ async def ensure_builtin_model_providers_in_db(db: AsyncSession) -> None:
     existing = await list_model_providers(db)
     existing_ids = {p.provider_id: p for p in existing}
 
-    for provider_def in _DEFAULT_BUILTIN_PROVIDERS:
+    for provider_def in BUILTIN_PROVIDERS:
         provider_id = provider_def["provider_id"]
         existing_provider = existing_ids.get(provider_id)
         if existing_provider:
@@ -598,22 +334,22 @@ async def fetch_remote_models(provider: ModelProvider) -> list[dict[str, Any]]:
     /embeddings/models；rerank 供应商没有稳定通用端点，配置了 endpoint 才拉取。
     """
     headers = dict(provider.headers_json or {})
-    api_key = _resolve_api_key(provider)
+    api_key = resolve_api_key(provider)
     if api_key:
         headers.setdefault("Authorization", f"Bearer {api_key}")
 
     capabilities = set(provider.capabilities or [])
     endpoint_specs = [
-        (provider.models_endpoint or DEFAULT_MODELS_ENDPOINT, "chat"),
+        (provider.models_endpoint, "chat"),
     ]
     if "embedding" in capabilities:
-        endpoint_specs.append((provider.embedding_models_endpoint or DEFAULT_EMBEDDING_MODELS_ENDPOINT, "embedding"))
+        endpoint_specs.append((provider.embedding_models_endpoint, "embedding"))
     if "rerank" in capabilities and provider.rerank_models_endpoint:
         endpoint_specs.append((provider.rerank_models_endpoint, "rerank"))
 
     seen_ids: set[tuple[str, str]] = set()
     models: list[dict[str, Any]] = []
-    async with httpx.AsyncClient(timeout=20.0) as client:
+    async with httpx.AsyncClient(timeout=40.0) as client:
         results = await asyncio.gather(
             *[
                 _fetch_models_from_endpoint(client, provider, headers, endpoint, model_type)
@@ -628,3 +364,50 @@ async def fetch_remote_models(provider: ModelProvider) -> list[dict[str, Any]]:
                 seen_ids.add(model_key)
                 models.append(model)
     return models
+
+
+async def test_model_status_by_spec(spec: str) -> dict:
+    """根据 full spec 测试模型连接状态（自动识别 Chat/Embedding）。
+
+    V2 spec 格式: provider_id:model_id（冒号分隔）
+    V1 spec 格式: provider/model_name（斜杠分隔）
+    """
+    from yuxi.services.model_cache import model_cache
+
+    # V2: 从缓存识别模型类型并分派
+    if ":" in spec:
+        info = model_cache.get_model_info(spec)
+        if info:
+            if info.model_type == "embedding":
+                from yuxi.models.embed import select_embedding_model_v2
+
+                model = select_embedding_model_v2(spec)
+                success, message = await model.test_connection()
+                return {
+                    "spec": spec,
+                    "status": "available" if success else "unavailable",
+                    "message": "连接正常" if success else message,
+                    "model_type": "embedding",
+                }
+            # chat 或其他类型走 chat 测试
+            from yuxi.models.chat import select_model_v2
+
+            model = select_model_v2(spec)
+            test_messages = [{"role": "user", "content": "Say 1"}]
+            response = await model.call(test_messages, stream=False)
+            if response and response.content:
+                return {"spec": spec, "status": "available", "message": "连接正常", "model_type": "chat"}
+            return {"spec": spec, "status": "unavailable", "message": "响应无效", "model_type": "chat"}
+
+    # V1 兼容：尝试旧的模型选择逻辑
+    from yuxi.models.chat import select_model
+
+    try:
+        model = select_model(model_spec=spec)
+        test_messages = [{"role": "user", "content": "Say 1"}]
+        response = await model.call(test_messages, stream=False)
+        if response and response.content:
+            return {"spec": spec, "status": "available", "message": "连接正常"}
+        return {"spec": spec, "status": "unavailable", "message": "响应无效"}
+    except Exception as e:
+        return {"spec": spec, "status": "error", "message": str(e)}

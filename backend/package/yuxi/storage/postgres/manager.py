@@ -202,6 +202,8 @@ class PostgresManager(metaclass=SingletonMeta):
                 provider_type VARCHAR(32) NOT NULL DEFAULT 'openai',
                 default_protocol VARCHAR(64),
                 base_url VARCHAR(500) NOT NULL,
+                embedding_base_url VARCHAR(500),
+                rerank_base_url VARCHAR(500),
                 models_endpoint VARCHAR(200),
                 embedding_models_endpoint VARCHAR(200),
                 rerank_models_endpoint VARCHAR(200),
@@ -242,29 +244,6 @@ class PostgresManager(metaclass=SingletonMeta):
             "CREATE INDEX IF NOT EXISTS ix_conversations_is_pinned ON conversations(is_pinned)",
             "CREATE UNIQUE INDEX IF NOT EXISTS ix_model_providers_provider_id ON model_providers(provider_id)",
             "CREATE INDEX IF NOT EXISTS ix_model_providers_is_enabled ON model_providers(is_enabled)",
-            "ALTER TABLE IF EXISTS model_providers ALTER COLUMN provider_type SET DEFAULT 'openai'",
-            "ALTER TABLE IF EXISTS model_providers ADD COLUMN IF NOT EXISTS models_endpoint VARCHAR(200)",
-            "ALTER TABLE IF EXISTS model_providers ADD COLUMN IF NOT EXISTS embedding_models_endpoint VARCHAR(200)",
-            "ALTER TABLE IF EXISTS model_providers ADD COLUMN IF NOT EXISTS rerank_models_endpoint VARCHAR(200)",
-            "ALTER TABLE IF EXISTS model_providers ADD COLUMN IF NOT EXISTS embedding_base_url VARCHAR(500)",
-            "ALTER TABLE IF EXISTS model_providers ADD COLUMN IF NOT EXISTS rerank_base_url VARCHAR(500)",
-            "ALTER TABLE IF EXISTS model_providers ALTER COLUMN models_endpoint SET DEFAULT '/models'",
-            (
-                "ALTER TABLE IF EXISTS model_providers "
-                "ALTER COLUMN embedding_models_endpoint SET DEFAULT '/embeddings/models'"
-            ),
-            (
-                "UPDATE model_providers SET models_endpoint = '/models' "
-                "WHERE models_endpoint IS NULL OR models_endpoint = ''"
-            ),
-            (
-                "UPDATE model_providers SET embedding_models_endpoint = '/embeddings/models' "
-                "WHERE embedding_models_endpoint IS NULL "
-                "OR embedding_models_endpoint = '' "
-                "OR embedding_models_endpoint = '/embedding/models'"
-            ),
-            "ALTER TABLE IF EXISTS model_providers DROP COLUMN IF EXISTS model_cache",
-            "ALTER TABLE IF EXISTS model_providers DROP COLUMN IF EXISTS sync_source",
         ]
         async with self.async_engine.begin() as conn:
             for stmt in stmts:

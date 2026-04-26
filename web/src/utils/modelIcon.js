@@ -29,4 +29,4 @@ export const modelIcons = {
   zhipu: `${ICON_BASE}/zhipu-color.svg`,
   zhipuai: `${ICON_BASE}/zhipu-color.svg`,
   'zhipuai-coding-plan': `${ICON_BASE}/zhipu-color.svg`
-} // ESLint-disable-line
+} // eslint-disable-line

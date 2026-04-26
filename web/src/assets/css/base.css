@@ -142,7 +142,7 @@
   --min-width: 400px;
 
   /* Page Padding - 响应式页面内边距 */
-  --page-padding: 20px;
+  --page-padding: 22px;
 
   /* Ant Design 兼容变量 */
   --color-bg-container: var(--main-0);
@@ -189,18 +189,18 @@
 /* Page Padding 响应式断点 */
 @media (min-width: 1440px) {
   :root {
-    --page-padding: 24px;
+    --page-padding: 30px;
   }
 }
 
 @media (max-width: 1199px) {
   :root {
-    --page-padding: 16px;
+    --page-padding: 18px;
   }
 }
 
 @media (max-width: 767px) {
   :root {
-    --page-padding: 12px;
+    --page-padding: 14px;
   }
 }

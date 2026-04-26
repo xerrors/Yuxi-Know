@@ -64,6 +64,7 @@
 import { computed, reactive, ref } from 'vue'
 import { modelProviderApi } from '@/apis/system_api'
 import { RefreshCw } from 'lucide-vue-next'
+import { useModelStatus } from '@/composables/useModelStatus'
 
 const props = defineProps({
   model_spec: {
@@ -124,10 +125,11 @@ const refreshCache = async () => {
 }
 
 // 状态管理
+const { statusMap: modelStatusMap, getStatusIcon, getStatusTooltip } = useModelStatus()
 const state = reactive({
-  currentModelStatus: null, // 当前模型状态
-  checkingStatus: false, // 是否正在检查状态
-  refreshingCache: false // 是否正在刷新缓存
+  currentModelStatus: null,
+  checkingStatus: false,
+  refreshingCache: false
 })
 
 const resolvedSize = computed(() => props.size || 'small')
@@ -142,8 +144,6 @@ const buttonSize = computed(() => {
 })
 
 const displayModelText = computed(() => props.model_spec || props.placeholder)
-
-// 当前模型状态
 
 // 检查当前模型状态
 const checkCurrentModelStatus = async () => {
@@ -175,7 +175,6 @@ const modelStatusIcon = computed(() => {
   return '○'
 })
 
-// 获取当前模型状态提示文本
 const getCurrentModelStatusTooltip = () => {
   const status = state.currentModelStatus
   if (!status) return '状态未知'

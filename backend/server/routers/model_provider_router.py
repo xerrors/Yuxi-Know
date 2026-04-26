@@ -9,12 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.utils.auth_middleware import get_admin_user, get_db
 from yuxi.services.model_provider_service import (
-    _check_credential_status,
+    check_credential_status,
     create_provider_config,
     delete_provider_config,
     fetch_remote_models,
     get_all_model_providers,
     get_model_provider_by_id,
+    test_model_status_by_spec,
     update_provider_config,
 )
 from yuxi.storage.postgres.models_business import User
@@ -68,7 +69,7 @@ async def list_providers(
     data = []
     for p in providers:
         d = p.to_dict()
-        d["credential_status"] = _check_credential_status(p)
+        d["credential_status"] = check_credential_status(p)
         data.append(d)
     return {"success": True, "data": data}
 
@@ -106,7 +107,7 @@ async def get_provider(
     if provider is None:
         raise HTTPException(status_code=404, detail=f"供应商 {provider_id} 不存在")
     data = provider.to_dict()
-    data["credential_status"] = _check_credential_status(provider)
+    data["credential_status"] = check_credential_status(provider)
     return {"success": True, "data": data}
 
 
@@ -234,23 +235,10 @@ async def get_model_status_by_spec(
     spec: str,
     current_user: User = Depends(get_admin_user),
 ):
-    """根据 full spec 检查模型状态（自动识别 V1/V2、Chat/Embedding）。
-
-    V2 spec 格式: provider_id:model_id（冒号分隔）
-    优先从缓存获取模型类型，根据类型分派到对应的测试函数。
-    """
-    from yuxi.models.chat import test_chat_model_status_by_spec
-
-    # 尝试从缓存获取模型类型，区分 Chat 和 Embedding
-    if ":" in spec:
-        from yuxi.services.model_cache import model_cache
-
-        info = model_cache.get_model_info(spec)
-        if info and info.model_type == "embedding":
-            from yuxi.models.embed import test_embedding_model_status_by_spec
-
-            result = await test_embedding_model_status_by_spec(spec)
-            return {"success": True, "data": result}
-
-    result = await test_chat_model_status_by_spec(spec)
-    return {"success": True, "data": result}
+    """根据 full spec 检查模型状态（自动识别 V1/V2、Chat/Embedding）。"""
+    try:
+        result = await test_model_status_by_spec(spec)
+        return {"success": True, "data": result}
+    except Exception as e:
+        logger.error(f"测试模型状态失败 {spec}: {e}")
+        return {"success": False, "data": {"spec": spec, "status": "error", "message": str(e)}}

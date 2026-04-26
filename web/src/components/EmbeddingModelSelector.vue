@@ -69,6 +69,7 @@ import { useConfigStore } from '@/stores/config'
 import { embeddingApi } from '@/apis/knowledge_api'
 import { modelProviderApi } from '@/apis/system_api'
 import { message } from 'ant-design-vue'
+import { useModelStatus } from '@/composables/useModelStatus'
 
 const configStore = useConfigStore()
 
@@ -99,9 +100,9 @@ const props = defineProps({
 const emit = defineEmits(['update:value', 'change'])
 
 const v2Models = ref({})
+const v1ModelStatuses = reactive({})
+const { statusMap: v2ModelStatuses, getStatusIcon: getV2StatusIcon, getStatusClass: getV2StatusClass, getStatusTooltip: getV2StatusTooltip, checkV2Status, checkV2Statuses } = useModelStatus()
 const state = reactive({
-  v1ModelStatuses: {},
-  v2ModelStatuses: {},
   checkingStatus: false
 })
 
@@ -140,20 +141,7 @@ const checkV2ModelStatuses = async () => {
   state.checkingStatus = true
   try {
     for (const providerData of Object.values(v2Models.value)) {
-      for (const model of providerData.models || []) {
-        try {
-          const response = await modelProviderApi.getModelStatusBySpec(model.spec)
-          if (response.data) {
-            state.v2ModelStatuses[model.spec] = response.data
-          }
-        } catch {
-          state.v2ModelStatuses[model.spec] = {
-            spec: model.spec,
-            status: 'error',
-            message: '检查失败'
-          }
-        }
-      }
+      await checkV2Statuses(providerData.models || [])
     }
   } catch (error) {
     console.error('检查 V2 模型状态失败:', error)
@@ -166,7 +154,7 @@ const checkV1ModelStatuses = async () => {
   try {
     const response = await embeddingApi.getAllModelsStatus()
     if (response.status.models) {
-      state.v1ModelStatuses = response.status.models
+      Object.assign(v1ModelStatuses, response.status.models)
     }
   } catch (error) {
     console.error('检查 V1 模型状态失败:', error)
@@ -176,7 +164,7 @@ const checkV1ModelStatuses = async () => {
 
 // V1 模型状态辅助函数
 const getV1StatusIcon = (modelId) => {
-  const status = state.v1ModelStatuses[modelId]
+  const status = v1ModelStatuses[modelId]
   if (!status) return '○'
   if (status.status === 'available') return '✓'
   if (status.status === 'unavailable') return '✗'
@@ -185,35 +173,12 @@ const getV1StatusIcon = (modelId) => {
 }
 
 const getV1StatusClass = (modelId) => {
-  const status = state.v1ModelStatuses[modelId]
+  const status = v1ModelStatuses[modelId]
   return status?.status || ''
 }
 
 const getV1StatusTooltip = (modelId) => {
-  const status = state.v1ModelStatuses[modelId]
-  if (!status) return '状态未知'
-  let statusText =
-    { available: '可用', unavailable: '不可用', error: '错误' }[status.status] || '未知'
-  return `${statusText}: ${status.message || '无详细信息'}`
-}
-
-// V2 模型状态辅助函数
-const getV2StatusIcon = (spec) => {
-  const status = state.v2ModelStatuses[spec]
-  if (!status) return '○'
-  if (status.status === 'available') return '✓'
-  if (status.status === 'unavailable') return '✗'
-  if (status.status === 'error') return '⚠'
-  return '○'
-}
-
-const getV2StatusClass = (spec) => {
-  const status = state.v2ModelStatuses[spec]
-  return status?.status || ''
-}
-
-const getV2StatusTooltip = (spec) => {
-  const status = state.v2ModelStatuses[spec]
+  const status = v1ModelStatuses[modelId]
   if (!status) return '状态未知'
   let statusText =
     { available: '可用', unavailable: '不可用', error: '错误' }[status.status] || '未知'

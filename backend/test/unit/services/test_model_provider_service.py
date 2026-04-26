@@ -4,11 +4,9 @@ import pytest
 
 os.environ.setdefault("OPENAI_API_KEY", "test-key")
 
+from yuxi.config.builtin_providers import BUILTIN_PROVIDERS
 from yuxi.services.model_provider_service import (
-    _DEFAULT_BUILTIN_PROVIDERS,
-    DEFAULT_EMBEDDING_MODELS_ENDPOINT,
-    DEFAULT_MODELS_ENDPOINT,
-    _check_credential_status,
+    check_credential_status,
     _normalize_payload,
     _normalize_remote_model,
     fetch_remote_models,
@@ -27,8 +25,8 @@ def test_normalize_payload_accepts_enabled_chat_model():
 
     assert payload["provider_id"] == "openrouter-local"
     assert payload["provider_type"] == "openai"
-    assert payload["models_endpoint"] == DEFAULT_MODELS_ENDPOINT
-    assert payload["embedding_models_endpoint"] == DEFAULT_EMBEDDING_MODELS_ENDPOINT
+    assert "models_endpoint" not in payload
+    assert "embedding_models_endpoint" not in payload
     assert payload["enabled_models"][0]["display_name"] == "anthropic/claude-sonnet-4.5"
 
 
@@ -44,16 +42,20 @@ def test_normalize_payload_rejects_unknown_enabled_model_type():
         )
 
 
-def test_normalize_payload_requires_embedding_dimension():
-    with pytest.raises(ValueError, match="dimension"):
-        _normalize_payload(
-            {
-                "provider_id": "embedding-local",
-                "display_name": "Embedding Local",
-                "base_url": "https://example.com/v1",
-                "enabled_models": [{"id": "text-embedding", "type": "embedding"}],
-            }
-        )
+def test_normalize_payload_allows_embedding_without_dimension():
+    """embedding 模型的 dimension 是可选字段，不提供也不会报错。"""
+    payload = _normalize_payload(
+        {
+            "provider_id": "embedding-local",
+            "display_name": "Embedding Local",
+            "base_url": "https://example.com/v1",
+            "capabilities": ["embedding"],
+            "embedding_base_url": "https://example.com/v1/embeddings",
+            "enabled_models": [{"id": "text-embedding", "type": "embedding"}],
+        }
+    )
+    assert payload["provider_id"] == "embedding-local"
+    assert payload["enabled_models"][0].get("dimension") is None
 
 
 def test_normalize_remote_model_preserves_detailed_model_config():
@@ -113,7 +115,7 @@ async def test_fetch_remote_models_loads_embedding_only_when_capability_enabled(
 
 
 def test_builtin_provider_templates_default_to_openai_provider_type():
-    assert len(_DEFAULT_BUILTIN_PROVIDERS) >= 20
+    assert len(BUILTIN_PROVIDERS) >= 16
     provider_types = {
         _normalize_payload(
             {
@@ -123,13 +125,13 @@ def test_builtin_provider_templates_default_to_openai_provider_type():
                 "provider_type": provider.get("provider_type"),
             }
         )["provider_type"]
-        for provider in _DEFAULT_BUILTIN_PROVIDERS
+        for provider in BUILTIN_PROVIDERS
     }
     assert provider_types == {"openai"}
 
 
 def test_builtin_siliconflow_provider_includes_default_runnable_models():
-    provider = next(item for item in _DEFAULT_BUILTIN_PROVIDERS if item["provider_id"] == "siliconflow-cn")
+    provider = next(item for item in BUILTIN_PROVIDERS if item["provider_id"] == "siliconflow-cn")
     models = {model["id"]: model for model in provider["enabled_models"]}
 
     assert provider["capabilities"] == ["chat", "embedding", "rerank"]
@@ -142,27 +144,27 @@ def test_builtin_siliconflow_provider_includes_default_runnable_models():
     assert "base_url_override" not in models["Pro/BAAI/bge-reranker-v2-m3"]
 
 
-def test_check_credential_status_disabled_provider_always_ok():
+def testcheck_credential_status_disabled_provider_always_ok():
     """未启用的 provider 无论凭证如何配置，状态始终为 ok。"""
     class Provider:
         is_enabled = False
         api_key = None
         api_key_env = None
 
-    assert _check_credential_status(Provider()) == "ok"
+    assert check_credential_status(Provider()) == "ok"
 
 
-def test_check_credential_status_direct_api_key_ok():
+def testcheck_credential_status_direct_api_key_ok():
     """直接配置了 api_key 的启用 provider 状态为 ok。"""
     class Provider:
         is_enabled = True
         api_key = "sk-test"
         api_key_env = None
 
-    assert _check_credential_status(Provider()) == "ok"
+    assert check_credential_status(Provider()) == "ok"
 
 
-def test_check_credential_status_env_key_exists_ok(monkeypatch):
+def testcheck_credential_status_env_key_exists_ok(monkeypatch):
     """api_key_env 对应的环境变量存在时状态为 ok。"""
     monkeypatch.setenv("TEST_API_KEY", "exists")
 
@@ -171,10 +173,10 @@ def test_check_credential_status_env_key_exists_ok(monkeypatch):
         api_key = None
         api_key_env = "TEST_API_KEY"
 
-    assert _check_credential_status(Provider()) == "ok"
+    assert check_credential_status(Provider()) == "ok"
 
 
-def test_check_credential_status_env_key_missing_warning(monkeypatch):
+def testcheck_credential_status_env_key_missing_warning(monkeypatch):
     """api_key_env 对应的环境变量不存在时状态为 warning。"""
     monkeypatch.delenv("MISSING_KEY", raising=False)
 
@@ -183,17 +185,17 @@ def test_check_credential_status_env_key_missing_warning(monkeypatch):
         api_key = None
         api_key_env = "MISSING_KEY"
 
-    assert _check_credential_status(Provider()) == "warning"
+    assert check_credential_status(Provider()) == "warning"
 
 
-def test_check_credential_status_both_empty_warning():
+def testcheck_credential_status_both_empty_warning():
     """api_key 和 api_key_env 都未配置时状态为 warning。"""
     class Provider:
         is_enabled = True
         api_key = None
         api_key_env = None
 
-    assert _check_credential_status(Provider()) == "warning"
+    assert check_credential_status(Provider()) == "warning"
 
 
 # ==================== 手动添加模型 / source 字段 ====================

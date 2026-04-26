@@ -47,11 +47,11 @@ const providerForm = reactive({
 // Model form state
 const showModelModal = ref(false)
 const isCreating = ref(false) // true=手动添加新模型，false=编辑已有模型
-const editingModel = reactive({
+const editingModel = ref({
   id: '',
   display_name: '',
   type: 'chat',
-  source: 'remote', // 'manual'|'remote'：区分手动添加，控制 stale 视觉警告跳过
+  source: 'remote',
   protocol_override: null,
   base_url_override: null,
   context_length: null,
@@ -445,7 +445,7 @@ const addModelFromRemote = async (providerId, remoteModel) => {
 }
 
 const openModelConfigModal = (model) => {
-  Object.assign(editingModel, normalizeModel(model))
+  Object.assign(editingModel.value, normalizeModel(model))
   isCreating.value = false
   showModelModal.value = true
 }
@@ -455,7 +455,7 @@ const openCreateModal = (provider) => {
   if (!provider) return
   const types = provider.capabilities?.length ? provider.capabilities : ['chat']
   const defaultType = types[0]
-  Object.assign(editingModel, {
+  Object.assign(editingModel.value, {
     id: '',
     display_name: '',
     type: defaultType,
@@ -483,7 +483,7 @@ const saveModelConfig = async () => {
 
     let enabledModels
     if (isCreating.value) {
-      const newId = (editingModel.id || '').trim()
+      const newId = (editingModel.value.id || '').trim()
       if (!newId) {
         message.error('请填写模型 ID')
         return
@@ -492,11 +492,11 @@ const saveModelConfig = async () => {
         message.error('模型 ID 已存在')
         return
       }
-      const newModel = { ...editingModel, id: newId, source: 'manual', enabled: true }
+      const newModel = { ...editingModel.value, id: newId, source: 'manual', enabled: true }
       enabledModels = [...(provider.enabled_models || []), newModel]
     } else {
       enabledModels = (provider.enabled_models || []).map((m) =>
-        m.id === editingModel.id ? { ...editingModel } : m
+        m.id === editingModel.value.id ? { ...editingModel.value } : m
       )
     }
 
@@ -554,7 +554,6 @@ onMounted(loadProviders)
     <!-- Page Header -->
     <div class="page-header">
       <div>
-        <p class="eyebrow">Model Registry</p>
         <h1>模型配置</h1>
       </div>
       <div class="summary-strip">
@@ -1075,24 +1074,15 @@ onMounted(loadProviders)
   align-items: flex-end;
   justify-content: space-between;
   gap: 24px;
-  padding: 28px 32px 18px;
+  padding: 28px var(--page-padding) 18px;
   border-bottom: 1px solid var(--gray-100);
 
   h1 {
     margin: 0;
-    font-size: 28px;
+    font-size: 24px;
     font-weight: 720;
     line-height: 34px;
   }
-}
-
-.eyebrow {
-  margin: 0 0 4px;
-  color: var(--main-700);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0;
-  text-transform: uppercase;
 }
 
 .summary-strip {
@@ -1122,8 +1112,7 @@ onMounted(loadProviders)
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 16px 32px;
-  border-bottom: 1px solid var(--gray-100);
+  padding: 16px var(--page-padding) 0;
 }
 
 .search-input {
@@ -1154,7 +1143,7 @@ onMounted(loadProviders)
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 16px;
-  padding: 24px 32px;
+  padding: 16px var(--page-padding);
 }
 
 // ============ Provider Card ============

@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -59,8 +60,6 @@ async def lifespan(app: FastAPI):
         raise
 
     # 初始化知识库管理器
-    import os
-
     if os.environ.get("LITE_MODE", "").lower() in ("true", "1"):
         logger.info("LITE_MODE enabled, skipping knowledge base initialization")
     else:
