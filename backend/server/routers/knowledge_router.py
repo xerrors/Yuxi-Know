@@ -1102,7 +1102,7 @@ async def generate_sample_questions(
         logger.info(f"开始生成知识库问题，知识库: {db_name}, 文件数量: {len(files_info)}, 问题数量: {count}")
 
         # 选择模型并调用
-        model = select_model()
+        model = select_model(model_spec=config.default_model)
         messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_message}]
         response = await model.call(messages, stream=False)
 
@@ -1523,7 +1523,7 @@ async def generate_description(
     """).strip()
 
     try:
-        model = select_model()
+        model = select_model(model_spec=config.default_model)
         response = await model.call(prompt)
         description = response.content.strip()
         logger.debug(f"Generated description: {description}")

@@ -15,7 +15,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 
 from yuxi.storage.postgres.models_business import User
 from server.utils.auth_middleware import get_admin_user
-from yuxi import knowledge_base
+from yuxi import config, knowledge_base
 from yuxi.models import select_model
 from yuxi.utils import logger
 
@@ -214,7 +214,7 @@ async def generate_mindmap(
         logger.info(f"开始生成思维导图，知识库: {db_name}, 文件数量: {len(files_info)}")
 
         # 选择模型并调用
-        model = select_model()
+        model = select_model(model_spec=config.default_model)
         messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_message}]
         response = await model.call(messages, stream=False)
 
