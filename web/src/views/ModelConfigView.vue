@@ -14,6 +14,10 @@ import {
 
 import { modelProviderApi } from '@/apis/system_api'
 import { modelIcons } from '@/utils/modelIcon'
+import PageHeader from '@/components/shared/PageHeader.vue'
+import PageShoulder from '@/components/shared/PageShoulder.vue'
+import ExtensionCard from '@/components/extensions/ExtensionCard.vue'
+import ExtensionCardGrid from '@/components/extensions/ExtensionCardGrid.vue'
 
 // ============ State ============
 const loading = ref(false)
@@ -242,6 +246,22 @@ const loadProviders = async () => {
   } finally {
     loading.value = false
   }
+}
+
+function getProviderInfo(provider) {
+  return [
+    { label: 'Base URL', value: provider.base_url || '-' },
+    { label: '类型', value: provider.provider_type || 'openai' },
+    { label: '已启用', value: `${provider.enabled_models?.length || 0} 个模型` }
+  ]
+}
+
+
+function getProviderStatus(provider) {
+  if (!provider.is_enabled) return { label: '未启用', level: 'info' }
+  if (provider.credential_status === 'warning') return { label: '凭证缺失', level: 'warning' }
+  if (provider.is_enabled) return { label: '', level: 'success' }
+  return null
 }
 
 const openCreateProviderModal = () => {
@@ -552,116 +572,69 @@ onMounted(loadProviders)
 <template>
   <div class="model-config-view">
     <!-- Page Header -->
-    <div class="page-header">
-      <div>
-        <h1>模型配置</h1>
-      </div>
-      <div class="summary-strip">
-        <span>{{ providerStats.total }} 个供应商</span>
-        <span>{{ providerStats.enabled }} 个启用</span>
-        <span v-if="providerStats.warning > 0" class="warning-count"
-          >{{ providerStats.warning }} 个凭证缺失</span
-        >
-        <span>{{ providerStats.models }} 个模型</span>
-      </div>
-    </div>
+    <PageHeader title="模型配置" :show-border="true">
+      <template #info>
+        <div class="summary-strip">
+          <span>{{ providerStats.total }} 个供应商</span>
+          <span>{{ providerStats.enabled }} 个启用</span>
+          <span v-if="providerStats.warning > 0" class="warning-count"
+            >{{ providerStats.warning }} 个凭证缺失</span
+          >
+          <span>{{ providerStats.models }} 个模型</span>
+        </div>
+      </template>
+    </PageHeader>
 
     <!-- Toolbar -->
-    <div class="toolbar">
-      <a-input
-        v-model:value="searchQuery"
-        class="search-input"
-        placeholder="搜索供应商..."
-        allow-clear
-      >
-        <template #prefix><Search :size="14" /></template>
-      </a-input>
-      <div class="toolbar-actions">
+    <PageShoulder v-model:search="searchQuery" search-placeholder="搜索供应商...">
+      <template #actions>
         <a-button type="primary" class="lucide-icon-btn" @click="openCreateProviderModal">
           <Plus :size="14" />
           新增供应商
         </a-button>
-        <a-tooltip title="刷新供应商列表">
-          <a-button class="lucide-icon-btn" :disabled="loading" @click="loadProviders">
-            <RefreshCw :size="14" :class="{ spinning: loading }" />
-          </a-button>
-        </a-tooltip>
-      </div>
-    </div>
+        <a-button class="lucide-icon-btn" @click="refreshProviders" :loading="refreshing">
+          <RefreshCw :size="14" :class="{ spinning: refreshing }" />
+        </a-button>
+      </template>
+    </PageShoulder>
 
     <!-- Provider Card Grid -->
-    <div class="provider-grid">
-      <div
+    <ExtensionCardGrid :min-width="320">
+      <ExtensionCard
         v-for="provider in filteredProviders"
         :key="provider.provider_id"
-        class="provider-card"
-        :class="{ disabled: !provider.is_enabled }"
+        :title="provider.display_name"
+        :subtitle="provider.provider_id"
+        :disabled="!provider.is_enabled"
+        :default-icon="Globe"
+        :info="getProviderInfo(provider)"
+        :status="getProviderStatus(provider)"
+        @click="openEditProviderModal(provider)"
       >
-        <!-- Card Header -->
-        <div class="card-header" @click="openEditProviderModal(provider)">
-          <div class="provider-icon">
-            <img
-              v-if="getProviderIcon(provider)"
-              :src="getIconUrl(getProviderIcon(provider))"
-              :alt="provider.display_name"
-            />
-            <Globe v-else :size="20" />
-          </div>
-          <div class="provider-info">
-            <span class="provider-name">{{ provider.display_name }}</span>
-            <span class="provider-id">{{ provider.provider_id }}</span>
-          </div>
-          <span v-if="!provider.is_enabled" class="provider-status">未启用</span>
-          <span v-else-if="provider.credential_status === 'warning'" class="provider-status warning"
-            >凭证缺失</span
-          >
-          <span
-            class="status-dot"
-            :class="{
-              off: !provider.is_enabled,
-              warning: provider.credential_status === 'warning' && provider.is_enabled
-            }"
-          ></span>
-        </div>
-
-        <!-- Card Body -->
-        <div class="card-body">
-          <div class="info-row">
-            <span class="info-label">Base URL</span>
-            <span class="info-value truncate">{{ provider.base_url || '-' }}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">类型</span>
-            <span class="info-value">{{ provider.provider_type || 'openai' }}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">已启用</span>
-            <span class="info-value clickable" @click.stop="openModelsModal(provider)">
-              {{ provider.enabled_models?.length || 0 }} 个模型
-            </span>
-          </div>
-        </div>
-
-        <!-- Card Footer -->
-        <div class="card-footer">
-          <button class="view-models-btn" type="button" @click="openModelsModal(provider)">
+        <template #icon>
+          <img
+            v-if="getProviderIcon(provider)"
+            :src="getIconUrl(getProviderIcon(provider))"
+            :alt="provider.display_name"
+          />
+        </template>
+        <template #footer>
+          <button class="view-models-btn" type="button" @click.stop="openModelsModal(provider)">
             <Settings2 :size="14" />
             管理模型
           </button>
-          <div class="card-actions" @click.stop>
-            <a-tooltip title="编辑供应商">
-              <a-button
-                size="small"
-                class="lucide-icon-btn"
-                @click="openEditProviderModal(provider)"
-              >
-                <Edit3 :size="14" />
-              </a-button>
-            </a-tooltip>
-          </div>
-        </div>
-      </div>
-    </div>
+          <a-tooltip title="编辑供应商">
+            <a-button
+              size="small"
+              class="lucide-icon-btn"
+              @click.stop="openEditProviderModal(provider)"
+            >
+              <Edit3 :size="14" />
+            </a-button>
+          </a-tooltip>
+        </template>
+      </ExtensionCard>
+    </ExtensionCardGrid>
 
     <!-- Provider Edit Modal -->
     <a-modal
@@ -1060,23 +1033,7 @@ onMounted(loadProviders)
   color: var(--gray-1000);
 }
 
-// ============ Page Header ============
-.page-header {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 28px var(--page-padding) 18px;
-  border-bottom: 1px solid var(--gray-100);
-
-  h1 {
-    margin: 0;
-    font-size: 24px;
-    font-weight: 720;
-    line-height: 34px;
-  }
-}
-
+// ============ Provider Summary Strip ============
 .summary-strip {
   display: flex;
   gap: 8px;
@@ -1098,193 +1055,7 @@ onMounted(loadProviders)
   }
 }
 
-// ============ Toolbar ============
-.toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 16px var(--page-padding) 0;
-}
-
-.search-input {
-  width: 280px;
-}
-
-.toolbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.spinning {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-// ============ Provider Grid ============
-.provider-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 16px;
-  padding: 16px var(--page-padding);
-}
-
-// ============ Provider Card ============
-.provider-card {
-  display: flex;
-  flex-direction: column;
-  background: var(--gray-0);
-  border: 1px solid var(--gray-150);
-  border-radius: 8px;
-  transition:
-    border-color 0.15s,
-    box-shadow 0.15s;
-
-  &:hover {
-    border-color: var(--main-100);
-  }
-
-  &.expanded {
-    border-color: var(--main-500);
-    box-shadow: 0 0 0 2px var(--main-50);
-  }
-}
-
-.card-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px;
-  cursor: pointer;
-}
-
-.provider-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  background: #e1f6fb;  // 固定使用浅色背景，确保图标清晰可见
-  overflow: hidden;
-
-  img {
-    width: 24px;
-    height: 24px;
-    object-fit: contain;
-  }
-
-  :deep(svg) {
-    color: var(--main-700);
-  }
-}
-
-.provider-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-
-  .provider-name {
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--gray-900);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .provider-id {
-    font-size: 12px;
-    color: var(--gray-600);
-    font-family: monospace;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-}
-
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--color-success-500);
-  flex-shrink: 0;
-
-  &.off {
-    background: var(--gray-300);
-  }
-
-  &.warning {
-    background: var(--color-warning-500);
-  }
-}
-
-.provider-status {
-  flex-shrink: 0;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: var(--gray-50);
-  color: var(--gray-500);
-  font-size: 11px;
-  line-height: 16px;
-
-  &.warning {
-    background: var(--color-warning-50);
-    color: var(--color-warning-700);
-  }
-}
-
-.card-body {
-  padding: 0 16px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.info-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-
-  .info-label {
-    color: var(--gray-500);
-    min-width: 72px;
-    flex-shrink: 0;
-  }
-
-  .info-value {
-    color: var(--gray-700);
-    min-width: 0;
-
-    &.truncate {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-  }
-}
-
-.card-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 16px;
-  border-top: 1px solid var(--gray-100);
-  background: var(--gray-10);
-  border-radius: 0 0 7px 7px;
-}
-
+// ============ Provider Card Footer ============
 .view-models-btn {
   display: inline-flex;
   align-items: center;
@@ -1301,6 +1072,19 @@ onMounted(loadProviders)
 
   &:hover {
     background: var(--main-50);
+  }
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
   }
 }
 

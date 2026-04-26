@@ -56,8 +56,7 @@
             >
               <div class="item-header">
                 <component
-                  :is="getToolIcon(tool.id)"
-                  v-if="getToolIcon(tool.id)"
+                  :is="getToolIcon(tool.id) || Wrench"
                   :size="16"
                   class="item-icon"
                 />
@@ -91,7 +90,10 @@
         <template v-else>
           <div class="panel-top-bar">
             <div class="panel-title-stack">
-              <h2>{{ currentTool.name }}</h2>
+              <h2>
+                <component :is="getToolIcon(currentTool.id) || Wrench" :size="24" />
+                {{ currentTool.name }}
+              </h2>
               <code class="panel-title-meta">{{ currentTool.id }}</code>
             </div>
           </div>

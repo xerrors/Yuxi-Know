@@ -1,16 +1,34 @@
 <template>
   <div class="database-container layout-container">
-    <ViewSwitchHeader
+    <PageHeader
       title="知识库"
       :active-key="knowledgeActiveView"
-      :items="knowledgeViewItems"
+      :tabs="knowledgeViewItems"
       :loading="dbState.listLoading"
+      :show-border="true"
       aria-label="知识库视图切换"
-    >
-      <template #actions>
-        <a-button type="primary" @click="state.openNewDatabaseModel = true"> 新建知识库 </a-button>
+    />
+
+    <PageShoulder v-model:search="searchQuery" search-placeholder="搜索知识库...">
+      <template #filters>
+        <a-select
+          v-model:value="typeFilter"
+          style="width: 120px"
+          placeholder="全部类型"
+          allow-clear
+        >
+          <a-select-option :value="null">全部类型</a-select-option>
+          <a-select-option v-for="t in kbTypes" :key="t" :value="t">
+            {{ getKbTypeLabel(t) }}
+          </a-select-option>
+        </a-select>
       </template>
-    </ViewSwitchHeader>
+      <template #actions>
+        <a-button type="primary" @click="state.openNewDatabaseModel = true">
+          <PlusOutlined /> 新建知识库
+        </a-button>
+      </template>
+    </PageShoulder>
 
     <a-modal
       :open="state.openNewDatabaseModel"
@@ -186,54 +204,24 @@
     </div>
 
     <!-- 数据库列表 -->
-    <div v-else class="databases">
-      <div
-        v-for="database in databases"
+    <ExtensionCardGrid v-else>
+      <ExtensionCard
+        v-for="database in filteredDatabases"
         :key="database.db_id"
-        class="database dbcard"
+        :title="database.name"
+        :subtitle="cardSubtitle(database)"
+        :description="database.description || '暂无描述'"
+        :tags="cardTags(database)"
         @click="navigateToDatabase(database.db_id)"
       >
-        <!-- 私有知识库锁定图标 -->
-        <LockOutlined
-          v-if="database.metadata?.is_private"
-          class="private-lock-icon"
-          title="私有知识库"
-        />
-        <div class="top">
-          <div class="icon">
-            <component :is="getKbTypeIcon(database.kb_type || 'lightrag')" />
-          </div>
-          <div class="info">
-            <h3>{{ database.name }}</h3>
-            <p>
-              <span>{{ database.row_count || 0 }} 文件</span>
-              <span class="created-time-inline" v-if="database.created_at">
-                {{ formatCreatedTime(database.created_at) }}
-              </span>
-            </p>
-          </div>
-        </div>
-        <!-- <a-tooltip :title="database.description || '暂无描述'">
-          <p class="description">{{ database.description || '暂无描述' }}</p>
-        </a-tooltip> -->
-        <p class="description">{{ database.description || '暂无描述' }}</p>
-        <div class="tags">
-          <a-tag
-            :bordered="false"
-            :color="getKbTypeColor(database.kb_type || 'lightrag')"
-            class="kb-type-tag"
-            size="small"
-          >
-            {{ getKbTypeLabel(database.kb_type || 'lightrag') }}
-          </a-tag>
-          <!-- 保留最后一个，使用 / 切分 -->
-          <a-tag color="blue" v-if="database.embed_info?.name" :bordered="false">{{
-            database.embed_info.name.split('/').slice(-1)[0]
-          }}</a-tag>
-        </div>
-        <!-- <button @click="deleteDatabase(database.collection_name)">删除</button> -->
-      </div>
-    </div>
+        <template #icon>
+          <component :is="getKbTypeIcon(database.kb_type || 'lightrag')" :size="20" />
+        </template>
+        <template #status>
+          <LockOutlined v-if="database.metadata?.is_private" title="私有知识库" />
+        </template>
+      </ExtensionCard>
+    </ExtensionCardGrid>
   </div>
 </template>
 
@@ -246,10 +234,13 @@ import { useDatabaseStore } from '@/stores/database'
 import { LockOutlined, PlusOutlined, QuestionCircleOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { typeApi } from '@/apis/knowledge_api'
-import ViewSwitchHeader from '@/components/ViewSwitchHeader.vue'
+import PageHeader from '@/components/shared/PageHeader.vue'
+import PageShoulder from '@/components/shared/PageShoulder.vue'
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue'
 import EmbeddingModelSelector from '@/components/EmbeddingModelSelector.vue'
 import ShareConfigForm from '@/components/ShareConfigForm.vue'
+import ExtensionCardGrid from '@/components/extensions/ExtensionCardGrid.vue'
+import ExtensionCard from '@/components/extensions/ExtensionCard.vue'
 import dayjs, { parseToShanghai } from '@/utils/time'
 import AiTextarea from '@/components/AiTextarea.vue'
 import { getKbTypeLabel, getKbTypeIcon, getKbTypeColor } from '@/utils/kb_utils'
@@ -268,6 +259,26 @@ const knowledgeViewItems = [
   { key: 'documents', label: '文档知识库', path: '/database' },
   { key: 'graph', label: '知识图谱', path: '/graph' }
 ]
+
+const kbTypes = ['lightrag', 'milvus', 'dify']
+const searchQuery = ref('')
+const typeFilter = ref(null)
+
+const filteredDatabases = computed(() => {
+  let list = databases.value
+  if (searchQuery.value) {
+    const q = searchQuery.value.toLowerCase()
+    list = list.filter(
+      (db) =>
+        db.name.toLowerCase().includes(q) ||
+        (db.description && db.description.toLowerCase().includes(q))
+    )
+  }
+  if (typeFilter.value) {
+    list = list.filter((db) => (db.kb_type || 'lightrag') === typeFilter.value)
+  }
+  return list
+})
 
 const state = reactive({
   openNewDatabaseModel: false
@@ -496,6 +507,30 @@ const handleCreateDatabase = async () => {
   }
 }
 
+const cardSubtitle = (database) => {
+  const parts = [`${database.row_count || 0} 文件`]
+  if (database.created_at) {
+    parts.push(formatCreatedTime(database.created_at))
+  }
+  return parts.join(' · ')
+}
+
+const cardTags = (database) => {
+  const tags = [
+    {
+      name: getKbTypeLabel(database.kb_type || 'lightrag'),
+      color: getKbTypeColor(database.kb_type || 'lightrag')
+    }
+  ]
+  if (database.embed_info?.name) {
+    tags.push({
+      name: database.embed_info.name.split('/').slice(-1)[0],
+      color: 'blue'
+    })
+  }
+  return tags
+}
+
 const navigateToDatabase = (databaseId) => {
   router.push({ path: `/database/${databaseId}` })
 }
@@ -663,153 +698,7 @@ onMounted(() => {
 }
 
 .database-container {
-  .databases {
-    .database {
-      .top {
-        .info {
-          h3 {
-            display: block;
-          }
-        }
-      }
-    }
-  }
-}
-.database-actions,
-.document-actions {
-  margin-bottom: 20px;
-}
-.databases {
-  padding: 12px var(--page-padding);
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 16px;
-}
-
-.database {
-  width: 100%;
-  padding: 10px var(--page-padding);
-  border-radius: 8px;
-  height: 144px;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  position: relative; // 为绝对定位的锁定图标提供参考
-  overflow: hidden;
-  background: linear-gradient(45deg, var(--gray-0) 0%, var(--gray-25) 100%);
-  box-shadow: 0px 1px 2px 0px var(--shadow-2);
-  border: 1px solid var(--gray-50);
-  transition: all 0.3s;
-  position: relative;
-
-  &:hover {
-    background: linear-gradient(45deg, var(--gray-0) 0%, var(--main-30) 100%);
-    box-shadow: 0px 1px 5px var(--shadow-3);
-  }
-
-  .private-lock-icon {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    color: var(--gray-600);
-    background: linear-gradient(135deg, var(--gray-0) 0%, var(--gray-100) 100%);
-    font-size: 12px;
-    border-radius: 8px;
-    padding: 6px;
-    z-index: 2;
-    box-shadow: 0px 2px 4px var(--shadow-2);
-    border: 1px solid var(--gray-100);
-  }
-
-  .top {
-    display: flex;
-    align-items: center;
-    height: 54px;
-    margin-bottom: 14px;
-
-    .icon {
-      width: 50px;
-      height: 50px;
-      font-size: 24px;
-      margin-right: 14px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      background: var(--main-30);
-      border-radius: 12px;
-      border: 1px solid var(--gray-150);
-      color: var(--main-color);
-      position: relative;
-    }
-
-    .info {
-      flex: 1;
-      min-width: 0;
-
-      h3,
-      p {
-        margin: 0;
-        color: var(--gray-10000);
-      }
-
-      h3 {
-        font-size: 16px;
-        font-weight: 600;
-        letter-spacing: -0.02em;
-        line-height: 1.4;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-
-      p {
-        color: var(--gray-700);
-        font-size: 13px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
-        margin-top: 4px;
-        font-weight: 400;
-
-        .created-time-inline {
-          color: var(--gray-700);
-          font-size: 11px;
-          font-weight: 400;
-          background: var(--gray-50);
-          padding: 2px 6px;
-          border-radius: 4px;
-        }
-      }
-    }
-  }
-
-  .description {
-    color: var(--gray-600);
-    overflow: hidden;
-    display: -webkit-box;
-    line-clamp: 1;
-    -webkit-line-clamp: 1;
-    -webkit-box-orient: vertical;
-    text-overflow: ellipsis;
-    margin-bottom: 12px;
-    font-size: 13px;
-    font-weight: 400;
-    flex: 1;
-  }
-
-  .tags {
-    opacity: 0.8;
-  }
-}
-
-.database-empty {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100%;
-  flex-direction: column;
-  color: var(--gray-900);
+  padding: 0;
 }
 
 .empty-state {
@@ -842,10 +731,6 @@ onMounted(() => {
     font-size: 15px;
     font-weight: 500;
   }
-}
-
-.database-container {
-  padding: 0;
 }
 
 .loading-container {

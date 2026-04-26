@@ -36,13 +36,13 @@
 
       <!-- Tags -->
       <div class="tags-section">
-        <a-tag :color="getKbTypeColor(database.kb_type || 'lightrag')" size="small">
+        <span class="card-tag" :class="'tag-' + getKbTypeColor(database.kb_type || 'lightrag')">
           {{ getKbTypeLabel(database.kb_type || 'lightrag') }}
-        </a-tag>
-        <a-tag color="blue" size="small">{{ database.embed_info?.name || 'N/A' }}</a-tag>
-        <a-tag color="cyan" size="small">{{
+        </span>
+        <span class="card-tag tag-blue">{{ database.embed_info?.name || 'N/A' }}</span>
+        <span class="card-tag tag-cyan">{{
           chunkPresetLabelMap[database.additional_params?.chunk_preset_id || 'general'] || 'General'
-        }}</a-tag>
+        }}</span>
       </div>
     </div>
   </div>
@@ -515,5 +515,27 @@ const deleteDatabase = () => {
   color: var(--gray-500);
   cursor: help;
   font-size: 14px;
+}
+
+.card-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+
+  background: var(--gray-100);
+  color: var(--gray-600);
+
+  &.tag-purple  { background: #f3e8ff; color: #7c3aed; }
+  &.tag-blue    { background: var(--color-info-50); color: var(--color-info-700); }
+  &.tag-red     { background: var(--color-error-50); color: var(--color-error-700); }
+  &.tag-green   { background: var(--color-success-50); color: var(--color-success-700); }
+  &.tag-gold    { background: #fef3c7; color: #d97706; }
+  &.tag-cyan    { background: #cffafe; color: #0891b2; }
+  &.tag-orange  { background: #fff7ed; color: #ea580c; }
 }
 </style>
