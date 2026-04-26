@@ -442,8 +442,8 @@ async def add_documents(
                         await knowledge_base.update_file_params(
                             db_id, file_id, indexing_params, operator_id=current_user.user_id
                         )
-                        # 2. 执行入库
-                        result = await knowledge_base.index_file(db_id, file_id, operator_id=current_user.user_id)
+                        # 2. 执行入库（传入 indexing_params 确保使用的参数与用户设置一致）
+                        result = await knowledge_base.index_file(db_id, file_id, operator_id=current_user.user_id, params=indexing_params)
                         processed_items.append(result)
                     except Exception as index_error:
                         logger.error(f"自动入库失败 {item} (file_id={file_id}): {index_error}")
@@ -605,7 +605,7 @@ async def index_documents(
                 await context.set_progress(progress, f"正在入库第 {idx}/{total} 个文档")
 
                 try:
-                    result = await knowledge_base.index_file(db_id, file_id, operator_id=operator_id)
+                    result = await knowledge_base.index_file(db_id, file_id, operator_id=operator_id, params=params)
                     processed_items.append(result)
                 except Exception as e:
                     logger.error(f"Index failed for {file_id}: {e}")
