@@ -193,6 +193,8 @@ async def refresh_model_cache(
 ):
     """强制刷新模型缓存，从数据库重新加载所有供应商配置到 Redis。"""
     await _refresh_model_cache()
+    from yuxi.services.model_cache import model_cache
+
     return {"success": True, "message": "缓存已刷新", "model_count": len(model_cache.get_all_specs())}
 
 
