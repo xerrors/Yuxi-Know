@@ -65,168 +65,166 @@
     </div>
 
     <div class="detail-content-wrapper">
-      <a-spin :spinning="loading">
-        <div v-if="currentSkill" class="detail-content-inner">
-          <div v-if="!isInstalledSkill" class="builtin-uninstalled-state">
-            <h3>{{ currentSkill.description }}</h3>
-            <p>版本 {{ currentSkill.version }}</p>
-            <a-button type="primary" @click="handleInstallBuiltin(currentSkill)"
-              >安装内置 Skill</a-button
-            >
-          </div>
+      <div v-if="currentSkill" class="detail-content-inner">
+        <div v-if="!isInstalledSkill" class="builtin-uninstalled-state">
+          <h3>{{ currentSkill.description }}</h3>
+          <p>版本 {{ currentSkill.version }}</p>
+          <a-button type="primary" @click="handleInstallBuiltin(currentSkill)"
+            >安装内置 Skill</a-button
+          >
+        </div>
 
-          <a-tabs v-else v-model:activeKey="activeTab" class="minimal-tabs">
-            <a-tab-pane key="editor">
-              <template #tab>
-                <span class="tab-title"><FileText :size="14" />代码管理</span>
-              </template>
-              <div class="workspace">
-                <div class="tree-container">
-                  <div class="tree-header">
-                    <span class="label">项目结构</span>
-                    <div class="tree-actions">
-                      <a-tooltip v-if="!isBuiltinInstalledSkill" title="新建文件"
-                        ><button @click="openCreateModal(false)"><FilePlus :size="14" /></button
-                      ></a-tooltip>
-                      <a-tooltip v-if="!isBuiltinInstalledSkill" title="新建目录"
-                        ><button @click="openCreateModal(true)"><FolderPlus :size="14" /></button
-                      ></a-tooltip>
-                      <a-tooltip title="刷新"
-                        ><button @click="reloadTree"><RotateCw :size="14" /></button
-                      ></a-tooltip>
-                    </div>
-                  </div>
-                  <div class="tree-content">
-                    <FileTreeComponent
-                      v-model:selectedKeys="selectedTreeKeys"
-                      v-model:expandedKeys="expandedKeys"
-                      :tree-data="treeData"
-                      @select="handleTreeSelect"
-                    />
+        <a-tabs v-else v-model:activeKey="activeTab" class="minimal-tabs">
+          <a-tab-pane key="editor">
+            <template #tab>
+              <span class="tab-title"><FileText :size="14" />代码管理</span>
+            </template>
+            <div class="workspace">
+              <div class="tree-container">
+                <div class="tree-header">
+                  <span class="label">项目结构</span>
+                  <div class="tree-actions">
+                    <a-tooltip v-if="!isBuiltinInstalledSkill" title="新建文件"
+                      ><button @click="openCreateModal(false)"><FilePlus :size="14" /></button
+                    ></a-tooltip>
+                    <a-tooltip v-if="!isBuiltinInstalledSkill" title="新建目录"
+                      ><button @click="openCreateModal(true)"><FolderPlus :size="14" /></button
+                    ></a-tooltip>
+                    <a-tooltip title="刷新"
+                      ><button @click="reloadTree"><RotateCw :size="14" /></button
+                    ></a-tooltip>
                   </div>
                 </div>
-                <div class="editor-container">
-                  <div class="editor-header">
-                    <div class="current-path">
-                      <File :size="14" />
-                      <span>{{ selectedPath || '未选择文件' }}</span>
-                      <span v-if="canSave" class="save-hint">●</span>
-                    </div>
-                    <div class="header-actions">
-                      <a-button
-                        v-if="isMarkdownFile && selectedPath"
-                        size="small"
-                        @click="viewMode = viewMode === 'edit' ? 'preview' : 'edit'"
-                        class="lucide-icon-btn view-toggle-btn"
-                        :title="viewMode === 'edit' ? '预览' : '编辑'"
-                      >
-                        <Eye v-if="viewMode === 'edit'" :size="14" />
-                        <Edit3 v-else :size="14" />
-                        <span>{{ viewMode === 'edit' ? '预览' : '编辑' }}</span>
-                      </a-button>
-                      <a-button
-                        v-if="!isBuiltinInstalledSkill"
-                        type="primary"
-                        size="small"
-                        @click="saveCurrentFile"
-                        :disabled="!canSave"
-                        :loading="savingFile"
-                        class="lucide-icon-btn"
-                      >
-                        <Save :size="14" />
-                        <span>保存</span>
-                      </a-button>
-                    </div>
-                  </div>
-                  <div class="editor-main">
-                    <a-empty
-                      v-if="!selectedPath || selectedIsDir"
-                      description="选择文件以开始编辑"
-                      class="mt-40"
-                    />
-                    <template v-else>
-                      <MdPreview
-                        v-if="viewMode === 'preview'"
-                        :modelValue="fileContent"
-                        :theme="theme"
-                        previewTheme="github"
-                        class="markdown-preview flat-md-preview"
-                      />
-                      <a-textarea
-                        v-else
-                        v-model:value="fileContent"
-                        class="pure-editor"
-                        :readonly="isBuiltinInstalledSkill"
-                        spellcheck="false"
-                      />
-                    </template>
-                  </div>
+                <div class="tree-content">
+                  <FileTreeComponent
+                    v-model:selectedKeys="selectedTreeKeys"
+                    v-model:expandedKeys="expandedKeys"
+                    :tree-data="treeData"
+                    @select="handleTreeSelect"
+                  />
                 </div>
               </div>
-            </a-tab-pane>
-
-            <a-tab-pane key="dependencies">
-              <template #tab>
-                <span class="tab-title"><Layers :size="14" />依赖管理</span>
-              </template>
-              <div class="config-view">
-                <div class="config-header">
-                  <div class="text">
-                    <h3>依赖声明</h3>
-                    <p>配置此 Skill 所需的工具、MCP 及其他 Skill 依赖。</p>
+              <div class="editor-container">
+                <div class="editor-header">
+                  <div class="current-path">
+                    <File :size="14" />
+                    <span>{{ selectedPath || '未选择文件' }}</span>
+                    <span v-if="canSave" class="save-hint">●</span>
                   </div>
-                  <a-button
-                    type="primary"
-                    :loading="savingDependencies"
-                    @click="saveDependencies"
-                    class="lucide-icon-btn"
-                  >
-                    <Save :size="14" />
-                    <span>更新依赖</span>
-                  </a-button>
+                  <div class="header-actions">
+                    <a-button
+                      v-if="isMarkdownFile && selectedPath"
+                      size="small"
+                      @click="viewMode = viewMode === 'edit' ? 'preview' : 'edit'"
+                      class="lucide-icon-btn view-toggle-btn"
+                      :title="viewMode === 'edit' ? '预览' : '编辑'"
+                    >
+                      <Eye v-if="viewMode === 'edit'" :size="14" />
+                      <Edit3 v-else :size="14" />
+                      <span>{{ viewMode === 'edit' ? '预览' : '编辑' }}</span>
+                    </a-button>
+                    <a-button
+                      v-if="!isBuiltinInstalledSkill"
+                      type="primary"
+                      size="small"
+                      @click="saveCurrentFile"
+                      :disabled="!canSave"
+                      :loading="savingFile"
+                      class="lucide-icon-btn"
+                    >
+                      <Save :size="14" />
+                      <span>保存</span>
+                    </a-button>
+                  </div>
                 </div>
-                <div class="config-form">
-                  <a-form layout="vertical">
-                    <a-form-item label="工具依赖 (Tools)">
-                      <a-select
-                        v-model:value="dependencyForm.tool_dependencies"
-                        mode="multiple"
-                        :options="toolDependencyOptions"
-                        placeholder="选择工具..."
-                        allow-clear
-                        show-search
-                      />
-                    </a-form-item>
-                    <a-form-item label="MCP 依赖 (Model Context Protocol)">
-                      <a-select
-                        v-model:value="dependencyForm.mcp_dependencies"
-                        mode="multiple"
-                        :options="mcpDependencyOptions"
-                        placeholder="选择 MCP 服务..."
-                        allow-clear
-                        show-search
-                      />
-                    </a-form-item>
-                    <a-form-item label="Skill 依赖">
-                      <a-select
-                        v-model:value="dependencyForm.skill_dependencies"
-                        mode="multiple"
-                        :options="skillDependencyOptions"
-                        placeholder="选择 Skill..."
-                        allow-clear
-                        show-search
-                      />
-                    </a-form-item>
-                  </a-form>
+                <div class="editor-main">
+                  <a-empty
+                    v-if="!selectedPath || selectedIsDir"
+                    description="选择文件以开始编辑"
+                    class="mt-40"
+                  />
+                  <template v-else>
+                    <MdPreview
+                      v-if="viewMode === 'preview'"
+                      :modelValue="fileContent"
+                      :theme="theme"
+                      previewTheme="github"
+                      class="markdown-preview flat-md-preview"
+                    />
+                    <a-textarea
+                      v-else
+                      v-model:value="fileContent"
+                      class="pure-editor"
+                      :readonly="isBuiltinInstalledSkill"
+                      spellcheck="false"
+                    />
+                  </template>
                 </div>
               </div>
-            </a-tab-pane>
-          </a-tabs>
-        </div>
-        <div v-else-if="!loading" class="detail-empty">
-          <a-empty description="未找到 Skill" />
-        </div>
-      </a-spin>
+            </div>
+          </a-tab-pane>
+
+          <a-tab-pane key="dependencies">
+            <template #tab>
+              <span class="tab-title"><Layers :size="14" />依赖管理</span>
+            </template>
+            <div class="config-view">
+              <div class="config-header">
+                <div class="text">
+                  <h3>依赖声明</h3>
+                  <p>配置此 Skill 所需的工具、MCP 及其他 Skill 依赖。</p>
+                </div>
+                <a-button
+                  type="primary"
+                  :loading="savingDependencies"
+                  @click="saveDependencies"
+                  class="lucide-icon-btn"
+                >
+                  <Save :size="14" />
+                  <span>更新依赖</span>
+                </a-button>
+              </div>
+              <div class="config-form">
+                <a-form layout="vertical">
+                  <a-form-item label="工具依赖 (Tools)">
+                    <a-select
+                      v-model:value="dependencyForm.tool_dependencies"
+                      mode="multiple"
+                      :options="toolDependencyOptions"
+                      placeholder="选择工具..."
+                      allow-clear
+                      show-search
+                    />
+                  </a-form-item>
+                  <a-form-item label="MCP 依赖 (Model Context Protocol)">
+                    <a-select
+                      v-model:value="dependencyForm.mcp_dependencies"
+                      mode="multiple"
+                      :options="mcpDependencyOptions"
+                      placeholder="选择 MCP 服务..."
+                      allow-clear
+                      show-search
+                    />
+                  </a-form-item>
+                  <a-form-item label="Skill 依赖">
+                    <a-select
+                      v-model:value="dependencyForm.skill_dependencies"
+                      mode="multiple"
+                      :options="skillDependencyOptions"
+                      placeholder="选择 Skill..."
+                      allow-clear
+                      show-search
+                    />
+                  </a-form-item>
+                </a-form>
+              </div>
+            </div>
+          </a-tab-pane>
+        </a-tabs>
+      </div>
+      <div v-else-if="!loading" class="detail-empty">
+        <a-empty description="未找到 Skill" />
+      </div>
     </div>
 
     <a-modal
