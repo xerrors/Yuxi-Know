@@ -307,11 +307,10 @@ class Tasker:
                 task.message = "服务重启时任务未继续执行"
                 task.updated_at = utc_isoformat()
                 updated.append(task)
-            self._tasks[task.id] = task
         for task in updated:
             await self._persist_task(task)
-        if records:
-            logger.info("Loaded {} task records from storage", len(records))
+        if updated:
+            logger.info("Marked {} interrupted tasks as failed", len(updated))
 
     async def _persist_task(self, task: Task) -> None:
         data: dict[str, Any] = {
