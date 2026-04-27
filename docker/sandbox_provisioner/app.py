@@ -131,6 +131,21 @@ class LocalContainerProvisionerBackend:
         self._sandbox_host = os.getenv("DOCKER_SANDBOX_HOST", "host.docker.internal")
         self._health_timeout_seconds = int(os.getenv("SANDBOX_HEALTH_TIMEOUT_SECONDS", "300"))
 
+        # Collect proxy and mirror environment variables to pass to sandbox
+        self._sandbox_env: dict[str, str] = {}
+        # Proxy
+        for env_name in ["HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy"]:
+            if env_name in os.environ:
+                self._sandbox_env[env_name] = os.environ[env_name]
+        # Package mirrors
+        for env_name in [
+            "APT_MIRROR", "PIP_INDEX_URL", "PIP_TRUSTED_HOST",
+            "NPM_REGISTRY", "NPM_CONFIG_REGISTRY",
+            "YARN_REGISTRY",
+        ]:
+            if env_name in os.environ:
+                self._sandbox_env[env_name] = os.environ[env_name]
+
         try:
             self._client = docker.from_env()
             self._client.ping()
@@ -387,6 +402,9 @@ class LocalContainerProvisionerBackend:
             }
             if self._network:
                 run_kwargs["network"] = self._network
+            if self._sandbox_env:
+                # Convert dict to list of "key=value" format for docker-py
+                run_kwargs["environment"] = [f"{k}={v}" for k, v in self._sandbox_env.items()]
 
             container = self._client.containers.run(self._sandbox_image, **run_kwargs)
             container.reload()
@@ -468,6 +486,21 @@ class KubernetesProvisionerBackend:
         self._thread_pvc = os.getenv("THREAD_PVC", "yuxi-thread")
         self._node_host = os.getenv("NODE_HOST", "host.docker.internal")
         self._container_port = int(os.getenv("SANDBOX_CONTAINER_PORT", "8080"))
+
+        # Collect proxy and mirror environment variables to pass to sandbox
+        self._sandbox_env: list[client.V1EnvVar] = []
+        # Proxy
+        for env_name in ["HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy"]:
+            if env_name in os.environ:
+                self._sandbox_env.append(client.V1EnvVar(name=env_name, value=os.environ[env_name]))
+        # Package mirrors
+        for env_name in [
+            "APT_MIRROR", "PIP_INDEX_URL", "PIP_TRUSTED_HOST",
+            "NPM_REGISTRY", "NPM_CONFIG_REGISTRY",
+            "YARN_REGISTRY",
+        ]:
+            if env_name in os.environ:
+                self._sandbox_env.append(client.V1EnvVar(name=env_name, value=os.environ[env_name]))
 
         kubeconfig_path = os.getenv("KUBECONFIG_PATH")
         if kubeconfig_path:
@@ -552,6 +585,7 @@ class KubernetesProvisionerBackend:
                                 read_only=True,
                             ),
                         ],
+                        env=self._sandbox_env if self._sandbox_env else None,
                     )
                 ],
                 volumes=[
