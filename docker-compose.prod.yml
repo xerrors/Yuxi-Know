@@ -100,6 +100,7 @@ services:
     container_name: sandbox-provisioner
     volumes:
       - ./saves:/app/saves
+      - ./docker/sandbox_provisioner/sandbox.env:/app/sandbox.env:ro
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - app-network

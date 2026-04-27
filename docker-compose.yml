@@ -131,6 +131,7 @@ services:
     volumes:
       - ./saves:/app/saves
       - ./docker/sandbox_provisioner/app.py:/app/app.py:ro
+      - ./docker/sandbox_provisioner/sandbox.env:/app/sandbox.env:ro
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "8002:8002"

@@ -190,13 +190,113 @@ curl http://localhost:8002/health
 
 从工程上看，当前实现更像“双层文件系统”。对 Agent 执行来说，真正工作的对象是远程沙盒进程暴露的文件 API；对 viewer、附件下载和一部分 artifact 查看来说，系统会优先在宿主机侧解析虚拟路径，再用本地文件读取或只读 backend 下载内容。这也是为什么你会看到既有 `ProvisionerSandboxBackend`，又有 `viewer_filesystem_service`、`SelectedSkillsReadonlyBackend`、`KnowledgeBaseReadonlyBackend` 这样的配套实现。
 
-## 十三、和旧版文档相比，今天最重要的理解方式
+## 十三、环境变量配置与传递链
+
+sandbox-provisioner 的环境变量传递分**两层**，需要分别理解：
+
+### 第一层：应用层 → sandbox-provisioner
+
+`api` 和 `worker` 服务通过 `SANDBOX_*` 前缀的环境变量告诉后端如何连接 provisioner。这些变量定义在 `docker-compose.yml` 的 `x-api-worker-env` 锚点中：
+
+| 变量名 | 说明 | 默认值 |
+|--------|------|--------|
+| `SANDBOX_PROVIDER` | 提供者类型，固定为 `provisioner` | `provisioner` |
+| `SANDBOX_PROVISIONER_URL` | provisioner 服务地址 | `http://sandbox-provisioner:8002` |
+| `SANDBOX_VIRTUAL_PATH_PREFIX` | 虚拟路径前缀 | `/home/gem/user-data` |
+| `SANDBOX_EXEC_TIMEOUT_SECONDS` | 命令执行超时时间 | `180` |
+| `SANDBOX_MAX_OUTPUT_BYTES` | 最大输出字节数 | `262144` |
+
+### 第二层：sandbox-provisioner 内部配置
+
+`sandbox-provisioner` 服务本身读取另一组环境变量，决定如何创建沙盒容器。这些变量直接写在 `docker-compose.yml` 的 `sandbox-provisioner.environment` 中：
+
+**通用配置：**
+
+| 变量名 | 说明 | 默认值 |
+|--------|------|--------|
+| `PROVISIONER_BACKEND` | 底层后端类型，`docker` 或 `kubernetes` | `docker` |
+| `SANDBOX_IMAGE` | 沙盒容器镜像 | 详见 compose 文件 |
+| `SANDBOX_CONTAINER_PORT` | 沙盒容器内部端口 | `8080` |
+| `SANDBOX_IDLE_TIMEOUT_SECONDS` | 空闲回收时间 | `120` |
+| `SANDBOX_HEALTH_TIMEOUT_SECONDS` | 健康检查超时 | `300` |
+
+**Docker 后端专用：**
+
+| 变量名 | 说明 | 默认值 |
+|--------|------|--------|
+| `DOCKER_NETWORK` | Docker 网络名称 | `yuxi-know_app-network` |
+| `DOCKER_SANDBOX_PREFIX` | 沙盒容器名前缀 | `yuxi-sandbox` |
+| `DOCKER_SANDBOX_HOST` | 宿主机访问地址 | `host.docker.internal` |
+| `DOCKER_THREADS_HOST_PATH` | 线程数据宿主机路径 | 自动推断 |
+
+**Kubernetes 后端专用：**
+
+| 变量名 | 说明 | 默认值 |
+|--------|------|--------|
+| `K8S_NAMESPACE` | Kubernetes namespace | `yuxi-know` |
+| `NODE_HOST` | Kubernetes 节点地址 | `host.docker.internal` |
+| `KUBECONFIG_PATH` | kubeconfig 文件路径 | 空（使用 incluster 配置） |
+| `THREAD_PVC` | 线程数据持久化卷 | `yuxi-thread` |
+| `SKILLS_PVC` | 技能目录持久化卷（预留） | `yuxi-skills` |
+
+### 环境变量传递链
+
+```
+宿主机 .env / 系统环境变量
+         ↓
+    docker-compose.yml
+         ↓
+    ┌────────────────────────────────┐
+    │  api/worker 服务               │  应用层变量 (SANDBOX_*)
+    │    SANDBOX_PROVISIONER_URL     │
+    └────────────┬───────────────────┘
+                 ↓  HTTP 调用
+    ┌────────────────────────────────┐
+    │  sandbox-provisioner 服务       │  沙盒层变量 (PROVISIONER_BACKEND, DOCKER_*, K8S_*)
+    │    PROVISIONER_BACKEND         │
+    └────────────┬───────────────────┘
+                 ↓  Docker API / K8s API
+    ┌────────────────────────────────┐
+    │  动态创建的沙盒容器              │
+    └────────────────────────────────┘
+```
+
+两层变量不要混看。改了 `api/worker` 的 `SANDBOX_PROVISIONER_URL` 只是改了后端找 provisioner 的地址；改了 `sandbox-provisioner` 的 `PROVISIONER_BACKEND` 才是改了 provisioner 本身用什么方式创建沙盒。
+
+### sandbox.env 的特殊作用
+
+`docker/sandbox_provisioner/sandbox.env` 文件的用途与上述两层变量不同。它通过 volume 挂载到 provisioner 容器内 (`/app/sandbox.env`)，然后由 `LocalContainerProvisionerBackend` 在创建沙盒容器时读取，解析后的键值对会作为**环境变量注入到每个动态创建的沙盒容器**中。
+
+```yaml
+# docker-compose.yml 中 sandbox-provisioner 的挂载
+sandbox-provisioner:
+  volumes:
+    - ./docker/sandbox_provisioner/sandbox.env:/app/sandbox.env:ro
+```
+
+也就是说，`sandbox.env` 配置的是沙盒容器内部可见的环境变量，而不是 provisioner 本身的配置。当前该文件内容为：
+
+```env
+CHECK_YUXI_SANDBOX_ENV_EXISTS=True
+```
+
+如果需要给所有沙盒容器注入额外的环境变量（如代理配置、认证信息等），可以添加到 `sandbox.env` 文件中。
+
+### 配置方式汇总
+
+| 配置目标 | 配置位置 | 示例变量 |
+|----------|----------|----------|
+| 应用层连接 provisioner | `.env` 或 compose 环境 | `SANDBOX_PROVISIONER_URL` |
+| provisioner 自身行为 | `.env` 或 compose 环境 | `PROVISIONER_BACKEND`, `DOCKER_*` |
+| 沙盒容器内部环境 | `sandbox.env` 文件 | 代理、认证等运行时变量 |
+
+## 十四、和旧版文档相比，今天最重要的理解方式
 
 当前项目不应再按“应用直接管理一个长期存在的本地 sandbox 服务”去理解。更准确的认识应该是：Yuxi 只管理线程和上下文；provisioner 负责创建线程对应的沙盒实例；文件系统不是简单地暴露一个容器根目录，而是把可写工作区、只读 skills 和只读知识库组合成一个受控命名空间。
 
 因此，当你在界面上“启用沙盒”或者在文档里“选择 K8s”时，本质上做的不是切换一段业务逻辑，而是在切换 provisioner 的底层实例承载方式。选择 `docker` 时，沙盒由当前部署机上的 Docker daemon 动态创建；旧值 `local` 也会落到这条路径。选择 `kubernetes` 时，沙盒由目标 K8s 集群动态创建。Yuxi 自己始终只面对一个 provisioner 服务地址。
 
-## 十四、排障时建议先看什么
+## 十五、排障时建议先看什么
 
 如果怀疑是 provisioner 级问题，先看 `http://localhost:8002/health`，确认 backend 类型和 idle timeout 是否符合预期。默认 Docker 部署下这里应看到 `backend=docker`，即使你沿用了旧的 `SANDBOX_PROVISIONER_BACKEND=local`。接着看 `docker logs sandbox-provisioner --tail 200`，因为这里能直接看到创建容器、复用旧实例、健康检查失败和 idle reaper 删除的日志。
 
