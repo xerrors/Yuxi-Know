@@ -42,7 +42,7 @@
         已添加 Skills
       </div>
       <ExtensionCardGrid>
-        <ExtensionCard
+        <InfoCard
           v-for="skill in filteredInstalledSkills"
           :key="skill.slug"
           :title="skill.name"
@@ -52,14 +52,14 @@
           :status="{ label: '已安装', level: 'success' }"
           @click="navigateToDetail(skill)"
         >
-        </ExtensionCard>
+        </InfoCard>
       </ExtensionCardGrid>
 
       <div v-if="filteredUninstalledBuiltinSkills.length" class="extension-section-header">
         可添加 Skills
       </div>
       <ExtensionCardGrid v-if="filteredUninstalledBuiltinSkills.length">
-        <ExtensionCard
+        <InfoCard
           v-for="skill in filteredUninstalledBuiltinSkills"
           :key="skill.slug"
           :title="skill.name"
@@ -69,7 +69,7 @@
           action-label="安装"
           @action-click="handleInstallBuiltin(skill)"
         >
-        </ExtensionCard>
+        </InfoCard>
       </ExtensionCardGrid>
     </template>
 
@@ -148,7 +148,7 @@ import { message } from 'ant-design-vue'
 import { RefreshCw, Upload, Computer, BookMarked } from 'lucide-vue-next'
 import { skillApi } from '@/apis/skill_api'
 import ExtensionCardGrid from './ExtensionCardGrid.vue'
-import ExtensionCard from './ExtensionCard.vue'
+import InfoCard from '@/components/shared/InfoCard.vue'
 import PageShoulder from '@/components/shared/PageShoulder.vue'
 
 const BookMarkedIcon = BookMarked

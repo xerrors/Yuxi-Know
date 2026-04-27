@@ -24,7 +24,7 @@
     <template v-else>
       <div v-if="filteredEnabledSubAgents.length" class="extension-section-header">已添加</div>
       <ExtensionCardGrid>
-        <ExtensionCard
+        <InfoCard
           v-for="agent in filteredEnabledSubAgents"
           :key="agent.name"
           :title="agent.name"
@@ -34,12 +34,12 @@
           :status="{ label: '已添加', level: 'success' }"
           @click="navigateToDetail(agent)"
         >
-        </ExtensionCard>
+        </InfoCard>
       </ExtensionCardGrid>
 
       <div v-if="filteredDisabledSubAgents.length" class="extension-section-header">可添加</div>
       <ExtensionCardGrid v-if="filteredDisabledSubAgents.length">
-        <ExtensionCard
+        <InfoCard
           v-for="agent in filteredDisabledSubAgents"
           :key="agent.name"
           :title="agent.name"
@@ -50,7 +50,7 @@
           @click="navigateToDetail(agent)"
           @action-click="handleSetAgentEnabled(agent, true)"
         >
-        </ExtensionCard>
+        </InfoCard>
       </ExtensionCardGrid>
     </template>
 
@@ -109,7 +109,7 @@ import { Plus, RefreshCw, Bot } from 'lucide-vue-next'
 import { subagentApi } from '@/apis/subagent_api'
 import { toolApi } from '@/apis/tool_api'
 import ExtensionCardGrid from './ExtensionCardGrid.vue'
-import ExtensionCard from './ExtensionCard.vue'
+import InfoCard from '@/components/shared/InfoCard.vue'
 import PageShoulder from '@/components/shared/PageShoulder.vue'
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue'
 

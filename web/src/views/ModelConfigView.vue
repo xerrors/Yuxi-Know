@@ -16,7 +16,7 @@ import { modelProviderApi } from '@/apis/system_api'
 import { modelIcons } from '@/utils/modelIcon'
 import PageHeader from '@/components/shared/PageHeader.vue'
 import PageShoulder from '@/components/shared/PageShoulder.vue'
-import ExtensionCard from '@/components/extensions/ExtensionCard.vue'
+import InfoCard from '@/components/shared/InfoCard.vue'
 import ExtensionCardGrid from '@/components/extensions/ExtensionCardGrid.vue'
 
 // ============ State ============
@@ -599,7 +599,7 @@ onMounted(loadProviders)
 
     <!-- Provider Card Grid -->
     <ExtensionCardGrid :min-width="320">
-      <ExtensionCard
+      <InfoCard
         v-for="provider in filteredProviders"
         :key="provider.provider_id"
         :title="provider.display_name"
@@ -632,7 +632,7 @@ onMounted(loadProviders)
             </a-button>
           </a-tooltip>
         </template>
-      </ExtensionCard>
+      </InfoCard>
     </ExtensionCardGrid>
 
     <!-- Provider Edit Modal -->

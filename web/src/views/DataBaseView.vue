@@ -205,7 +205,7 @@
 
     <!-- 数据库列表 -->
     <ExtensionCardGrid v-else>
-      <ExtensionCard
+      <InfoCard
         v-for="database in filteredDatabases"
         :key="database.db_id"
         :title="database.name"
@@ -220,7 +220,7 @@
         <template #status>
           <LockOutlined v-if="database.metadata?.is_private" title="私有知识库" />
         </template>
-      </ExtensionCard>
+      </InfoCard>
     </ExtensionCardGrid>
   </div>
 </template>
@@ -240,7 +240,7 @@ import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue'
 import EmbeddingModelSelector from '@/components/EmbeddingModelSelector.vue'
 import ShareConfigForm from '@/components/ShareConfigForm.vue'
 import ExtensionCardGrid from '@/components/extensions/ExtensionCardGrid.vue'
-import ExtensionCard from '@/components/extensions/ExtensionCard.vue'
+import InfoCard from '@/components/shared/InfoCard.vue'
 import dayjs, { parseToShanghai } from '@/utils/time'
 import AiTextarea from '@/components/AiTextarea.vue'
 import { getKbTypeLabel, getKbTypeIcon, getKbTypeColor } from '@/utils/kb_utils'

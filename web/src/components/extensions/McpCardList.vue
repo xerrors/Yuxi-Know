@@ -27,7 +27,7 @@
     <template v-else>
       <div v-if="filteredEnabledServers.length" class="extension-section-header">已添加</div>
       <ExtensionCardGrid>
-        <ExtensionCard
+        <InfoCard
           v-for="server in filteredEnabledServers"
           :key="server.name"
           :title="server.name"
@@ -39,14 +39,14 @@
           @click="navigateToDetail(server)"
         >
           <template #icon>
-            <span class="extension-card-emoji-icon">{{ server.icon || '🔌' }}</span>
+            <span class="info-card-emoji-icon">{{ server.icon || '🔌' }}</span>
           </template>
-        </ExtensionCard>
+        </InfoCard>
       </ExtensionCardGrid>
 
       <div v-if="filteredDisabledServers.length" class="extension-section-header">可添加</div>
       <ExtensionCardGrid v-if="filteredDisabledServers.length">
-        <ExtensionCard
+        <InfoCard
           v-for="server in filteredDisabledServers"
           :key="server.name"
           :title="server.name"
@@ -59,9 +59,9 @@
           @action-click="handleSetServerEnabled(server, true)"
         >
           <template #icon>
-            <span class="extension-card-emoji-icon">{{ server.icon || '🔌' }}</span>
+            <span class="info-card-emoji-icon">{{ server.icon || '🔌' }}</span>
           </template>
-        </ExtensionCard>
+        </InfoCard>
       </ExtensionCardGrid>
     </template>
 
@@ -80,7 +80,7 @@ import { message } from 'ant-design-vue'
 import { Plus, RefreshCw, Plug } from 'lucide-vue-next'
 import { mcpApi } from '@/apis/mcp_api'
 import ExtensionCardGrid from './ExtensionCardGrid.vue'
-import ExtensionCard from './ExtensionCard.vue'
+import InfoCard from '@/components/shared/InfoCard.vue'
 import PageShoulder from '@/components/shared/PageShoulder.vue'
 import McpFormModal from './McpFormModal.vue'
 
@@ -178,7 +178,7 @@ defineExpose({ fetchServers, loading })
 <style lang="less" scoped>
 @import '@/assets/css/extensions.less';
 
-.extension-card-emoji-icon {
+.info-card-emoji-icon {
   font-size: 18px;
   line-height: 1;
 }

@@ -34,7 +34,7 @@
     </div>
 
     <ExtensionCardGrid v-else>
-      <ExtensionCard
+      <InfoCard
         v-for="tool in filteredTools"
         :key="tool.id"
         :title="tool.name"
@@ -44,7 +44,7 @@
         :tags="toolTags(tool)"
         @click="selectTool(tool)"
       >
-      </ExtensionCard>
+      </InfoCard>
     </ExtensionCardGrid>
 
     <a-modal
@@ -123,7 +123,7 @@ import { Wrench, RefreshCw, SlidersHorizontal, FileText, Tag, Tags, List } from 
 import { toolApi } from '@/apis/tool_api'
 import { getToolIcon } from '@/components/ToolCallingResult/toolRegistry'
 import ExtensionCardGrid from './ExtensionCardGrid.vue'
-import ExtensionCard from './ExtensionCard.vue'
+import InfoCard from '@/components/shared/InfoCard.vue'
 import PageShoulder from '@/components/shared/PageShoulder.vue'
 
 const WrenchIcon = Wrench

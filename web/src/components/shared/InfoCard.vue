@@ -1,22 +1,22 @@
 <template>
   <div
-    class="extension-card"
-    :class="{ 'extension-card-disabled': disabled }"
+    class="info-card"
+    :class="{ 'info-card-disabled': disabled }"
     @click="$emit('click')"
   >
-    <div class="extension-card-header">
-      <div class="extension-card-icon">
+    <div class="info-card-header">
+      <div class="info-card-icon">
         <slot name="icon">
           <component :is="defaultIcon" v-if="defaultIcon" :size="20" />
         </slot>
       </div>
-      <div class="extension-card-info">
-        <span class="extension-card-name" :title="title">{{ title }}</span>
-        <span v-if="subtitle" class="extension-card-subtitle" :title="subtitle">{{
+      <div class="info-card-info">
+        <span class="info-card-name" :title="title">{{ title }}</span>
+        <span v-if="subtitle" class="info-card-subtitle" :title="subtitle">{{
           subtitle
         }}</span>
       </div>
-      <div class="extension-card-status">
+      <div class="info-card-status">
         <slot name="status" />
         <template v-if="!$slots.status">
           <button
@@ -41,13 +41,13 @@
       </div>
     </div>
 
-    <div v-if="$slots.info" class="extension-card-body">
+    <div v-if="$slots.info" class="info-card-body">
       <slot name="info" />
     </div>
-    <div v-else-if="description" class="extension-card-desc" :title="description">
+    <div v-else-if="description" class="info-card-desc" :title="description">
       {{ description }}
     </div>
-    <div v-else-if="info && info.length > 0" class="extension-card-info-rows">
+    <div v-else-if="info && info.length > 0" class="info-card-info-rows">
       <div v-for="(row, idx) in info" :key="idx" class="info-row">
         <span class="info-label">{{ row.label }}</span>
         <span class="info-value">{{ row.value }}</span>
@@ -56,7 +56,7 @@
 
     <div
       v-if="$slots.tags || (normalizedTags && normalizedTags.length > 0)"
-      class="extension-card-tags"
+      class="info-card-tags"
     >
       <slot name="tags">
         <span
@@ -70,7 +70,7 @@
       </slot>
     </div>
 
-    <div v-if="$slots.footer" class="extension-card-footer">
+    <div v-if="$slots.footer" class="info-card-footer">
       <slot name="footer" />
     </div>
   </div>
@@ -113,7 +113,7 @@ const normalizedTags = computed(() => {
 </script>
 
 <style lang="less" scoped>
-.extension-card {
+.info-card {
   display: flex;
   flex-direction: column;
   gap: 10px;
