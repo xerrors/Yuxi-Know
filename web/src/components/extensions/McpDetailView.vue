@@ -469,6 +469,145 @@ onMounted(() => {
 @import '@/assets/css/extensions.less';
 @import '@/assets/css/extension-detail.less';
 
+
+/* 工具列表样式 */
+.tools-tab {
+  .tools-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+
+  .empty-tools {
+    padding: 40px 0;
+  }
+
+  .tools-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+
+    .tool-card {
+      background: var(--gray-0);
+      border: 1px solid var(--gray-150);
+      border-radius: 8px;
+      padding: 12px 16px;
+      transition: all 0.2s ease;
+
+      &:hover {
+        border-color: var(--gray-200);
+      }
+
+      &.disabled {
+        opacity: 0.6;
+      }
+
+      .tool-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+
+        .tool-info {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+
+          .tool-name {
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--gray-900);
+          }
+
+          .info-icon {
+            color: var(--gray-400);
+            cursor: pointer;
+            &:hover {
+              color: var(--gray-600);
+            }
+          }
+        }
+
+        .tool-actions {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+      }
+
+      .tool-description {
+        font-size: 13px;
+        color: var(--gray-600);
+        line-height: 1.4;
+        margin-bottom: 8px;
+      }
+
+      :deep(.ant-collapse) {
+        background: transparent;
+        border: none;
+
+        .ant-collapse-header {
+          padding: 8px 0;
+          font-size: 13px;
+          color: var(--gray-600);
+        }
+        .ant-collapse-content-box {
+          padding: 0;
+        }
+      }
+
+      .params-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+
+        .param-item {
+          background: var(--gray-50);
+          padding: 8px 12px;
+          border-radius: 4px;
+
+          .param-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+
+            .param-name {
+              font-weight: 500;
+              font-size: 13px;
+              color: var(--gray-900);
+              font-family: @mono-font;
+            }
+            .param-required {
+              font-size: 11px;
+              color: var(--color-error-500);
+              background: var(--color-error-50);
+              padding: 1px 6px;
+              border-radius: 3px;
+            }
+            .param-type {
+              font-size: 11px;
+              color: var(--gray-500);
+              background: var(--gray-100);
+              padding: 1px 6px;
+              border-radius: 3px;
+              font-family: @mono-font;
+            }
+          }
+
+          .param-desc {
+            font-size: 12px;
+            color: var(--gray-600);
+            line-height: 1.4;
+          }
+        }
+      }
+    }
+  }
+}
+
+
 .mcp-detail {
   .detail-content-wrapper {
     flex: 1;
