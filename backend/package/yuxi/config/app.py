@@ -49,23 +49,23 @@ class Config(BaseModel):
     # 模型配置
     # ============================================================
     default_model: str = Field(
-        default="siliconflow/Pro/MiniMaxAI/MiniMax-M2.5",
+        default="siliconflow-cn:Pro/MiniMaxAI/MiniMax-M2.5",
         description="默认对话模型",
     )
     fast_model: str = Field(
-        default="siliconflow/Pro/MiniMaxAI/MiniMax-M2.5",
+        default="siliconflow-cn:Pro/MiniMaxAI/MiniMax-M2.5",
         description="快速响应模型",
     )
     embed_model: str = Field(
-        default="siliconflow/Pro/BAAI/bge-m3",
+        default="siliconflow-cn:Pro/BAAI/bge-m3",
         description="默认 Embedding 模型",
     )
     reranker: str = Field(
-        default="siliconflow/Pro/BAAI/bge-reranker-v2-m3",
+        default="siliconflow-cn:Pro/BAAI/bge-reranker-v2-m3",
         description="默认 Re-Ranker 模型",
     )
     content_guard_llm_model: str = Field(
-        default="siliconflow/Pro/MiniMaxAI/MiniMax-M2.5",
+        default="siliconflow-cn:Pro/MiniMaxAI/MiniMax-M2.5",
         description="内容审查LLM模型",
     )
 
@@ -184,7 +184,11 @@ class Config(BaseModel):
                 logger.warning(f"Skip invalid model provider config {provider}: {e}")
 
     def _load_custom_providers(self) -> None:
-        """从独立的TOML文件加载自定义供应商配置"""
+        """从独立的TOML文件加载自定义供应商配置
+
+        [弃用] 这个方法已弃用，建议直接在网页中添加，custom_providers.toml 将在 0.7.x 版本中移除
+        """
+
         custom_config_file = self._config_file.parent / "custom_providers.toml"
 
         if not custom_config_file.exists():
