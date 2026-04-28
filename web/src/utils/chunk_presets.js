@@ -23,6 +23,11 @@ export const CHUNK_PRESET_OPTIONS = [
     value: 'semantic',
     label: 'Semantic',
     description: '语义分块：利用嵌入和聚类算法进行语义切分，并自动增强标题上下文。'
+  },
+  {
+    value: 'separator',
+    label: 'Separator',
+    description: '严格分隔：命中分隔符即切分，仅超长片段内部继续按长度切分。'
   }
 ]
 
