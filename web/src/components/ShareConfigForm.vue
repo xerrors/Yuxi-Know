@@ -1,22 +1,40 @@
 <template>
   <div class="share-config-form">
     <div class="share-config-content">
-      <div class="share-mode">
-        <a-radio-group v-model:value="config.is_shared" class="share-mode-radio">
-          <a-radio :value="true">全员共享</a-radio>
-          <a-radio :value="false">指定部门</a-radio>
-        </a-radio-group>
+      <div class="share-mode-cards" role="radiogroup" aria-label="共享设置">
+        <button
+          v-for="option in shareModeOptions"
+          :key="option.value"
+          type="button"
+          role="radio"
+          class="share-mode-card"
+          :class="{ active: config.is_shared === option.value }"
+          :aria-checked="config.is_shared === option.value"
+          :tabindex="config.is_shared === option.value ? 0 : -1"
+          @click="setShareMode(option.value)"
+          @keydown.enter.prevent="setShareMode(option.value)"
+          @keydown.space.prevent="setShareMode(option.value)"
+        >
+          <div class="card-icon-wrapper" aria-hidden="true">
+            <component :is="option.icon" class="card-icon" :size="20" />
+          </div>
+          <div class="card-content">
+            <div class="card-title">{{ option.title }}</div>
+            <div class="card-description">{{ option.description }}</div>
+          </div>
+        </button>
       </div>
-      <p class="share-hint">
-        {{ config.is_shared ? '所有用户都可以访问' : '只有指定部门的用户可以访问' }}
-      </p>
-      <!-- 部门选择 -->
-      <div v-if="!config.is_shared" class="dept-selection">
+      <div v-if="!config.is_shared" class="compact-dept-selection">
+        <div class="dept-selection-header">
+          <div class="dept-selection-label">可访问部门</div>
+          <div class="dept-selection-hint">请选择可访问该知识库的部门</div>
+        </div>
         <a-select
           v-model:value="config.accessible_department_ids"
           mode="multiple"
-          placeholder="请选择可访问的部门"
-          style="width: 100%"
+          placeholder="请选择部门"
+          size="small"
+          class="full-width dept-selection-input"
           :options="departmentOptions"
         />
       </div>
@@ -26,11 +44,27 @@
 
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { Globe, Building2 } from 'lucide-vue-next'
 import { useUserStore } from '@/stores/user'
 import { departmentApi } from '@/apis/department_api'
 
 const userStore = useUserStore()
 const departments = ref([])
+
+const shareModeOptions = [
+  {
+    value: true,
+    title: '公开给团队',
+    description: '团队内所有成员都可以访问这个知识库',
+    icon: Globe
+  },
+  {
+    value: false,
+    title: '仅指定部门',
+    description: '只有选中的部门成员可以访问这个知识库',
+    icon: Building2
+  }
+]
 
 const props = defineProps({
   modelValue: {
@@ -83,6 +117,13 @@ watch(
   },
   { deep: true }
 )
+
+const setShareMode = (isShared) => {
+  if (config.is_shared === isShared) {
+    return
+  }
+  config.is_shared = isShared
+}
 
 // 监听共享模式变化
 watch(
@@ -190,32 +231,146 @@ defineExpose({
 
 <style lang="less" scoped>
 .share-config-form {
-  h3 {
-    margin-top: 20px;
-    margin-bottom: 12px;
-  }
-
   .share-config-content {
-    background: var(--gray-25);
-    border-radius: 8px;
-    padding: 16px;
-    border: 1px solid var(--gray-150);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-radius: 10px;
 
-    .share-mode {
-      .share-mode-radio {
-        display: flex;
-        gap: 24px;
+    .share-mode-cards {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+
+      @media (max-width: 768px) {
+        grid-template-columns: 1fr;
       }
     }
 
-    .share-hint {
-      font-size: 13px;
-      color: var(--gray-600);
-      margin: 8px 0 0 0;
+    .share-mode-card {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 76px;
+      padding: 12px;
+      border: 1px solid var(--gray-200);
+      border-radius: 10px;
+      background: var(--gray-0);
+      text-align: left;
+      cursor: pointer;
+      transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+
+      &:hover,
+      &:focus-visible {
+        border-color: var(--main-color);
+      }
+
+      &:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 2px var(--main-20);
+      }
+
+      &.active {
+        border-color: var(--main-color);
+        background: var(--main-10);
+        box-shadow: 0 0 0 1px var(--main-20);
+      }
+
+      .card-icon-wrapper {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        flex-shrink: 0;
+        border-radius: 10px;
+        background: var(--gray-50);
+        transition: background-color 0.2s ease;
+      }
+
+      .card-icon {
+        color: var(--gray-500);
+        transition: color 0.2s ease;
+      }
+
+      .card-content {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 3px;
+        flex: 1;
+      }
+
+      .card-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--gray-800);
+        line-height: 1.35;
+      }
+
+      &.active .card-icon-wrapper {
+        background: var(--main-0);
+      }
+
+      &.active .card-icon {
+        color: var(--main-color);
+      }
+
+      .card-description {
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--gray-600);
+      }
     }
 
     .dept-selection {
-      margin-top: 12px;
+      margin-top: 0;
+    }
+
+    .compact-dept-selection {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 10px 12px;
+      border: 1px solid var(--gray-150);
+      border-radius: 10px;
+      background: linear-gradient(180deg, var(--gray-0) 0%, var(--gray-50) 100%);
+    }
+
+    .dept-selection-header {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .dept-selection-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--gray-800);
+      line-height: 1.4;
+    }
+
+    .dept-selection-hint {
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--gray-600);
+    }
+
+    .dept-selection-input {
+      :deep(.ant-select-selector) {
+        min-height: 36px;
+        padding: 3px 8px !important;
+        border-radius: 8px !important;
+        border-color: var(--gray-200) !important;
+        box-shadow: none !important;
+      }
+
+      &:deep(.ant-select-focused .ant-select-selector),
+      &:deep(.ant-select-selector:hover) {
+        border-color: var(--main-color) !important;
+      }
     }
   }
 }

@@ -40,117 +40,121 @@
       width="800px"
       destroyOnClose
     >
-      <!-- 知识库类型选择 -->
-      <h3>知识库类型<span style="color: var(--color-error-500)">*</span></h3>
-      <div class="kb-type-cards">
-        <div
-          v-for="(typeInfo, typeKey) in orderedKbTypes"
-          :key="typeKey"
-          class="kb-type-card"
-          :class="{ active: newDatabase.kb_type === typeKey }"
-          :data-type="typeKey"
-          @click="handleKbTypeChange(typeKey)"
-        >
-          <div class="card-header">
-            <component :is="getKbTypeIcon(typeKey)" class="type-icon" />
-            <span class="type-title">{{ getKbTypeLabel(typeKey) }}</span>
+      <div class="new-database-form">
+        <!-- 知识库类型选择 -->
+        <div class="form-section">
+          <h3 class="section-title">
+            知识库类型<span class="required-mark">*</span>
+          </h3>
+          <div class="kb-type-cards">
+            <div
+              v-for="(typeInfo, typeKey) in orderedKbTypes"
+              :key="typeKey"
+              class="kb-type-card"
+              :class="{ active: newDatabase.kb_type === typeKey }"
+              :data-type="typeKey"
+              @click="handleKbTypeChange(typeKey)"
+            >
+              <div class="card-header">
+                <component :is="getKbTypeIcon(typeKey)" class="type-icon" />
+                <span class="type-title">{{ getKbTypeLabel(typeKey) }}</span>
+              </div>
+              <div class="card-description">{{ typeInfo.description }}</div>
+            </div>
           </div>
-          <div class="card-description">{{ typeInfo.description }}</div>
         </div>
-      </div>
 
-      <!-- 类型说明 -->
-      <!-- <div class="kb-type-guide" v-if="newDatabase.kb_type">
-        <a-alert
-          :message="getKbTypeDescription(newDatabase.kb_type)"
-          :type="getKbTypeAlertType(newDatabase.kb_type)"
-          show-icon
-          style="margin: 12px 0;"
-        />
-      </div> -->
+        <div class="form-section">
+          <h3 class="section-title">知识库名称<span class="required-mark">*</span></h3>
+          <a-input v-model:value="newDatabase.name" placeholder="新建知识库名称" />
+        </div>
 
-      <h3>知识库名称<span style="color: var(--color-error-500)">*</span></h3>
-      <a-input v-model:value="newDatabase.name" placeholder="新建知识库名称" size="large" />
+        <div v-if="newDatabase.kb_type !== 'dify'" class="form-grid two-columns">
+          <div class="form-section compact-section">
+            <h3 class="section-title">嵌入模型</h3>
+            <EmbeddingModelSelector
+              v-model:value="newDatabase.embed_model_name"
+              class="full-width"
+              placeholder="请选择嵌入模型"
+            />
+          </div>
 
-      <template v-if="newDatabase.kb_type !== 'dify'">
-        <h3>嵌入模型</h3>
-        <EmbeddingModelSelector
-          v-model:value="newDatabase.embed_model_name"
-          style="width: 100%"
-          size="large"
-          placeholder="请选择嵌入模型"
-        />
-      </template>
+          <div class="form-section compact-section">
+            <div class="chunk-preset-title-row">
+              <h3 class="section-title">分块策略</h3>
+              <a-tooltip :title="selectedPresetDescription">
+                <QuestionCircleOutlined class="chunk-preset-help-icon" />
+              </a-tooltip>
+            </div>
+            <a-select
+              v-model:value="newDatabase.chunk_preset_id"
+              :options="chunkPresetOptions"
+              class="full-width"
+            />
+          </div>
+        </div>
 
-      <div v-if="newDatabase.kb_type !== 'dify'" class="chunk-preset-title-row">
-        <h3 style="margin: 0">分块策略</h3>
-        <a-tooltip :title="selectedPresetDescription">
-          <QuestionCircleOutlined class="chunk-preset-help-icon" />
-        </a-tooltip>
-      </div>
-      <a-select
-        v-if="newDatabase.kb_type !== 'dify'"
-        v-model:value="newDatabase.chunk_preset_id"
-        :options="chunkPresetOptions"
-        style="width: 100%"
-        size="large"
-      />
+        <!-- 仅对 LightRAG 提供语言选择和LLM选择 -->
+        <div v-if="newDatabase.kb_type === 'lightrag'" class="form-grid two-columns">
+          <div class="form-section compact-section">
+            <h3 class="section-title">语言</h3>
+            <a-select
+              v-model:value="newDatabase.language"
+              :options="languageOptions"
+              class="full-width"
+              :dropdown-match-select-width="false"
+            />
+          </div>
 
-      <!-- 仅对 LightRAG 提供语言选择和LLM选择 -->
-      <div v-if="newDatabase.kb_type === 'lightrag'">
-        <h3 style="margin-top: 20px">语言</h3>
-        <a-select
-          v-model:value="newDatabase.language"
-          :options="languageOptions"
-          style="width: 100%"
-          size="large"
-          :dropdown-match-select-width="false"
-        />
+          <div class="form-section compact-section">
+            <h3 class="section-title">语言模型 (LLM)</h3>
+            <ModelSelectorComponent
+              :model_spec="llmModelSpec"
+              placeholder="请选择模型"
+              @select-model="handleLLMSelect"
+              class="full-width compact-model-selector"
+            />
+          </div>
+        </div>
 
-        <h3 style="margin-top: 20px">语言模型 (LLM)</h3>
-        <p style="color: var(--gray-700); font-size: 14px">可以在设置中配置语言模型</p>
-        <ModelSelectorComponent
-          :model_spec="llmModelSpec"
-          placeholder="请选择模型"
-          @select-model="handleLLMSelect"
-          size="large"
-          style="width: 100%; height: 60px"
-        />
-      </div>
+        <div v-if="newDatabase.kb_type === 'dify'" class="form-grid three-columns">
+          <div class="form-section compact-section">
+            <h3 class="section-title">Dify API URL</h3>
+            <a-input
+              v-model:value="newDatabase.dify_api_url"
+              placeholder="例如: https://api.dify.ai/v1"
+            />
+          </div>
 
-      <div v-if="newDatabase.kb_type === 'dify'">
-        <h3 style="margin-top: 20px">Dify API URL</h3>
-        <a-input
-          v-model:value="newDatabase.dify_api_url"
-          placeholder="例如: https://api.dify.ai/v1"
-          size="large"
-        />
+          <div class="form-section compact-section">
+            <h3 class="section-title">Dify Token</h3>
+            <a-input-password
+              v-model:value="newDatabase.dify_token"
+              placeholder="请输入 Dify API Token"
+            />
+          </div>
 
-        <h3 style="margin-top: 20px">Dify Token</h3>
-        <a-input-password
-          v-model:value="newDatabase.dify_token"
-          placeholder="请输入 Dify API Token"
-          size="large"
-        />
+          <div class="form-section compact-section">
+            <h3 class="section-title">Dataset ID</h3>
+            <a-input
+              v-model:value="newDatabase.dify_dataset_id"
+              placeholder="请输入 Dify dataset_id"
+            />
+          </div>
+        </div>
 
-        <h3 style="margin-top: 20px">Dataset ID</h3>
-        <a-input
-          v-model:value="newDatabase.dify_dataset_id"
-          placeholder="请输入 Dify dataset_id"
-          size="large"
-        />
-      </div>
-
-      <h3 style="margin-top: 20px">知识库描述</h3>
-      <p style="color: var(--gray-700); font-size: 14px">
-        在智能体流程中，这里的描述会作为工具的描述。智能体会根据知识库的标题和描述来选择合适的工具。所以这里描述的越详细，智能体越容易选择到合适的工具。
-      </p>
-      <AiTextarea
-        v-model="newDatabase.description"
-        :name="newDatabase.name"
-        placeholder="新建知识库描述"
-        :auto-size="{ minRows: 3, maxRows: 10 }"
-      />
+        <div class="form-section">
+          <h3 class="section-title">知识库描述</h3>
+          <p class="field-hint description-hint">
+            在智能体流程中，这里的描述会作为工具的描述。智能体会根据知识库的标题和描述来选择合适的工具。所以这里描述的越详细，智能体越容易选择到合适的工具。
+          </p>
+          <AiTextarea
+            v-model="newDatabase.description"
+            :name="newDatabase.name"
+            placeholder="新建知识库描述"
+            :auto-size="{ minRows: 3, maxRows: 10 }"
+          />
+        </div>
 
       <!-- 隐私设置（暂时隐藏）
       <h3 style="margin-top: 20px">隐私设置</h3>
@@ -170,9 +174,12 @@
       </div>
       -->
 
-      <!-- 共享配置 -->
-      <h3>共享设置</h3>
-      <ShareConfigForm v-model="shareConfig" :auto-select-user-dept="true" />
+        <!-- 共享配置 -->
+        <div class="form-section compact-section">
+          <h3 class="section-title">共享设置</h3>
+          <ShareConfigForm v-model="shareConfig" :auto-select-user-dept="true" />
+        </div>
+      </div>
       <template #footer>
         <a-button key="back" @click="cancelCreateDatabase">取消</a-button>
         <a-button
@@ -552,9 +559,74 @@ onMounted(() => {
 
 <style lang="less" scoped>
 .new-database-modal {
+  .new-database-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .form-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .form-section.compact-section {
+    gap: 6px;
+  }
+
+  .form-grid {
+    display: grid;
+    gap: 16px;
+
+    &.two-columns {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    &.three-columns {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    @media (max-width: 768px) {
+      &.two-columns,
+      &.three-columns {
+        grid-template-columns: 1fr;
+      }
+    }
+  }
+
+  .full-width {
+    width: 100%;
+  }
+
+  .compact-model-selector {
+    height: 40px;
+  }
+
+  .section-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--gray-800);
+  }
+
+  .required-mark {
+    margin-left: 2px;
+    color: var(--color-error-500);
+  }
+
+  .field-hint {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--gray-600);
+  }
+
+  .description-hint {
+    margin-top: -2px;
+  }
+
   .chunk-preset-title-row {
-    margin-top: 20px;
-    margin-bottom: 8px;
     display: flex;
     align-items: center;
     gap: 6px;
@@ -579,20 +651,20 @@ onMounted(() => {
   .kb-type-cards {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 16px;
-    margin: 16px 0;
+    gap: 12px;
+    margin: 4px 0 0;
 
     @media (max-width: 768px) {
       grid-template-columns: 1fr;
-      gap: 12px;
+      gap: 10px;
     }
 
     .kb-type-card {
-      border: 2px solid var(--gray-150);
+      border: 1px solid var(--gray-150);
       border-radius: 12px;
-      padding: 16px;
+      padding: 14px;
       cursor: pointer;
-      transition: all 0.3s ease;
+      transition: all 0.2s ease;
       background: var(--gray-0);
       position: relative;
       overflow: hidden;
@@ -604,6 +676,8 @@ onMounted(() => {
       &.active {
         border-color: var(--main-color);
         background: var(--main-10);
+        box-shadow: 0 0 0 1px var(--main-20);
+
         .type-icon {
           color: var(--main-color);
         }
@@ -612,18 +686,18 @@ onMounted(() => {
       .card-header {
         display: flex;
         align-items: center;
-        gap: 12px;
-        margin-bottom: 12px;
+        gap: 10px;
+        margin-bottom: 10px;
 
         .type-icon {
-          width: 24px;
-          height: 24px;
+          width: 20px;
+          height: 20px;
           color: var(--main-color);
           flex-shrink: 0;
         }
 
         .type-title {
-          font-size: 16px;
+          font-size: 15px;
           font-weight: 600;
           color: var(--gray-800);
         }
@@ -634,7 +708,6 @@ onMounted(() => {
         color: var(--gray-600);
         line-height: 1.5;
         margin-bottom: 0;
-        // min-height: 40px;
       }
 
       .deprecated-badge {
