@@ -260,13 +260,13 @@ const renameChat = async (chatId) => {
   }
 
   &.active {
-    background: var(--main-30);
+    background-color: color-mix(in srgb, var(--main-color) 6%, var(--gray-0));
     color: var(--main-color);
     font-weight: 600;
 
     .actions-mask {
       opacity: 1;
-      background: linear-gradient(to right, transparent, var(--main-30) 20px);
+      background: linear-gradient(to right, transparent, color-mix(in srgb, var(--main-color) 6%, var(--gray-0)) 20px);
     }
   }
 

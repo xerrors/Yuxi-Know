@@ -577,7 +577,7 @@ div.header,
 
     &.active {
       border-color: transparent;
-      background-color: var(--main-30);
+      background-color: color-mix(in srgb, var(--main-color) 6%, var(--gray-0));
       font-weight: 600;
       color: var(--main-color);
     }

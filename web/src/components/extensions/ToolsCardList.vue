@@ -2,23 +2,17 @@
   <div class="tools-cards-page extension-page-root">
     <PageShoulder search-placeholder="搜索工具..." v-model:search="searchQuery">
       <template #filters>
-        <a-dropdown trigger="click">
-          <a-button
-            class="lucide-icon-btn"
-            :class="{ active: !!selectedCategory }"
-            style="margin-left: 4px"
-          >
-            <SlidersHorizontal :size="14" />
-          </a-button>
-          <template #overlay>
-            <a-menu :selectedKeys="[selectedCategory || 'all']" @click="handleCategorySelect">
-              <a-menu-item key="all">全部分类</a-menu-item>
-              <a-menu-item v-for="cat in categories" :key="cat">
-                {{ categoryLabels[cat] || cat }}
-              </a-menu-item>
-            </a-menu>
-          </template>
-        </a-dropdown>
+        <a-select
+          v-model:value="selectedCategory"
+          style="width: 120px"
+          placeholder="全部分类"
+          allow-clear
+        >
+          <a-select-option value="">全部分类</a-select-option>
+          <a-select-option v-for="cat in categories" :key="cat" :value="cat">
+            {{ categoryLabels[cat] || cat }}
+          </a-select-option>
+        </a-select>
       </template>
       <template #actions>
         <a-tooltip title="刷新工具">
@@ -119,7 +113,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
-import { Wrench, RefreshCw, SlidersHorizontal, FileText, Tag, Tags, List } from 'lucide-vue-next'
+import { Wrench, RefreshCw, FileText, Tag, Tags, List } from 'lucide-vue-next'
 import { toolApi } from '@/apis/tool_api'
 import { getToolIcon } from '@/components/ToolCallingResult/toolRegistry'
 import ExtensionCardGrid from './ExtensionCardGrid.vue'
@@ -178,10 +172,6 @@ const filteredTools = computed(() => {
 const selectTool = (tool) => {
   currentTool.value = tool
   detailVisible.value = true
-}
-
-const handleCategorySelect = ({ key }) => {
-  selectedCategory.value = key === 'all' ? '' : key
 }
 
 const fetchTools = async () => {

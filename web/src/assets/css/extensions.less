@@ -402,7 +402,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
+  border-radius: 6px;
   border-style: solid;
   border-width: 1px;
   box-shadow: none;
@@ -460,25 +460,6 @@
       background: var(--color-error-100);
       color: var(--color-error-900);
     }
-  }
-}
-
-.panel-status-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 30px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: var(--gray-100);
-  color: var(--gray-600);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1;
-
-  &.warning {
-    background: var(--color-warning-50);
-    color: var(--color-warning-900);
   }
 }
 
@@ -576,7 +557,7 @@
 
   :deep(.ant-tabs-nav) {
     margin: 0;
-    padding: 0 16px;
+    padding: 0 var(--page-padding);
     flex-shrink: 0;
     border-bottom: 1px solid @border-color;
 
