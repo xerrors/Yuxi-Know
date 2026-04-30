@@ -104,8 +104,9 @@ defineEmits(['select-personal', 'select-database', 'select-path'])
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
-  color: var(--gray-700);
+  color: var(--gray-600);
   font-size: 14px;
+  font-weight: 600;
   text-align: left;
   cursor: pointer;
   transition:
@@ -118,13 +119,13 @@ defineEmits(['select-personal', 'select-database', 'select-path'])
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-weight: 500;
   }
 
   &:hover:not(:disabled),
   &.active {
     border-color: transparent;
-    background: var(--main-20);
-    color: var(--main-color);
+    color: var(--main-600);
   }
 
   &.secondary {

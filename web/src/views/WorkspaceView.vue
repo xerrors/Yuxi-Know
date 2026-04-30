@@ -59,7 +59,7 @@
             :selection-mode="selectionMode"
             :loading="loadingTree"
             @select-entry="handleSelectEntry"
-            @go-parent="goParentDirectory"
+            @select-path="selectWorkspacePath"
             @update:selected-paths="selectedPaths = $event"
             @update:selection-mode="handleSelectionModeChange"
             @delete-selected="confirmDeleteEntries(selectedEntries)"
@@ -79,6 +79,7 @@
             :file="previewFile"
             :file-path="selectedEntry?.path || ''"
             :loading="loadingPreview"
+            @close="closePreview"
           />
         </template>
 
@@ -336,15 +337,6 @@ const closePreview = () => {
   selectedEntry.value = null
   previewFile.value = null
   revokePreviewObjectUrl()
-}
-
-const goParentDirectory = async () => {
-  if (currentPath.value === '/') return
-  const trimmed = currentPath.value.replace(/\/$/, '')
-  const parent = trimmed.slice(0, trimmed.lastIndexOf('/')) || '/'
-  closePreview()
-  clearWorkspaceSelection()
-  await loadWorkspaceEntries(parent)
 }
 
 const openCreateDirectoryModal = () => {

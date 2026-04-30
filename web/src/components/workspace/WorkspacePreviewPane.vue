@@ -5,10 +5,12 @@
       :file="file"
       :file-path="filePath"
       :show-download="false"
+      :show-close="true"
       :show-fullscreen="true"
       :full-height="true"
       container-class="workspace-preview-container"
       content-class="workspace-preview-content"
+      @close="$emit('close')"
     />
     <div v-else-if="loading" class="preview-state">
       <a-spin />
@@ -31,6 +33,8 @@ defineProps({
   filePath: { type: String, default: '' },
   loading: { type: Boolean, default: false }
 })
+
+defineEmits(['close'])
 </script>
 
 <style scoped lang="less">

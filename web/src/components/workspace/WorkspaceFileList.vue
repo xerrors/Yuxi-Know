@@ -2,22 +2,34 @@
   <section class="workspace-file-list">
     <div class="file-list-header">
       <div class="path-line">
-        <button
-          type="button"
-          class="path-action"
-          :disabled="currentPath === '/'"
-          aria-label="返回上级目录"
-          @click="$emit('go-parent')"
-        >
-          <ChevronLeft :size="16" />
-        </button>
-        <span class="path-text" :title="currentPath">{{ currentPath }}</span>
+        <a-breadcrumb class="path-breadcrumb">
+          <a-breadcrumb-item v-for="item in breadcrumbItems" :key="item.path">
+            <button
+              type="button"
+              class="breadcrumb-action"
+              :class="{ current: item.path === currentPath }"
+              :disabled="item.path === currentPath"
+              :title="item.path"
+              @click="$emit('select-path', item.path)"
+            >
+              {{ item.name }}
+            </button>
+          </a-breadcrumb-item>
+        </a-breadcrumb>
       </div>
       <div class="list-actions">
         <span class="entry-count">{{ entries.length }} 项</span>
-        <a-button size="small" :type="selectionMode ? 'primary' : 'default'" @click="toggleSelectionMode">
-          多选
-        </a-button>
+        <a-tooltip title="多选">
+          <a-button
+            size="small"
+            class="lucide-icon-btn"
+            :type="selectionMode ? 'primary' : 'default'"
+            aria-label="多选"
+            @click="toggleSelectionMode"
+          >
+            <ListChecks :size="14" />
+          </a-button>
+        </a-tooltip>
         <a-button
           v-if="selectionMode"
           size="small"
@@ -122,7 +134,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { ChevronLeft, Download, Folder, MoreHorizontal, Trash2 } from 'lucide-vue-next'
+import { Download, Folder, ListChecks, MoreHorizontal, Trash2 } from 'lucide-vue-next'
 import { formatFileSize, formatRelativeTime, getFileIcon, getFileIconColor } from '@/utils/file_utils'
 
 const props = defineProps({
@@ -137,7 +149,7 @@ const props = defineProps({
 
 const emit = defineEmits([
   'select-entry',
-  'go-parent',
+  'select-path',
   'update:selectedPaths',
   'update:selectionMode',
   'delete-selected',
@@ -148,6 +160,23 @@ const emit = defineEmits([
 const selectedPathSet = computed(() => new Set(props.selectedPaths))
 const deletingPathSet = computed(() => new Set(props.deletingPaths))
 const entryPaths = computed(() => props.entries.map((entry) => entry.path))
+const breadcrumbItems = computed(() => {
+  const normalizedPath = props.currentPath || '/'
+  if (normalizedPath === '/') {
+    return [{ name: '工作区', path: '/' }]
+  }
+
+  const segments = normalizedPath.split('/').filter(Boolean)
+  return segments.reduce(
+    (items, segment) => {
+      const parentPath = items[items.length - 1].path
+      const path = parentPath === '/' ? `/${segment}` : `${parentPath}/${segment}`
+      items.push({ name: segment, path })
+      return items
+    },
+    [{ name: '工作区', path: '/' }]
+  )
+})
 
 const allSelected = computed(() => {
   return entryPaths.value.length > 0 && entryPaths.value.every((path) => selectedPathSet.value.has(path))
@@ -213,37 +242,34 @@ const toggleEntrySelection = (path, checked) => {
   flex: 0 0 auto;
 }
 
-.path-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border: 1px solid var(--gray-150);
-  border-radius: 8px;
-  background: var(--gray-0);
-  color: var(--gray-600);
-  cursor: pointer;
-
-  &:disabled {
-    color: var(--gray-300);
-    cursor: not-allowed;
-  }
-
-  &:hover:not(:disabled) {
-    background: var(--main-20);
-    color: var(--main-color);
-  }
-}
-
-.path-text {
+.path-breadcrumb {
   min-width: 0;
   overflow: hidden;
-  color: var(--gray-900);
   font-size: 14px;
-  font-weight: 600;
+}
+
+.breadcrumb-action {
+  max-width: 180px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  color: var(--main-800);
+  cursor: pointer;
+  font: inherit;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 400;
+
+  &:hover:not(:disabled) {
+    color: var(--main-600);
+  }
+
+  &.current,
+  &:disabled {
+    color: var(--gray-900);
+    cursor: default;
+  }
 }
 
 .entry-count {
