@@ -4,11 +4,24 @@
       <button
         type="button"
         class="workspace-nav-item"
-        :class="{ active: activeKey === 'personal' }"
+        :class="{ active: activeKey === 'personal' && currentPath !== savedArtifactsPath }"
         @click="$emit('select-personal')"
       >
         <FolderKanban :size="16" />
         <span>个人工作区</span>
+      </button>
+    </section>
+
+    <section class="sidebar-section">
+      <div class="section-title">快速访问</div>
+      <button
+        type="button"
+        class="workspace-nav-item secondary"
+        :class="{ active: activeKey === 'personal' && currentPath === savedArtifactsPath }"
+        @click="$emit('select-path', savedArtifactsPath)"
+      >
+        <Archive :size="15" />
+        <span>Saved Artifacts</span>
       </button>
     </section>
 
@@ -41,15 +54,18 @@
 </template>
 
 <script setup>
-import { FolderKanban, LibraryBig, UsersRound } from 'lucide-vue-next'
+import { Archive, FolderKanban, LibraryBig, UsersRound } from 'lucide-vue-next'
+
+const savedArtifactsPath = '/saved_artifacts'
 
 defineProps({
   activeKey: { type: String, default: 'personal' },
+  currentPath: { type: String, default: '/' },
   databases: { type: Array, default: () => [] },
   loadingDatabases: { type: Boolean, default: false }
 })
 
-defineEmits(['select-personal', 'select-database'])
+defineEmits(['select-personal', 'select-database', 'select-path'])
 </script>
 
 <style scoped lang="less">

@@ -25,10 +25,12 @@
         </button>
         <WorkspaceSidebar
           :active-key="activeSourceKey"
+          :current-path="currentPath"
           :databases="databases"
           :loading-databases="loadingDatabases"
           @select-personal="selectPersonalWorkspace"
           @select-database="selectDatabase"
+          @select-path="selectWorkspacePath"
         />
       </div>
       <button
@@ -268,10 +270,19 @@ const loadDatabases = async () => {
 const selectPersonalWorkspace = async () => {
   activeSourceKey.value = 'personal'
   selectedDatabase.value = null
+  closePreview()
   clearWorkspaceSelection()
-  if (!entries.value.length) {
-    await loadWorkspaceEntries(currentPath.value)
+  if (currentPath.value !== '/' || !entries.value.length) {
+    await loadWorkspaceEntries('/')
   }
+}
+
+const selectWorkspacePath = async (path) => {
+  activeSourceKey.value = 'personal'
+  selectedDatabase.value = null
+  closePreview()
+  clearWorkspaceSelection()
+  await loadWorkspaceEntries(path)
 }
 
 const selectDatabase = (database) => {
