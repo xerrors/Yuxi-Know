@@ -58,7 +58,7 @@ defineEmits(['select-personal', 'select-database'])
   flex-direction: column;
   gap: 18px;
   min-width: 0;
-  padding: 14px calc(var(--page-padding) - 8px);
+  padding: 14px 10px;
   border-right: 1px solid var(--gray-100);
   background: var(--gray-25);
   overflow-y: auto;

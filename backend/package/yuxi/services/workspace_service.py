@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import io
 import mimetypes
+import shutil
 from pathlib import Path, PurePosixPath
 from urllib.parse import quote
 
-from fastapi import HTTPException
+import aiofiles
+from fastapi import HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 
 from yuxi.agents.backends.sandbox.paths import _global_user_data_dir
@@ -67,6 +70,37 @@ def _sort_entries(entries: list[dict]) -> list[dict]:
     return sorted(entries, key=lambda item: (not bool(item.get("is_dir")), str(item.get("name") or "").lower()))
 
 
+def _validate_child_name(name: str, *, field_name: str) -> str:
+    clean_name = str(name or "").strip()
+    if not clean_name:
+        raise HTTPException(status_code=422, detail=f"{field_name} 不能为空")
+    if clean_name in {".", ".."} or "/" in clean_name or "\\" in clean_name:
+        raise HTTPException(status_code=422, detail=f"{field_name} 不能包含路径分隔符")
+    if PurePosixPath(clean_name).name != clean_name:
+        raise HTTPException(status_code=422, detail=f"{field_name} 不能包含路径分隔符")
+    return clean_name
+
+
+def _resolve_parent_directory(user: User, parent_path: str) -> Path:
+    parent = _resolve_workspace_path(user, parent_path)
+    if not parent.exists():
+        raise HTTPException(status_code=404, detail="目标目录不存在")
+    if not parent.is_dir():
+        raise HTTPException(status_code=400, detail="目标路径不是目录")
+    return parent
+
+
+def _resolve_new_child(root: Path, parent: Path, name: str) -> Path:
+    target = parent / name
+    try:
+        target.resolve(strict=False).relative_to(root)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail="Access denied") from exc
+    if target.exists():
+        raise HTTPException(status_code=400, detail="同名文件或文件夹已存在")
+    return target
+
+
 def _list_directory(root: Path, target: Path) -> list[dict]:
     entries = [_entry_for_path(root, child) for child in target.iterdir()]
     return _sort_entries(entries)
@@ -105,6 +139,67 @@ async def read_workspace_file_content(*, path: str, current_user: User) -> dict:
         "supported": supported,
         "message": message,
     }
+
+
+async def delete_workspace_path(*, path: str, current_user: User) -> dict:
+    root = _workspace_root(current_user)
+    target = _resolve_workspace_path(current_user, path)
+    if target == root:
+        raise HTTPException(status_code=400, detail="工作区根目录不允许删除")
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="文件不存在")
+
+    try:
+        if target.is_dir():
+            await asyncio.to_thread(shutil.rmtree, target)
+        else:
+            await asyncio.to_thread(target.unlink)
+    except PermissionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {"success": True, "path": _normalize_workspace_path(path).as_posix()}
+
+
+async def create_workspace_directory(*, parent_path: str, name: str, current_user: User) -> dict:
+    root = _workspace_root(current_user)
+    directory_name = _validate_child_name(name, field_name="文件夹名")
+    parent = _resolve_parent_directory(current_user, parent_path)
+    target = _resolve_new_child(root, parent, directory_name)
+
+    try:
+        await asyncio.to_thread(target.mkdir)
+    except FileExistsError as exc:
+        raise HTTPException(status_code=400, detail="同名文件或文件夹已存在") from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {"success": True, "entry": _entry_for_path(root, target)}
+
+
+async def upload_workspace_file(*, parent_path: str, file: UploadFile, current_user: User) -> dict:
+    root = _workspace_root(current_user)
+    file_name = _validate_child_name(Path(file.filename or "").name, field_name="文件名")
+    parent = _resolve_parent_directory(current_user, parent_path)
+    target = _resolve_new_child(root, parent, file_name)
+    created_file = False
+    upload_completed = False
+
+    try:
+        async with aiofiles.open(target, "xb") as buffer:
+            created_file = True
+            while chunk := await file.read(1024 * 1024):
+                await buffer.write(chunk)
+        upload_completed = True
+    except FileExistsError as exc:
+        raise HTTPException(status_code=400, detail="同名文件或文件夹已存在") from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        if created_file and not upload_completed and target.exists():
+            with contextlib.suppress(OSError):
+                await asyncio.to_thread(target.unlink)
+
+    return {"success": True, "entry": _entry_for_path(root, target)}
 
 
 async def download_workspace_file(*, path: str, current_user: User) -> StreamingResponse | FileResponse:

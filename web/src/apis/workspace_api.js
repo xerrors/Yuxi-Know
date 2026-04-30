@@ -1,4 +1,4 @@
-import { apiGet } from './base'
+import { apiDelete, apiGet, apiPost } from './base'
 
 const buildQuery = (params) => {
   const query = new URLSearchParams()
@@ -18,6 +18,25 @@ export const getWorkspaceTree = (path = '/') => {
 export const getWorkspaceFileContent = (path) => {
   const query = buildQuery({ path })
   return apiGet(`/api/workspace/file?${query}`)
+}
+
+export const deleteWorkspacePath = (path) => {
+  const query = buildQuery({ path })
+  return apiDelete(`/api/workspace/file?${query}`)
+}
+
+export const createWorkspaceDirectory = (parentPath, name) => {
+  return apiPost('/api/workspace/directory', {
+    parent_path: parentPath,
+    name
+  })
+}
+
+export const uploadWorkspaceFile = (parentPath, file) => {
+  const formData = new FormData()
+  formData.append('parent_path', parentPath)
+  formData.append('file', file)
+  return apiPost('/api/workspace/upload', formData)
 }
 
 export const downloadWorkspaceFile = (path) => {
