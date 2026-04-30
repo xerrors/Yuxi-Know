@@ -94,7 +94,7 @@
           @click.stop="$emit('toggle-panel')"
           title="查看文件"
         >
-          <FolderCode :size="18" />
+          <FolderKanban :size="18" />
           <span>文件</span>
         </button>
         <slot name="actions-left-extra"></slot>
@@ -108,7 +108,7 @@ import { computed, ref, watch } from 'vue'
 import MessageInputComponent from '@/components/MessageInputComponent.vue'
 import ImagePreviewComponent from '@/components/ImagePreviewComponent.vue'
 import AttachmentOptionsComponent from '@/components/AttachmentOptionsComponent.vue'
-import { FolderCode, SquareCheck } from 'lucide-vue-next'
+import { FolderKanban, SquareCheck } from 'lucide-vue-next'
 import {
   CheckCircleOutlined,
   ClockCircleOutlined,

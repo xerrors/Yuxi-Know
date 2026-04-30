@@ -2,12 +2,15 @@
   <div ref="panelRef" class="agent-panel" :class="{ resizing: isResizing }">
     <!-- 拖拽手柄 -->
     <div class="resize-handle" @pointerdown="startResize"></div>
-    <div class="panel-header" :class="{ 'is-compact': isCompactHeader }">
+    <div class="panel-header">
       <div class="panel-header-main">
         <div class="panel-title">
           <span><strong>文件系统</strong></span>
         </div>
         <div class="window-actions">
+          <button class="header-action-btn" title="刷新" @click="emitRefresh">
+            <RefreshCw :size="15" />
+          </button>
           <button
             class="header-action-btn"
             :title="isExpanded ? '恢复高度' : '向上展开'"
@@ -20,34 +23,7 @@
           </button>
         </div>
       </div>
-      <div class="file-toolbar">
-        <button
-          class="header-action-btn"
-          title="新建文件夹"
-          :disabled="!threadId"
-          @click="openCreateDirectoryModal"
-        >
-          <FolderPlus :size="15" />
-        </button>
-        <button
-          class="header-action-btn"
-          title="上传文件"
-          :disabled="!threadId"
-          @click="openUploadFilePicker"
-        >
-          <Upload :size="15" />
-        </button>
-        <button class="header-action-btn" title="刷新" @click="emitRefresh">
-          <RefreshCw :size="15" />
-        </button>
-      </div>
     </div>
-    <input
-      ref="uploadInputRef"
-      class="hidden-file-input"
-      type="file"
-      @change="handleUploadInputChange"
-    />
     <div class="tab-content">
       <div class="files-display">
         <div v-if="!threadId" class="empty">创建对话后可查看工作区</div>
@@ -142,24 +118,6 @@
         @close="closePreview"
       />
     </a-modal>
-
-    <a-modal
-      v-model:open="createDirectoryModalVisible"
-      title="新建文件夹"
-      okText="创建"
-      cancelText="取消"
-      :confirmLoading="creatingDirectory"
-      @ok="createDirectory"
-      @cancel="closeCreateDirectoryModal"
-    >
-      <p>文件夹将创建在{{ resolveWorkspaceTargetDirectory() }}下</p>
-      <a-input
-        v-model:value="newDirectoryName"
-        placeholder="输入文件夹名"
-        :maxlength="120"
-        @pressEnter="createDirectory"
-      />
-    </a-modal>
   </div>
 </template>
 
@@ -169,22 +127,18 @@ import {
   ChevronsDownUp,
   ChevronsUpDown,
   Download,
-  FolderPlus,
   RefreshCw,
   Trash2,
-  Upload,
   X
 } from 'lucide-vue-next'
 import { Modal, message } from 'ant-design-vue'
 import FileTreeComponent from '@/components/FileTreeComponent.vue'
 import AgentFilePreview from '@/components/AgentFilePreview.vue'
 import {
-  createViewerDirectory,
   deleteViewerFile,
   downloadViewerFile,
   getViewerFileContent,
-  getViewerFileSystemTree,
-  uploadViewerFile
+  getViewerFileSystemTree
 } from '@/apis/viewer_filesystem'
 
 const props = defineProps({
@@ -220,20 +174,15 @@ const props = defineProps({
 
 const emit = defineEmits(['refresh', 'close', 'resize', 'resizing', 'toggle-expand'])
 const INLINE_PREVIEW_MIN_WIDTH = 920
-const WORKSPACE_PATH = '/home/gem/user-data/workspace'
+const DEFAULT_EXPANDED_ROOT_DIRECTORY_NAME = 'user-data'
 
 const panelRef = ref(null)
-const uploadInputRef = ref(null)
 const modalVisible = ref(false)
-const createDirectoryModalVisible = ref(false)
 const currentFile = ref(null)
 const currentFilePath = ref('')
 const loadingFiles = ref(false)
 const filesystemError = ref('')
 const panelWidth = ref(0)
-const newDirectoryName = ref('')
-const creatingDirectory = ref(false)
-const uploadingFile = ref(false)
 
 const dynamicTreeData = ref([])
 const selectedKeys = ref([])
@@ -241,7 +190,6 @@ const expandedKeys = ref([])
 const deletingPaths = ref(new Set())
 
 const useInlinePreview = computed(() => panelWidth.value >= INLINE_PREVIEW_MIN_WIDTH)
-const isCompactHeader = computed(() => panelWidth.value > 0 && panelWidth.value < 360)
 
 const buildDisplayName = (fullPath) => {
   const normalized = String(fullPath || '').replace(/\/+$/, '')
@@ -329,43 +277,6 @@ const removeTreeNode = (nodes, targetKey) => {
 
 const normalizePathKey = (path) => String(path || '').replace(/\/+$/, '')
 
-const isWorkspacePath = (path) => {
-  const normalizedPath = normalizePathKey(path)
-  return normalizedPath === WORKSPACE_PATH || normalizedPath.startsWith(`${WORKSPACE_PATH}/`)
-}
-
-const parentPathOf = (path) => {
-  const normalizedPath = normalizePathKey(path)
-  if (!normalizedPath || normalizedPath === '/') return '/'
-  const parts = normalizedPath.split('/').filter(Boolean)
-  parts.pop()
-  return parts.length ? `/${parts.join('/')}` : '/'
-}
-
-const findTreeNode = (nodes, targetKey) => {
-  const normalizedTargetKey = normalizePathKey(targetKey)
-  for (const node of nodes) {
-    if (normalizePathKey(node.key) === normalizedTargetKey) return node
-    if (node.children?.length) {
-      const child = findTreeNode(node.children, targetKey)
-      if (child) return child
-    }
-  }
-  return null
-}
-
-const resolveWorkspaceTargetDirectory = () => {
-  const selectedKey = selectedKeys.value[0]
-  if (!selectedKey) return WORKSPACE_PATH
-
-  // 根据当前选中节点推断写入目录，避免把文件上传到只读命名空间。
-  const selectedNode = findTreeNode(dynamicTreeData.value, selectedKey)
-  const targetPath = selectedNode?.isLeaf
-    ? parentPathOf(selectedKey)
-    : normalizePathKey(selectedKey)
-  return isWorkspacePath(targetPath) ? targetPath : ''
-}
-
 const isSameOrChildPath = (path, targetPath) => {
   const normalizedPath = normalizePathKey(path)
   const normalizedTargetPath = normalizePathKey(targetPath)
@@ -402,6 +313,22 @@ const getFileName = (fileItem) => {
   return '未知文件'
 }
 
+const loadDirectoryChildren = async (directoryPath) => {
+  const res = await getViewerFileSystemTree(
+    props.threadId,
+    directoryPath,
+    props.agentId,
+    props.agentConfigId
+  )
+  return sortEntries(res?.entries || []).map((entry) => createTreeNode(entry))
+}
+
+const findDefaultExpandedRootNode = (nodes) => {
+  return nodes.find(
+    (node) => !node.isLeaf && buildDisplayName(node.key) === DEFAULT_EXPANDED_ROOT_DIRECTORY_NAME
+  )
+}
+
 const refreshFileSystem = async () => {
   if (!props.threadId) {
     dynamicTreeData.value = []
@@ -420,9 +347,21 @@ const refreshFileSystem = async () => {
       props.agentConfigId
     )
     if (res?.entries) {
-      dynamicTreeData.value = sortEntries(res.entries).map((entry) => createTreeNode(entry))
-      expandedKeys.value = []
+      const rootNodes = sortEntries(res.entries).map((entry) => createTreeNode(entry))
+      const defaultExpandedNode = findDefaultExpandedRootNode(rootNodes)
+
+      dynamicTreeData.value = rootNodes
+      expandedKeys.value = defaultExpandedNode ? [defaultExpandedNode.key] : []
       selectedKeys.value = []
+
+      if (defaultExpandedNode) {
+        try {
+          const children = await loadDirectoryChildren(defaultExpandedNode.key)
+          dynamicTreeData.value = updateTreeChildren(rootNodes, defaultExpandedNode.key, children)
+        } catch (error) {
+          console.error('Failed to load default expanded directory', error)
+        }
+      }
     } else {
       dynamicTreeData.value = []
     }
@@ -435,47 +374,14 @@ const refreshFileSystem = async () => {
   }
 }
 
-const loadData = (treeNode) => {
-  return new Promise((resolve) => {
-    if (treeNode.isLeaf || (treeNode.children && treeNode.children.length > 0) || !props.threadId) {
-      resolve()
-      return
-    }
+const loadData = async (treeNode) => {
+  if (treeNode.isLeaf || treeNode.children?.length || !props.threadId) return
 
-    getViewerFileSystemTree(props.threadId, treeNode.key, props.agentId, props.agentConfigId)
-      .then((res) => {
-        if (res?.entries) {
-          const children = sortEntries(res.entries).map((entry) => createTreeNode(entry))
-          dynamicTreeData.value = updateTreeChildren(dynamicTreeData.value, treeNode.key, children)
-        }
-        resolve()
-      })
-      .catch((error) => {
-        console.error('Failed to load children for', treeNode.key, error)
-        resolve()
-      })
-  })
-}
-
-const refreshDirectoryChildren = async (directoryPath) => {
-  const normalizedDirectoryPath = normalizePathKey(directoryPath)
-  const targetNode = findTreeNode(dynamicTreeData.value, normalizedDirectoryPath)
-  if (!targetNode || targetNode.isLeaf) {
-    return
-  }
-
-  const res = await getViewerFileSystemTree(
-    props.threadId,
-    normalizedDirectoryPath,
-    props.agentId,
-    props.agentConfigId
-  )
-  if (res?.entries) {
-    const children = sortEntries(res.entries).map((entry) => createTreeNode(entry))
-    dynamicTreeData.value = updateTreeChildren(dynamicTreeData.value, targetNode.key, children)
-    if (!expandedKeys.value.includes(targetNode.key)) {
-      expandedKeys.value = [...expandedKeys.value, targetNode.key]
-    }
+  try {
+    const children = await loadDirectoryChildren(treeNode.key)
+    dynamicTreeData.value = updateTreeChildren(dynamicTreeData.value, treeNode.key, children)
+  } catch (error) {
+    console.error('Failed to load children for', treeNode.key, error)
   }
 }
 
@@ -593,100 +499,6 @@ const confirmDeleteNode = (node) => {
       }
     }
   })
-}
-
-const openCreateDirectoryModal = () => {
-  if (!props.threadId) return
-  const targetDirectory = resolveWorkspaceTargetDirectory()
-  if (!targetDirectory) {
-    message.warning('只能在 workspace 目录下新建文件夹')
-    return
-  }
-  newDirectoryName.value = ''
-  createDirectoryModalVisible.value = true
-}
-
-const closeCreateDirectoryModal = () => {
-  createDirectoryModalVisible.value = false
-  newDirectoryName.value = ''
-}
-
-const createDirectory = async () => {
-  if (creatingDirectory.value) return
-  const targetDirectory = resolveWorkspaceTargetDirectory()
-  const directoryName = newDirectoryName.value.trim()
-
-  if (!targetDirectory) {
-    message.warning('只能在 workspace 目录下新建文件夹')
-    return
-  }
-  if (!directoryName) {
-    message.warning('请输入文件夹名')
-    return
-  }
-
-  creatingDirectory.value = true
-  try {
-    await createViewerDirectory(
-      props.threadId,
-      targetDirectory,
-      directoryName,
-      props.agentId,
-      props.agentConfigId
-    )
-    await refreshDirectoryChildren(targetDirectory)
-    closeCreateDirectoryModal()
-    message.success('文件夹创建成功')
-  } catch (error) {
-    console.error('创建文件夹失败:', error)
-    message.error(error?.message || '创建文件夹失败')
-  } finally {
-    creatingDirectory.value = false
-  }
-}
-
-const openUploadFilePicker = () => {
-  if (!props.threadId || uploadingFile.value) return
-  const targetDirectory = resolveWorkspaceTargetDirectory()
-  if (!targetDirectory) {
-    message.warning('只能上传到 workspace 目录')
-    return
-  }
-  if (uploadInputRef.value) {
-    uploadInputRef.value.value = ''
-    uploadInputRef.value.click()
-  }
-}
-
-const handleUploadInputChange = async (event) => {
-  const file = event.target?.files?.[0]
-  if (!file || uploadingFile.value) return
-
-  const targetDirectory = resolveWorkspaceTargetDirectory()
-  if (!targetDirectory) {
-    message.warning('只能上传到 workspace 目录')
-    event.target.value = ''
-    return
-  }
-
-  uploadingFile.value = true
-  try {
-    await uploadViewerFile(
-      props.threadId,
-      targetDirectory,
-      file,
-      props.agentId,
-      props.agentConfigId
-    )
-    await refreshDirectoryChildren(targetDirectory)
-    message.success('文件上传成功')
-  } catch (error) {
-    console.error('上传文件失败:', error)
-    message.error(error?.message || '上传文件失败')
-  } finally {
-    uploadingFile.value = false
-    event.target.value = ''
-  }
 }
 
 const downloadFile = async (fileItem) => {
@@ -869,37 +681,11 @@ watch(useInlinePreview, (isInline) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 2px;
   padding: 4px 16px;
   min-height: 44px;
   background: var(--gray-25);
   flex-shrink: 0;
-
-  &.is-compact {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 6px;
-    padding: 8px 12px;
-
-    .panel-header-main {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      min-width: 0;
-    }
-
-    .file-toolbar {
-      order: 2;
-      width: 100%;
-      justify-content: flex-start;
-      padding: 4px;
-      border-right: none;
-      border: 1px solid var(--gray-150);
-      border-radius: 8px;
-      background: var(--gray-0);
-    }
-  }
 }
 
 .panel-header-main {
@@ -964,17 +750,11 @@ watch(useInlinePreview, (isInline) => {
 
 .file-toolbar {
   order: 2;
-  padding-right: 8px;
-  border-right: 1px solid var(--gray-300);
 }
 
 .window-actions {
   order: 3;
   flex-shrink: 0;
-}
-
-.hidden-file-input {
-  display: none;
 }
 
 .close-btn {
@@ -1127,125 +907,6 @@ watch(useInlinePreview, (isInline) => {
     content: '📋';
     font-size: 32px;
     opacity: 0.6;
-  }
-}
-
-.todo-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.todo-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--gray-150);
-  transition: all 0.15s ease;
-
-  &:hover {
-    background: var(--main-10);
-    border-color: var(--gray-200);
-  }
-}
-
-.todo-status {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-top: 2px;
-
-  .icon {
-    font-size: 16px;
-
-    &.completed {
-      color: #52c41a;
-    }
-    &.in-progress {
-      color: #1890ff;
-    }
-    &.pending {
-      color: #faad14;
-    }
-    &.cancelled {
-      color: #ff4d4f;
-    }
-    &.unknown {
-      color: var(--gray-400);
-    }
-  }
-}
-
-.todo-text {
-  flex: 1;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--gray-1000);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-
-  .todo-item.completed & {
-    color: var(--gray-500);
-    text-decoration: line-through;
-  }
-}
-
-.list-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-  padding: 0 4px;
-
-  .list-header-left {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .count {
-    font-size: 13px;
-    color: var(--gray-500);
-  }
-
-  .info-icon {
-    color: var(--gray-400);
-    cursor: help;
-    transition: color 0.2s;
-
-    &:hover {
-      color: var(--main-500);
-    }
-  }
-
-  .add-btn {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 10px;
-    height: 28px;
-    border: 1px solid var(--gray-200);
-    border-radius: 6px;
-    background: var(--gray-0);
-    color: var(--gray-700);
-    font-size: 13px;
-    cursor: pointer;
-    transition: all 0.2s;
-
-    &:hover:not(:disabled) {
-      background: var(--gray-50);
-      color: var(--main-700);
-      border-color: var(--main-300);
-    }
-
-    &:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
   }
 }
 
