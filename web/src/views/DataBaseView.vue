@@ -250,7 +250,7 @@ import ExtensionCardGrid from '@/components/extensions/ExtensionCardGrid.vue'
 import InfoCard from '@/components/shared/InfoCard.vue'
 import dayjs, { parseToShanghai } from '@/utils/time'
 import AiTextarea from '@/components/AiTextarea.vue'
-import { getKbTypeLabel, getKbTypeIcon, getKbTypeColor } from '@/utils/kb_utils'
+import { getKbTypeLabel, getKbTypeIcon, getKbTypeColor, parseModelSpec, buildDisplaySpec } from '@/utils/kb_utils'
 import { CHUNK_PRESET_OPTIONS, getChunkPresetDescription } from '@/utils/chunk_presets'
 
 const route = useRoute()
@@ -324,6 +324,7 @@ const createEmptyDatabaseForm = () => ({
   chunk_preset_id: 'general',
   language: 'Chinese',
   llm_info: {
+    model_spec: '',
     provider: '',
     model_name: ''
   },
@@ -338,14 +339,7 @@ const selectedPresetDescription = computed(() =>
   getChunkPresetDescription(newDatabase.chunk_preset_id)
 )
 
-const llmModelSpec = computed(() => {
-  const provider = newDatabase.llm_info?.provider || ''
-  const modelName = newDatabase.llm_info?.model_name || ''
-  if (provider && modelName) {
-    return `${provider}/${modelName}`
-  }
-  return ''
-})
+const llmModelSpec = computed(() => buildDisplaySpec(newDatabase.llm_info))
 
 // 支持的知识库类型
 const supportedKbTypes = ref({})
@@ -427,15 +421,9 @@ const handleKbTypeChange = (type) => {
 
 // 处理LLM选择
 const handleLLMSelect = (spec) => {
-  console.log('LLM选择:', spec)
-  if (typeof spec !== 'string' || !spec) return
-
-  const index = spec.indexOf('/')
-  const provider = index !== -1 ? spec.slice(0, index) : ''
-  const modelName = index !== -1 ? spec.slice(index + 1) : ''
-
-  newDatabase.llm_info.provider = provider
-  newDatabase.llm_info.model_name = modelName
+  const parsed = parseModelSpec(spec)
+  if (!parsed) return
+  Object.assign(newDatabase.llm_info, parsed)
 }
 
 // 构建请求数据（只负责表单数据转换）
@@ -470,7 +458,13 @@ const buildRequestData = () => {
 
   if (newDatabase.kb_type === 'lightrag') {
     requestData.additional_params.language = newDatabase.language || 'English'
-    if (newDatabase.llm_info.provider && newDatabase.llm_info.model_name) {
+    if (newDatabase.llm_info.model_spec) {
+      requestData.llm_info = {
+        model_spec: newDatabase.llm_info.model_spec,
+        provider: newDatabase.llm_info.provider,
+        model_name: newDatabase.llm_info.model_name
+      }
+    } else if (newDatabase.llm_info.provider && newDatabase.llm_info.model_name) {
       requestData.llm_info = {
         provider: newDatabase.llm_info.provider,
         model_name: newDatabase.llm_info.model_name

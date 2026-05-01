@@ -75,7 +75,7 @@
 import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDatabaseStore } from '@/stores/database'
-import { getKbTypeLabel, getKbTypeIcon, getKbTypeColor } from '@/utils/kb_utils'
+import { getKbTypeLabel, getKbTypeIcon, getKbTypeColor, parseModelSpec, buildDisplaySpec } from '@/utils/kb_utils'
 import { LeftOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons-vue'
 import HeaderComponent from '@/components/HeaderComponent.vue'
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue'
@@ -94,6 +94,7 @@ const editForm = reactive({
   name: '',
   description: '',
   llm_info: {
+    model_spec: '',
     provider: '',
     model_name: ''
   }
@@ -113,6 +114,7 @@ const showEditModal = () => {
   // 如果是 LightRAG 类型，加载当前的 LLM 配置
   if (database.value.kb_type === 'lightrag') {
     const llmInfo = database.value.llm_info || {}
+    editForm.llm_info.model_spec = llmInfo.model_spec || ''
     editForm.llm_info.provider = llmInfo.provider || ''
     editForm.llm_info.model_name = llmInfo.model_name || ''
   }
@@ -131,6 +133,7 @@ const handleEditSubmit = () => {
       // 如果是 LightRAG 类型，包含 llm_info
       if (database.value.kb_type === 'lightrag') {
         updateData.llm_info = {
+          model_spec: editForm.llm_info.model_spec,
           provider: editForm.llm_info.provider,
           model_name: editForm.llm_info.model_name
         }
@@ -145,25 +148,12 @@ const handleEditSubmit = () => {
 }
 
 // LLM 模型选择处理
-const llmModelSpec = computed(() => {
-  const provider = editForm.llm_info?.provider || ''
-  const modelName = editForm.llm_info?.model_name || ''
-  if (provider && modelName) {
-    return `${provider}/${modelName}`
-  }
-  return ''
-})
+const llmModelSpec = computed(() => buildDisplaySpec(editForm.llm_info))
 
 const handleLLMSelect = (spec) => {
-  console.log('LLM选择:', spec)
-  if (typeof spec !== 'string' || !spec) return
-
-  const index = spec.indexOf('/')
-  const provider = index !== -1 ? spec.slice(0, index) : ''
-  const modelName = index !== -1 ? spec.slice(index + 1) : ''
-
-  editForm.llm_info.provider = provider
-  editForm.llm_info.model_name = modelName
+  const parsed = parseModelSpec(spec)
+  if (!parsed) return
+  Object.assign(editForm.llm_info, parsed)
 }
 
 const deleteDatabase = () => {
