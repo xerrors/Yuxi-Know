@@ -84,32 +84,6 @@ def _docx_heading_tree(markdown_content: str) -> list[str]:
     return [element for element in root.get_tree() if element]
 
 
-def _hard_split_by_token_limit(text: str, chunk_token_num: int) -> list[str]:
-    token_iter = list(re.finditer(r"[A-Za-z0-9_]+|[\u4e00-\u9fff]", text or ""))
-    if not token_iter:
-        cleaned = (text or "").strip()
-        return [cleaned] if cleaned else []
-
-    chunks: list[str] = []
-    start = 0
-    index = 0
-    max_tokens = max(int(chunk_token_num or 0), 1)
-
-    while index < len(token_iter):
-        end_index = min(index + max_tokens, len(token_iter)) - 1
-        end = token_iter[end_index].end()
-        piece = text[start:end].strip()
-        if piece:
-            chunks.append(piece)
-        start = end
-        index = end_index + 1
-
-    tail = text[start:].strip()
-    if tail:
-        chunks.append(tail)
-    return chunks
-
-
 def _ensure_chunk_token_limit(
     chunks: list[str], chunk_token_num: int, delimiter: str, overlapped_percent: int
 ) -> list[str]:
@@ -161,7 +135,7 @@ def _ensure_chunk_token_limit(
                     if nlp.count_tokens(text) <= max_tokens:
                         protected.append(text)
                     else:
-                        protected.extend(_hard_split_by_token_limit(text, max_tokens))
+                        protected.extend(nlp.hard_split_by_token_limit(text, max_tokens))
 
     return [chunk for chunk in protected if chunk.strip()]
 
