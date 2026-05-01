@@ -11,7 +11,7 @@ COPY ./web/package*.json ./
 COPY ./web/pnpm-lock.yaml* ./
 
 # 安装依赖
-RUN pnpm install --registry=https://registry.npmmirror.com
+RUN pnpm install --registry=https://registry.npmjs.org
 
 # 复制源代码
 COPY ./web .
@@ -33,7 +33,7 @@ COPY ./web/package*.json ./
 COPY ./web/pnpm-lock.yaml* ./
 
 # 安装依赖
-RUN pnpm install --frozen-lockfile --registry=https://registry.npmmirror.com
+RUN pnpm install --frozen-lockfile --registry=https://registry.npmjs.org
 
 # 复制源代码并构建
 COPY ./web .

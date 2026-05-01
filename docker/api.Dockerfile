@@ -15,8 +15,8 @@ ENV TZ=Asia/Shanghai \
     UV_COMPILE_BYTECODE=1 \
     DEBIAN_FRONTEND=noninteractive
 
-# 设置 npm 镜像源，为 MCP 和 Skills 安装依赖
-RUN npm config set registry https://registry.npmmirror.com --global \
+# 设置 npm 源，为 MCP 和 Skills 安装依赖
+RUN npm config set registry https://registry.npmjs.org --global \
     && npm cache clean --force
 
 # 设置代理和时区，更换镜像源，安装系统依赖 - 合并为一个RUN减少层数
