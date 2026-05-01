@@ -82,6 +82,7 @@
               :filePath="currentFilePath"
               :fullHeight="true"
               :showClose="true"
+              closeVariant="collapse-right"
               :showDownload="true"
               :showFullscreen="true"
               @download="downloadFile"

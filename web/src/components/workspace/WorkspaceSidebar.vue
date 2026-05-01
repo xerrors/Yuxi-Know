@@ -95,7 +95,7 @@ defineEmits(['select-personal', 'select-database', 'select-path'])
   min-width: 0;
   padding: 14px 10px;
   border-right: 1px solid var(--gray-100);
-  background: var(--gray-25);
+  background: var(--gray-0);
   overflow-y: auto;
 }
 

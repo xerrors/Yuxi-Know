@@ -6,6 +6,7 @@
       :file-path="filePath"
       :show-download="false"
       :show-close="true"
+      close-variant="collapse-right"
       :show-fullscreen="true"
       :full-height="true"
       :editable="editable"

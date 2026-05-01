@@ -79,8 +79,14 @@
         >
           <Maximize2 :size="18" />
         </button>
-        <button v-if="showClose" class="modal-action-btn" @click="$emit('close')" title="关闭">
-          <X :size="18" />
+        <button
+          v-if="showClose"
+          class="modal-action-btn"
+          @click="$emit('close')"
+          :title="closeTitle"
+          :aria-label="closeTitle"
+        >
+          <component :is="closeIconComponent" :size="18" />
         </button>
       </div>
     </div>
@@ -234,7 +240,7 @@
 
 <script setup>
 import { computed, onUnmounted, ref, watch } from 'vue'
-import { Code2, Download, Eye, Globe, Maximize2, Pencil, Save, X } from 'lucide-vue-next'
+import { Code2, Download, Eye, Globe, Maximize2, PanelRightClose, Pencil, Save, X } from 'lucide-vue-next'
 import { MdPreview } from 'md-editor-v3'
 import hljs from 'highlight.js/lib/common'
 import 'md-editor-v3/lib/preview.css'
@@ -274,6 +280,11 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
+  closeVariant: {
+    type: String,
+    default: 'close',
+    validator: (value) => ['close', 'collapse-right'].includes(value)
+  },
   fullHeight: {
     type: Boolean,
     default: false
@@ -300,6 +311,8 @@ const emit = defineEmits(['close', 'download', 'save'])
 
 const themeStore = useThemeStore()
 const theme = computed(() => (themeStore.isDark ? 'dark' : 'light'))
+const closeTitle = computed(() => (props.closeVariant === 'collapse-right' ? '收起预览面板' : '关闭预览'))
+const closeIconComponent = computed(() => (props.closeVariant === 'collapse-right' ? PanelRightClose : X))
 const htmlPreviewMode = ref('render')
 const editMode = ref('preview')
 const draftContent = ref('')

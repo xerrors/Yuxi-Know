@@ -566,12 +566,20 @@ onUnmounted(() => {
   revokePreviewObjectUrl()
 })
 
-watch(useInlinePreview, (isInline) => {
+watch(useInlinePreview, (isInline, wasInline) => {
   if (!previewFile.value) {
     previewModalVisible.value = false
     return
   }
-  previewModalVisible.value = !isInline
+
+  if (isInline) {
+    previewModalVisible.value = false
+    return
+  }
+
+  if (wasInline) {
+    closePreview()
+  }
 })
 </script>
 
