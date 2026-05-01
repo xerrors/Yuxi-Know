@@ -164,7 +164,7 @@
         <ChunkParamsConfig
           :temp-chunk-params="indexParams"
           :show-qa-split="true"
-          :show-chunk-size-overlap="!isLightRAG"
+          :show-chunk-size-overlap="true"
           :show-preset="true"
           :allow-preset-follow-default="true"
           :database-preset-id="store.database?.additional_params?.chunk_preset_id || 'general'"
@@ -686,6 +686,12 @@ const buildIndexParamsPayload = () => {
 
   if (isLightRAG.value) {
     payload.qa_separator = indexParams.value.qa_separator || ''
+    if (indexParams.value.chunk_size) {
+      payload.chunk_size = indexParams.value.chunk_size
+    }
+    if (indexParams.value.chunk_overlap) {
+      payload.chunk_overlap = indexParams.value.chunk_overlap
+    }
     return payload
   }
 

@@ -19,6 +19,76 @@ from yuxi.plugins.parser.unified import Parser
 from yuxi.utils import hashstr, logger
 from yuxi.utils.datetime_utils import utc_isoformat
 
+# Patch LightRAG's tiktoken usage to avoid downloading from the internet at runtime.
+# LightRAG calls _get_tiktoken_encoding_for_model() inside openai_embed/openai_complete_if_cache,
+# which tries to download tiktoken BPE files from openaipublic.blob.core.windows.net.
+# In air-gapped environments this causes ConnectionRefused errors.
+import lightrag.llm.openai as _lightrag_openai
+
+
+class _TiktokenWrapper:
+    """Wraps a pre-loaded tiktoken encoding to bypass LightRAG's TiktokenTokenizer auto-download."""
+
+    def __init__(self, model_name: str, encoding):
+        self.model_name = model_name
+        self._enc = encoding
+
+    def encode(self, text: str) -> list[int]:
+        return self._enc.encode(text)
+
+    def decode(self, tokens: list[int]) -> str:
+        return self._enc.decode(tokens)
+
+
+class _CharTokenizer:
+    """Fallback tokenizer that approximates 1 token ≈ 4 characters (GPT-style ratio)."""
+
+    def __init__(self, model_name: str):
+        self.model_name = model_name
+
+    def encode(self, text: str) -> list[int]:
+        return list(range(0, len(text), 4))
+
+    def decode(self, tokens: list[int]) -> str:
+        return ""
+
+
+# Patch LightRAG's tiktoken usage to avoid downloading from the internet at runtime.
+try:
+    import tiktoken
+
+    _PATCHED_ENCODING = tiktoken.get_encoding("o200k_base")
+
+    def _patched_get_encoding(model: str):
+        if model not in _lightrag_openai._TIKTOKEN_ENCODING_CACHE:
+            _lightrag_openai._TIKTOKEN_ENCODING_CACHE[model] = _PATCHED_ENCODING
+        return _lightrag_openai._TIKTOKEN_ENCODING_CACHE[model]
+
+    _lightrag_openai._get_tiktoken_encoding_for_model = _patched_get_encoding
+    logger.info("Patched LightRAG tiktoken to use offline o200k_base encoding")
+except Exception as _e:
+    logger.warning(f"tiktoken unavailable ({_e}), using character-based fallback for LightRAG")
+
+    _DUMMY = _CharTokenizer("fallback")
+
+    def _fallback_get_encoding(model: str):
+        if model not in _lightrag_openai._TIKTOKEN_ENCODING_CACHE:
+            _lightrag_openai._TIKTOKEN_ENCODING_CACHE[model] = _DUMMY
+        return _lightrag_openai._TIKTOKEN_ENCODING_CACHE[model]
+
+    _lightrag_openai._get_tiktoken_encoding_for_model = _fallback_get_encoding
+
+
+def _extract_json_from_text(text: str) -> str:
+    """Extract JSON object from LLM output that may contain reasoning/thinking text."""
+    import re
+
+    if not text:
+        return text
+    # Find the first balanced { ... } in the text
+    match = re.search(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", text, re.DOTALL)
+    return match.group(0) if match else text
+
 
 class LightRagKB(KnowledgeBase):
     """基于 LightRAG 的知识库实现"""
@@ -157,12 +227,23 @@ class LightRagKB(KnowledgeBase):
         working_dir = os.path.join(self.work_dir, db_id)
         os.makedirs(working_dir, exist_ok=True)
 
+        # 创建不依赖外网的 Tokenizer，避免 tiktoken 下载 o200k_base.tiktoken
+        try:
+            import tiktoken
+
+            enc = tiktoken.get_encoding("o200k_base")
+            tokenizer = _TiktokenWrapper("gpt-4o-mini", enc)
+        except Exception:
+            logger.warning("tiktoken unavailable, falling back to character-based tokenizer")
+            tokenizer = _CharTokenizer("fallback")
+
         # 创建 LightRAG 实例
         rag = LightRAG(
             working_dir=working_dir,
             workspace=db_id,
             llm_model_func=self._get_llm_func(llm_info),
             embedding_func=self._get_embedding_func(embed_info),
+            tokenizer=tokenizer,
             vector_storage="MilvusVectorDBStorage",
             kv_storage="JsonKVStorage",
             graph_storage="Neo4JStorage",
@@ -247,7 +328,36 @@ class LightRagKB(KnowledgeBase):
 
         model = select_model(model_spec=model_spec)
 
+        # Reasoning models (MiniMax-M2.x, DeepSeek-R, etc.) wrap JSON in thinking
+        # text, which breaks LightRAG's keyword_extraction mode that relies on
+        # chat.completions.parse() + response_format.  When keyword_extraction is
+        # requested we call the model normally and extract JSON from the text.
+        _REASONING_MODELS = {
+            "minimax-m2.7",
+            "minimax-m2.5",
+            "deepseek-reasoner",
+            "kimi-k2-thinking",
+        }
+
         async def llm_model_func(prompt, system_prompt=None, history_messages=[], **kwargs):
+            is_reasoning = model.model_name.lower() in _REASONING_MODELS
+            keyword_extraction = kwargs.pop("keyword_extraction", False)
+
+            if keyword_extraction and is_reasoning:
+                text = await openai_complete_if_cache(
+                    model=model.model_name,
+                    prompt=prompt,
+                    system_prompt=system_prompt,
+                    history_messages=history_messages,
+                    api_key=model.api_key,
+                    base_url=model.base_url,
+                    **kwargs,
+                )
+                return _extract_json_from_text(text)
+
+            if keyword_extraction:
+                kwargs["keyword_extraction"] = True
+
             return await openai_complete_if_cache(
                 model=model.model_name,
                 prompt=prompt,
