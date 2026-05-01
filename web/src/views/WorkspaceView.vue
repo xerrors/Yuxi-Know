@@ -5,13 +5,22 @@
         <a-button :disabled="activeSourceKey !== 'personal'" @click="openCreateDirectoryModal">
           新建文件夹
         </a-button>
-        <a-button :loading="uploadingFile" :disabled="activeSourceKey !== 'personal'" @click="openUploadFilePicker">
+        <a-button
+          :loading="uploadingFile"
+          :disabled="activeSourceKey !== 'personal'"
+          @click="openUploadFilePicker"
+        >
           上传文件
         </a-button>
       </template>
     </PageHeader>
 
-    <input ref="uploadInputRef" class="upload-input" type="file" @change="handleUploadInputChange" />
+    <input
+      ref="uploadInputRef"
+      class="upload-input"
+      type="file"
+      @change="handleUploadInputChange"
+    />
 
     <div class="workspace-shell" :class="{ 'is-sidebar-collapsed': sidebarCollapsed }">
       <div v-if="!sidebarCollapsed" class="workspace-sidebar-slot">
@@ -181,6 +190,7 @@ const uploadInputRef = ref(null)
 const deletingPaths = ref([])
 const sidebarCollapsed = ref(false)
 const previewWidthPercent = ref(50)
+const previewRequestId = ref(0)
 const INLINE_PREVIEW_MIN_WIDTH = 960
 
 const useInlinePreview = computed(() => workspaceMainWidth.value >= INLINE_PREVIEW_MIN_WIDTH)
@@ -196,7 +206,11 @@ const workspaceMainStyle = computed(() => {
 const filteredEntries = computed(() => {
   const keyword = searchQuery.value.trim().toLowerCase()
   if (!keyword) return entries.value
-  return entries.value.filter((entry) => String(entry.name || '').toLowerCase().includes(keyword))
+  return entries.value.filter((entry) =>
+    String(entry.name || '')
+      .toLowerCase()
+      .includes(keyword)
+  )
 })
 
 const selectedEntries = computed(() => {
@@ -309,6 +323,8 @@ const handleSelectEntry = async (entry) => {
     return
   }
 
+  const requestId = previewRequestId.value + 1
+  previewRequestId.value = requestId
   selectedEntry.value = entry
   revokePreviewObjectUrl()
   previewFile.value = {
@@ -323,8 +339,10 @@ const handleSelectEntry = async (entry) => {
   loadingPreview.value = true
   try {
     const response = await getWorkspaceFileContent(entry.path)
+    if (previewRequestId.value !== requestId || selectedEntry.value?.path !== entry.path) return
     previewFile.value = await normalizePreviewFile(entry, response)
   } catch (error) {
+    if (previewRequestId.value !== requestId || selectedEntry.value?.path !== entry.path) return
     console.warn('加载文件预览失败:', error)
     previewFile.value = {
       ...entry,
@@ -336,14 +354,18 @@ const handleSelectEntry = async (entry) => {
     }
     message.error('加载文件预览失败')
   } finally {
-    loadingPreview.value = false
+    if (previewRequestId.value === requestId) {
+      loadingPreview.value = false
+    }
   }
 }
 
 const closePreview = () => {
+  previewRequestId.value += 1
   previewModalVisible.value = false
   selectedEntry.value = null
   previewFile.value = null
+  loadingPreview.value = false
   revokePreviewObjectUrl()
 }
 
@@ -430,7 +452,9 @@ const comparablePath = (path) => String(path || '/').replace(/\/$/, '') || '/'
 const isSameOrChildPath = (path, targetPath) => {
   const normalizedPath = comparablePath(path)
   const normalizedTargetPath = comparablePath(targetPath)
-  return normalizedPath === normalizedTargetPath || normalizedPath.startsWith(`${normalizedTargetPath}/`)
+  return (
+    normalizedPath === normalizedTargetPath || normalizedPath.startsWith(`${normalizedTargetPath}/`)
+  )
 }
 
 const confirmDeleteEntries = (targetEntries) => {
@@ -445,7 +469,10 @@ const confirmDeleteEntries = (targetEntries) => {
       : firstEntry.is_dir
         ? `确认删除文件夹「${firstEntry.name}」？`
         : `确认删除文件「${firstEntry.name}」？`,
-    content: isBatch || firstEntry.is_dir ? '将删除文件夹及其所有内容，删除后不可恢复。' : '删除后不可恢复。',
+    content:
+      isBatch || firstEntry.is_dir
+        ? '将删除文件夹及其所有内容，删除后不可恢复。'
+        : '删除后不可恢复。',
     okText: '删除',
     okType: 'danger',
     cancelText: '取消',
@@ -458,7 +485,10 @@ const deleteEntries = async (targetEntries) => {
   deletingPaths.value = paths
   try {
     await Promise.all(paths.map((path) => deleteWorkspacePath(path)))
-    if (selectedEntry.value && paths.some((path) => isSameOrChildPath(selectedEntry.value.path, path))) {
+    if (
+      selectedEntry.value &&
+      paths.some((path) => isSameOrChildPath(selectedEntry.value.path, path))
+    ) {
       closePreview()
     }
     clearWorkspaceSelection()

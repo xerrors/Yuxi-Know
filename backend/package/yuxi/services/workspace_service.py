@@ -11,24 +11,29 @@ from urllib.parse import quote
 import aiofiles
 from fastapi import HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
-
 from yuxi.agents.backends.sandbox.paths import _global_user_data_dir, ensure_workspace_default_files
 from yuxi.services.viewer_filesystem_service import _detect_preview_type
 from yuxi.storage.postgres.models_business import User
 from yuxi.utils.datetime_utils import utc_isoformat_from_timestamp
 from yuxi.utils.paths import WORKSPACE_DIR_NAME
 
-
 EDITABLE_WORKSPACE_SUFFIXES = {".md", ".markdown", ".mdx", ".txt"}
 
 
 def _workspace_root(user: User) -> Path:
     try:
-        root = _global_user_data_dir(str(user.id)) / WORKSPACE_DIR_NAME
+        user_data_root = _global_user_data_dir(str(user.id)).resolve()
+        root = user_data_root / WORKSPACE_DIR_NAME
     except ValueError as exc:
         raise HTTPException(status_code=403, detail="Access denied") from exc
+    if root.is_symlink():
+        raise HTTPException(status_code=403, detail="Access denied")
     root.mkdir(parents=True, exist_ok=True)
     resolved_root = root.resolve()
+    try:
+        resolved_root.relative_to(user_data_root)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail="Access denied") from exc
     ensure_workspace_default_files(resolved_root)
     return resolved_root
 
@@ -138,8 +143,17 @@ async def read_workspace_file_content(*, path: str, current_user: User) -> dict:
             "supported": supported,
             "message": message,
         }
+    try:
+        content = raw_content.decode("utf-8")
+    except UnicodeDecodeError:
+        return {
+            "content": None,
+            "preview_type": "unsupported",
+            "supported": False,
+            "message": "当前文件不是 UTF-8 文本，暂不支持预览",
+        }
     return {
-        "content": raw_content.decode("utf-8"),
+        "content": content,
         "preview_type": preview_type,
         "supported": supported,
         "message": message,

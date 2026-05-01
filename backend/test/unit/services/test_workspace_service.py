@@ -43,6 +43,38 @@ def test_workspace_root_keeps_existing_agents_prompt_file(tmp_path: Path, monkey
     assert agents_file.read_text(encoding="utf-8") == "保留已有内容"
 
 
+def test_workspace_root_rejects_symlink_root(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(workspace_paths.conf, "save_dir", str(tmp_path))
+    user_root = tmp_path / "threads" / "shared" / "user-1"
+    outside_root = tmp_path / "outside"
+    user_root.mkdir(parents=True)
+    outside_root.mkdir()
+    (user_root / "workspace").symlink_to(outside_root, target_is_directory=True)
+
+    with pytest.raises(HTTPException) as exc_info:
+        svc._workspace_root(SimpleNamespace(id="user-1"))
+
+    assert exc_info.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_read_workspace_file_content_returns_unsupported_for_non_utf8_text(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(workspace_paths.conf, "save_dir", str(tmp_path))
+    user = SimpleNamespace(id="user-1")
+    root = svc._workspace_root(user)
+    target = root / "bad.txt"
+    target.write_bytes(b"\xff\xfe\x00")
+
+    result = await svc.read_workspace_file_content(path="/bad.txt", current_user=user)
+
+    assert result["content"] is None
+    assert result["preview_type"] == "unsupported"
+    assert result["supported"] is False
+
+
 @pytest.mark.asyncio
 async def test_write_workspace_file_content_updates_markdown_file(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(workspace_paths.conf, "save_dir", str(tmp_path))

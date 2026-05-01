@@ -266,7 +266,11 @@ const renameChat = async (chatId) => {
 
     .actions-mask {
       opacity: 1;
-      background: linear-gradient(to right, transparent, color-mix(in srgb, var(--main-color) 6%, var(--gray-0)) 20px);
+      background: linear-gradient(
+        to right,
+        transparent,
+        color-mix(in srgb, var(--main-color) 6%, var(--gray-0)) 20px
+      );
     }
   }
 

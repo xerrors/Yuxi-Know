@@ -105,7 +105,11 @@
             </button>
             <template #overlay>
               <a-menu>
-                <a-menu-item v-if="!entry.is_dir" key="download" @click="$emit('download-entry', entry)">
+                <a-menu-item
+                  v-if="!entry.is_dir"
+                  key="download"
+                  @click="$emit('download-entry', entry)"
+                >
                   <span class="menu-item-content">
                     <Download :size="14" />
                     <span>下载</span>
@@ -135,7 +139,12 @@
 <script setup>
 import { computed } from 'vue'
 import { Download, Folder, ListChecks, MoreHorizontal, Trash2 } from 'lucide-vue-next'
-import { formatFileSize, formatRelativeTime, getFileIcon, getFileIconColor } from '@/utils/file_utils'
+import {
+  formatFileSize,
+  formatRelativeTime,
+  getFileIcon,
+  getFileIconColor
+} from '@/utils/file_utils'
 
 const props = defineProps({
   entries: { type: Array, default: () => [] },
@@ -179,7 +188,9 @@ const breadcrumbItems = computed(() => {
 })
 
 const allSelected = computed(() => {
-  return entryPaths.value.length > 0 && entryPaths.value.every((path) => selectedPathSet.value.has(path))
+  return (
+    entryPaths.value.length > 0 && entryPaths.value.every((path) => selectedPathSet.value.has(path))
+  )
 })
 
 const partiallySelected = computed(() => {
@@ -207,7 +218,10 @@ const toggleEntrySelection = (path, checked) => {
   } else {
     nextSelectedPaths.delete(path)
   }
-  emit('update:selectedPaths', [...nextSelectedPaths].filter((selectedPath) => entryPaths.value.includes(selectedPath)))
+  emit(
+    'update:selectedPaths',
+    [...nextSelectedPaths].filter((selectedPath) => entryPaths.value.includes(selectedPath))
+  )
 }
 </script>
 

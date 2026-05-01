@@ -469,7 +469,6 @@ onMounted(() => {
 @import '@/assets/css/extensions.less';
 @import '@/assets/css/extension-detail.less';
 
-
 /* 工具列表样式 */
 .tools-tab {
   .tools-toolbar {
@@ -606,7 +605,6 @@ onMounted(() => {
     }
   }
 }
-
 
 .mcp-detail {
   .detail-content-wrapper {

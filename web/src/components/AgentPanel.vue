@@ -124,14 +124,7 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import {
-  ChevronsDownUp,
-  ChevronsUpDown,
-  Download,
-  RefreshCw,
-  Trash2,
-  X
-} from 'lucide-vue-next'
+import { ChevronsDownUp, ChevronsUpDown, Download, RefreshCw, Trash2, X } from 'lucide-vue-next'
 import { Modal, message } from 'ant-design-vue'
 import FileTreeComponent from '@/components/FileTreeComponent.vue'
 import AgentFilePreview from '@/components/AgentFilePreview.vue'

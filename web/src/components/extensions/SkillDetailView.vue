@@ -323,10 +323,6 @@ const currentSkillStatusLabel = computed(() => {
   return '已上传'
 })
 
-const currentSkillStatusTone = computed(() => {
-  return currentSkill.value?.status === 'update_available' ? 'warning' : 'default'
-})
-
 const canSave = computed(() => {
   if (!selectedPath.value || selectedIsDir.value) return false
   return fileContent.value !== originalFileContent.value

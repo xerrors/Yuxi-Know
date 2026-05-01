@@ -17,7 +17,9 @@
       <button
         type="button"
         class="workspace-nav-item secondary"
-        :class="{ active: activeKey === 'personal' && isSameOrChildPath(currentPath, savedArtifactsPath) }"
+        :class="{
+          active: activeKey === 'personal' && isSameOrChildPath(currentPath, savedArtifactsPath)
+        }"
         @click="$emit('select-path', savedArtifactsPath)"
       >
         <Archive :size="15" />
@@ -75,7 +77,8 @@ const isSameOrChildPath = (path, targetPath) => {
   const target = normalizePath(targetPath)
   return current === target || current.startsWith(`${target}/`)
 }
-const isQuickAccessPath = (path) => quickAccessPaths.some((targetPath) => isSameOrChildPath(path, targetPath))
+const isQuickAccessPath = (path) =>
+  quickAccessPaths.some((targetPath) => isSameOrChildPath(path, targetPath))
 
 defineProps({
   activeKey: { type: String, default: 'personal' },

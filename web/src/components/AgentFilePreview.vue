@@ -240,7 +240,17 @@
 
 <script setup>
 import { computed, onUnmounted, ref, watch } from 'vue'
-import { Code2, Download, Eye, Globe, Maximize2, PanelRightClose, Pencil, Save, X } from 'lucide-vue-next'
+import {
+  Code2,
+  Download,
+  Eye,
+  Globe,
+  Maximize2,
+  PanelRightClose,
+  Pencil,
+  Save,
+  X
+} from 'lucide-vue-next'
 import { MdPreview } from 'md-editor-v3'
 import hljs from 'highlight.js/lib/common'
 import 'md-editor-v3/lib/preview.css'
@@ -311,8 +321,12 @@ const emit = defineEmits(['close', 'download', 'save'])
 
 const themeStore = useThemeStore()
 const theme = computed(() => (themeStore.isDark ? 'dark' : 'light'))
-const closeTitle = computed(() => (props.closeVariant === 'collapse-right' ? '收起预览面板' : '关闭预览'))
-const closeIconComponent = computed(() => (props.closeVariant === 'collapse-right' ? PanelRightClose : X))
+const closeTitle = computed(() =>
+  props.closeVariant === 'collapse-right' ? '收起预览面板' : '关闭预览'
+)
+const closeIconComponent = computed(() =>
+  props.closeVariant === 'collapse-right' ? PanelRightClose : X
+)
 const htmlPreviewMode = ref('render')
 const editMode = ref('preview')
 const draftContent = ref('')
@@ -406,7 +420,9 @@ watch(
   }
 )
 
-watch([() => props.filePath, () => props.file?.content, canEdit], syncDraftContent, { immediate: true })
+watch([() => props.filePath, () => props.file?.content, canEdit], syncDraftContent, {
+  immediate: true
+})
 
 watch([() => props.filePath, () => props.file?.previewType, () => props.file?.content], () => {
   if (isHtmlFile.value) {

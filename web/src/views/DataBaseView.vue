@@ -43,9 +43,7 @@
       <div class="new-database-form">
         <!-- 知识库类型选择 -->
         <div class="form-section">
-          <h3 class="section-title">
-            知识库类型<span class="required-mark">*</span>
-          </h3>
+          <h3 class="section-title">知识库类型<span class="required-mark">*</span></h3>
           <div class="kb-type-cards">
             <div
               v-for="(typeInfo, typeKey) in orderedKbTypes"
@@ -156,7 +154,7 @@
           />
         </div>
 
-      <!-- 隐私设置（暂时隐藏）
+        <!-- 隐私设置（暂时隐藏）
       <h3 style="margin-top: 20px">隐私设置</h3>
       <div class="privacy-config">
         <a-switch
