@@ -4,7 +4,7 @@
       <button
         type="button"
         class="workspace-nav-item"
-        :class="{ active: activeKey === 'personal' && currentPath !== savedArtifactsPath }"
+        :class="{ active: activeKey === 'personal' && !isQuickAccessPath(currentPath) }"
         @click="$emit('select-personal')"
       >
         <FolderKanban :size="16" />
@@ -17,11 +17,20 @@
       <button
         type="button"
         class="workspace-nav-item secondary"
-        :class="{ active: activeKey === 'personal' && currentPath === savedArtifactsPath }"
+        :class="{ active: activeKey === 'personal' && isSameOrChildPath(currentPath, savedArtifactsPath) }"
         @click="$emit('select-path', savedArtifactsPath)"
       >
         <Archive :size="15" />
         <span>Saved Artifacts</span>
+      </button>
+      <button
+        type="button"
+        class="workspace-nav-item secondary"
+        :class="{ active: activeKey === 'personal' && isSameOrChildPath(currentPath, agentsPath) }"
+        @click="$emit('select-path', agentsPath)"
+      >
+        <Bot :size="15" />
+        <span>Agents</span>
       </button>
     </section>
 
@@ -54,9 +63,19 @@
 </template>
 
 <script setup>
-import { Archive, FolderKanban, LibraryBig, UsersRound } from 'lucide-vue-next'
+import { Archive, Bot, FolderKanban, LibraryBig, UsersRound } from 'lucide-vue-next'
 
 const savedArtifactsPath = '/saved_artifacts'
+const agentsPath = '/agents/'
+const quickAccessPaths = [savedArtifactsPath, agentsPath]
+
+const normalizePath = (path) => String(path || '/').replace(/\/$/, '') || '/'
+const isSameOrChildPath = (path, targetPath) => {
+  const current = normalizePath(path)
+  const target = normalizePath(targetPath)
+  return current === target || current.startsWith(`${target}/`)
+}
+const isQuickAccessPath = (path) => quickAccessPaths.some((targetPath) => isSameOrChildPath(path, targetPath))
 
 defineProps({
   activeKey: { type: String, default: 'personal' },

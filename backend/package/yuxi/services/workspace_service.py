@@ -12,7 +12,7 @@ import aiofiles
 from fastapi import HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 
-from yuxi.agents.backends.sandbox.paths import _global_user_data_dir
+from yuxi.agents.backends.sandbox.paths import _global_user_data_dir, ensure_workspace_default_files
 from yuxi.services.viewer_filesystem_service import _detect_preview_type
 from yuxi.storage.postgres.models_business import User
 from yuxi.utils.datetime_utils import utc_isoformat_from_timestamp
@@ -25,7 +25,9 @@ def _workspace_root(user: User) -> Path:
     except ValueError as exc:
         raise HTTPException(status_code=403, detail="Access denied") from exc
     root.mkdir(parents=True, exist_ok=True)
-    return root.resolve()
+    resolved_root = root.resolve()
+    ensure_workspace_default_files(resolved_root)
+    return resolved_root
 
 
 def _normalize_workspace_path(path: str | None) -> PurePosixPath:

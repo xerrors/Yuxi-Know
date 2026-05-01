@@ -2,10 +2,12 @@ from .backend import ProvisionerSandboxBackend
 from .paths import (
     VIRTUAL_PATH_PREFIX,
     ensure_thread_dirs,
+    ensure_workspace_default_files,
     resolve_virtual_path,
     sandbox_outputs_dir,
     sandbox_uploads_dir,
     sandbox_user_data_dir,
+    sandbox_workspace_agents_prompt_file,
     sandbox_workspace_dir,
     virtual_path_for_thread_file,
 )
@@ -51,6 +53,7 @@ __all__ = [
     "ProvisionerSandboxProvider",
     "VIRTUAL_PATH_PREFIX",
     "ensure_thread_dirs",
+    "ensure_workspace_default_files",
     "get_sandbox_provider",
     "init_sandbox_provider",
     "resolve_virtual_path",
@@ -58,6 +61,7 @@ __all__ = [
     "sandbox_outputs_dir",
     "sandbox_uploads_dir",
     "sandbox_user_data_dir",
+    "sandbox_workspace_agents_prompt_file",
     "sandbox_workspace_dir",
     "shutdown_sandbox_provider",
     "virtual_path_for_thread_file",
