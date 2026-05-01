@@ -79,7 +79,10 @@
             :file="previewFile"
             :file-path="selectedEntry?.path || ''"
             :loading="loadingPreview"
+            :editable="true"
+            :saving="savingPreviewFile"
             @close="closePreview"
+            @save="handleSavePreviewFile"
           />
         </template>
 
@@ -123,7 +126,10 @@
         :showClose="true"
         :showDownload="false"
         :showFullscreen="true"
+        :editable="activeSourceKey === 'personal'"
+        :saving="savingPreviewFile"
         @close="closePreview"
+        @save="handleSavePreviewFile"
       />
     </a-modal>
   </div>
@@ -145,6 +151,7 @@ import {
   downloadWorkspaceFile,
   getWorkspaceFileContent,
   getWorkspaceTree,
+  saveWorkspaceFileContent,
   uploadWorkspaceFile
 } from '@/apis/workspace_api'
 
@@ -159,6 +166,7 @@ const previewObjectUrl = ref('')
 const previewModalVisible = ref(false)
 const loadingTree = ref(false)
 const loadingPreview = ref(false)
+const savingPreviewFile = ref(false)
 const loadingDatabases = ref(false)
 const databases = ref([])
 const selectedDatabase = ref(null)
@@ -337,6 +345,29 @@ const closePreview = () => {
   selectedEntry.value = null
   previewFile.value = null
   revokePreviewObjectUrl()
+}
+
+const handleSavePreviewFile = async (content) => {
+  if (!selectedEntry.value?.path || savingPreviewFile.value) return
+
+  savingPreviewFile.value = true
+  try {
+    const response = await saveWorkspaceFileContent(selectedEntry.value.path, content)
+    if (response.entry) {
+      selectedEntry.value = response.entry
+    }
+    previewFile.value = {
+      ...previewFile.value,
+      content
+    }
+    await loadWorkspaceEntries(currentPath.value)
+    message.success('文件保存成功')
+  } catch (error) {
+    console.warn('保存工作区文件失败:', error)
+    message.error(error?.message || '文件保存失败')
+  } finally {
+    savingPreviewFile.value = false
+  }
 }
 
 const openCreateDirectoryModal = () => {

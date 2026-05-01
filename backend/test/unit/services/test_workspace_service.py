@@ -3,6 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+from fastapi import HTTPException
+
 from yuxi.agents.backends.sandbox import paths as workspace_paths
 from yuxi.services import workspace_service as svc
 
@@ -38,3 +41,76 @@ def test_workspace_root_keeps_existing_agents_prompt_file(tmp_path: Path, monkey
 
     assert root == tmp_path / "threads" / "shared" / "user-1" / "workspace"
     assert agents_file.read_text(encoding="utf-8") == "保留已有内容"
+
+
+@pytest.mark.asyncio
+async def test_write_workspace_file_content_updates_markdown_file(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(workspace_paths.conf, "save_dir", str(tmp_path))
+    user = SimpleNamespace(id="user-1")
+    root = svc._workspace_root(user)
+    target = root / "note.md"
+    target.write_text("旧内容", encoding="utf-8")
+
+    result = await svc.write_workspace_file_content(path="/note.md", content="# 新内容", current_user=user)
+
+    assert result["success"] is True
+    assert result["path"] == "/note.md"
+    assert result["entry"]["path"] == "/note.md"
+    assert target.read_text(encoding="utf-8") == "# 新内容"
+
+
+@pytest.mark.asyncio
+async def test_write_workspace_file_content_updates_txt_file(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(workspace_paths.conf, "save_dir", str(tmp_path))
+    user = SimpleNamespace(id="user-1")
+    root = svc._workspace_root(user)
+    target = root / "note.txt"
+    target.write_text("old", encoding="utf-8")
+
+    await svc.write_workspace_file_content(path="/note.txt", content="new", current_user=user)
+
+    assert target.read_text(encoding="utf-8") == "new"
+
+
+@pytest.mark.asyncio
+async def test_write_workspace_file_content_rejects_unsupported_suffix(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(workspace_paths.conf, "save_dir", str(tmp_path))
+    user = SimpleNamespace(id="user-1")
+    root = svc._workspace_root(user)
+    target = root / "script.py"
+    target.write_text("print('hello')", encoding="utf-8")
+
+    with pytest.raises(HTTPException) as exc_info:
+        await svc.write_workspace_file_content(path="/script.py", content="print('bye')", current_user=user)
+
+    assert exc_info.value.status_code == 400
+    assert target.read_text(encoding="utf-8") == "print('hello')"
+
+
+@pytest.mark.asyncio
+async def test_write_workspace_file_content_rejects_directory_and_missing_file(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(workspace_paths.conf, "save_dir", str(tmp_path))
+    user = SimpleNamespace(id="user-1")
+    svc._workspace_root(user)
+
+    with pytest.raises(HTTPException) as directory_error:
+        await svc.write_workspace_file_content(path="/agents/", content="x", current_user=user)
+    with pytest.raises(HTTPException) as missing_error:
+        await svc.write_workspace_file_content(path="/missing.md", content="x", current_user=user)
+
+    assert directory_error.value.status_code == 400
+    assert missing_error.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_write_workspace_file_content_blocks_path_traversal(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(workspace_paths.conf, "save_dir", str(tmp_path))
+
+    with pytest.raises(HTTPException) as exc_info:
+        await svc.write_workspace_file_content(
+            path="/../outside.md",
+            content="x",
+            current_user=SimpleNamespace(id="user-1"),
+        )
+
+    assert exc_info.value.status_code == 403

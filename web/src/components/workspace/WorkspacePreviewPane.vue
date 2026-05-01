@@ -8,9 +8,12 @@
       :show-close="true"
       :show-fullscreen="true"
       :full-height="true"
+      :editable="editable"
+      :saving="saving"
       container-class="workspace-preview-container"
       content-class="workspace-preview-content"
       @close="$emit('close')"
+      @save="$emit('save', $event)"
     />
     <div v-else-if="loading" class="preview-state">
       <a-spin />
@@ -19,7 +22,7 @@
     <div v-else class="preview-empty">
       <FileSearch :size="28" />
       <h3>选择文件以预览</h3>
-      <p>支持 Markdown、文本、代码、图片与 PDF 的只读预览。</p>
+      <p>支持 Markdown、TXT 编辑，其他格式保持只读预览。</p>
     </div>
   </aside>
 </template>
@@ -31,10 +34,12 @@ import AgentFilePreview from '@/components/AgentFilePreview.vue'
 defineProps({
   file: { type: Object, default: null },
   filePath: { type: String, default: '' },
-  loading: { type: Boolean, default: false }
+  loading: { type: Boolean, default: false },
+  editable: { type: Boolean, default: false },
+  saving: { type: Boolean, default: false }
 })
 
-defineEmits(['close'])
+defineEmits(['close', 'save'])
 </script>
 
 <style scoped lang="less">

@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPost } from './base'
+import { apiDelete, apiGet, apiPost, apiPut } from './base'
 
 const buildQuery = (params) => {
   const query = new URLSearchParams()
@@ -18,6 +18,10 @@ export const getWorkspaceTree = (path = '/') => {
 export const getWorkspaceFileContent = (path) => {
   const query = buildQuery({ path })
   return apiGet(`/api/workspace/file?${query}`)
+}
+
+export const saveWorkspaceFileContent = (path, content) => {
+  return apiPut('/api/workspace/file', { path, content })
 }
 
 export const deleteWorkspacePath = (path) => {

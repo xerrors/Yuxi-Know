@@ -19,6 +19,9 @@ from yuxi.utils.datetime_utils import utc_isoformat_from_timestamp
 from yuxi.utils.paths import WORKSPACE_DIR_NAME
 
 
+EDITABLE_WORKSPACE_SUFFIXES = {".md", ".markdown", ".mdx", ".txt"}
+
+
 def _workspace_root(user: User) -> Path:
     try:
         root = _global_user_data_dir(str(user.id)) / WORKSPACE_DIR_NAME
@@ -140,6 +143,37 @@ async def read_workspace_file_content(*, path: str, current_user: User) -> dict:
         "preview_type": preview_type,
         "supported": supported,
         "message": message,
+    }
+
+
+async def write_workspace_file_content(*, path: str, content: str, current_user: User) -> dict:
+    root = _workspace_root(current_user)
+    target = _resolve_workspace_path(current_user, path)
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="文件不存在")
+    if not target.is_file():
+        raise HTTPException(status_code=400, detail="当前路径是目录")
+    if target.suffix.lower() not in EDITABLE_WORKSPACE_SUFFIXES:
+        raise HTTPException(status_code=400, detail="当前文件类型不支持编辑")
+
+    raw_content = await asyncio.to_thread(target.read_bytes)
+    preview_type, supported, _message = _detect_preview_type(path, raw_content)
+    if preview_type not in {"markdown", "text"} or not supported:
+        raise HTTPException(status_code=400, detail="当前文件类型不支持编辑")
+    try:
+        raw_content.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(status_code=400, detail="当前文件不是 UTF-8 文本") from exc
+
+    try:
+        await asyncio.to_thread(target.write_text, content, encoding="utf-8")
+    except PermissionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {
+        "success": True,
+        "path": _normalize_workspace_path(path).as_posix(),
+        "entry": _entry_for_path(root, target),
     }
 
 

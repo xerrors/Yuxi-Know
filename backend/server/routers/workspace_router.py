@@ -11,6 +11,7 @@ from yuxi.services.workspace_service import (
     list_workspace_tree,
     read_workspace_file_content,
     upload_workspace_file,
+    write_workspace_file_content,
 )
 from yuxi.storage.postgres.models_business import User
 
@@ -20,6 +21,11 @@ workspace = APIRouter(prefix="/workspace", tags=["workspace"])
 class CreateWorkspaceDirectoryRequest(BaseModel):
     parent_path: str
     name: str
+
+
+class UpdateWorkspaceFileContentRequest(BaseModel):
+    path: str
+    content: str
 
 
 @workspace.get("/tree", response_model=dict)
@@ -36,6 +42,18 @@ async def get_workspace_file(
     current_user: User = Depends(get_required_user),
 ):
     return await read_workspace_file_content(path=path, current_user=current_user)
+
+
+@workspace.put("/file", response_model=dict)
+async def update_workspace_file(
+    payload: UpdateWorkspaceFileContentRequest,
+    current_user: User = Depends(get_required_user),
+):
+    return await write_workspace_file_content(
+        path=payload.path,
+        content=payload.content,
+        current_user=current_user,
+    )
 
 
 @workspace.delete("/file", response_model=dict)
