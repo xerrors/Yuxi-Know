@@ -3,6 +3,7 @@ x-api-worker-env: &api-worker-env
   LITE_MODE: ${LITE_MODE:-false}
   RUNNING_IN_DOCKER: "true"
   MODEL_DIR_IN_DOCKER: /models
+  TIKTOKEN_CACHE_DIR: /app/.tiktoken_cache
   # DBs and other services
   POSTGRES_URL: ${POSTGRES_URL:-postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-yuxi_know}}
   REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
@@ -50,10 +51,11 @@ services:
       - ./backend/scripts:/app/scripts
       - ./docker/sandbox_provisioner:/app/docker/sandbox_provisioner:ro
       - ./.env:/app/.env
+      - ./.tiktoken_cache:/app/.tiktoken_cache:ro
       - ${MODEL_DIR:-./models}:/models  # 使用默认值处理未定义的环境变量
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
-      - "5050:5050"
+      - "25050:5050"
     networks:
       - app-network
     extra_hosts:
@@ -97,6 +99,7 @@ services:
       - ./backend/scripts:/app/scripts
       - ./docker/sandbox_provisioner:/app/docker/sandbox_provisioner:ro
       - ./.env:/app/.env
+      - ./.tiktoken_cache:/app/.tiktoken_cache:ro
       - ./backend/pyproject.toml:/app/pyproject.toml
       - ./backend/uv.lock:/app/uv.lock
       - ${MODEL_DIR:-./models}:/models
@@ -178,6 +181,8 @@ services:
       context: .
       dockerfile: docker/web.Dockerfile
       target: development
+      extra_hosts:
+        - "registry.npmjs.org:104.16.24.34"
     image: yuxi-web:${YUXI_VERSION:-0.6.1}
     container_name: web-dev
     volumes:
