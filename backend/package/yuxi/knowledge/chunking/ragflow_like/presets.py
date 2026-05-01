@@ -9,12 +9,16 @@ CHUNK_PRESET_GENERAL = "general"
 CHUNK_PRESET_QA = "qa"
 CHUNK_PRESET_BOOK = "book"
 CHUNK_PRESET_LAWS = "laws"
+CHUNK_PRESET_SEMANTIC = "semantic"
+CHUNK_PRESET_SEPARATOR = "separator"
 
 CHUNK_PRESET_IDS = {
     CHUNK_PRESET_GENERAL,
     CHUNK_PRESET_QA,
     CHUNK_PRESET_BOOK,
     CHUNK_PRESET_LAWS,
+    CHUNK_PRESET_SEMANTIC,
+    CHUNK_PRESET_SEPARATOR,
 }
 
 CHUNK_PRESET_DESCRIPTIONS: dict[str, str] = {
@@ -22,6 +26,8 @@ CHUNK_PRESET_DESCRIPTIONS: dict[str, str] = {
     CHUNK_PRESET_QA: "问答分块：优先抽取问题-回答结构，适合 FAQ、题库、问答手册。",
     CHUNK_PRESET_BOOK: "书籍分块：强化章节标题识别并做层级合并，适合教材、手册、长章节文档。",
     CHUNK_PRESET_LAWS: "法规分块：按法条层级组织与合并，适合法律法规、制度规范类文本。",
+    CHUNK_PRESET_SEMANTIC: "语义分块：利用嵌入和聚类算法进行语义切分，并自动增强标题上下文。",
+    CHUNK_PRESET_SEPARATOR: "严格分隔：命中分隔符即切分，仅超长片段内部继续按长度切分。",
 }
 
 CHUNK_ENGINE_VERSION = "ragflow_like_v1"
@@ -63,6 +69,25 @@ _PRESET_DEFAULTS: dict[str, dict[str, Any] | None] = {
     CHUNK_PRESET_QA: {"raptor": {"use_raptor": False}, "graphrag": {"use_graphrag": False}},
     CHUNK_PRESET_BOOK: {"raptor": {"use_raptor": False}, "graphrag": {"use_graphrag": False}},
     CHUNK_PRESET_LAWS: {"raptor": {"use_raptor": False}, "graphrag": {"use_graphrag": False}},
+    CHUNK_PRESET_SEMANTIC: {
+        "raptor": {"use_raptor": False},
+        "graphrag": {
+            "use_graphrag": True,
+            "entity_types": ["organization", "person", "geo", "event", "category"],
+            "method": "light",
+        },
+    },
+    CHUNK_PRESET_SEPARATOR: {
+        "layout_recognize": "DeepDOC",
+        "chunk_token_num": 512,
+        "delimiter": "\n",
+        "auto_keywords": 0,
+        "auto_questions": 0,
+        "html4excel": False,
+        "topn_tags": 3,
+        "raptor": {"use_raptor": False},
+        "graphrag": {"use_graphrag": False},
+    },
 }
 
 
@@ -234,5 +259,15 @@ def get_chunk_preset_options() -> list[dict[str, str]]:
             "value": CHUNK_PRESET_LAWS,
             "label": "Laws",
             "description": CHUNK_PRESET_DESCRIPTIONS[CHUNK_PRESET_LAWS],
+        },
+        {
+            "value": CHUNK_PRESET_SEMANTIC,
+            "label": "Semantic",
+            "description": CHUNK_PRESET_DESCRIPTIONS[CHUNK_PRESET_SEMANTIC],
+        },
+        {
+            "value": CHUNK_PRESET_SEPARATOR,
+            "label": "Separator",
+            "description": CHUNK_PRESET_DESCRIPTIONS[CHUNK_PRESET_SEPARATOR],
         },
     ]

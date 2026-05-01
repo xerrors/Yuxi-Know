@@ -208,10 +208,7 @@
 
         <!-- 部门选择器（仅超级管理员可见） -->
         <a-form-item v-if="userStore.isSuperAdmin" label="部门" class="form-item">
-          <a-select
-            v-model:value="userManagement.form.departmentId"
-            placeholder="请选择部门"
-          >
+          <a-select v-model:value="userManagement.form.departmentId" placeholder="请选择部门">
             <a-select-option
               v-for="dept in departmentManagement.departments"
               :key="dept.id"

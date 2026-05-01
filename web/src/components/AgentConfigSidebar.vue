@@ -57,11 +57,7 @@
             />
             <!-- 统一显示所有配置项 -->
             <template v-for="(value, key) in filteredConfigurableItems" :key="key">
-              <a-form-item
-                :label="getConfigLabel(key, value)"
-                :name="key"
-                class="config-item"
-              >
+              <a-form-item :label="getConfigLabel(key, value)" :name="key" class="config-item">
                 <p v-if="value.description" class="config-description">{{ value.description }}</p>
 
                 <!-- <div>{{ value }}</div> -->
@@ -1067,7 +1063,7 @@ const confirmDeleteConfig = async () => {
   flex-shrink: 0;
 
   &.open {
-    width: 400px;
+    width: 360px;
   }
 
   .sidebar-header {
@@ -1078,7 +1074,7 @@ const confirmDeleteConfig = async () => {
     border-bottom: 1px solid var(--gray-150);
     background: var(--gray-0);
     flex-shrink: 0;
-    min-width: 400px;
+    min-width: 360px;
     z-index: 10;
 
     .header-top-row {
@@ -1154,7 +1150,7 @@ const confirmDeleteConfig = async () => {
     flex: 1;
     overflow-y: auto;
     padding: 10px 12px 8px;
-    min-width: 400px;
+    min-width: 360px;
 
     .agent-info {
       .agent-basic-info {

@@ -40,7 +40,7 @@ services:
     build:
       context: .
       dockerfile: docker/api.Dockerfile
-    image: yuxi-api:${YUXI_VERSION:-0.6.1}
+    image: yuxi-api:${YUXI_VERSION:-0.6.2}
     container_name: api-dev
     working_dir: /app
     volumes:
@@ -54,6 +54,7 @@ services:
       - ./.tiktoken_cache:/app/.tiktoken_cache:ro
       - ${MODEL_DIR:-./models}:/models  # 使用默认值处理未定义的环境变量
       - /var/run/docker.sock:/var/run/docker.sock
+      - nltk_data:/root/nltk_data  # 使用命名卷持久化NLTK数据，避免路径展开差异
     ports:
       - "25050:5050"
     networks:
@@ -88,7 +89,7 @@ services:
     build:
       context: .
       dockerfile: docker/api.Dockerfile
-    image: yuxi-api:${YUXI_VERSION:-0.6.1}
+    image: yuxi-api:${YUXI_VERSION:-0.6.2}
     container_name: worker-dev
     working_dir: /app
     volumes:
@@ -128,11 +129,12 @@ services:
     build:
       context: ./docker/sandbox_provisioner
       dockerfile: Dockerfile
-    image: yuxi-sandbox-provisioner:${YUXI_VERSION:-0.6.1}
+    image: yuxi-sandbox-provisioner:${YUXI_VERSION:-0.6.2}
     container_name: sandbox-provisioner
     volumes:
       - ./saves:/app/saves
       - ./docker/sandbox_provisioner/app.py:/app/app.py:ro
+      - ./docker/sandbox_provisioner/sandbox.env:/app/sandbox.env:ro
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "8002:8002"
@@ -183,7 +185,7 @@ services:
       target: development
       extra_hosts:
         - "registry.npmjs.org:104.16.24.34"
-    image: yuxi-web:${YUXI_VERSION:-0.6.1}
+    image: yuxi-web:${YUXI_VERSION:-0.6.2}
     container_name: web-dev
     volumes:
       - ./web/src:/app/src
@@ -434,6 +436,9 @@ services:
     networks:
       - app-network
     restart: unless-stopped
+
+volumes:
+  nltk_data:
 
 networks:
   app-network:

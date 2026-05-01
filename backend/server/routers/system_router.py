@@ -8,7 +8,6 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 from yuxi.storage.postgres.models_business import User
 from server.utils.auth_middleware import get_admin_user
 from yuxi import config, get_version
-from yuxi.models.chat import test_chat_model_status, test_all_chat_models_status
 from yuxi.utils.logging_config import logger
 
 system = APIRouter(prefix="/system", tags=["system"])
@@ -195,38 +194,6 @@ async def check_ocr_services_health(current_user: User = Depends(get_admin_user)
 
 
 # =============================================================================
-# === 聊天模型状态检查分组 ===
-# =============================================================================
-
-
-@system.get("/chat-models/status")
-async def get_chat_model_status(provider: str, model_name: str, current_user: User = Depends(get_admin_user)):
-    """获取指定聊天模型的状态"""
-    logger.debug(f"Checking chat model status: {provider}/{model_name}")
-    try:
-        status = await test_chat_model_status(provider, model_name)
-        return {"status": status, "message": "success"}
-    except Exception as e:
-        logger.error(f"获取聊天模型状态失败 {provider}/{model_name}: {e}")
-        return {
-            "message": f"获取聊天模型状态失败: {e}",
-            "status": {"provider": provider, "model_name": model_name, "status": "error", "message": str(e)},
-        }
-
-
-@system.get("/chat-models/all/status")
-async def get_all_chat_models_status(current_user: User = Depends(get_admin_user)):
-    """获取所有聊天模型的状态"""
-    logger.debug("Checking all chat models status")
-    try:
-        status = await test_all_chat_models_status()
-        return {"status": status, "message": "success"}
-    except Exception as e:
-        logger.error(f"获取所有聊天模型状态失败: {e}")
-        return {"message": f"获取所有聊天模型状态失败: {e}", "status": {"models": {}, "total": 0, "available": 0}}
-
-
-# =============================================================================
 # === 自定义供应商管理分组 ===
 # =============================================================================
 
@@ -243,81 +210,3 @@ async def get_custom_providers(current_user: User = Depends(get_admin_user)):
     except Exception as e:
         logger.error(f"获取自定义供应商失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取自定义供应商失败: {str(e)}")
-
-
-@system.post("/custom-providers")
-async def add_custom_provider(
-    provider_id: str = Body(..., description="供应商ID"),
-    provider_data: dict = Body(..., description="供应商配置数据"),
-    current_user: User = Depends(get_admin_user),
-):
-    """添加自定义供应商"""
-    try:
-        success = config.add_custom_provider(provider_id, provider_data)
-        if success:
-            return {"message": f"自定义供应商 {provider_id} 添加成功"}
-        else:
-            raise HTTPException(status_code=400, detail=f"供应商ID {provider_id} 已存在，请使用其他ID")
-    except Exception as e:
-        logger.error(f"添加自定义供应商失败 {provider_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"添加自定义供应商失败: {str(e)}")
-
-
-@system.put("/custom-providers/{provider_id}")
-async def update_custom_provider(
-    provider_id: str,
-    provider_data: dict = Body(..., description="供应商配置数据"),
-    current_user: User = Depends(get_admin_user),
-):
-    """更新自定义供应商"""
-    try:
-        success = config.update_custom_provider(provider_id, provider_data)
-        if success:
-            return {"message": f"自定义供应商 {provider_id} 更新成功"}
-        else:
-            raise HTTPException(status_code=404, detail=f"自定义供应商 {provider_id} 不存在或更新失败")
-    except Exception as e:
-        logger.error(f"更新自定义供应商失败 {provider_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"更新自定义供应商失败: {str(e)}")
-
-
-@system.delete("/custom-providers/{provider_id}")
-async def delete_custom_provider(provider_id: str, current_user: User = Depends(get_admin_user)):
-    """删除自定义供应商"""
-    try:
-        success = config.delete_custom_provider(provider_id)
-        if success:
-            return {"message": f"自定义供应商 {provider_id} 删除成功"}
-        else:
-            raise HTTPException(status_code=404, detail=f"自定义供应商 {provider_id} 不存在或删除失败")
-    except Exception as e:
-        logger.error(f"删除自定义供应商失败 {provider_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"删除自定义供应商失败: {str(e)}")
-
-
-@system.post("/custom-providers/{provider_id}/test")
-async def test_custom_provider(
-    provider_id: str, request: dict = Body(..., description="测试请求"), current_user: User = Depends(get_admin_user)
-):
-    """测试自定义供应商连接"""
-    try:
-        # 从请求中获取model_name
-        model_name = request.get("model_name")
-        if not model_name:
-            raise HTTPException(status_code=400, detail="缺少model_name参数")
-
-        # 检查供应商是否存在
-        if provider_id not in config.model_names:
-            raise HTTPException(status_code=404, detail=f"供应商 {provider_id} 不存在")
-
-        # 测试模型状态
-        status = await test_chat_model_status(provider_id, model_name)
-        return {"status": status, "message": "测试完成"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"测试自定义供应商失败 {provider_id}/{model_name}: {e}")
-        return {
-            "message": f"测试自定义供应商失败: {e}",
-            "status": {"provider": provider_id, "model_name": model_name, "status": "error", "message": str(e)},
-        }

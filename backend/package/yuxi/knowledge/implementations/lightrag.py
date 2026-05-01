@@ -14,7 +14,7 @@ from yuxi import config
 from yuxi.knowledge.base import FileStatus, KnowledgeBase
 from yuxi.knowledge.chunking.ragflow_like.dispatcher import chunk_markdown
 from yuxi.knowledge.chunking.ragflow_like.presets import resolve_chunk_processing_params
-from yuxi.knowledge.utils.kb_utils import get_embedding_config
+from yuxi.models.embed import get_embedding_model_info_by_id
 from yuxi.plugins.parser.unified import Parser
 from yuxi.utils import hashstr, logger
 from yuxi.utils.datetime_utils import utc_isoformat
@@ -372,7 +372,7 @@ class LightRagKB(KnowledgeBase):
 
     def _get_embedding_func(self, embed_info: dict):
         """获取 embedding 函数"""
-        config_dict = get_embedding_config(embed_info)
+        config_dict = get_embedding_model_info_by_id(embed_info["model_id"])
         logger.debug(f"Embedding config dict: {config_dict}")
 
         if config_dict.get("model_id") and config_dict["model_id"].startswith("ollama"):
@@ -412,7 +412,9 @@ class LightRagKB(KnowledgeBase):
             ),
         )
 
-    async def index_file(self, db_id: str, file_id: str, operator_id: str | None = None) -> dict:
+    async def index_file(
+        self, db_id: str, file_id: str, operator_id: str | None = None, params: dict | None = None
+    ) -> dict:
         """
         Index parsed file (Status: INDEXING -> INDEXED/ERROR_INDEXING)
 
@@ -420,6 +422,7 @@ class LightRagKB(KnowledgeBase):
             db_id: Database ID
             file_id: File ID
             operator_id: ID of the user performing the operation
+            params: Override processing params to apply during indexing (merged on top of stored params)
 
         Returns:
             Updated file metadata
@@ -476,14 +479,15 @@ class LightRagKB(KnowledgeBase):
                 markdown_content = await self._read_markdown_from_minio(file_meta["markdown_file"])
                 file_path = file_meta.get("path")
                 filename = file_meta.get("filename") or file_id
-                processing_params = resolve_chunk_processing_params(
+                params = resolve_chunk_processing_params(
                     kb_additional_params=self.databases_meta.get(db_id, {}).get("metadata"),
                     file_processing_params=file_meta.get("processing_params"),
+                    request_params=params,
                 )
-                self.files_meta[file_id]["processing_params"] = processing_params
+                self.files_meta[file_id]["processing_params"] = params
                 await self._save_metadata()
 
-                chunks = chunk_markdown(markdown_content, file_id, filename, processing_params)
+                chunks = chunk_markdown(markdown_content, file_id, filename, params)
                 chunk_input, split_by_character, split_by_character_only = self._prepare_lightrag_insert_payload(chunks)
                 if not chunk_input:
                     chunk_input = markdown_content
@@ -503,7 +507,7 @@ class LightRagKB(KnowledgeBase):
 
                 logger.info(
                     f"Indexed file {file_id} into LightRAG with {len(chunks)} chunks, "
-                    f"chunk_preset_id={processing_params.get('chunk_preset_id')}"
+                    f"chunk_preset_id={params.get('chunk_preset_id')}"
                 )
 
                 # Update status

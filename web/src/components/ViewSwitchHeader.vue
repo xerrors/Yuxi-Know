@@ -76,6 +76,8 @@ const selectItem = (item) => {
   padding-left: 12px;
   margin-left: 2px;
   border-left: 1px solid var(--gray-200);
+  height: 16px;
+  line-height: 16px;
 }
 
 .switcher-item {

@@ -1,25 +1,32 @@
-import openaiIcon from '@/assets/providers/openai.svg'
-import dashscopeIcon from '@/assets/providers/bailian-color.svg'
-import togetherIcon from '@/assets/providers/together-color.svg'
-import deepseekIcon from '@/assets/providers/deepseek-color.svg'
-import zhipuIcon from '@/assets/providers/zhipu-color.svg'
-import siliconflowIcon from '@/assets/providers/siliconcloud-color.svg'
-import arkIcon from '@/assets/providers/doubao-color.svg'
-import openrouterIcon from '@/assets/providers/openrouter.svg'
-import defaultIcon from '@/assets/providers/default.png'
-import modelscopeIcon from '@/assets/providers/modelscope-color.svg'
-import minimaxIcon from '@/assets/providers/minimax-color.svg'
+const ICON_BASE = 'https://registry.npmmirror.com/@lobehub/icons-static-svg/latest/files/icons'
 
 export const modelIcons = {
-  openai: openaiIcon,
-  dashscope: dashscopeIcon,
-  together: togetherIcon,
-  deepseek: deepseekIcon,
-  zhipu: zhipuIcon,
-  siliconflow: siliconflowIcon,
-  ark: arkIcon,
-  openrouter: openrouterIcon,
-  modelscope: modelscopeIcon,
-  minimax: minimaxIcon,
-  default: defaultIcon // 添加默认图标
+  default: `${ICON_BASE}/default.svg`,
+  alibaba: `${ICON_BASE}/bailian-color.svg`,
+  'alibaba-coding-plan': `${ICON_BASE}/alibabacloud-color.svg`,
+  'alibaba-coding-plan-cn': `${ICON_BASE}/alibabacloud-color.svg`,
+  anthropic: `${ICON_BASE}/anthropic.svg`,
+  ark: `${ICON_BASE}/volcengine-color.svg`,
+  dashscope: `${ICON_BASE}/bailian-color.svg`,
+  deepseek: `${ICON_BASE}/deepseek-color.svg`,
+  google: `${ICON_BASE}/google-color.svg`,
+  lmstudio: `${ICON_BASE}/lmstudio.svg`,
+  minimax: `${ICON_BASE}/minimax-color.svg`,
+  'minimax-cn': `${ICON_BASE}/minimax-color.svg`,
+  modelscope: `${ICON_BASE}/modelscope-color.svg`,
+  moonshotai: `${ICON_BASE}/moonshot.svg`,
+  'moonshotai-cn': `${ICON_BASE}/moonshot.svg`,
+  ollama: `${ICON_BASE}/ollama.svg`,
+  'ollama-cloud': `${ICON_BASE}/ollama.svg`,
+  opencode: `${ICON_BASE}/opencode.svg`,
+  openai: `${ICON_BASE}/openai.svg`,
+  openrouter: `${ICON_BASE}/openrouter.svg`,
+  siliconflow: `${ICON_BASE}/siliconcloud-color.svg`,
+  'siliconflow-cn': `${ICON_BASE}/siliconcloud-color.svg`,
+  together: `${ICON_BASE}/together-color.svg`,
+  zai: `${ICON_BASE}/zai.svg`,
+  'zai-coding-plan': `${ICON_BASE}/zai.svg`,
+  zhipu: `${ICON_BASE}/zhipu-color.svg`,
+  zhipuai: `${ICON_BASE}/zhipu-color.svg`,
+  'zhipuai-coding-plan': `${ICON_BASE}/zhipu-color.svg`
 }

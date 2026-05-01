@@ -175,7 +175,7 @@ const handleNodeClick = (data) => {
     display: flex;
     align-items: center;
     width: 100%;
-    padding: 0 4px;
+    padding: 0;
     height: 32px;
 
     /* 隐藏切换器 */

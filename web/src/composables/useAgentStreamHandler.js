@@ -218,6 +218,12 @@ export function useAgentStreamHandler({
           message.info(chunkMessage)
         }
         return true
+
+      case 'warning':
+        if (chunkMessage) {
+          message.warning(chunkMessage)
+        }
+        return false
     }
 
     return false

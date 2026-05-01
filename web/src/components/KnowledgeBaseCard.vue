@@ -36,13 +36,13 @@
 
       <!-- Tags -->
       <div class="tags-section">
-        <a-tag :color="getKbTypeColor(database.kb_type || 'lightrag')" size="small">
+        <span class="card-tag" :class="'tag-' + getKbTypeColor(database.kb_type || 'lightrag')">
           {{ getKbTypeLabel(database.kb_type || 'lightrag') }}
-        </a-tag>
-        <a-tag color="blue" size="small">{{ database.embed_info?.name || 'N/A' }}</a-tag>
-        <a-tag color="cyan" size="small">{{
+        </span>
+        <span class="card-tag tag-blue">{{ database.embed_info?.name || 'N/A' }}</span>
+        <span class="card-tag tag-cyan">{{
           chunkPresetLabelMap[database.additional_params?.chunk_preset_id || 'general'] || 'General'
-        }}</a-tag>
+        }}</span>
       </div>
     </div>
   </div>
@@ -503,6 +503,7 @@ const deleteDatabase = () => {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
+  gap: 4px;
 }
 
 .chunk-preset-label {

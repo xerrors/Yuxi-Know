@@ -49,23 +49,23 @@ class Config(BaseModel):
     # 模型配置
     # ============================================================
     default_model: str = Field(
-        default="siliconflow/Pro/MiniMaxAI/MiniMax-M2.5",
+        default="siliconflow-cn:Pro/MiniMaxAI/MiniMax-M2.5",
         description="默认对话模型",
     )
     fast_model: str = Field(
-        default="siliconflow/Pro/MiniMaxAI/MiniMax-M2.5",
+        default="siliconflow-cn:Pro/MiniMaxAI/MiniMax-M2.5",
         description="快速响应模型",
     )
     embed_model: str = Field(
-        default="siliconflow/Pro/BAAI/bge-m3",
+        default="siliconflow-cn:Pro/BAAI/bge-m3",
         description="默认 Embedding 模型",
     )
     reranker: str = Field(
-        default="siliconflow/Pro/BAAI/bge-reranker-v2-m3",
+        default="siliconflow-cn:Pro/BAAI/bge-reranker-v2-m3",
         description="默认 Re-Ranker 模型",
     )
     content_guard_llm_model: str = Field(
-        default="siliconflow/Pro/MiniMaxAI/MiniMax-M2.5",
+        default="siliconflow-cn:Pro/MiniMaxAI/MiniMax-M2.5",
         description="内容审查LLM模型",
     )
 
@@ -184,7 +184,11 @@ class Config(BaseModel):
                 logger.warning(f"Skip invalid model provider config {provider}: {e}")
 
     def _load_custom_providers(self) -> None:
-        """从独立的TOML文件加载自定义供应商配置"""
+        """从独立的TOML文件加载自定义供应商配置
+
+        [弃用] 这个方法已弃用，建议直接在网页中添加，custom_providers.toml 将在 0.7.x 版本中移除
+        """
+
         custom_config_file = self._config_file.parent / "custom_providers.toml"
 
         if not custom_config_file.exists():
@@ -428,131 +432,6 @@ class Config(BaseModel):
         except Exception as e:
             logger.error(f"Failed to save models config to {self._config_file}: {e}")
 
-    # ============================================================
-    # 自定义供应商管理方法
-    # ============================================================
-
-    def add_custom_provider(self, provider_id: str, provider_data: dict[str, Any]) -> bool:
-        """添加自定义供应商
-
-        Args:
-            provider_id: 供应商唯一标识符
-            provider_data: 供应商配置数据
-
-        Returns:
-            是否添加成功
-        """
-        try:
-            # 处理环境变量，移除 ${} 包裹
-            if "env" in provider_data and provider_data["env"]:
-                env_value = provider_data["env"]
-                if isinstance(env_value, str) and env_value.startswith("${") and env_value.endswith("}"):
-                    provider_data["env"] = env_value[2:-1]
-
-            # 确保标记为自定义供应商
-            provider_data["custom"] = True
-
-            # 检查供应商ID是否已存在（无论是内置还是自定义）
-            if provider_id in self.model_names:
-                logger.error(f"Provider ID already exists: {provider_id}")
-                return False
-
-            # 添加到配置中
-            self.model_names[provider_id] = ChatModelProvider(**provider_data)
-
-            # 保存到自定义供应商配置文件
-            self._save_custom_providers()
-
-            # 重新处理环境变量
-            self._handle_environment()
-
-            logger.info(f"Added custom provider: {provider_id}")
-            return True
-
-        except Exception as e:
-            logger.error(f"Failed to add custom provider {provider_id}: {e}")
-            return False
-
-    def update_custom_provider(self, provider_id: str, provider_data: dict) -> bool:
-        """更新自定义供应商
-
-        Args:
-            provider_id: 供应商唯一标识符
-            provider_data: 新的供应商配置数据
-
-        Returns:
-            是否更新成功
-        """
-        try:
-            # 处理环境变量，移除 ${} 包裹
-            if "env" in provider_data and provider_data["env"]:
-                env_value = provider_data["env"]
-                if isinstance(env_value, str) and env_value.startswith("${") and env_value.endswith("}"):
-                    provider_data["env"] = env_value[2:-1]
-
-            # 检查供应商是否存在且为自定义供应商
-            if provider_id not in self.model_names:
-                logger.error(f"Provider not found: {provider_id}")
-                return False
-
-            if not self.model_names[provider_id].custom:
-                logger.error(f"Cannot update non-custom provider: {provider_id}")
-                return False
-
-            # 确保保持自定义供应商标记
-            provider_data["custom"] = True
-
-            # 更新供应商配置
-            self.model_names[provider_id] = ChatModelProvider(**provider_data)
-
-            # 保存到自定义供应商配置文件
-            self._save_custom_providers()
-
-            # 重新处理环境变量
-            self._handle_environment()
-
-            logger.info(f"Updated custom provider: {provider_id}")
-            return True
-
-        except Exception as e:
-            logger.error(f"Failed to update custom provider {provider_id}: {e}")
-            return False
-
-    def delete_custom_provider(self, provider_id: str) -> bool:
-        """删除自定义供应商
-
-        Args:
-            provider_id: 供应商唯一标识符
-
-        Returns:
-            是否删除成功
-        """
-        try:
-            # 检查供应商是否存在且为自定义供应商
-            if provider_id not in self.model_names:
-                logger.error(f"Provider not found: {provider_id}")
-                return False
-
-            if not self.model_names[provider_id].custom:
-                logger.error(f"Cannot delete non-custom provider: {provider_id}")
-                return False
-
-            # 从配置中删除
-            del self.model_names[provider_id]
-
-            # 保存到自定义供应商配置文件
-            self._save_custom_providers()
-
-            # 重新处理环境变量
-            self._handle_environment()
-
-            logger.info(f"Deleted custom provider: {provider_id}")
-            return True
-
-        except Exception as e:
-            logger.error(f"Failed to delete custom provider {provider_id}: {e}")
-            return False
-
     def get_custom_providers(self) -> dict[str, ChatModelProvider]:
         """获取所有自定义供应商
 
@@ -560,37 +439,6 @@ class Config(BaseModel):
             自定义供应商字典
         """
         return {k: v for k, v in self.model_names.items() if v.custom}
-
-    def _save_custom_providers(self) -> None:
-        """保存自定义供应商到独立配置文件"""
-        if not self._config_file:
-            logger.warning("Config file path not set")
-            return
-
-        custom_config_file = self._config_file.parent / "custom_providers.toml"
-
-        try:
-            # 获取所有自定义供应商
-            custom_providers = self.get_custom_providers()
-
-            # 创建配置数据
-            custom_config = {}
-            if custom_providers:
-                custom_config["model_names"] = {
-                    provider: info.model_dump() for provider, info in custom_providers.items()
-                }
-
-            # 确保目录存在
-            custom_config_file.parent.mkdir(parents=True, exist_ok=True)
-
-            # 写入配置文件
-            with open(custom_config_file, "wb") as f:
-                tomli_w.dump(custom_config, f)
-
-            logger.info(f"Custom providers saved to {custom_config_file}")
-
-        except Exception as e:
-            logger.error(f"Failed to save custom providers to {custom_config_file}: {e}")
 
 
 # 全局配置实例

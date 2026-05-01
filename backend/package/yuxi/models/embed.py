@@ -7,6 +7,7 @@ import httpx
 import requests
 
 from yuxi import config
+from yuxi.services.model_cache import is_v2_spec_format
 from yuxi.utils import get_docker_safe_url, hashstr, logger
 
 
@@ -276,16 +277,64 @@ async def test_all_embedding_models_status() -> dict:
     }
 
 
-def select_embedding_model(model_id):
-    provider, model_name = model_id.split("/", 1) if model_id else ("", "")
+def get_embedding_model_info_by_id(model_id: str) -> dict:
+    """
+    通过模型ID获取Embedding模型的标准化配置信息（统一入口，V1/V2 自动识别）。
+
+    V1 格式: provider/model_name（如 "siliconflow/BAAI/bge-m3"），从 config.embed_model_names 查找
+    V2 格式: provider_id:model_id（如 "siliconflow:BAAI/bge-m3"），从 model_cache 查找
+
+    Returns:
+        dict: 包含 base_url、api_key、name、dimension、model_id、batch_size 等字段的配置字典。
+              api_key 已从环境变量解析为实际值。
+    """
+    # V2 spec 检测
+    if isinstance(model_id, str) and is_v2_spec_format(model_id):
+        from yuxi.services.model_cache import model_cache
+
+        info = model_cache.get_model_info(model_id)
+        if info:
+            logger.info(f"Loaded v2 embedding model info for {model_id}")
+            return {
+                "name": info.display_name,
+                "dimension": info.dimension,
+                "base_url": info.base_url,
+                "api_key": info.api_key,
+                "model_id": info.spec,
+                "batch_size": info.batch_size,
+            }
+
     support_embed_models = config.embed_model_names.keys()
     assert model_id in support_embed_models, f"Unsupported embed model: {model_id}, only support {support_embed_models}"
+
+    embed_config = config.embed_model_names[model_id].model_dump()
+
+    # 解析 api_key：如果值本身是环境变量名，则从环境变量获取实际值
+    embed_config["api_key"] = os.getenv(embed_config["api_key"]) or embed_config["api_key"]
+
+    logger.info(f"Loaded embedding model info for {model_id}")
+    return embed_config
+
+
+def select_embedding_model(model_id):
+    """选择 Embedding 模型（V1/V2 自动识别）。
+
+    V1 格式: provider/model_name（斜杠分隔）
+    V2 格式: provider_id:model_id（冒号分隔）
+    """
+    # V2 spec 检测：第一个特殊字符为冒号且存在于缓存中
+    if isinstance(model_id, str) and is_v2_spec_format(model_id):
+        from yuxi.services.model_cache import model_cache
+
+        if model_cache.is_v2_spec(model_id):
+            return select_embedding_model_v2(model_id)
+
+    provider, model_name = model_id.split("/", 1) if model_id else ("", "")
     logger.info(f"Loading embedding model {model_id}")
     if provider == "local":
         raise ValueError("Local embedding model is not supported, please use other embedding models")
 
-    # 获取嵌入模型配置并转换为字典
-    embed_config = config.embed_model_names[model_id].model_dump()
+    embed_config = get_embedding_model_info_by_id(model_id)
 
     if provider == "ollama":
         model = OllamaEmbedding(**embed_config)
@@ -293,3 +342,66 @@ def select_embedding_model(model_id):
         model = OtherEmbedding(**embed_config)
 
     return model
+
+
+def select_embedding_model_v2(spec: str):
+    """根据 v2 spec（provider_id:model_id）选择 Embedding 模型。
+
+    v2 spec 格式使用冒号分隔，如: siliconflow:BAAI/bge-m3
+    数据来源为数据库中的 model_providers 表，通过全局缓存访问。
+    """
+    from yuxi.services.model_cache import model_cache
+
+    info = model_cache.get_model_info(spec)
+    if not info:
+        raise ValueError(f"Unknown v2 embedding model spec: {spec}")
+
+    if info.model_type != "embedding":
+        raise ValueError(f"Model {spec} is not an embedding model (type={info.model_type})")
+
+    logger.info(f"Selecting v2 embedding model: {spec} (provider_type={info.provider_type})")
+
+    if info.provider_type == "ollama":
+        return OllamaEmbedding(
+            model=info.model_id,
+            base_url=info.base_url,
+            api_key=info.api_key,
+            dimension=info.dimension,
+            batch_size=info.batch_size,
+        )
+    else:
+        return OtherEmbedding(
+            model=info.model_id,
+            base_url=info.base_url,
+            api_key=info.api_key,
+            dimension=info.dimension,
+            batch_size=info.batch_size,
+        )
+
+
+async def test_embedding_model_status_by_spec(spec: str) -> dict:
+    """根据 full spec 测试 Embedding 模型状态（自动识别 V1/V2）。
+
+    V1 spec 格式: provider/model_name（斜杠分隔）
+    V2 spec 格式: provider_id:model_id（冒号分隔）
+    """
+    try:
+        if is_v2_spec_format(spec):
+            from yuxi.services.model_cache import model_cache
+
+            if model_cache.is_v2_spec(spec):
+                model = select_embedding_model_v2(spec)
+            else:
+                return {"spec": spec, "status": "unsupported", "message": f"不支持的 V2 模型: {spec}"}
+        else:
+            model = select_embedding_model(spec)
+
+        success, message = await model.test_connection()
+        return {
+            "spec": spec,
+            "status": "available" if success else "unavailable",
+            "message": "连接正常" if success else message,
+        }
+    except Exception as e:
+        logger.warning(f"测试 Embedding 模型状态失败 {spec}: {e}")
+        return {"spec": spec, "status": "error", "message": str(e)}

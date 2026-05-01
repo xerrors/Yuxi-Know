@@ -13,8 +13,12 @@
       </span>
       <span class="summary-content">
         <span class="summary-title">{{ toolCallsSummaryTitle }}</span>
-        <span class="summary-separator" v-if="normalizedToolCalls.length > 1 && toolCallsNamesMeta">·</span>
-        <span class="summary-meta" v-if="normalizedToolCalls.length > 1 && toolCallsNamesMeta">{{ toolCallsNamesMeta }}</span>
+        <span class="summary-separator" v-if="normalizedToolCalls.length > 1 && toolCallsNamesMeta"
+          >·</span
+        >
+        <span class="summary-meta" v-if="normalizedToolCalls.length > 1 && toolCallsNamesMeta">{{
+          toolCallsNamesMeta
+        }}</span>
         <span class="summary-status-tag" v-if="statusSummary">{{ statusSummary }}</span>
       </span>
       <span class="summary-trailing">
@@ -123,8 +127,9 @@ const statusSummary = computed(() => {
     (toolCall) =>
       toolCall.status !== 'success' && toolCall.status !== 'error' && !toolCall.tool_call_result
   ).length
-  const errorCount = normalizedToolCalls.value.filter((toolCall) => toolCall.status === 'error')
-    .length
+  const errorCount = normalizedToolCalls.value.filter(
+    (toolCall) => toolCall.status === 'error'
+  ).length
 
   const parts = []
   if (successCount > 0 && successCount === normalizedToolCalls.value.length) {
@@ -151,6 +156,7 @@ const toggleToolCallsExpanded = () => {
   .tool-calls-summary {
     appearance: none;
     width: auto;
+    max-width: 100%;
     display: inline-flex;
     align-items: center;
     gap: 8px;

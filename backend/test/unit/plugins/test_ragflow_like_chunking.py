@@ -7,8 +7,10 @@ sys.path.append(os.getcwd())
 
 from yuxi.knowledge.chunking.ragflow_like.dispatcher import chunk_markdown
 from yuxi.knowledge.chunking.ragflow_like.nlp import bullets_category, count_tokens
+from yuxi.knowledge.chunking.ragflow_like.utils.semantic_utils import split_sentences_chinese
 from yuxi.knowledge.chunking.ragflow_like.presets import (
     CHUNK_ENGINE_VERSION,
+    CHUNK_PRESET_IDS,
     get_chunk_preset_options,
     map_to_internal_parser_id,
     resolve_chunk_processing_params,
@@ -85,6 +87,13 @@ def test_book_chunking_hierarchical_merge() -> None:
     assert any("第一章" in ck["content"] for ck in chunks)
 
 
+def test_split_sentences_chinese_should_keep_quote_boundary() -> None:
+    text = '他说：“你好。”然后问：“你在吗？”最后结束！'
+    sentences = split_sentences_chinese(text)
+
+    assert sentences == ["他说：“你好。”", "然后问：“你在吗？”", "最后结束！"]
+
+
 def test_markdown_heading_has_higher_weight_in_bullet_category() -> None:
     sections = [
         "# 3.2 个人所得项目及计税、申报方式概括",
@@ -108,7 +117,7 @@ def test_mid_sentence_bullet_marker_should_not_be_treated_as_heading() -> None:
 
 def test_chunk_preset_options_include_description() -> None:
     options = get_chunk_preset_options()
-    assert len(options) == 4
+    assert {option["value"] for option in options} == CHUNK_PRESET_IDS
     assert all(isinstance(option.get("description"), str) and option["description"] for option in options)
 
 

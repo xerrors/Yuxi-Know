@@ -97,6 +97,19 @@ const router = createRouter({
       ]
     },
     {
+      path: '/model-config',
+      name: 'model-config',
+      component: AppLayout,
+      children: [
+        {
+          path: '',
+          name: 'ModelConfigComp',
+          component: () => import('../views/ModelConfigView.vue'),
+          meta: { keepAlive: false, requiresAuth: true, requiresAdmin: true }
+        }
+      ]
+    },
+    {
       path: '/extensions',
       name: 'extensions',
       component: AppLayout,
@@ -105,6 +118,39 @@ const router = createRouter({
           path: '',
           name: 'ExtensionsComp',
           component: () => import('../views/ExtensionsView.vue'),
+          meta: {
+            keepAlive: false,
+            requiresAuth: true,
+            requiresAdmin: true,
+            requiresSuperAdmin: true
+          }
+        },
+        {
+          path: 'mcp/:name',
+          name: 'ExtensionMcpDetail',
+          component: () => import('../components/extensions/McpDetailView.vue'),
+          meta: {
+            keepAlive: false,
+            requiresAuth: true,
+            requiresAdmin: true,
+            requiresSuperAdmin: true
+          }
+        },
+        {
+          path: 'subagent/:name',
+          name: 'ExtensionSubagentDetail',
+          component: () => import('../components/extensions/SubagentDetailView.vue'),
+          meta: {
+            keepAlive: false,
+            requiresAuth: true,
+            requiresAdmin: true,
+            requiresSuperAdmin: true
+          }
+        },
+        {
+          path: 'skill/:slug',
+          name: 'ExtensionSkillDetail',
+          component: () => import('../components/extensions/SkillDetailView.vue'),
           meta: {
             keepAlive: false,
             requiresAuth: true,

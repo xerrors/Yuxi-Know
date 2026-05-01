@@ -12,6 +12,7 @@ from urllib import request
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from dotenv import dotenv_values
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +115,16 @@ def wait_for_sandbox_ready(sandbox_url: str, timeout_seconds: int = 30) -> bool:
 
 
 class LocalContainerProvisionerBackend:
+    _SANDBOX_ENV_FILE = Path(__file__).parent / "sandbox.env"
+
+    @staticmethod
+    def _load_sandbox_env() -> dict[str, str]:
+        """Parse sandbox.env and return environment variables to inject into sandbox containers."""
+        if LocalContainerProvisionerBackend._SANDBOX_ENV_FILE.exists():
+            return dotenv_values(LocalContainerProvisionerBackend._SANDBOX_ENV_FILE)
+
+        return {}
+
     def __init__(self):
         import docker
         from docker.errors import DockerException
@@ -130,6 +141,7 @@ class LocalContainerProvisionerBackend:
         self._container_prefix = os.getenv("DOCKER_SANDBOX_PREFIX", "yuxi-sandbox")
         self._sandbox_host = os.getenv("DOCKER_SANDBOX_HOST", "host.docker.internal")
         self._health_timeout_seconds = int(os.getenv("SANDBOX_HEALTH_TIMEOUT_SECONDS", "300"))
+        self._sandbox_env = self._load_sandbox_env()
 
         try:
             self._client = docker.from_env()
@@ -387,6 +399,8 @@ class LocalContainerProvisionerBackend:
             }
             if self._network:
                 run_kwargs["network"] = self._network
+            if self._sandbox_env:
+                run_kwargs["environment"] = self._sandbox_env
 
             container = self._client.containers.run(self._sandbox_image, **run_kwargs)
             container.reload()

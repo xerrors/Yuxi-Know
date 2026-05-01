@@ -31,7 +31,7 @@ services:
     build:
       context: .
       dockerfile: docker/api.Dockerfile
-    image: yuxi-api:${YUXI_VERSION:-0.6.1}
+    image: yuxi-api:${YUXI_VERSION:-0.6.2}
     container_name: api-prod
     working_dir: /app
     networks:
@@ -68,7 +68,7 @@ services:
     build:
       context: .
       dockerfile: docker/api.Dockerfile
-    image: yuxi-api:${YUXI_VERSION:-0.6.1}
+    image: yuxi-api:${YUXI_VERSION:-0.6.2}
     container_name: worker-prod
     working_dir: /app
     networks:
@@ -100,6 +100,7 @@ services:
     container_name: sandbox-provisioner
     volumes:
       - ./saves:/app/saves
+      - ./docker/sandbox_provisioner/sandbox.env:/app/sandbox.env:ro
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - app-network
@@ -143,7 +144,7 @@ services:
       context: .
       dockerfile: docker/web.Dockerfile
       target: production
-    image: yuxi-web:${YUXI_VERSION:-0.6.1}
+    image: yuxi-web:${YUXI_VERSION:-0.6.2}
     container_name: web-prod
     ports:
       - "80:80"

@@ -18,6 +18,7 @@ from yuxi.plugins.parser import Parser, SUPPORTED_FILE_EXTENSIONS, is_supported_
 from yuxi.knowledge.utils import calculate_content_hash
 from yuxi.knowledge.utils.kb_utils import parse_minio_url
 from yuxi.models.embed import test_all_embedding_models_status, test_embedding_model_status
+from yuxi.services.model_cache import is_v2_spec_format
 from yuxi.storage.postgres.models_business import User
 from yuxi.storage.minio.client import MinIOClient, StorageError, aupload_file_to_minio, get_minio_client
 from yuxi.utils import logger
@@ -148,11 +149,27 @@ async def create_database(
         else:
             if not embed_model_name:
                 raise HTTPException(status_code=400, detail="embed_model_name 不能为空")
-            if embed_model_name not in config.embed_model_names:
-                raise HTTPException(status_code=400, detail=f"不支持的 embedding 模型: {embed_model_name}")
-            embed_info = config.embed_model_names[embed_model_name]
-            # 将Pydantic模型转换为字典以便JSON序列化
-            embed_info_dict = embed_info.model_dump() if hasattr(embed_info, "model_dump") else embed_info.dict()
+
+            # V2 embedding model (spec 格式: provider_id:model_id，第一个特殊字符为冒号)
+            if is_v2_spec_format(embed_model_name):
+                from yuxi.services.model_cache import model_cache
+
+                info = model_cache.get_model_info(embed_model_name)
+                if not info or info.model_type != "embedding":
+                    raise HTTPException(status_code=400, detail=f"不支持的 embedding 模型: {embed_model_name}")
+                embed_info_dict = {
+                    "name": info.display_name,
+                    "dimension": info.dimension,
+                    "base_url": info.base_url,
+                    "api_key": info.api_key,
+                    "model_id": info.spec,
+                    "batch_size": info.batch_size,
+                }
+            else:
+                if embed_model_name not in config.embed_model_names:
+                    raise HTTPException(status_code=400, detail=f"不支持的 embedding 模型: {embed_model_name}")
+                embed_info = config.embed_model_names[embed_model_name]
+                embed_info_dict = embed_info.model_dump() if hasattr(embed_info, "model_dump") else embed_info.dict()
 
         database_info = await knowledge_base.create_database(
             database_name,
@@ -426,8 +443,10 @@ async def add_documents(
                         await knowledge_base.update_file_params(
                             db_id, file_id, indexing_params, operator_id=current_user.user_id
                         )
-                        # 2. 执行入库
-                        result = await knowledge_base.index_file(db_id, file_id, operator_id=current_user.user_id)
+                        # 2. 执行入库（传入 indexing_params 确保使用的参数与用户设置一致）
+                        result = await knowledge_base.index_file(
+                            db_id, file_id, operator_id=current_user.user_id, params=indexing_params
+                        )
                         processed_items.append(result)
                     except Exception as index_error:
                         logger.error(f"自动入库失败 {item} (file_id={file_id}): {index_error}")
@@ -589,7 +608,7 @@ async def index_documents(
                 await context.set_progress(progress, f"正在入库第 {idx}/{total} 个文档")
 
                 try:
-                    result = await knowledge_base.index_file(db_id, file_id, operator_id=operator_id)
+                    result = await knowledge_base.index_file(db_id, file_id, operator_id=operator_id, params=params)
                     processed_items.append(result)
                 except Exception as e:
                     logger.error(f"Index failed for {file_id}: {e}")
@@ -1083,7 +1102,7 @@ async def generate_sample_questions(
         logger.info(f"开始生成知识库问题，知识库: {db_name}, 文件数量: {len(files_info)}, 问题数量: {count}")
 
         # 选择模型并调用
-        model = select_model()
+        model = select_model(model_spec=config.default_model)
         messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_message}]
         response = await model.call(messages, stream=False)
 
@@ -1504,7 +1523,7 @@ async def generate_description(
     """).strip()
 
     try:
-        model = select_model()
+        model = select_model(model_spec=config.default_model)
         response = await model.call(prompt)
         description = response.content.strip()
         logger.debug(f"Generated description: {description}")

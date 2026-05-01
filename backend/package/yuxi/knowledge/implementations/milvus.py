@@ -284,7 +284,9 @@ class MilvusKB(KnowledgeBase):
         """将文本分割成块"""
         return chunk_markdown(text, file_id, filename, params)
 
-    async def index_file(self, db_id: str, file_id: str, operator_id: str | None = None) -> dict:
+    async def index_file(
+        self, db_id: str, file_id: str, operator_id: str | None = None, params: dict | None = None
+    ) -> dict:
         """
         Index parsed file (Status: INDEXING -> INDEXED/ERROR_INDEXING)
 
@@ -292,6 +294,7 @@ class MilvusKB(KnowledgeBase):
             db_id: Database ID
             file_id: File ID
             operator_id: ID of the user performing the operation
+            params: Override processing params to apply during indexing (merged on top of stored params)
 
         Returns:
             Updated file metadata
@@ -342,10 +345,11 @@ class MilvusKB(KnowledgeBase):
             if operator_id:
                 self.files_meta[file_id]["updated_by"] = operator_id
 
-            # Read processing params inside lock to ensure we get the latest values
+            # 将传入的 params 作为 request_params，确保用户指定的参数始终覆盖存储的参数
             params = resolve_chunk_processing_params(
                 kb_additional_params=self.databases_meta.get(db_id, {}).get("metadata"),
                 file_processing_params=file_meta.get("processing_params"),
+                request_params=params,
             )
             self.files_meta[file_id]["processing_params"] = params
             await self._save_metadata()

@@ -355,7 +355,7 @@ def merge_processing_params(metadata_params: dict | None, request_params: dict |
 
 def get_embedding_config(embed_info: dict) -> dict:
     """
-    获取嵌入模型配置
+    获取嵌入模型配置（兼容性入口，新代码请直接使用 get_embedding_model_info_by_id）。
 
     Args:
         embed_info: 嵌入信息字典
@@ -364,13 +364,12 @@ def get_embedding_config(embed_info: dict) -> dict:
         dict: 标准化的嵌入配置
     """
     try:
-        # 使用最新配置
         assert isinstance(embed_info, dict), f"embed_info must be a dict, got {type(embed_info)}"
         assert "model_id" in embed_info, f"embed_info must contain 'model_id', got {embed_info}"
         logger.warning(f"Using model_id: {embed_info['model_id']}")
-        config_dict = config.embed_model_names[embed_info["model_id"]].model_dump()
-        config_dict["api_key"] = os.getenv(config_dict["api_key"]) or config_dict["api_key"]
-        return config_dict
+        from yuxi.models.embed import get_embedding_model_info_by_id
+
+        return get_embedding_model_info_by_id(embed_info["model_id"])
 
     except AssertionError as e:
         logger.error(f"AssertionError in get_embedding_config: {e}, embed_info={embed_info}")

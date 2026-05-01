@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "yuxi"
-version = "0.6.1"
+version = "0.6.2"
 description = "Yuxi 智能知识库与知识图谱平台核心后端包"
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
@@ -76,6 +76,12 @@ dependencies = [
     "typer>=0.16.0",
     "unstructured>=0.17.2",
     "wcmatch>=8.0.0",
+    # Markdown 解析语义切分相关依赖
+    "markdown-it-py>=3.0.0",
+    "mdit-py-plugins>=0.4.0",
+    "scikit-learn>=1.3.0",
+    "nltk>=3.8.1",
+    "beautifulsoup4>=4.12.0",
 ]
 
 [tool.setuptools]

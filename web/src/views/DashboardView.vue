@@ -159,7 +159,6 @@ onUnmounted(() => {
 
 <style scoped lang="less">
 .dashboard-container {
-  // padding: 0 24px 24px 24px;
   background-color: var(--gray-25);
   min-height: calc(100vh - 64px);
   overflow-x: hidden;
@@ -168,7 +167,7 @@ onUnmounted(() => {
 // Dashboard 特有的网格布局
 .dashboard-grid {
   display: grid;
-  padding: 16px;
+  padding: var(--page-padding);
   grid-template-columns: 1fr 1fr 1fr;
   grid-template-rows: auto auto;
   gap: 16px;

@@ -7,11 +7,12 @@
     </a-empty>
   </div>
   <div class="graph-container layout-container" v-else>
-    <ViewSwitchHeader
+    <PageHeader
       title="知识库"
       :active-key="knowledgeActiveView"
-      :items="knowledgeViewItems"
+      :tabs="knowledgeViewItems"
       aria-label="知识库视图切换"
+      :show-border="true"
     >
       <template #actions>
         <div class="db-selector">
@@ -30,15 +31,47 @@
             placeholder="选择或输入KB ID"
           />
         </div>
-        <!-- <a-button type="default" @click="openLink('http://localhost:7474/')" :icon="h(GlobalOutlined)">
-          Neo4j 浏览器
-        </a-button> -->
-        <a-button v-if="isNeo4j" type="primary" @click="state.showModal = true"
-          ><UploadOutlined /> 上传文件</a-button
+      </template>
+    </PageHeader>
+
+    <div class="graph-shoulder">
+      <div class="graph-shoulder-left">
+        <a-input
+          v-model:value="state.searchInput"
+          placeholder="输入要查询的实体 (*为全部)"
+          style="width: 300px"
+          @keydown.enter="onSearch"
+          allow-clear
         >
-        <a-button v-else type="primary" @click="state.showUploadTipModal = true"
-          ><UploadOutlined /> 上传文件</a-button
+          <template #suffix>
+            <component
+              :is="state.searchLoading ? LoadingOutlined : SearchOutlined"
+              @click="onSearch"
+            />
+          </template>
+        </a-input>
+        <a-input
+          v-model:value="sampleNodeCount"
+          placeholder="查询数量"
+          style="width: 100px"
+          @keydown.enter="loadSampleNodes"
+          :loading="graph.fetching"
         >
+          <template #suffix>
+            <component
+              :is="graph.fetching ? LoadingOutlined : ReloadOutlined"
+              @click="loadSampleNodes"
+            />
+          </template>
+        </a-input>
+      </div>
+      <div class="graph-shoulder-right">
+        <a-button v-if="isNeo4j" type="primary" @click="state.showModal = true">
+          <UploadOutlined /> 上传文件
+        </a-button>
+        <a-button v-else type="primary" @click="state.showUploadTipModal = true">
+          <UploadOutlined /> 上传文件
+        </a-button>
         <a-button
           v-if="unindexedCount > 0"
           type="primary"
@@ -47,8 +80,8 @@
         >
           <SyncOutlined v-if="!state.indexing" /> 为{{ unindexedCount }}个节点添加索引
         </a-button>
-      </template>
-    </ViewSwitchHeader>
+      </div>
+    </div>
 
     <div class="container-outter">
       <GraphCanvas
@@ -59,46 +92,8 @@
         @node-click="graph.handleNodeClick"
         @edge-click="graph.handleEdgeClick"
         @canvas-click="graph.handleCanvasClick"
+        class="graph-canvas"
       >
-        <template #top>
-          <div class="actions">
-            <div class="actions-left">
-              <a-input
-                v-model:value="state.searchInput"
-                placeholder="输入要查询的实体 (*为全部)"
-                style="width: 300px"
-                @keydown.enter="onSearch"
-                allow-clear
-              >
-                <template #suffix>
-                  <component
-                    :is="state.searchLoading ? LoadingOutlined : SearchOutlined"
-                    @click="onSearch"
-                  />
-                </template>
-              </a-input>
-              <a-input
-                v-model:value="sampleNodeCount"
-                placeholder="查询数量"
-                style="width: 100px"
-                @keydown.enter="loadSampleNodes"
-                :loading="graph.fetching"
-              >
-                <template #suffix>
-                  <component
-                    :is="graph.fetching ? LoadingOutlined : ReloadOutlined"
-                    @click="loadSampleNodes"
-                  />
-                </template>
-              </a-input>
-            </div>
-            <div class="actions-right">
-              <a-button type="default" @click="exportGraphData" :icon="h(ExportOutlined)">
-                导出数据
-              </a-button>
-            </div>
-          </div>
-        </template>
         <template #content>
           <a-empty v-show="graph.graphData.nodes.length === 0" style="padding: 4rem 0" />
         </template>
@@ -202,7 +197,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, h } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { useConfigStore } from '@/stores/config'
@@ -211,11 +206,9 @@ import {
   SyncOutlined,
   SearchOutlined,
   ReloadOutlined,
-  LoadingOutlined,
-  DatabaseOutlined,
-  ExportOutlined
+  LoadingOutlined
 } from '@ant-design/icons-vue'
-import ViewSwitchHeader from '@/components/ViewSwitchHeader.vue'
+import PageHeader from '@/components/shared/PageHeader.vue'
 import { neo4jApi, unifiedApi } from '@/apis/graph_api'
 import { useUserStore } from '@/stores/user'
 import GraphCanvas from '@/components/GraphCanvas.vue'
@@ -554,32 +547,6 @@ const indexNodes = () => {
     })
 }
 
-const exportGraphData = () => {
-  const dataStr = JSON.stringify(
-    {
-      nodes: graph.graphData.nodes,
-      edges: graph.graphData.edges,
-      graphInfo: isNeo4j.value ? graphInfo.value : state.lightragStats,
-      source: state.selectedDbId,
-      exportTime: new Date().toISOString()
-    },
-    null,
-    2
-  )
-
-  const dataBlob = new Blob([dataStr], { type: 'application/json' })
-  const url = URL.createObjectURL(dataBlob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `graph-data-${state.selectedDbId}-${new Date().toISOString().slice(0, 10)}.json`
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(url)
-
-  message.success('图谱数据已导出')
-}
-
 const getAuthHeaders = () => {
   const userStore = useUserStore()
   return userStore.getAuthHeaders()
@@ -740,16 +707,15 @@ const goToDatabasePage = () => {
 
 .container-outter {
   width: 100%;
-  height: calc(100vh - @graph-header-height);
+  height: calc(100vh - @graph-header-height - 60px);
   overflow: hidden;
   background: var(--gray-10);
+  padding: 16px var(--page-padding);
 
-  .actions {
-    display: flex;
-    justify-content: space-between;
-    margin: 20px 0;
-    padding: 0 24px;
-    width: 100%;
+  .graph-canvas {
+    border: 1px solid var(--gray-100);
+    border-radius: 8px;
+    height: 100%;
   }
 
   .tags {
@@ -758,11 +724,15 @@ const goToDatabasePage = () => {
   }
 }
 
-.actions {
-  top: 0;
+.graph-shoulder {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px var(--page-padding) 0;
 
-  .actions-left,
-  .actions-right {
+  &-left,
+  &-right {
     display: flex;
     align-items: center;
     gap: 10px;
@@ -773,7 +743,6 @@ const goToDatabasePage = () => {
   }
 
   button {
-    height: 37px;
     box-shadow: none;
   }
 }

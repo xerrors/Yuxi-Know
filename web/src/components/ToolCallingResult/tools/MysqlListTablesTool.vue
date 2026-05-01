@@ -47,7 +47,7 @@ const formatResult = (content) => {
 <style lang="less" scoped>
 .mysql-result {
   border-radius: 8px;
-  padding: 12px;
+  padding: 4px;
 
   .result-text {
     margin: 0;

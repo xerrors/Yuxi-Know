@@ -43,9 +43,8 @@ defineProps({
 .header-container {
   background-color: var(--bg-sider);
   backdrop-filter: blur(10px);
-  padding: 8px 16px;
+  padding: 8px var(--page-padding);
   height: 50px;
-  border-bottom: 1px solid var(--gray-150);
   position: sticky;
   top: 0;
   z-index: 1000;

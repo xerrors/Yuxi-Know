@@ -77,7 +77,7 @@
       </div>
 
       <!-- Result Slot -->
-      <div class="tool-result" style="opacity: 0.8;" v-if="hasResult">
+      <div class="tool-result" style="opacity: 0.8" v-if="hasResult">
         <slot name="result" :tool-call="toolCall" :result-content="resultContent">
           <div class="tool-result-content" :data-tool-call-id="toolCall.id">
             <!-- Default rendering -->
@@ -234,7 +234,7 @@ const formatResultData = (data) => {
       background-color: var(--gray-25);
     }
 
-    &>span {
+    & > span {
       display: flex;
       align-items: center;
     }
@@ -403,8 +403,8 @@ const formatResultData = (data) => {
     }
 
     .tool-content {
-      margin: 4px 0 8px 12px;
-      padding-left: 12px;
+      margin: 4px 0 8px 8px;
+      padding-left: 8px;
       border-left: 1px solid var(--gray-100);
 
       .tool-params {
