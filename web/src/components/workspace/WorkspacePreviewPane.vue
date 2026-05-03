@@ -63,6 +63,13 @@ defineEmits(['close', 'save'])
   min-height: 0;
 }
 
+:deep(.workspace-preview-content .html-preview),
+:deep(.workspace-preview-content .pdf-preview) {
+  display: block;
+  height: 100%;
+  min-height: 100%;
+}
+
 .preview-state,
 .preview-empty {
   display: flex;
