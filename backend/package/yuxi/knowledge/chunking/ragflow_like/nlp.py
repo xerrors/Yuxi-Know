@@ -55,6 +55,33 @@ def count_tokens(text: str) -> int:
     return max(1, len(parts)) if text.strip() else 0
 
 
+def hard_split_by_token_limit(text: str, chunk_token_num: int) -> list[str]:
+    """将文本按 token 上限硬切，用于 naive_merge 之后的兜底保护。"""
+    token_iter = list(re.finditer(r"[A-Za-z0-9_]+|[一-鿿]", text or ""))
+    if not token_iter:
+        cleaned = (text or "").strip()
+        return [cleaned] if cleaned else []
+
+    chunks: list[str] = []
+    start = 0
+    index = 0
+    max_tokens = max(int(chunk_token_num or 0), 1)
+
+    while index < len(token_iter):
+        end_index = min(index + max_tokens, len(token_iter)) - 1
+        end = token_iter[end_index].end()
+        piece = text[start:end].strip()
+        if piece:
+            chunks.append(piece)
+        start = end
+        index = end_index + 1
+
+    tail = text[start:].strip()
+    if tail:
+        chunks.append(tail)
+    return chunks
+
+
 def random_choices(arr: list[str], k: int) -> list[str]:
     if not arr:
         return []

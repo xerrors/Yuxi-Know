@@ -30,6 +30,24 @@ def _iter_sections(markdown_content: str, delimiter: str) -> list[tuple[str, str
     return sections
 
 
+def _ensure_chunk_token_limit(chunks: list[str], chunk_token_num: int) -> list[str]:
+    """对输出 chunk 做 token 上限保护：超长的直接硬切。"""
+    max_tokens = int(chunk_token_num or 0)
+    if max_tokens <= 0:
+        return [c.strip() for c in chunks if c and c.strip()]
+
+    protected: list[str] = []
+    for chunk in chunks:
+        cleaned = (chunk or "").strip()
+        if not cleaned:
+            continue
+        if nlp.count_tokens(cleaned) <= max_tokens:
+            protected.append(cleaned)
+        else:
+            protected.extend(nlp.hard_split_by_token_limit(cleaned, max_tokens))
+    return protected
+
+
 def chunk_markdown(markdown_content: str, parser_config: dict[str, Any] | None = None) -> list[str]:
     parser_config = parser_config or {}
 
@@ -38,9 +56,10 @@ def chunk_markdown(markdown_content: str, parser_config: dict[str, Any] | None =
     overlapped_percent = int(parser_config.get("overlapped_percent", 0) or 0)
 
     sections = _iter_sections(markdown_content, delimiter)
-    return nlp.naive_merge(
+    chunks = nlp.naive_merge(
         sections,
         chunk_token_num=chunk_token_num,
         delimiter=delimiter,
         overlapped_percent=overlapped_percent,
     )
+    return _ensure_chunk_token_limit(chunks, chunk_token_num)
