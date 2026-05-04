@@ -25,7 +25,9 @@ async def test_user_is_locked_after_repeated_failed_logins(test_client, standard
         assert response.status_code == 401, response.text
         assert response.json()["detail"] == "用户名或密码错误"
 
-    locked_response = await test_client.post("/api/auth/token", data={"username": user_id, "password": "wrong-password"})
+    locked_response = await test_client.post(
+        "/api/auth/token", data={"username": user_id, "password": "wrong-password"}
+    )
     assert locked_response.status_code == 423, locked_response.text
     assert "X-Lock-Remaining" in locked_response.headers
     assert "账户已被锁定" in locked_response.json()["detail"]
@@ -73,3 +75,24 @@ async def test_invalid_token_is_rejected(test_client):
     headers = {"Authorization": "Bearer not-a-real-token"}
     response = await test_client.get("/api/auth/me", headers=headers)
     assert response.status_code == 401
+
+
+async def test_deleted_user_token_is_rejected(test_client, admin_headers, standard_user):
+    user_id = standard_user["user"]["id"]
+
+    delete_response = await test_client.delete(f"/api/auth/users/{user_id}", headers=admin_headers)
+    assert delete_response.status_code == 200, delete_response.text
+
+    profile_response = await test_client.get("/api/auth/me", headers=standard_user["headers"])
+    assert profile_response.status_code == 401
+
+
+async def test_locked_user_token_is_rejected(test_client, standard_user):
+    user_id = standard_user["user"]["user_id"]
+
+    for _ in range(5):
+        await test_client.post("/api/auth/token", data={"username": user_id, "password": "wrong-password"})
+
+    profile_response = await test_client.get("/api/auth/me", headers=standard_user["headers"])
+    assert profile_response.status_code == 423
+    assert "X-Lock-Remaining" in profile_response.headers

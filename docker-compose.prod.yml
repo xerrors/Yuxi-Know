@@ -2,6 +2,7 @@ x-api-worker-env: &api-worker-env
   HOST_IP: ${HOST_IP:-}
   LITE_MODE: ${LITE_MODE:-}
   RUNNING_IN_DOCKER: "true"
+  YUXI_ENV: production
   MODEL_DIR_IN_DOCKER: /models
   PYTHONPATH: /app/package
   POSTGRES_URL: ${POSTGRES_URL:-postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-yuxi_know}}

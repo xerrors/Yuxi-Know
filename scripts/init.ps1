@@ -2,12 +2,49 @@
 # This script helps set up the environment for the Yuxi project
 # Note: API keys will be visible during input - use with care
 
+function New-RandomHex($ByteCount) {
+    $bytes = [byte[]]::new($ByteCount)
+    [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+    return -join ($bytes | ForEach-Object { $_.ToString("x2") })
+}
+
+function Test-EnvValue($Name) {
+    return [bool](Select-String -Path ".env" -Pattern "^$Name=.+" -Quiet)
+}
+
+function Ensure-JwtEnv {
+    if ((Test-EnvValue "JWT_SECRET_KEY") -and (Test-EnvValue "YUXI_INSTANCE_ID")) {
+        return
+    }
+
+    Write-Host "JWT security settings are missing in .env." -ForegroundColor Yellow
+    $JWT_SECRET_KEY = Read-Host "Please enter your JWT_SECRET_KEY (press Enter to auto-generate)"
+    if ([string]::IsNullOrEmpty($JWT_SECRET_KEY)) {
+        $JWT_SECRET_KEY = New-RandomHex 32
+        Write-Host "Generated JWT_SECRET_KEY and saved it to .env." -ForegroundColor Green
+    }
+
+    $YUXI_INSTANCE_ID = Read-Host "Please enter your YUXI_INSTANCE_ID (press Enter to auto-generate)"
+    if ([string]::IsNullOrEmpty($YUXI_INSTANCE_ID)) {
+        $YUXI_INSTANCE_ID = "instance-$(New-RandomHex 8)"
+        Write-Host "Generated YUXI_INSTANCE_ID and saved it to .env." -ForegroundColor Green
+    }
+
+    @"
+
+# JWT security settings
+JWT_SECRET_KEY=$JWT_SECRET_KEY
+YUXI_INSTANCE_ID=$YUXI_INSTANCE_ID
+"@ | Add-Content -Path ".env" -Encoding UTF8
+}
+
 Write-Host "🚀 Initializing Yuxi project..." -ForegroundColor Cyan
 Write-Host "==================================" -ForegroundColor Cyan
 
 # Check if .env file exists
 if (Test-Path ".env") {
     Write-Host "✅ .env file already exists. Skipping environment setup." -ForegroundColor Green
+    Ensure-JwtEnv
 } else {
     Write-Host "📝 .env file not found. Let's set up your environment variables." -ForegroundColor Yellow
     Write-Host ""
@@ -32,6 +69,20 @@ if (Test-Path ".env") {
 
     $TAVILY_API_KEY = Read-Host "Please enter your TAVILY_API_KEY (press Enter to skip)"
 
+    Write-Host ""
+    Write-Host "JWT security settings" -ForegroundColor Yellow
+    $JWT_SECRET_KEY = Read-Host "Please enter your JWT_SECRET_KEY (press Enter to auto-generate)"
+    if ([string]::IsNullOrEmpty($JWT_SECRET_KEY)) {
+        $JWT_SECRET_KEY = New-RandomHex 32
+        Write-Host "Generated JWT_SECRET_KEY and saved it to .env." -ForegroundColor Green
+    }
+
+    $YUXI_INSTANCE_ID = Read-Host "Please enter your YUXI_INSTANCE_ID (press Enter to auto-generate)"
+    if ([string]::IsNullOrEmpty($YUXI_INSTANCE_ID)) {
+        $YUXI_INSTANCE_ID = "instance-$(New-RandomHex 8)"
+        Write-Host "Generated YUXI_INSTANCE_ID and saved it to .env." -ForegroundColor Green
+    }
+
     # Create .env file
     $envContent = @"
 # SiliconFlow API Key (required)
@@ -44,12 +95,21 @@ SILICONFLOW_API_KEY=$apiKey
         $envContent += "`nTAVILY_API_KEY=$TAVILY_API_KEY"
     }
 
+    $envContent += @"
+
+# JWT security settings
+JWT_SECRET_KEY=$JWT_SECRET_KEY
+YUXI_INSTANCE_ID=$YUXI_INSTANCE_ID
+"@
+
     $envContent | Out-File -FilePath ".env" -Encoding UTF8
     Write-Host "✅ .env file created successfully!" -ForegroundColor Green
 
     # Clear the variables from memory
     Remove-Variable -Name "apiKey" -ErrorAction SilentlyContinue
     Remove-Variable -Name "TAVILY_API_KEY" -ErrorAction SilentlyContinue
+    Remove-Variable -Name "JWT_SECRET_KEY" -ErrorAction SilentlyContinue
+    Remove-Variable -Name "YUXI_INSTANCE_ID" -ErrorAction SilentlyContinue
 }
 
 Write-Host ""
