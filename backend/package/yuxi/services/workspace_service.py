@@ -12,12 +12,14 @@ import aiofiles
 from fastapi import HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from yuxi.agents.backends.sandbox.paths import _global_user_data_dir, ensure_workspace_default_files
+from yuxi.services.upload_utils import write_upload_to_buffer
 from yuxi.services.viewer_filesystem_service import _detect_preview_type
 from yuxi.storage.postgres.models_business import User
 from yuxi.utils.datetime_utils import utc_isoformat_from_timestamp
 from yuxi.utils.paths import WORKSPACE_DIR_NAME
 
 EDITABLE_WORKSPACE_SUFFIXES = {".md", ".markdown", ".mdx", ".txt"}
+MAX_WORKSPACE_UPLOAD_SIZE_BYTES = 100 * 1024 * 1024
 
 
 def _workspace_root(user: User) -> Path:
@@ -237,11 +239,17 @@ async def upload_workspace_file(*, parent_path: str, file: UploadFile, current_u
     try:
         async with aiofiles.open(target, "xb") as buffer:
             created_file = True
-            while chunk := await file.read(1024 * 1024):
-                await buffer.write(chunk)
+            await write_upload_to_buffer(
+                file,
+                buffer,
+                max_size_bytes=MAX_WORKSPACE_UPLOAD_SIZE_BYTES,
+                too_large_message="文件过大，当前仅支持 100 MB 以内的文件",
+            )
         upload_completed = True
     except FileExistsError as exc:
         raise HTTPException(status_code=400, detail="同名文件或文件夹已存在") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except PermissionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     finally:

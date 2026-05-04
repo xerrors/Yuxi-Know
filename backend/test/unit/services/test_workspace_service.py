@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, UploadFile
 
 from yuxi.agents.backends.sandbox import paths as workspace_paths
 from yuxi.services import workspace_service as svc
@@ -146,3 +147,37 @@ async def test_write_workspace_file_content_blocks_path_traversal(tmp_path: Path
         )
 
     assert exc_info.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_upload_workspace_file_writes_file(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(workspace_paths.conf, "save_dir", str(tmp_path))
+    user = SimpleNamespace(id="user-1")
+    root = svc._workspace_root(user)
+    upload = UploadFile(filename="demo.txt", file=BytesIO(b"hello"))
+
+    result = await svc.upload_workspace_file(parent_path="/", file=upload, current_user=user)
+
+    assert result["success"] is True
+    assert result["entry"]["path"] == "/demo.txt"
+    assert result["entry"]["size"] == 5
+    assert (root / "demo.txt").read_bytes() == b"hello"
+
+
+@pytest.mark.asyncio
+async def test_upload_workspace_file_rejects_oversized_file_and_cleans_partial_file(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(workspace_paths.conf, "save_dir", str(tmp_path))
+    monkeypatch.setattr(svc, "MAX_WORKSPACE_UPLOAD_SIZE_BYTES", 5)
+    user = SimpleNamespace(id="user-1")
+    root = svc._workspace_root(user)
+    upload = UploadFile(filename="large.txt", file=BytesIO(b"123456"))
+
+    with pytest.raises(HTTPException) as exc_info:
+        await svc.upload_workspace_file(parent_path="/", file=upload, current_user=user)
+
+    assert exc_info.value.status_code == 400
+    assert "100 MB" in exc_info.value.detail
+    assert not (root / "large.txt").exists()
