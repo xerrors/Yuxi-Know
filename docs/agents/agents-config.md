@@ -183,6 +183,18 @@ Context 的价值不只在“配置页面”。它贯穿了从配置加载到实
 
 也就是说，运行期 Context 的基础来源并不是前端临时状态，而是数据库中保存的 AgentConfig。
 
+此外，用户工作区会默认创建 `agents/AGENTS.md`。当 Agent 开始执行时，后端会读取当前用户工作区下的这个文件，并将其内容追加到 `system_prompt`，用于补充该用户对 Agent 的长期指令或工作区约定。该文件属于用户级共享工作区，内容会随 `user_id` 和当前 `thread_id` 映射到运行时工作区路径；文件不存在、为空或不可读时不会影响 Agent 启动，单次注入内容最多读取 64 KiB，超出部分会截断并追加提示。
+
+合并后的提示词结构可以理解为：
+
+```text
+AgentConfig.config_json.context.system_prompt
+  + 用户工作区 agents/AGENTS.md 内容
+  + 运行期中间件继续追加的系统提示段
+```
+
+因此，`agents/AGENTS.md` 适合放置用户维度的稳定约束，不适合放置一次性任务要求；一次性要求仍应直接写在当前对话中。
+
 ### 4.2 Context 实例化阶段
 
 `BaseAgent` 在运行前会创建 `context_schema()` 实例，并通过 `update_from_dict()` 注入配置值。
