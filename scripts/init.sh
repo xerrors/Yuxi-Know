@@ -5,12 +5,49 @@
 
 set -e
 
+generate_hex() {
+    local length="$1"
+    if command -v openssl >/dev/null 2>&1; then
+        openssl rand -hex "$length"
+    else
+        tr -dc 'a-f0-9' < /dev/urandom | head -c $((length * 2))
+    fi
+}
+
+ensure_jwt_env() {
+    if grep -Eq '^JWT_SECRET_KEY=.+' .env && grep -Eq '^YUXI_INSTANCE_ID=.+' .env; then
+        return
+    fi
+
+    echo "JWT security settings are missing in .env."
+    read -s -p "Please enter your JWT_SECRET_KEY (press Enter to auto-generate): " JWT_SECRET_KEY
+    echo ""
+    if [ -z "$JWT_SECRET_KEY" ]; then
+        JWT_SECRET_KEY=$(generate_hex 32)
+        echo "Generated JWT_SECRET_KEY and saved it to .env."
+    fi
+
+    read -p "Please enter your YUXI_INSTANCE_ID (press Enter to auto-generate): " YUXI_INSTANCE_ID
+    if [ -z "$YUXI_INSTANCE_ID" ]; then
+        YUXI_INSTANCE_ID="instance-$(generate_hex 8)"
+        echo "Generated YUXI_INSTANCE_ID and saved it to .env."
+    fi
+
+    cat >> .env << EOF
+
+# JWT security settings
+JWT_SECRET_KEY=${JWT_SECRET_KEY}
+YUXI_INSTANCE_ID=${YUXI_INSTANCE_ID}
+EOF
+}
+
 echo "🚀 Initializing Yuxi project..."
 echo "=================================="
 
 # Check if .env file exists
 if [ -f ".env" ]; then
     echo "✅ .env file already exists. Skipping environment setup."
+    ensure_jwt_env
 else
     echo "📝 .env file not found. Let's set up your environment variables."
     echo ""
@@ -34,6 +71,21 @@ else
     echo "Get your API key from: https://app.tavily.com/"
     read -p "Please enter your TAVILY_API_KEY (press Enter to skip): " TAVILY_API_KEY
 
+    echo ""
+    echo "JWT security settings"
+    read -s -p "Please enter your JWT_SECRET_KEY (press Enter to auto-generate): " JWT_SECRET_KEY
+    echo ""
+    if [ -z "$JWT_SECRET_KEY" ]; then
+        JWT_SECRET_KEY=$(generate_hex 32)
+        echo "Generated JWT_SECRET_KEY and saved it to .env."
+    fi
+
+    read -p "Please enter your YUXI_INSTANCE_ID (press Enter to auto-generate): " YUXI_INSTANCE_ID
+    if [ -z "$YUXI_INSTANCE_ID" ]; then
+        YUXI_INSTANCE_ID="instance-$(generate_hex 8)"
+        echo "Generated YUXI_INSTANCE_ID and saved it to .env."
+    fi
+
     # Create .env file
     cat > .env << EOF
 # SiliconFlow API Key (required)
@@ -45,6 +97,13 @@ EOF
     if [ -n "$TAVILY_API_KEY" ]; then
         echo "TAVILY_API_KEY=${TAVILY_API_KEY}" >> .env
     fi
+
+    cat >> .env << EOF
+
+# JWT security settings
+JWT_SECRET_KEY=${JWT_SECRET_KEY}
+YUXI_INSTANCE_ID=${YUXI_INSTANCE_ID}
+EOF
 
     echo "✅ .env file created successfully!"
 fi
