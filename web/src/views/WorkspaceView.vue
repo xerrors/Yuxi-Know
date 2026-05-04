@@ -233,8 +233,8 @@ const normalizePreviewFile = async (entry, response) => {
   }
 
   if (previewType === 'image' || previewType === 'pdf') {
-    const response = await downloadWorkspaceFile(entry.path)
-    const blob = await response.blob()
+    const downloadResponse = await downloadWorkspaceFile(entry.path)
+    const blob = await downloadResponse.blob()
     revokePreviewObjectUrl()
     previewObjectUrl.value = URL.createObjectURL(blob)
     file.previewUrl = previewObjectUrl.value
@@ -554,10 +554,11 @@ const stopPreviewResize = () => {
   document.body.style.userSelect = ''
   window.removeEventListener('pointermove', resizePreview)
   window.removeEventListener('pointerup', stopPreviewResize)
+  window.removeEventListener('pointercancel', stopPreviewResize)
 }
 
 const resizePreview = (event) => {
-  if (!workspaceMainRef.value || resizePointerId === null) return
+  if (!workspaceMainRef.value || resizePointerId === null || event.pointerId !== resizePointerId) return
   const rect = workspaceMainRef.value.getBoundingClientRect()
   const relativeX = event.clientX - rect.left
   const nextPreviewPercent = Math.round(((rect.width - relativeX) / rect.width) * 100)
@@ -571,6 +572,7 @@ const startPreviewResize = (event) => {
   document.body.style.userSelect = 'none'
   window.addEventListener('pointermove', resizePreview)
   window.addEventListener('pointerup', stopPreviewResize)
+  window.addEventListener('pointercancel', stopPreviewResize)
 }
 
 let workspaceResizeObserver = null

@@ -7,8 +7,8 @@
             <button
               type="button"
               class="breadcrumb-action"
-              :class="{ current: item.path === currentPath }"
-              :disabled="item.path === currentPath"
+              :class="{ current: item.path === normalizedCurrentPath }"
+              :disabled="item.path === normalizedCurrentPath"
               :title="item.path"
               @click="$emit('select-path', item.path)"
             >
@@ -169,8 +169,9 @@ const emit = defineEmits([
 const selectedPathSet = computed(() => new Set(props.selectedPaths))
 const deletingPathSet = computed(() => new Set(props.deletingPaths))
 const entryPaths = computed(() => props.entries.map((entry) => entry.path))
+const normalizedCurrentPath = computed(() => (props.currentPath || '/').replace(/\/+$/, '') || '/')
 const breadcrumbItems = computed(() => {
-  const normalizedPath = props.currentPath || '/'
+  const normalizedPath = normalizedCurrentPath.value
   if (normalizedPath === '/') {
     return [{ name: '工作区', path: '/' }]
   }
