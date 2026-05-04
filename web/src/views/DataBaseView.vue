@@ -43,9 +43,7 @@
       <div class="new-database-form">
         <!-- 知识库类型选择 -->
         <div class="form-section">
-          <h3 class="section-title">
-            知识库类型<span class="required-mark">*</span>
-          </h3>
+          <h3 class="section-title">知识库类型<span class="required-mark">*</span></h3>
           <div class="kb-type-cards">
             <div
               v-for="(typeInfo, typeKey) in orderedKbTypes"
@@ -156,7 +154,7 @@
           />
         </div>
 
-      <!-- 隐私设置（暂时隐藏）
+        <!-- 隐私设置（暂时隐藏）
       <h3 style="margin-top: 20px">隐私设置</h3>
       <div class="privacy-config">
         <a-switch
@@ -250,7 +248,14 @@ import ExtensionCardGrid from '@/components/extensions/ExtensionCardGrid.vue'
 import InfoCard from '@/components/shared/InfoCard.vue'
 import dayjs, { parseToShanghai } from '@/utils/time'
 import AiTextarea from '@/components/AiTextarea.vue'
-import { getKbTypeLabel, getKbTypeIcon, getKbTypeColor, parseModelSpec, buildDisplaySpec, buildLlmInfoPayload } from '@/utils/kb_utils'
+import {
+  getKbTypeLabel,
+  getKbTypeIcon,
+  getKbTypeColor,
+  parseModelSpec,
+  buildDisplaySpec,
+  buildLlmInfoPayload
+} from '@/utils/kb_utils'
 import { CHUNK_PRESET_OPTIONS, getChunkPresetDescription } from '@/utils/chunk_presets'
 
 const route = useRoute()
@@ -458,7 +463,10 @@ const buildRequestData = () => {
 
   if (newDatabase.kb_type === 'lightrag') {
     requestData.additional_params.language = newDatabase.language || 'English'
-    if (newDatabase.llm_info.model_spec || (newDatabase.llm_info.provider && newDatabase.llm_info.model_name)) {
+    if (
+      newDatabase.llm_info.model_spec ||
+      (newDatabase.llm_info.provider && newDatabase.llm_info.model_name)
+    ) {
       requestData.llm_info = buildLlmInfoPayload(newDatabase.llm_info)
     }
   }

@@ -2,7 +2,6 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
-import aiofiles
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from yuxi.agents.backends.sandbox import (
@@ -13,6 +12,7 @@ from yuxi.agents.buildin import agent_manager
 from yuxi.config import config as app_config
 from yuxi.plugins.parser import Parser
 from yuxi.repositories.conversation_repository import ConversationRepository
+from yuxi.services.upload_utils import write_upload_to_path
 from yuxi.utils.datetime_utils import utc_isoformat
 from yuxi.utils.logging_config import logger
 from yuxi.utils.paths import VIRTUAL_PATH_UPLOADS
@@ -41,21 +41,12 @@ def _ensure_workdir() -> Path:
 
 
 async def _write_upload_to_disk(upload: UploadFile, dest: Path) -> int:
-    await upload.seek(0)
-    written = 0
-    chunk_size = 1024 * 1024
-
-    async with aiofiles.open(dest, "wb") as buffer:
-        while True:
-            chunk = await upload.read(chunk_size)
-            if not chunk:
-                break
-            written += len(chunk)
-            if written > MAX_ATTACHMENT_SIZE_BYTES:
-                raise ValueError("附件过大，当前仅支持 5 MB 以内的文件")
-            await buffer.write(chunk)
-
-    return written
+    return await write_upload_to_path(
+        upload,
+        dest,
+        max_size_bytes=MAX_ATTACHMENT_SIZE_BYTES,
+        too_large_message="附件过大，当前仅支持 5 MB 以内的文件",
+    )
 
 
 def _truncate_markdown(markdown: str) -> tuple[str, bool]:

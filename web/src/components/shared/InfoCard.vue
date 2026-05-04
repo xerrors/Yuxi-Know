@@ -1,9 +1,5 @@
 <template>
-  <div
-    class="info-card"
-    :class="{ 'info-card-disabled': disabled }"
-    @click="$emit('click')"
-  >
+  <div class="info-card" :class="{ 'info-card-disabled': disabled }" @click="$emit('click')">
     <div class="info-card-header">
       <div class="info-card-icon">
         <slot name="icon">
@@ -12,9 +8,7 @@
       </div>
       <div class="info-card-info">
         <span class="info-card-name" :title="title">{{ title }}</span>
-        <span v-if="subtitle" class="info-card-subtitle" :title="subtitle">{{
-          subtitle
-        }}</span>
+        <span v-if="subtitle" class="info-card-subtitle" :title="subtitle">{{ subtitle }}</span>
       </div>
       <div class="info-card-status">
         <slot name="status" />
@@ -54,10 +48,7 @@
       </div>
     </div>
 
-    <div
-      v-if="$slots.tags || (normalizedTags && normalizedTags.length > 0)"
-      class="info-card-tags"
-    >
+    <div v-if="$slots.tags || (normalizedTags && normalizedTags.length > 0)" class="info-card-tags">
       <slot name="tags">
         <span
           v-for="(tag, idx) in normalizedTags"
@@ -253,7 +244,6 @@ const normalizedTags = computed(() => {
     background: var(--gray-10);
   }
 }
-
 
 .card-action-btn {
   display: inline-flex;

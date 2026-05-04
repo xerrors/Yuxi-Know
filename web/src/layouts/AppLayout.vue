@@ -8,6 +8,7 @@ import {
   ClipboardList,
   Blocks,
   Box,
+  FolderKanban,
   PanelLeftClose,
   PanelLeftOpen,
   MessageCirclePlus
@@ -130,6 +131,13 @@ const mainList = computed(() => {
       action: true
     }
   ]
+
+  items.push({
+    name: '工作区',
+    path: '/workspace',
+    icon: FolderKanban,
+    activeIcon: FolderKanban
+  })
 
   if (userStore.isAdmin) {
     if (!isLiteMode) {

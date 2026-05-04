@@ -52,6 +52,19 @@ const router = createRouter({
       ]
     },
     {
+      path: '/workspace',
+      name: 'workspace',
+      component: AppLayout,
+      children: [
+        {
+          path: '',
+          name: 'WorkspaceComp',
+          component: () => import('../views/WorkspaceView.vue'),
+          meta: { keepAlive: true, requiresAuth: true }
+        }
+      ]
+    },
+    {
       path: '/graph',
       name: 'graph',
       component: AppLayout,

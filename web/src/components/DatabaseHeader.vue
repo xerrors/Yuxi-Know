@@ -75,7 +75,14 @@
 import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDatabaseStore } from '@/stores/database'
-import { getKbTypeLabel, getKbTypeIcon, getKbTypeColor, parseModelSpec, buildDisplaySpec, buildLlmInfoPayload } from '@/utils/kb_utils'
+import {
+  getKbTypeLabel,
+  getKbTypeIcon,
+  getKbTypeColor,
+  parseModelSpec,
+  buildDisplaySpec,
+  buildLlmInfoPayload
+} from '@/utils/kb_utils'
 import { LeftOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons-vue'
 import HeaderComponent from '@/components/HeaderComponent.vue'
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue'

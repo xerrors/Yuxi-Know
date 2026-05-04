@@ -8,6 +8,21 @@ from langchain.messages import AIMessage, HumanMessage
 from yuxi.services import chat_service as svc
 
 
+def _empty_agents_prompt(_thread_id: str, _user_id: str) -> str:
+    return ""
+
+
+class _FakeAgentConfigRepo:
+    def __init__(self, _db):
+        pass
+
+    async def get_by_id(self, config_id: int):
+        return SimpleNamespace(id=config_id)
+
+    async def get_or_create_default(self, *, department_id: str, agent_id: str, created_by: str):
+        return SimpleNamespace(id=999, department_id=department_id, agent_id=agent_id, created_by=created_by)
+
+
 class _FakeConvRepo:
     def __init__(self, _db):
         self.saved_messages: list[dict] = []
@@ -112,10 +127,12 @@ async def test_agent_chat_uses_invoke_messages_and_persists_langgraph_state(monk
     monkeypatch.setattr(svc, "_build_langfuse_run_context", fake_build_langfuse_run_context)
     monkeypatch.setattr(svc, "get_trace_info", fake_get_trace_info)
     monkeypatch.setattr(svc, "flush_langfuse", lambda: calls.setdefault("flushed", True))
+    monkeypatch.setattr(svc, "_load_workspace_agents_prompt", _empty_agents_prompt)
 
     monkeypatch.setattr(svc.agent_manager, "get_agent", lambda agent_id: FakeAgent())
     monkeypatch.setattr(svc, "get_agent_config_by_id", fake_get_agent_config_by_id)
     monkeypatch.setattr(svc, "ConversationRepository", _FakeConvRepo)
+    monkeypatch.setattr(svc, "AgentConfigRepository", _FakeAgentConfigRepo)
     monkeypatch.setattr(svc, "save_messages_from_langgraph_state", fake_save_messages_from_langgraph_state)
     monkeypatch.setattr(svc.content_guard, "check", fake_guard_check)
 
@@ -193,10 +210,12 @@ async def test_agent_chat_sync_returns_finished_even_when_state_has_interrupt(mo
     )
     monkeypatch.setattr(svc, "get_trace_info", lambda _run_context: {})
     monkeypatch.setattr(svc, "flush_langfuse", lambda: None)
+    monkeypatch.setattr(svc, "_load_workspace_agents_prompt", _empty_agents_prompt)
 
     monkeypatch.setattr(svc.agent_manager, "get_agent", lambda agent_id: FakeAgent())
     monkeypatch.setattr(svc, "get_agent_config_by_id", fake_get_agent_config_by_id)
     monkeypatch.setattr(svc, "ConversationRepository", _FakeConvRepo)
+    monkeypatch.setattr(svc, "AgentConfigRepository", _FakeAgentConfigRepo)
     monkeypatch.setattr(svc, "save_messages_from_langgraph_state", fake_save_messages_from_langgraph_state)
     monkeypatch.setattr(svc.content_guard, "check", fake_guard_check)
 
@@ -214,3 +233,37 @@ async def test_agent_chat_sync_returns_finished_even_when_state_has_interrupt(mo
     assert result["response"] == "Need input later"
     assert result["thread_id"] == "thread-2"
     assert result["request_id"] == "req-2"
+
+
+@pytest.mark.asyncio
+async def test_build_agent_input_context_merges_workspace_agents_prompt(monkeypatch: pytest.MonkeyPatch):
+    def fake_agents_prompt(_thread_id: str, _user_id: str) -> str:
+        return "回答前先读取 AGENTS.md"
+
+    monkeypatch.setattr(svc, "_load_workspace_agents_prompt", fake_agents_prompt)
+
+    context = await svc._build_agent_input_context(
+        {"system_prompt": "原始系统提示词", "temperature": 0.1},
+        thread_id="thread-1",
+        user_id="user-1",
+    )
+
+    assert context["system_prompt"] == "原始系统提示词\n\n用户工作区 agents/AGENTS.md 内容：\n回答前先读取 AGENTS.md"
+    assert context["temperature"] == 0.1
+    assert context["thread_id"] == "thread-1"
+    assert context["user_id"] == "user-1"
+
+
+@pytest.mark.asyncio
+async def test_build_agent_input_context_keeps_prompt_when_workspace_agents_prompt_empty(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(svc, "_load_workspace_agents_prompt", _empty_agents_prompt)
+
+    context = await svc._build_agent_input_context(
+        {"system_prompt": "原始系统提示词"},
+        thread_id="thread-1",
+        user_id="user-1",
+    )
+
+    assert context["system_prompt"] == "原始系统提示词"

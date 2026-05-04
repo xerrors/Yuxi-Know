@@ -4,7 +4,15 @@ import re
 from pathlib import Path
 
 from yuxi import config as conf
-from yuxi.utils.paths import OUTPUTS_DIR_NAME, UPLOADS_DIR_NAME, VIRTUAL_PATH_PREFIX, WORKSPACE_DIR_NAME
+from yuxi.utils.logging_config import logger
+from yuxi.utils.paths import (
+    OUTPUTS_DIR_NAME,
+    UPLOADS_DIR_NAME,
+    VIRTUAL_PATH_PREFIX,
+    WORKSPACE_AGENTS_DIR_NAME,
+    WORKSPACE_AGENTS_PROMPT_FILE_NAME,
+    WORKSPACE_DIR_NAME,
+)
 
 _SAFE_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
@@ -51,6 +59,33 @@ def sandbox_workspace_dir(thread_id: str, user_id: str) -> Path:
     return _global_user_data_dir(user_id) / WORKSPACE_DIR_NAME
 
 
+def sandbox_workspace_agents_prompt_file(thread_id: str, user_id: str) -> Path:
+    return sandbox_workspace_dir(thread_id, user_id) / WORKSPACE_AGENTS_DIR_NAME / WORKSPACE_AGENTS_PROMPT_FILE_NAME
+
+
+def ensure_workspace_default_files(workspace_dir: Path) -> None:
+    agents_dir = workspace_dir / WORKSPACE_AGENTS_DIR_NAME
+    agents_file = agents_dir / WORKSPACE_AGENTS_PROMPT_FILE_NAME
+
+    try:
+        agents_dir.mkdir(parents=True, exist_ok=True)
+    except FileExistsError:
+        logger.warning("工作区默认 Agents 目录创建失败：路径已被文件占用")
+        return
+    except OSError as exc:
+        logger.warning(f"工作区默认 Agents 目录初始化失败: {exc}")
+        return
+
+    try:
+        with agents_file.open("xb"):
+            pass
+    except FileExistsError:
+        if agents_file.is_dir():
+            logger.warning("工作区默认 AGENTS.md 创建失败：路径已被目录占用")
+    except OSError as exc:
+        logger.warning(f"工作区默认 Agents 文件初始化失败: {exc}")
+
+
 def sandbox_uploads_dir(thread_id: str) -> Path:
     return _thread_root_dir(thread_id) / UPLOADS_DIR_NAME
 
@@ -61,7 +96,9 @@ def sandbox_outputs_dir(thread_id: str) -> Path:
 
 def ensure_thread_dirs(thread_id: str, user_id: str) -> None:
     _global_user_data_dir(user_id).mkdir(parents=True, exist_ok=True)
-    sandbox_workspace_dir(thread_id, user_id).mkdir(parents=True, exist_ok=True)
+    workspace_dir = sandbox_workspace_dir(thread_id, user_id)
+    workspace_dir.mkdir(parents=True, exist_ok=True)
+    ensure_workspace_default_files(workspace_dir)
     sandbox_uploads_dir(thread_id).mkdir(parents=True, exist_ok=True)
     sandbox_outputs_dir(thread_id).mkdir(parents=True, exist_ok=True)
 

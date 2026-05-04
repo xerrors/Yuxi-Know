@@ -9,6 +9,42 @@
         <span class="file-path-title">{{ filePath }}</span>
       </div>
       <div class="modal-actions">
+        <div v-if="canEdit" class="preview-mode-switch">
+          <button
+            class="preview-mode-btn"
+            :class="{ active: editMode === 'preview' }"
+            @click="editMode = 'preview'"
+            title="预览"
+          >
+            <Eye :size="16" />
+          </button>
+          <button
+            class="preview-mode-btn"
+            :class="{ active: editMode === 'edit' }"
+            @click="editMode = 'edit'"
+            title="编辑"
+          >
+            <Pencil :size="16" />
+          </button>
+        </div>
+        <button
+          v-if="canEdit && editMode === 'edit'"
+          class="modal-action-btn"
+          :disabled="saving || !draftChanged"
+          @click="requestSave"
+          title="保存"
+        >
+          <Save :size="18" />
+        </button>
+        <button
+          v-if="canEdit && editMode === 'edit'"
+          class="modal-action-btn"
+          :disabled="saving"
+          @click="cancelEdit"
+          title="取消编辑"
+        >
+          <X :size="18" />
+        </button>
         <div v-if="isHtmlFile" class="preview-mode-switch">
           <button
             class="preview-mode-btn"
@@ -43,14 +79,28 @@
         >
           <Maximize2 :size="18" />
         </button>
-        <button v-if="showClose" class="modal-action-btn" @click="$emit('close')" title="关闭">
-          <X :size="18" />
+        <button
+          v-if="showClose"
+          class="modal-action-btn"
+          @click="$emit('close')"
+          :title="closeTitle"
+          :aria-label="closeTitle"
+        >
+          <component :is="closeIconComponent" :size="18" />
         </button>
       </div>
     </div>
 
     <div class="file-content" :class="contentClass">
-      <template v-if="file?.previewType === 'image' && file?.previewUrl">
+      <template v-if="canEdit && editMode === 'edit'">
+        <textarea
+          v-model="draftContent"
+          class="file-edit-textarea"
+          :disabled="saving"
+          spellcheck="false"
+        />
+      </template>
+      <template v-else-if="file?.previewType === 'image' && file?.previewUrl">
         <div class="image-preview-wrapper">
           <img :src="file.previewUrl" :alt="filePath" class="image-preview" />
         </div>
@@ -190,13 +240,30 @@
 
 <script setup>
 import { computed, onUnmounted, ref, watch } from 'vue'
-import { Code2, Download, Globe, Maximize2, X } from 'lucide-vue-next'
+import {
+  Code2,
+  Download,
+  Eye,
+  Globe,
+  Maximize2,
+  PanelRightClose,
+  Pencil,
+  Save,
+  X
+} from 'lucide-vue-next'
 import { MdPreview } from 'md-editor-v3'
 import hljs from 'highlight.js/lib/common'
 import 'md-editor-v3/lib/preview.css'
 import { useThemeStore } from '@/stores/theme'
 import { getFileIcon, getFileIconColor } from '@/utils/file_utils'
-import { getCodeLanguageByPath, isHtmlPreview, isMarkdownPreview } from '@/utils/file_preview'
+import {
+  getCodeLanguageByPath,
+  getPreviewFileExtension,
+  isHtmlPreview,
+  isMarkdownPreview
+} from '@/utils/file_preview'
+
+const EDITABLE_EXTENSIONS = new Set(['.md', '.markdown', '.mdx', '.txt'])
 
 const props = defineProps({
   file: {
@@ -223,7 +290,20 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
+  closeVariant: {
+    type: String,
+    default: 'close',
+    validator: (value) => ['close', 'collapse-right'].includes(value)
+  },
   fullHeight: {
+    type: Boolean,
+    default: false
+  },
+  editable: {
+    type: Boolean,
+    default: false
+  },
+  saving: {
     type: Boolean,
     default: false
   },
@@ -237,15 +317,32 @@ const props = defineProps({
   }
 })
 
-defineEmits(['close', 'download'])
+const emit = defineEmits(['close', 'download', 'save'])
 
 const themeStore = useThemeStore()
 const theme = computed(() => (themeStore.isDark ? 'dark' : 'light'))
+const closeTitle = computed(() =>
+  props.closeVariant === 'collapse-right' ? '收起预览面板' : '关闭预览'
+)
+const closeIconComponent = computed(() =>
+  props.closeVariant === 'collapse-right' ? PanelRightClose : X
+)
 const htmlPreviewMode = ref('render')
+const editMode = ref('preview')
+const draftContent = ref('')
 const fullscreenPreviewVisible = ref(false)
 const htmlPreviewRenderKey = ref(0)
 
 const isMarkdown = computed(() => isMarkdownPreview(props.filePath, props.file?.previewType))
+const canEdit = computed(
+  () =>
+    props.editable &&
+    props.file?.supported !== false &&
+    typeof props.file?.content === 'string' &&
+    EDITABLE_EXTENSIONS.has(getPreviewFileExtension(props.filePath))
+)
+const savedContent = computed(() => formatContent(props.file?.content))
+const draftChanged = computed(() => draftContent.value !== savedContent.value)
 const isHtmlFile = computed(
   () =>
     props.file?.previewType === 'text' &&
@@ -293,6 +390,20 @@ const formatContent = (content) => {
   return String(content)
 }
 
+const syncDraftContent = () => {
+  draftContent.value = savedContent.value
+  editMode.value = 'preview'
+}
+
+const requestSave = () => {
+  if (!canEdit.value || props.saving) return
+  emit('save', draftContent.value)
+}
+
+const cancelEdit = () => {
+  syncDraftContent()
+}
+
 const openFullscreenPreview = () => {
   if (!props.file) return
   fullscreenPreviewVisible.value = true
@@ -308,6 +419,10 @@ watch(
     htmlPreviewMode.value = 'render'
   }
 )
+
+watch([() => props.filePath, () => props.file?.content, canEdit], syncDraftContent, {
+  immediate: true
+})
 
 watch([() => props.filePath, () => props.file?.previewType, () => props.file?.content], () => {
   if (isHtmlFile.value) {
@@ -381,8 +496,8 @@ onUnmounted(() => {
 
 .modal-action-btn,
 .preview-mode-btn {
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  height: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -399,6 +514,18 @@ onUnmounted(() => {
 .preview-mode-btn:hover {
   background: var(--gray-100);
   color: var(--gray-900);
+}
+
+.modal-action-btn:disabled,
+.preview-mode-btn:disabled {
+  color: var(--gray-300);
+  cursor: not-allowed;
+}
+
+.modal-action-btn:disabled:hover,
+.preview-mode-btn:disabled:hover {
+  background: transparent;
+  color: var(--gray-300);
 }
 
 .preview-mode-btn.active {
@@ -434,6 +561,25 @@ onUnmounted(() => {
   .flat-md-preview {
     padding: 12px;
   }
+}
+
+.file-edit-textarea {
+  width: 100%;
+  min-height: calc(80vh - 40px);
+  padding: 12px;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: var(--gray-0);
+  color: var(--gray-1000);
+  font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.file-edit-textarea:disabled {
+  color: var(--gray-600);
+  background: var(--gray-25);
 }
 
 .file-content pre,
