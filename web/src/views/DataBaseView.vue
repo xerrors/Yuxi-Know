@@ -250,7 +250,7 @@ import ExtensionCardGrid from '@/components/extensions/ExtensionCardGrid.vue'
 import InfoCard from '@/components/shared/InfoCard.vue'
 import dayjs, { parseToShanghai } from '@/utils/time'
 import AiTextarea from '@/components/AiTextarea.vue'
-import { getKbTypeLabel, getKbTypeIcon, getKbTypeColor, parseModelSpec, buildDisplaySpec } from '@/utils/kb_utils'
+import { getKbTypeLabel, getKbTypeIcon, getKbTypeColor, parseModelSpec, buildDisplaySpec, buildLlmInfoPayload } from '@/utils/kb_utils'
 import { CHUNK_PRESET_OPTIONS, getChunkPresetDescription } from '@/utils/chunk_presets'
 
 const route = useRoute()
@@ -458,17 +458,8 @@ const buildRequestData = () => {
 
   if (newDatabase.kb_type === 'lightrag') {
     requestData.additional_params.language = newDatabase.language || 'English'
-    if (newDatabase.llm_info.model_spec) {
-      requestData.llm_info = {
-        model_spec: newDatabase.llm_info.model_spec,
-        provider: newDatabase.llm_info.provider,
-        model_name: newDatabase.llm_info.model_name
-      }
-    } else if (newDatabase.llm_info.provider && newDatabase.llm_info.model_name) {
-      requestData.llm_info = {
-        provider: newDatabase.llm_info.provider,
-        model_name: newDatabase.llm_info.model_name
-      }
+    if (newDatabase.llm_info.model_spec || (newDatabase.llm_info.provider && newDatabase.llm_info.model_name)) {
+      requestData.llm_info = buildLlmInfoPayload(newDatabase.llm_info)
     }
   }
 

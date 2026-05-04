@@ -75,7 +75,7 @@
 import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDatabaseStore } from '@/stores/database'
-import { getKbTypeLabel, getKbTypeIcon, getKbTypeColor, parseModelSpec, buildDisplaySpec } from '@/utils/kb_utils'
+import { getKbTypeLabel, getKbTypeIcon, getKbTypeColor, parseModelSpec, buildDisplaySpec, buildLlmInfoPayload } from '@/utils/kb_utils'
 import { LeftOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons-vue'
 import HeaderComponent from '@/components/HeaderComponent.vue'
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue'
@@ -132,11 +132,7 @@ const handleEditSubmit = () => {
 
       // 如果是 LightRAG 类型，包含 llm_info
       if (database.value.kb_type === 'lightrag') {
-        updateData.llm_info = {
-          model_spec: editForm.llm_info.model_spec,
-          provider: editForm.llm_info.provider,
-          model_name: editForm.llm_info.model_name
-        }
+        updateData.llm_info = buildLlmInfoPayload(editForm.llm_info)
       }
 
       await store.updateDatabaseInfo(updateData)

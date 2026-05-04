@@ -158,7 +158,7 @@ import { ref, reactive, computed, h, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDatabaseStore } from '@/stores/database'
 import { useUserStore } from '@/stores/user'
-import { getKbTypeLabel, getKbTypeColor, parseModelSpec, buildDisplaySpec } from '@/utils/kb_utils'
+import { getKbTypeLabel, getKbTypeColor, parseModelSpec, buildDisplaySpec, buildLlmInfoPayload } from '@/utils/kb_utils'
 import {
   CHUNK_PRESET_OPTIONS,
   CHUNK_PRESET_LABEL_MAP,
@@ -377,11 +377,7 @@ const handleEditSubmit = () => {
 
       // 如果是 LightRAG 类型，包含 llm_info
       if (database.value.kb_type === 'lightrag') {
-        updateData.llm_info = {
-          model_spec: editForm.llm_info.model_spec,
-          provider: editForm.llm_info.provider,
-          model_name: editForm.llm_info.model_name
-        }
+        updateData.llm_info = buildLlmInfoPayload(editForm.llm_info)
       }
 
       await store.updateDatabaseInfo(updateData)
