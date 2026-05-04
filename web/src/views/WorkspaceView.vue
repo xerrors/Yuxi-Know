@@ -558,7 +558,8 @@ const stopPreviewResize = () => {
 }
 
 const resizePreview = (event) => {
-  if (!workspaceMainRef.value || resizePointerId === null || event.pointerId !== resizePointerId) return
+  if (!workspaceMainRef.value || resizePointerId === null || event.pointerId !== resizePointerId)
+    return
   const rect = workspaceMainRef.value.getBoundingClientRect()
   const relativeX = event.clientX - rect.left
   const nextPreviewPercent = Math.round(((rect.width - relativeX) / rect.width) * 100)

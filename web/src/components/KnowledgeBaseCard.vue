@@ -158,7 +158,13 @@ import { ref, reactive, computed, h, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDatabaseStore } from '@/stores/database'
 import { useUserStore } from '@/stores/user'
-import { getKbTypeLabel, getKbTypeColor, parseModelSpec, buildDisplaySpec, buildLlmInfoPayload } from '@/utils/kb_utils'
+import {
+  getKbTypeLabel,
+  getKbTypeColor,
+  parseModelSpec,
+  buildDisplaySpec,
+  buildLlmInfoPayload
+} from '@/utils/kb_utils'
 import {
   CHUNK_PRESET_OPTIONS,
   CHUNK_PRESET_LABEL_MAP,
