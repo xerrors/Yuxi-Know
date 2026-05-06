@@ -26,15 +26,13 @@
             size="middle"
             :loading="benchmarksLoading"
             @click="() => loadBenchmarks(true)"
-            :icon="h(ReloadOutlined)"
-            class="refresh-benchmarks-btn"
+            :icon="h(RefreshCw, { size: 16 })"
+            class="refresh-benchmarks-btn lucide-icon-btn"
             title="刷新评估基准列表"
           />
         </div>
       </div>
       <div class="toolbar-right">
-        <!-- 检索配置按钮 -->
-        <a-button size="middle" @click="openSearchConfigModal" :icon="h(SettingOutlined)" />
         <!-- 开始评估按钮 -->
         <a-button
           type="primary"
@@ -116,8 +114,8 @@
               size="small"
               :loading="refreshingHistory"
               @click="refreshHistory"
-              :icon="h('ReloadOutlined')"
-              class="refresh-btn"
+              :icon="h(RefreshCw, { size: 14 })"
+              class="refresh-btn lucide-icon-btn"
             >
               刷新
             </a-button>
@@ -130,12 +128,7 @@
             size="small"
           >
             <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'status'">
-                <a-tag :color="getStatusColor(record.status)">
-                  {{ getStatusText(record.status) }}
-                </a-tag>
-              </template>
-              <template v-else-if="column.key === 'overall_score'">
+              <template v-if="column.key === 'overall_score'">
                 <span v-if="record.overall_score !== null">
                   <a-tag :color="getScoreTagColor(record.overall_score)">
                     {{ (record.overall_score * 100).toFixed(0) }}%
@@ -151,8 +144,11 @@
                     size="small"
                     @click="viewResults(record.task_id)"
                   >
-                    查看结果
+                    查看
                   </a-button>
+                  <a-tag v-else :color="getStatusColor(record.status)">
+                    {{ getStatusText(record.status) }}
+                  </a-tag>
                   <a-popconfirm
                     title="确定要删除这条评估记录吗？"
                     description="删除后将无法恢复"
@@ -394,12 +390,6 @@
     </div>
   </a-modal>
 
-  <!-- 检索配置弹窗 -->
-  <SearchConfigModal
-    v-model="searchConfigModalVisible"
-    :database-id="databaseId"
-    @save="handleSearchConfigSave"
-  />
 </template>
 
 <script setup>
@@ -407,8 +397,7 @@ import { ref, reactive, onMounted, computed, h } from 'vue'
 import { message, Modal } from 'ant-design-vue'
 import { evaluationApi } from '@/apis/knowledge_api'
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue'
-import SearchConfigModal from './SearchConfigModal.vue'
-import { SettingOutlined, ReloadOutlined } from '@ant-design/icons-vue'
+import { RefreshCw } from 'lucide-vue-next'
 import { useTaskerStore } from '@/stores/tasker'
 
 const props = defineProps({
@@ -435,7 +424,6 @@ const selectedResult = ref(null)
 const detailedResults = ref([])
 const evaluationStats = ref({})
 const resultsLoading = ref(false)
-const searchConfigModalVisible = ref(false)
 const refreshingHistory = ref(false)
 const showErrorsOnly = ref(false)
 const currentPage = ref(1)
@@ -512,12 +500,6 @@ const historyColumns = [
     }
   },
   {
-    title: '状态',
-    dataIndex: 'status',
-    key: 'status',
-    width: 100
-  },
-  {
     title: 'Recall@10',
     key: 'recall_10',
     width: 100,
@@ -568,7 +550,7 @@ const historyColumns = [
   {
     title: '操作',
     key: 'actions',
-    width: 150
+    width: 100
   }
 ]
 
@@ -657,17 +639,6 @@ const loadResultsWithPagination = async () => {
   } finally {
     resultsLoading.value = false
   }
-}
-
-// 打开检索配置弹窗
-const openSearchConfigModal = () => {
-  searchConfigModalVisible.value = true
-}
-
-// 处理检索配置保存
-const handleSearchConfigSave = (config) => {
-  console.log('RAG评估中的检索配置已更新:', config)
-  // 可以在这里添加配置更新后的处理逻辑
 }
 
 // 加载基准列表

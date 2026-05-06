@@ -5,14 +5,14 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from yuxi import config
 from yuxi.knowledge import knowledge_base
+from yuxi.knowledge.eval.benchmark_generation import dump_benchmark_item, iter_generated_benchmark_items
+from yuxi.knowledge.eval.evaluator import aggregate_metrics, evaluate_question
 from yuxi.models import select_model
 from yuxi.repositories.evaluation_repository import EvaluationRepository
 from yuxi.repositories.knowledge_base_repository import KnowledgeBaseRepository
 from yuxi.services.task_service import TaskContext, tasker
 from yuxi.utils import logger
-from yuxi.utils.evaluation_metrics import EvaluationMetricsCalculator
 
 
 class EvaluationService:
@@ -288,9 +288,6 @@ class EvaluationService:
         return {"task_id": task_id, "message": "基准生成任务已提交"}
 
     async def _generate_benchmark_task(self, context: TaskContext):
-        import math
-        import random
-
         await context.set_progress(0, "初始化")
 
         task = context._tasker._tasks.get(context.task_id)
@@ -304,11 +301,6 @@ class EvaluationService:
         embedding_model_id = payload.get("embedding_model_id")
         llm_model_spec = payload.get("llm_model_spec") or (payload.get("llm_config") or {}).get("model_spec")
 
-        if neighbors_count < 0:
-            neighbors_count = 0
-        if neighbors_count > 10:
-            neighbors_count = 10
-
         kb_instance = await knowledge_base.aget_kb(db_id)
         if not kb_instance:
             await context.set_message("知识库不存在")
@@ -317,35 +309,6 @@ class EvaluationService:
             await context.set_message("暂不支持该类型知识库生成评估基准")
             raise ValueError("Unsupported KB type for benchmark generation")
 
-        await context.set_progress(5, "加载chunks")
-
-        all_chunks = []
-        for fid, finfo in kb_instance.files_meta.items():
-            if finfo.get("database_id") != db_id:
-                continue
-            try:
-                content_info = await kb_instance.get_file_content(db_id, fid)
-                lines = content_info.get("lines", [])
-                for line in lines:
-                    all_chunks.append(
-                        {
-                            "id": line.get("id"),
-                            "content": line.get("content", ""),
-                            "file_id": fid,
-                            "chunk_index": line.get("chunk_order_index"),
-                        }
-                    )
-            except Exception:
-                continue
-
-        if not all_chunks:
-            await context.set_message("知识库为空或未解析到chunks")
-            raise ValueError("No chunks found in knowledge base")
-
-        contents = [c["content"] for c in all_chunks]
-
-        await context.set_progress(15, "向量化")
-
         db_meta = kb_instance.databases_meta.get(db_id, {})
         embed_info = db_meta.get("embed_info", {})
         if not embedding_model_id:
@@ -353,94 +316,28 @@ class EvaluationService:
         if not embedding_model_id:
             raise ValueError("Embedding model not specified")
 
-        from yuxi.models import select_embedding_model, select_model
-
-        embed_model = select_embedding_model(embedding_model_id)
-        batch_size = int(getattr(embed_model, "batch_size", 40) or 40)
-        if embedding_model_id in config.embed_model_names:
-            batch_size = config.embed_model_names[embedding_model_id].batch_size
-        # TODO: Performance Optimization
-        # Currently, we re-calculate embeddings for ALL chunks in the KB for every benchmark generation.
-        # This is inefficient for large KBs (O(N) embedding calls).
-        # Optimization: Reuse existing embeddings from Vector DB if embedding_model_id matches the KB's embedding model.
-        embeddings = await embed_model.abatch_encode(contents, batch_size=batch_size)
-        norms = [math.sqrt(sum(x * x for x in vec)) or 1.0 for vec in embeddings]
-
-        def cosine(a, b, na, nb):
-            s = 0.0
-            for i in range(len(a)):
-                s += a[i] * b[i]
-            return s / (na * nb)
-
-        llm = select_model(model_spec=llm_model_spec)
-
         benchmark_id = f"benchmark_{uuid.uuid4().hex[:8]}"
         bench_dir = await self._get_benchmark_dir(db_id)
         data_file_path = os.path.join(bench_dir, f"{benchmark_id}.jsonl")
-
         generated = 0
-        attempts = 0
 
-        await context.set_progress(0, "准备生成样本")
-
-        with open(data_file_path, "w", encoding="utf-8") as f:
-            # Allow more attempts to generate enough questions
-            max_attempts = max(count * 5, 50)
-            while generated < count and attempts < max_attempts:
-                attempts += 1
-                i0 = random.randrange(len(all_chunks))
-                e0 = embeddings[i0]
-                n0 = norms[i0]
-
-                sims = []
-                for j in range(len(all_chunks)):
-                    if j == i0:
-                        continue
-                    s = cosine(e0, embeddings[j], n0, norms[j])
-                    sims.append((j, s))
-                sims.sort(key=lambda x: x[1], reverse=True)
-                top_js = [j for j, _ in sims[:neighbors_count]]
-
-                ctx_items = []
-                ctx_items.append((all_chunks[i0]["id"], all_chunks[i0]["content"]))
-                for j in top_js:
-                    ctx_items.append((all_chunks[j]["id"], all_chunks[j]["content"]))
-                allowed_ids = {cid for cid, _ in ctx_items}
-                context_text = "\n\n".join([f"片段ID={cid}\n{content}" for cid, content in ctx_items])
-
-                prompt = (
-                    "你将基于以下上下文生成一个可由上下文准确回答的问题与标准答案。"
-                    "仅返回一个JSON对象，不要包含其他文字。"
-                    "键为 query、gold_answer、gold_chunk_ids。gold_chunk_ids 必须是上述上下文片段的ID子集。\n\n"
-                    "上下文：\n" + context_text + "\n"
-                )
-
-                try:
-                    resp = await llm.call(prompt, False)
-                    content = resp.content if resp else ""
-
-                    import json_repair
-
-                    obj = json_repair.loads(content)
-                    q = obj.get("query")
-                    a = obj.get("gold_answer")
-                    gids = obj.get("gold_chunk_ids")
-                    if not q or not a or not isinstance(gids, list):
-                        logger.warning(f"Generated JSON missing fields or invalid format: {obj}")
-                        continue
-
-                    gids = [str(x) for x in gids if str(x) in allowed_ids]
-                    if not gids:
-                        logger.warning("Generated gold_chunk_ids not found in allowed context")
-                        continue
-
-                    line = {"query": q, "gold_chunk_ids": gids, "gold_answer": a}
-                    f.write(json.dumps(line, ensure_ascii=False) + "\n")
+        try:
+            with open(data_file_path, "w", encoding="utf-8") as f:
+                async for item in iter_generated_benchmark_items(
+                    kb_instance=kb_instance,
+                    db_id=db_id,
+                    count=count,
+                    neighbors_count=neighbors_count,
+                    embedding_model_id=embedding_model_id,
+                    llm_model_spec=llm_model_spec,
+                    progress_cb=context.set_progress,
+                ):
+                    f.write(dump_benchmark_item(item))
                     generated += 1
-                    await context.set_progress(0 + int(99 * generated / max(count, 1)), f"已生成 {generated}/{count}")
-                except Exception as e:
-                    logger.warning(f"Benchmark generation failed for one item: {e}")
-                    continue
+        except ValueError as e:
+            if str(e) == "No chunks found in knowledge base":
+                await context.set_message("知识库为空或未解析到chunks")
+            raise
 
         await self.eval_repo.create_benchmark(
             {
@@ -590,109 +487,33 @@ class EvaluationService:
                     await self.eval_repo.update_result(task_id, payload)
 
             for i, question_data in enumerate(benchmark_data):
-                # 检查任务是否被取消
                 await context.raise_if_cancelled()
                 progress = 10 + (i / total_questions) * 80
                 await context.set_progress(progress, f"评估 {i + 1}/{total_questions}")
 
-                # 执行查询
-                query_result = await kb_instance.aquery(question_data["query"], db_id, **retrieval_config)
-
-                # 处理结果
-                if isinstance(query_result, dict):
-                    generated_answer = query_result.get("answer", "")
-                    retrieved_chunks = query_result.get("retrieved_chunks", [])
-                else:
-                    retrieved_chunks = query_result if isinstance(query_result, list) else []
-                    generated_answer = ""
-
-                # 如果没有生成的答案，但有检索结果且配置了 LLM，则生成答案
-                if not generated_answer and retrieved_chunks and retrieval_config.get("answer_llm"):
-                    logger.debug(f"使用 LLM {retrieval_config.get('answer_llm')} 生成答案...")
-                    try:
-                        # 从配置中获取 LLM
-                        model_spec = retrieval_config["answer_llm"]
-                        llm = select_model(model_spec=model_spec)
-
-                        # 构建上下文
-                        context_docs = []
-                        for idx, chunk in enumerate(retrieved_chunks[:5]):  # 使用前5个最相关的文档
-                            content = chunk.get("content", "")
-                            if content:
-                                context_docs.append(f"文档 {idx + 1}:\n{content}")
-
-                        context_text = "\\n\\n".join(context_docs)
-
-                        # 构建提示词
-                        prompt = (
-                            f"基于以下上下文信息，请回答用户的问题。\n\n"
-                            f"上下文信息：{context_text}\n\n"
-                            f"用户问题：{question_data['query']}\n\n"
-                            "请根据上下文信息准确回答问题。\n\n"
-                            "如果上下文中缺少相关信息，请回答“信息不足，无法回答”。\n\n"
-                        )
-
-                        # 生成答案
-                        response = await llm.call(prompt, stream=False)
-                        generated_answer = response.content if response else ""
-                        logger.debug(f"LLM 生成的答案长度: {len(generated_answer) if generated_answer else 0}")
-
-                    except Exception as e:
-                        logger.error(f"LLM 生成答案失败: {e}")
-                        generated_answer = ""
-
-                # 计算指标
-                current_metrics = {}
-                retrieval_scores = {}
-                answer_scores = {}
+                question_result = await evaluate_question(
+                    kb_instance=kb_instance,
+                    db_id=db_id,
+                    question_data=question_data,
+                    retrieval_config=retrieval_config,
+                    has_gold_chunks=benchmark_row.has_gold_chunks,
+                    has_gold_answers=benchmark_row.has_gold_answers,
+                    judge_llm=judge_llm,
+                    select_model_fn=select_model,
+                )
 
                 if benchmark_row.has_gold_chunks and question_data.get("gold_chunk_ids"):
-                    retrieval_scores = EvaluationMetricsCalculator.calculate_retrieval_metrics(
-                        retrieved_chunks, question_data["gold_chunk_ids"]
-                    )
-                    current_metrics.update(retrieval_scores)
-                    all_retrieval_metrics.append(retrieval_scores)
-
-                if benchmark_row.has_gold_answers and question_data.get("gold_answer"):
-                    if judge_llm:
-                        # 评判过程包含 LLM 调用
-                        answer_scores = await EvaluationMetricsCalculator.calculate_answer_metrics(
-                            query=question_data["query"],
-                            generated_answer=generated_answer,
-                            gold_answer=question_data["gold_answer"],
-                            judge_llm=judge_llm,
-                        )
-                        current_metrics.update(answer_scores)
-                        all_answer_metrics.append(answer_scores)
-                    else:
-                        logger.warning("需要计算答案指标但未配置 Judge LLM")
+                    all_retrieval_metrics.append(question_result["retrieval_scores"])
+                if benchmark_row.has_gold_answers and question_data.get("gold_answer") and judge_llm:
+                    all_answer_metrics.append(question_result["answer_scores"])
 
                 await self.eval_repo.upsert_result_detail(
                     task_id=task_id,
                     query_index=i,
-                    data={
-                        "query_text": question_data["query"],
-                        "gold_chunk_ids": question_data.get("gold_chunk_ids"),
-                        "gold_answer": question_data.get("gold_answer"),
-                        "generated_answer": generated_answer,
-                        "retrieved_chunks": retrieved_chunks,
-                        "metrics": current_metrics,
-                    },
+                    data=question_result["detail"],
                 )
 
-                # 计算当前累计指标
-                current_overall_metrics = {}
-                if all_retrieval_metrics:
-                    keys = all_retrieval_metrics[0].keys()
-                    for k in keys:
-                        current_overall_metrics[k] = sum(m.get(k, 0) for m in all_retrieval_metrics) / len(
-                            all_retrieval_metrics
-                        )
-                if all_answer_metrics:
-                    scores = [m.get("score", 0) for m in all_answer_metrics]
-                    current_overall_metrics["answer_correctness"] = sum(scores) / len(scores) if scores else 0.0
-
-                # 更新 Tasker 的 result 以便实时获取当前指标
+                current_overall_metrics, _ = aggregate_metrics(all_retrieval_metrics, all_answer_metrics)
                 await context.set_result(
                     {
                         "current_metrics": current_overall_metrics,
@@ -701,31 +522,13 @@ class EvaluationService:
                     }
                 )
 
-                # 定期更新文件 (每5个或最后一个)
                 if (i + 1) % 5 == 0 or (i + 1) == total_questions:
                     await update_result_db(completed=i + 1)
 
-            # 最终计算
             await context.set_progress(95, "计算最终指标")
-
-            # 汇总指标
-            overall_metrics = {}
-
-            # 检索指标平均值
-            if all_retrieval_metrics:
-                keys = all_retrieval_metrics[0].keys()
-                for k in keys:
-                    overall_metrics[k] = sum(m.get(k, 0) for m in all_retrieval_metrics) / len(all_retrieval_metrics)
-
-            # 答案指标平均值
-            if all_answer_metrics:
-                scores = [m.get("score", 0) for m in all_answer_metrics]
-                overall_metrics["answer_correctness"] = sum(scores) / len(scores) if scores else 0.0
-
-            overall_score = EvaluationMetricsCalculator.calculate_overall_score(
-                all_retrieval_metrics, all_answer_metrics
+            overall_metrics, overall_score = aggregate_metrics(
+                all_retrieval_metrics, all_answer_metrics, include_overall_score=True
             )
-            overall_metrics["overall_score"] = overall_score
 
             await update_result_db(
                 status="completed",

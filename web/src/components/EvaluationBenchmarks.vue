@@ -6,16 +6,16 @@
         <span class="total-count">{{ benchmarks.length }} 个基准</span>
       </div>
       <div class="header-right">
-        <a-button @click="loadBenchmarks">
-          <template #icon><ReloadOutlined /></template>
+        <a-button class="lucide-icon-btn" @click="loadBenchmarks">
+          <template #icon><RefreshCw :size="16" /></template>
           刷新
         </a-button>
-        <a-button type="primary" @click="showUploadModal">
-          <template #icon><UploadOutlined /></template>
+        <a-button type="primary" class="lucide-icon-btn" @click="showUploadModal">
+          <template #icon><Upload :size="16" /></template>
           上传基准
         </a-button>
-        <a-button @click="showGenerateModal">
-          <template #icon><RobotOutlined /></template>
+        <a-button class="lucide-icon-btn" @click="showGenerateModal">
+          <template #icon><Bot :size="16" /></template>
           自动生成
         </a-button>
       </div>
@@ -45,19 +45,31 @@
             <div class="benchmark-header">
               <h4 class="benchmark-name">{{ benchmark.name }}</h4>
               <div class="benchmark-actions">
-                <a-button type="text" size="small" @click.stop="previewBenchmark(benchmark)">
-                  <EyeOutlined />
+                <a-button
+                  type="text"
+                  size="small"
+                  class="lucide-icon-btn"
+                  @click.stop="previewBenchmark(benchmark)"
+                >
+                  <Eye :size="15" />
                 </a-button>
                 <a-button
                   type="text"
                   size="small"
+                  class="lucide-icon-btn"
                   :loading="!!downloadingBenchmarkMap[benchmark.benchmark_id]"
                   @click.stop="downloadBenchmark(benchmark)"
                 >
-                  <DownloadOutlined />
+                  <Download :size="15" />
                 </a-button>
-                <a-button type="text" size="small" danger @click.stop="deleteBenchmark(benchmark)">
-                  <DeleteOutlined />
+                <a-button
+                  type="text"
+                  size="small"
+                  class="lucide-icon-btn"
+                  danger
+                  @click.stop="deleteBenchmark(benchmark)"
+                >
+                  <Trash2 :size="15" />
                 </a-button>
               </div>
             </div>
@@ -69,23 +81,23 @@
               <div class="meta-row">
                 <span
                   v-if="benchmark.has_gold_chunks && benchmark.has_gold_answers"
-                  class="type-badge type-both"
+                  class="card-tag benchmark-tag tag-purple"
                 >
                   检索 + 问答
                 </span>
-                <span v-else-if="benchmark.has_gold_chunks" class="type-badge type-retrieval">
+                <span v-else-if="benchmark.has_gold_chunks" class="card-tag benchmark-tag tag-blue">
                   检索评估
                 </span>
-                <span v-else-if="benchmark.has_gold_answers" class="type-badge type-answer">
+                <span v-else-if="benchmark.has_gold_answers" class="card-tag benchmark-tag tag-gold">
                   问答评估
                 </span>
-                <span v-else class="type-badge type-query">仅查询</span>
+                <span v-else class="card-tag benchmark-tag">仅查询</span>
 
-                <span :class="['tag', benchmark.has_gold_chunks ? 'tag-yes' : 'tag-no']">
-                  {{ benchmark.has_gold_chunks ? '✓' : '✗' }} 黄金Chunk
+                <span v-if="benchmark.has_gold_chunks" class="card-tag benchmark-tag tag-green">
+                  Gold Chunks
                 </span>
-                <span :class="['tag', benchmark.has_gold_answers ? 'tag-yes' : 'tag-no']">
-                  {{ benchmark.has_gold_answers ? '✓' : '✗' }} 黄金答案
+                <span v-if="benchmark.has_gold_answers" class="card-tag benchmark-tag tag-green">
+                  Gold Answer
                 </span>
               </div>
             </div>
@@ -125,13 +137,13 @@
               {{ previewData.question_count }}
             </span>
             <span class="meta-item">
-              <span class="meta-label">黄金Chunk:</span>
+              <span class="meta-label">Gold Chunks:</span>
               <span :class="previewData.has_gold_chunks ? 'status-yes' : 'status-no'">
                 {{ previewData.has_gold_chunks ? '有' : '无' }}
               </span>
             </span>
             <span class="meta-item">
-              <span class="meta-label">黄金答案:</span>
+              <span class="meta-label">Gold Answer:</span>
               <span :class="previewData.has_gold_answers ? 'status-yes' : 'status-no'">
                 {{ previewData.has_gold_answers ? '有' : '无' }}
               </span>
@@ -200,14 +212,7 @@
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { message, Modal } from 'ant-design-vue'
-import {
-  UploadOutlined,
-  RobotOutlined,
-  EyeOutlined,
-  DownloadOutlined,
-  DeleteOutlined,
-  ReloadOutlined
-} from '@ant-design/icons-vue'
+import { Bot, Download, Eye, RefreshCw, Trash2, Upload } from 'lucide-vue-next'
 import { evaluationApi } from '@/apis/knowledge_api'
 import { useTaskerStore } from '@/stores/tasker'
 import BenchmarkUploadModal from './modals/BenchmarkUploadModal.vue'
@@ -256,14 +261,14 @@ const questionColumns = [
     ellipsis: false
   },
   {
-    title: '黄金Chunk',
+    title: 'Gold Chunks',
     dataIndex: 'gold_chunk_ids',
     key: 'gold_chunk_ids',
     width: 200,
     ellipsis: false
   },
   {
-    title: '黄金答案',
+    title: 'Gold Answer',
     dataIndex: 'gold_answer',
     key: 'gold_answer',
     width: 420,
@@ -611,47 +616,10 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
-.tag {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 6px;
-  border-radius: 3px;
-  font-size: 11px;
-  font-weight: 500;
-  background: var(--main-50);
-  color: var(--color-text-tertiary);
-
-  &.tag-yes {
-    // background: var(--color-success-50);
-    color: var(--main-500);
-  }
-}
-
-.type-badge {
-  padding: 1px 6px;
-  border-radius: 3px;
-  font-size: 11px;
-  font-weight: 500;
-
-  &.type-both {
-    background: var(--color-accent-50);
-    color: var(--color-accent-700);
-  }
-
-  &.type-retrieval {
-    background: var(--color-info-50);
-    color: var(--color-info-700);
-  }
-
-  &.type-answer {
-    background: var(--color-warning-50);
-    color: var(--color-warning-700);
-  }
-
-  &.type-query {
-    background: var(--gray-100);
-    color: var(--gray-700);
-  }
+.benchmark-tag {
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 4px;
 }
 
 .benchmark-footer {
