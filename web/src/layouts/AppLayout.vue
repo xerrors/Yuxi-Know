@@ -17,6 +17,7 @@ import {
 import { useConfigStore } from '@/stores/config'
 import { useAgentStore } from '@/stores/agent'
 import { useChatThreadsStore } from '@/stores/chatThreads'
+import { useChatUIStore } from '@/stores/chatUI'
 import { useDatabaseStore } from '@/stores/database'
 import { useInfoStore } from '@/stores/info'
 import { useTaskerStore } from '@/stores/tasker'
@@ -31,6 +32,7 @@ import ConversationNavSection from '@/components/ConversationNavSection.vue'
 const configStore = useConfigStore()
 const agentStore = useAgentStore()
 const chatThreadsStore = useChatThreadsStore()
+const chatUIStore = useChatUIStore()
 const databaseStore = useDatabaseStore()
 const infoStore = useInfoStore()
 const taskerStore = useTaskerStore()
@@ -54,7 +56,7 @@ const showDebugModal = ref(false)
 // Add state for settings modal
 const showSettingsModal = ref(false)
 
-const sidebarCollapsed = ref(false)
+const { sidebarCollapsed } = storeToRefs(chatUIStore)
 
 // Provide settings modal methods to child components
 const openSettingsModal = () => {

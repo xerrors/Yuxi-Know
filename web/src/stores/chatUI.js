@@ -13,6 +13,9 @@ export const useChatUIStore = defineStore('chatUI', () => {
   // 配置侧边栏
   const isConfigSidebarOpen = ref(false)
 
+  // 应用侧边栏折叠态
+  const sidebarCollapsed = ref(false)
+
   // 更多菜单
   const moreMenuOpen = ref(false)
   const moreMenuPosition = ref({ x: 0, y: 0 })
@@ -51,6 +54,7 @@ export const useChatUIStore = defineStore('chatUI', () => {
     isLoadingMessages,
     agentModalOpen,
     isConfigSidebarOpen,
+    sidebarCollapsed,
     moreMenuOpen,
     moreMenuPosition,
 
@@ -58,5 +62,11 @@ export const useChatUIStore = defineStore('chatUI', () => {
     openMoreMenu,
     closeMoreMenu,
     reset
+  }
+}, {
+  persist: {
+    key: 'chat-ui-store',
+    storage: localStorage,
+    pick: ['sidebarCollapsed']
   }
 })
