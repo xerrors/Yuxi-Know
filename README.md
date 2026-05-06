@@ -1,6 +1,5 @@
-
 <div align="center">
-<h1>语析 - 基于大模型的知识库与知识图谱智能体开发平台</h1>
+<h1>语析 - 结合知识库与知识图谱的多租户 Harness 平台</h1>
 
 [![](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=ffffff)](https://github.com/xerrors/Yuxi/blob/main/docker-compose.yml)
 [![](https://img.shields.io/github/issues/xerrors/Yuxi?color=F48D73)](https://github.com/xerrors/Yuxi/issues)
@@ -24,17 +23,9 @@
 ## 核心特性
 
 - **智能体开发**：基于 LangGraph，支持子智能体、Skills、MCPs、Tools 与中间件机制
-- **知识库（RAG）**：多格式文档上传，支持 Embedding / Rerank 配置及知识库评估
+- **知识库（RAG）**：多格式文档解析，支持 Embedding / Rerank 配置及知识库评估
 - **知识图谱**：基于 LightRAG 的图谱构建与可视化，支持属性图谱并参与智能体推理
 - **平台与工程化**：Vue + FastAPI 架构，支持暗黑模式、Docker 与生产级部署
-
-
-## 你可以用语析做什么？
-
-- 构建 **面向真实业务的 RAG + 知识图谱智能体**
-- 将 PDF / Word / Markdown / 图片快速转化为可推理的知识库
-- 自动（LightRAG）或手动构建知识图谱，并用于智能体推理
-- 使用 LangGraph v1 构建多智能体 / 子智能体系统
 
 ## 最新动态
 
@@ -201,10 +192,11 @@ docker compose up --build
 本项目参考并引用了以下优秀开源项目，在此致以诚挚的感谢：
 
 - [LightRAG](https://github.com/HKUDS/LightRAG) - 直接引入作为图谱构建与检索的基础包
-- [DeepAgents](https://github.com/IDEA-CCNL/DeepAgents) - 直接引入作为深度智能体框架
+- [DeepAgents](https://github.com/langchain-ai/deepagents) - 直接引入作为深度智能体框架
 - [DeerFlow](https://github.com/bytedance/deer-flow) - 参考了其 Sandbox 智能体架构的实现思路
 - [RAGflow](https://github.com/infiniflow/ragflow) - 参考了其文档 Text Chunking 的分块策略
 - [LangGraph](https://github.com/langchain-ai/langgraph) - 多智能体编排框架，本项目的核心架构基础
+- [QwenPaw](https://github.com/agentscope-ai/QwenPaw) - 参考模型配置与个人文件区域设计
 
 ## 参与贡献
 
