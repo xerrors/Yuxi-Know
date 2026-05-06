@@ -363,6 +363,10 @@ class EvaluationService:
                 kb_row = await self.kb_repo.get_by_id(db_id)
                 query_params = (kb_row.query_params if kb_row else None) or {}
                 retrieval_config = query_params.get("options", {}) if isinstance(query_params, dict) else {}
+                if not retrieval_config:
+                    kb_instance = await knowledge_base.aget_kb(db_id)
+                    if kb_instance:
+                        retrieval_config = kb_instance._get_default_query_params(db_id).get("options", {})
                 logger.info(f"从知识库 {db_id} 加载检索配置: {list(retrieval_config.keys())}")
             except Exception as e:
                 logger.error(f"获取知识库检索配置失败: {e}")

@@ -453,6 +453,7 @@ class KnowledgeBase(ABC):
             "llm_info": llm_info.model_dump() if hasattr(llm_info, "model_dump") else llm_info,
             "metadata": kwargs,
             "created_at": utc_isoformat(),
+            "query_params": self._get_default_query_params(db_id),
         }
         await self._persist_kb(db_id)
 
@@ -641,6 +642,15 @@ class KnowledgeBase(ABC):
             query_params_meta = self.databases_meta[db_id].get("query_params") or {}
             return query_params_meta.get("options", {})
         return {}
+
+    def _get_default_query_params(self, db_id: str) -> dict[str, Any]:
+        """从 get_query_params_config 中提取所有参数的默认值，返回 {"options": {...}}"""
+        config = self.get_query_params_config(db_id)
+        defaults = {}
+        for opt in config.get("options", []):
+            if "default" in opt:
+                defaults[opt["key"]] = opt["default"]
+        return {"options": defaults}
 
     def get_database_info(self, db_id: str, include_files: bool = True) -> dict | None:
         """
@@ -1046,7 +1056,7 @@ class KnowledgeBase(ABC):
                 "kb_type": kb.kb_type,
                 "embed_info": kb.embed_info,
                 "llm_info": kb.llm_info,
-                "query_params": kb.query_params,
+                "query_params": kb.query_params or self._get_default_query_params(kb.db_id),
                 "metadata": ensure_chunk_defaults_in_additional_params(kb.additional_params),
                 "created_at": utc_isoformat(kb.created_at) if kb.created_at else utc_isoformat(),
             }

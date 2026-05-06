@@ -681,8 +681,8 @@ const switchToUser = async (user) => {
 .log-container {
   height: calc(80vh - 200px);
   overflow-y: auto;
-  background: var(--gray-0);
-  color: var(--gray-1000);
+  background: #1e1f1f;
+  color: #ffffff;
   border-radius: 5px;
   font-family: 'Consolas', 'Monaco', monospace;
   font-size: 12px;
@@ -752,12 +752,6 @@ const switchToUser = async (user) => {
   padding: 16px;
   text-align: center;
   color: var(--gray-500);
-}
-
-@media (prefers-color-scheme: dark) {
-  .log-container {
-    background: var(--gray-900);
-  }
 }
 
 :fullscreen .log-container {
