@@ -10,8 +10,8 @@ const buildQuery = (params) => {
   return query.toString()
 }
 
-export const getWorkspaceTree = (path = '/') => {
-  const query = buildQuery({ path })
+export const getWorkspaceTree = (path = '/', recursive = false, filesOnly = false) => {
+  const query = buildQuery({ path, recursive, files_only: filesOnly })
   return apiGet(`/api/workspace/tree?${query}`)
 }
 

@@ -31,9 +31,16 @@ class UpdateWorkspaceFileContentRequest(BaseModel):
 @workspace.get("/tree", response_model=dict)
 async def get_workspace_tree(
     path: str = Query("/", description="工作区目录路径"),
+    recursive: bool = Query(False, description="是否递归返回子目录文件"),
+    files_only: bool = Query(False, description="是否仅返回文件"),
     current_user: User = Depends(get_required_user),
 ):
-    return await list_workspace_tree(path=path, current_user=current_user)
+    return await list_workspace_tree(
+        path=path,
+        recursive=recursive,
+        files_only=files_only,
+        current_user=current_user,
+    )
 
 
 @workspace.get("/file", response_model=dict)

@@ -16,7 +16,7 @@ from yuxi.services.upload_utils import write_upload_to_buffer
 from yuxi.services.viewer_filesystem_service import _detect_preview_type
 from yuxi.storage.postgres.models_business import User
 from yuxi.utils.datetime_utils import utc_isoformat_from_timestamp
-from yuxi.utils.paths import WORKSPACE_DIR_NAME
+from yuxi.utils.paths import VIRTUAL_PATH_WORKSPACE, WORKSPACE_DIR_NAME
 
 EDITABLE_WORKSPACE_SUFFIXES = {".md", ".markdown", ".mdx", ".txt"}
 MAX_WORKSPACE_UPLOAD_SIZE_BYTES = 100 * 1024 * 1024
@@ -69,8 +69,10 @@ def _entry_for_path(root: Path, path: Path) -> dict:
     display_path = f"/{relative}" if relative else "/"
     if is_dir and display_path != "/" and not display_path.endswith("/"):
         display_path = f"{display_path}/"
+    virtual_path = VIRTUAL_PATH_WORKSPACE if display_path == "/" else f"{VIRTUAL_PATH_WORKSPACE}{display_path}"
     return {
         "path": display_path,
+        "virtual_path": virtual_path,
         "name": path.name or "工作区",
         "is_dir": is_dir,
         "size": 0 if is_dir else stat.st_size,
@@ -113,19 +115,26 @@ def _resolve_new_child(root: Path, parent: Path, name: str) -> Path:
     return target
 
 
-def _list_directory(root: Path, target: Path) -> list[dict]:
-    entries = [_entry_for_path(root, child) for child in target.iterdir()]
+def _list_directory(root: Path, target: Path, *, recursive: bool = False, files_only: bool = False) -> list[dict]:
+    children = list(target.iterdir())
+    entries = [_entry_for_path(root, child) for child in children if not files_only or child.is_file()]
+    if recursive:
+        for child in children:
+            if child.is_dir() and not child.is_symlink():
+                entries.extend(_list_directory(root, child, recursive=True, files_only=files_only))
     return _sort_entries(entries)
 
 
-async def list_workspace_tree(*, path: str, current_user: User) -> dict:
+async def list_workspace_tree(
+    *, path: str, recursive: bool = False, files_only: bool = False, current_user: User
+) -> dict:
     root = _workspace_root(current_user)
     target = _resolve_workspace_path(current_user, path)
     if not target.exists():
         return {"entries": []}
     if not target.is_dir():
         raise HTTPException(status_code=400, detail="当前路径不是目录")
-    entries = await asyncio.to_thread(_list_directory, root, target)
+    entries = await asyncio.to_thread(_list_directory, root, target, recursive=recursive, files_only=files_only)
     return {"entries": entries}
 
 

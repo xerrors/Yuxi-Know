@@ -252,6 +252,7 @@ import { useConfigStore } from '@/stores/config'
 import { storeToRefs } from 'pinia'
 import { MessageProcessor } from '@/utils/messageProcessor'
 import { agentApi, threadApi } from '@/apis'
+import { getWorkspaceTree } from '@/apis/workspace_api'
 import HumanApprovalModal from '@/components/HumanApprovalModal.vue'
 import { useApproval } from '@/composables/useApproval'
 import { useAgentThreadState } from '@/composables/useAgentThreadState'
@@ -349,6 +350,7 @@ const { getThreadState, resetOnGoingConv, stopThreadStream } = useAgentThreadSta
 const threadMessages = ref({})
 const threadFilesMap = ref({})
 const threadAttachmentsMap = ref({})
+const workspaceMentionFiles = ref([])
 const threadConfigNoticeMap = ref({})
 const threadPendingConfigNoticeMap = ref({})
 const threadConfigSnapshotMap = ref({})
@@ -454,6 +456,7 @@ const { mentionConfig } = useAgentMentionConfig({
   currentAgentState,
   currentThreadFiles,
   currentThreadAttachments,
+  workspaceMentionFiles,
   configurableItems,
   agentConfig,
   availableKnowledgeBases,
@@ -894,7 +897,13 @@ onMounted(() => {
   })
 })
 
+let skipNextWorkspaceMentionActivation = true
 onActivated(() => {
+  if (skipNextWorkspaceMentionActivation) {
+    skipNextWorkspaceMentionActivation = false
+  } else {
+    void fetchWorkspaceMentionFiles()
+  }
   nextTick(() => {
     startChatMainResizeObserver()
   })
@@ -1019,7 +1028,25 @@ const refreshThreadFilesAndAttachments = async (threadId) => {
   await Promise.all([fetchThreadFiles(threadId), fetchThreadAttachments(threadId)])
 }
 
+let workspaceMentionFilesRequest = null
+const fetchWorkspaceMentionFiles = async () => {
+  if (workspaceMentionFilesRequest) return workspaceMentionFilesRequest
+  workspaceMentionFilesRequest = (async () => {
+    try {
+      const response = await getWorkspaceTree('/', true, true)
+      workspaceMentionFiles.value = Array.isArray(response?.entries) ? response.entries : []
+    } catch (error) {
+      console.warn('Failed to fetch workspace mention files:', error)
+      workspaceMentionFiles.value = []
+    } finally {
+      workspaceMentionFilesRequest = null
+    }
+  })()
+  return workspaceMentionFilesRequest
+}
+
 const handleArtifactSaved = async () => {
+  await fetchWorkspaceMentionFiles()
   if (!currentChatId.value) return
   await refreshThreadFilesAndAttachments(currentChatId.value)
 }
@@ -1088,7 +1115,10 @@ const handleAttachmentUpload = async (files) => {
       await threadApi.uploadThreadAttachment(threadId, file)
     }
     message.success({ content: '附件上传成功', key: 'upload-attachment', duration: 2 })
-    await fetchAgentState(currentAgentId.value, threadId)
+    await Promise.all([
+      fetchAgentState(currentAgentId.value, threadId),
+      refreshThreadFilesAndAttachments(threadId)
+    ])
   } catch (error) {
     message.destroy('upload-attachment')
     handleChatError(error, 'upload')
@@ -1801,7 +1831,7 @@ const initAll = async () => {
 }
 
 onMounted(async () => {
-  await initAll()
+  await Promise.all([initAll(), fetchWorkspaceMentionFiles()])
   scrollController.enableAutoScroll()
 })
 
