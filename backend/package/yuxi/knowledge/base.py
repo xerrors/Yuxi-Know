@@ -351,6 +351,18 @@ class KnowledgeBase(ABC):
 
         await self._persist_file(file_id)
 
+    async def _mark_file_unparsed(self, file_id: str, operator_id: str | None = None) -> None:
+        if file_id not in self.files_meta:
+            return
+
+        self.files_meta[file_id]["status"] = FileStatus.UPLOADED
+        self.files_meta[file_id].pop("markdown_file", None)
+        self.files_meta[file_id].pop("error", None)
+        self.files_meta[file_id]["updated_at"] = utc_isoformat()
+        if operator_id:
+            self.files_meta[file_id]["updated_by"] = operator_id
+        await self._persist_file(file_id)
+
     async def _save_markdown_to_minio(self, db_id: str, file_id: str, content: str) -> str:
         """Save markdown content to MinIO and return HTTP URL"""
         from yuxi.storage.minio import get_minio_client

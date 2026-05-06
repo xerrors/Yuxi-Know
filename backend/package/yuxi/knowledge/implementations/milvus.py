@@ -333,6 +333,7 @@ class MilvusKB(KnowledgeBase):
 
             # Check markdown file exists
             if not file_meta.get("markdown_file"):
+                await self._mark_file_unparsed(file_id, operator_id)
                 raise ValueError("File has not been parsed yet (no markdown_file)")
 
             # Clear previous error if any

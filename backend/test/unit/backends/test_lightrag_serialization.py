@@ -52,6 +52,36 @@ async def _fake_read_markdown(*_args, **_kwargs) -> str:
     return "mock markdown"
 
 
+async def test_index_file_marks_file_unparsed_when_markdown_file_is_missing(
+    light_rag_kb: LightRagKB,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    persisted: list[str] = []
+    db_id = "kb_missing_markdown"
+    file_id = "file-missing"
+    light_rag_kb.databases_meta[db_id] = {"metadata": {}}
+    light_rag_kb.files_meta[file_id] = {
+        "status": FileStatus.PARSED,
+        "path": "/tmp/file.md",
+        "filename": "file.md",
+        "processing_params": {},
+    }
+
+    async def fake_persist_file(saved_file_id: str) -> None:
+        persisted.append(saved_file_id)
+
+    monkeypatch.setattr(light_rag_kb, "_persist_file", fake_persist_file)
+    monkeypatch.setattr(light_rag_kb, "_get_lightrag_instance", _make_async_return(SimpleNamespace()))
+
+    with pytest.raises(ValueError, match="no markdown_file"):
+        await light_rag_kb.index_file(db_id, file_id, operator_id="user-1")
+
+    assert light_rag_kb.files_meta[file_id]["status"] == FileStatus.UPLOADED
+    assert "markdown_file" not in light_rag_kb.files_meta[file_id]
+    assert light_rag_kb.files_meta[file_id]["updated_by"] == "user-1"
+    assert persisted == [file_id]
+
+
 async def test_index_file_serializes_writes_within_same_database(
     light_rag_kb: LightRagKB,
     monkeypatch: pytest.MonkeyPatch,
@@ -151,9 +181,15 @@ async def test_add_documents_auto_index_uses_latest_parsed_metadata(monkeypatch:
         ) -> None:
             calls.append(("update_params", file_id))
 
-        async def index_file(self, _db_id: str, file_id: str, operator_id: str | None = None) -> dict:
+        async def index_file(
+            self,
+            _db_id: str,
+            file_id: str,
+            operator_id: str | None = None,
+            params: dict | None = None,
+        ) -> dict:
             calls.append(("index", file_id))
-            return {"file_id": file_id, "status": FileStatus.INDEXED, "operator_id": operator_id}
+            return {"file_id": file_id, "status": FileStatus.INDEXED, "operator_id": operator_id, "params": params}
 
     class FakeTaskContext:
         async def set_message(self, _message: str) -> None:
