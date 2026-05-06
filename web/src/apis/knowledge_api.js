@@ -479,8 +479,7 @@ export const evaluationApi = {
    * @param {string} dbId - 知识库ID
    * @param {Object} params - 生成参数
    * @param {number} params.count - 生成问题数量
-   * @param {boolean} params.include_answers - 是否生成答案
-   * @param {Object} params.llm_config - LLM配置
+   * @param {string} params.llm_model_spec - LLM模型配置
    * @returns {Promise} - 生成结果
    */
   generateBenchmark: async (dbId, params) => {

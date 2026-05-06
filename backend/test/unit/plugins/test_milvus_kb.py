@@ -1,6 +1,6 @@
 from pymilvus import CollectionSchema, DataType, FieldSchema, Function, FunctionType
 
-from yuxi.knowledge.implementations.milvus import CONTENT_ANALYZER_PARAMS, CONTENT_SPARSE_FIELD, MilvusKB
+from yuxi.knowledge.implementations.milvus import CONTENT_ANALYZER_PARAMS, CONTENT_SPARSE_FIELD, MilvusKB, VECTOR_METRIC_TYPE
 
 
 class FakeHit:
@@ -67,6 +67,18 @@ async def test_keyword_mode_uses_milvus_bm25_search():
     assert search_call["limit"] == 7
 
 
+async def test_vector_mode_ignores_metric_type_override():
+    collection = FakeCollection()
+    kb = make_kb(collection)
+
+    chunks = await kb.aquery("vector query", "db", search_mode="vector", metric_type="L2")
+
+    assert chunks[0]["content"] == "BM25 result"
+    search_call = collection.search_calls[0]
+    assert search_call["anns_field"] == "embedding"
+    assert search_call["param"]["metric_type"] == VECTOR_METRIC_TYPE
+
+
 async def test_hybrid_mode_uses_milvus_native_hybrid_search():
     collection = FakeCollection()
     kb = make_kb(collection)
@@ -90,6 +102,7 @@ async def test_hybrid_mode_uses_milvus_native_hybrid_search():
     vector_request, bm25_request = hybrid_call["reqs"]
     assert vector_request.anns_field == "embedding"
     assert vector_request.data == [[0.1, 0.2]]
+    assert vector_request.param["metric_type"] == VECTOR_METRIC_TYPE
     assert bm25_request.anns_field == CONTENT_SPARSE_FIELD
     assert bm25_request.data == ["hybrid query"]
     assert bm25_request.limit == 8
@@ -118,6 +131,7 @@ def test_query_params_config_uses_bm25_parameters():
 
     option_keys = {option["key"] for option in config["options"]}
     assert "keyword_top_k" not in option_keys
+    assert "metric_type" not in option_keys
     assert {
         "bm25_top_k",
         "vector_weight",

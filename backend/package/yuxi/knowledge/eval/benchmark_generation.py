@@ -1,13 +1,11 @@
 import json
-import math
 import random
 from collections.abc import AsyncIterator, Callable
 from typing import Any
 
 import json_repair
 
-from yuxi import config
-from yuxi.models import select_embedding_model, select_model
+from yuxi.models import select_model
 from yuxi.utils import logger
 
 
@@ -36,26 +34,59 @@ def clamp_neighbors_count(neighbors_count: int) -> int:
     return min(max(neighbors_count, 0), 10)
 
 
-def cosine_similarity(a: list[float], b: list[float], na: float, nb: float) -> float:
-    s = 0.0
-    for i in range(len(a)):
-        s += a[i] * b[i]
-    return s / (na * nb)
+def _is_anchor_chunk(candidate: dict[str, Any], anchor_chunk: dict[str, Any]) -> bool:
+    metadata = candidate.get("metadata") or {}
+    candidate_id = metadata.get("chunk_id")
+    if candidate_id is not None and str(candidate_id) == str(anchor_chunk.get("id")):
+        return True
+
+    candidate_file_id = metadata.get("file_id")
+    candidate_chunk_index = metadata.get("chunk_index")
+    return candidate_file_id == anchor_chunk.get("file_id") and candidate_chunk_index == anchor_chunk.get("chunk_index")
 
 
-def select_neighbor_indices(
-    anchor_idx: int, embeddings: list[list[float]], norms: list[float], neighbors_count: int
-) -> list[int]:
-    anchor_embedding = embeddings[anchor_idx]
-    anchor_norm = norms[anchor_idx]
-    sims = []
-    for idx in range(len(embeddings)):
-        if idx == anchor_idx:
+async def select_neighbor_chunks_by_kb_query(
+    *, kb_instance: Any, db_id: str, anchor_chunk: dict[str, Any], neighbors_count: int
+) -> list[dict[str, Any]]:
+    if neighbors_count <= 0:
+        return []
+
+    anchor_content = anchor_chunk.get("content", "")
+    if not anchor_content:
+        return []
+
+    candidates = await kb_instance.aquery(
+        anchor_content,
+        db_id,
+        search_mode="vector",
+        final_top_k=neighbors_count + 3,
+        use_reranker=False,
+        similarity_threshold=0.0,
+    )
+
+    chunks = []
+    for candidate in candidates:
+        if _is_anchor_chunk(candidate, anchor_chunk):
             continue
-        score = cosine_similarity(anchor_embedding, embeddings[idx], anchor_norm, norms[idx])
-        sims.append((idx, score))
-    sims.sort(key=lambda x: x[1], reverse=True)
-    return [idx for idx, _ in sims[:neighbors_count]]
+
+        metadata = candidate.get("metadata") or {}
+        chunk_id = metadata.get("chunk_id")
+        content = candidate.get("content", "")
+        if not chunk_id or not content:
+            continue
+
+        chunks.append(
+            {
+                "id": str(chunk_id),
+                "content": content,
+                "file_id": metadata.get("file_id"),
+                "chunk_index": metadata.get("chunk_index"),
+            }
+        )
+        if len(chunks) >= neighbors_count:
+            break
+
+    return chunks
 
 
 def build_benchmark_generation_prompt(ctx_items: list[tuple[str, str]]) -> str:
@@ -74,7 +105,6 @@ async def iter_generated_benchmark_items(
     db_id: str,
     count: int,
     neighbors_count: int,
-    embedding_model_id: str,
     llm_model_spec: Any,
     progress_cb: Callable[[int, str], Any] | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
@@ -86,31 +116,25 @@ async def iter_generated_benchmark_items(
         raise ValueError("No chunks found in knowledge base")
 
     if progress_cb:
-        await progress_cb(15, "向量化")
+        await progress_cb(15, "准备生成样本")
 
-    contents = [chunk["content"] for chunk in all_chunks]
-    embed_model = select_embedding_model(embedding_model_id)
-    batch_size = int(getattr(embed_model, "batch_size", 40) or 40)
-    if embedding_model_id in config.embed_model_names:
-        batch_size = config.embed_model_names[embedding_model_id].batch_size
-
-    embeddings = await embed_model.abatch_encode(contents, batch_size=batch_size)
-    norms = [math.sqrt(sum(x * x for x in vec)) or 1.0 for vec in embeddings]
     llm = select_model(model_spec=llm_model_spec)
-    neighbors_count = clamp_neighbors_count(neighbors_count)
+    context_count = max(clamp_neighbors_count(neighbors_count), 1)
     generated = 0
     attempts = 0
     max_attempts = max(count * 5, 50)
 
-    if progress_cb:
-        await progress_cb(0, "准备生成样本")
-
     while generated < count and attempts < max_attempts:
         attempts += 1
-        anchor_idx = random.randrange(len(all_chunks))
-        neighbor_indices = select_neighbor_indices(anchor_idx, embeddings, norms, neighbors_count)
-        ctx_items = [(all_chunks[anchor_idx]["id"], all_chunks[anchor_idx]["content"])]
-        ctx_items.extend((all_chunks[idx]["id"], all_chunks[idx]["content"]) for idx in neighbor_indices)
+        anchor_chunk = all_chunks[random.randrange(len(all_chunks))]
+        neighbor_chunks = await select_neighbor_chunks_by_kb_query(
+            kb_instance=kb_instance,
+            db_id=db_id,
+            anchor_chunk=anchor_chunk,
+            neighbors_count=context_count - 1,
+        )
+        ctx_chunks = [anchor_chunk] + neighbor_chunks
+        ctx_items = [(chunk["id"], chunk["content"]) for chunk in ctx_chunks]
         allowed_ids = {cid for cid, _ in ctx_items}
 
         try:

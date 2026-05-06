@@ -297,24 +297,16 @@ class EvaluationService:
         name = payload.get("name", "自动生成评估基准")
         description = payload.get("description", "")
         count = int(payload.get("count", 10))
-        neighbors_count = int(payload.get("neighbors_count", 0))
-        embedding_model_id = payload.get("embedding_model_id")
-        llm_model_spec = payload.get("llm_model_spec") or (payload.get("llm_config") or {}).get("model_spec")
+        neighbors_count = int(payload.get("neighbors_count", 1))
+        llm_model_spec = payload.get("llm_model_spec")
 
         kb_instance = await knowledge_base.aget_kb(db_id)
         if not kb_instance:
             await context.set_message("知识库不存在")
             raise ValueError("Knowledge Base not found")
-        if kb_instance.kb_type == "lightrag":
-            await context.set_message("暂不支持该类型知识库生成评估基准")
+        if kb_instance.kb_type != "milvus":
+            await context.set_message("仅支持 commonrag/Milvus 类型知识库生成评估基准")
             raise ValueError("Unsupported KB type for benchmark generation")
-
-        db_meta = kb_instance.databases_meta.get(db_id, {})
-        embed_info = db_meta.get("embed_info", {})
-        if not embedding_model_id:
-            embedding_model_id = embed_info.get("name") or embed_info.get("model") or ""
-        if not embedding_model_id:
-            raise ValueError("Embedding model not specified")
 
         benchmark_id = f"benchmark_{uuid.uuid4().hex[:8]}"
         bench_dir = await self._get_benchmark_dir(db_id)
@@ -328,7 +320,6 @@ class EvaluationService:
                     db_id=db_id,
                     count=count,
                     neighbors_count=neighbors_count,
-                    embedding_model_id=embedding_model_id,
                     llm_model_spec=llm_model_spec,
                     progress_cb=context.set_progress,
                 ):

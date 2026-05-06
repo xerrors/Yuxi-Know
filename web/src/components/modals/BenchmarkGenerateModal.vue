@@ -50,77 +50,23 @@
                 :min="0"
                 :max="10"
                 style="width: 100%"
-                placeholder="每次选取的相似chunks数量"
+                placeholder="每次参考的chunks总数"
               />
             </a-form-item>
           </a-col>
         </a-row>
       </a-form-item>
 
-      <a-form-item label="LLM配置" name="llm_config">
-        <a-card size="small" title="配置参数">
-          <a-form-item
-            label="LLM模型配置"
-            name="llm_model_spec"
-            :rules="[{ required: true, message: '请选择LLM模型' }]"
-          >
-            <ModelSelectorComponent
-              :model_spec="formState.llm_model_spec"
-              placeholder="选择用于生成问题的LLM模型"
-              size="small"
-              @select-model="handleSelectLLMModel"
-            />
-          </a-form-item>
-
-          <a-form-item
-            label="Embedding模型"
-            name="embedding_model_id"
-            :rules="[{ required: true, message: '请选择Embedding模型' }]"
-          >
-            <EmbeddingModelSelector
-              v-model:value="formState.embedding_model_id"
-              placeholder="请选择用于相似度计算的Embedding模型"
-              size="default"
-            />
-          </a-form-item>
-
-          <a-row :gutter="16">
-            <a-col :span="12">
-              <a-form-item
-                label="Temperature"
-                name="temperature"
-                :labelCol="{ span: 24 }"
-                :wrapperCol="{ span: 24 }"
-              >
-                <a-input-number
-                  v-model:value="formState.llm_config.temperature"
-                  :min="0"
-                  :max="2"
-                  :step="0.1"
-                  style="width: 100%"
-                  placeholder="控制生成内容的随机性"
-                />
-              </a-form-item>
-            </a-col>
-            <a-col :span="12">
-              <a-form-item
-                label="Max Tokens"
-                name="max_tokens"
-                :labelCol="{ span: 24 }"
-                :wrapperCol="{ span: 24 }"
-              >
-                <a-input-number
-                  v-model:value="formState.llm_config.max_tokens"
-                  :min="100"
-                  :max="4000"
-                  :step="100"
-                  style="width: 100%"
-                  placeholder="生成内容的最大长度"
-                />
-              </a-form-item>
-            </a-col>
-          </a-row>
-        </a-card>
+      <a-form-item
+        label="LLM模型配置"
+        name="llm_model_spec"
+        :rules="[{ required: true, message: '请选择LLM模型' }]"
+      >
+        <ModelSelectorComponent
+          :model_spec="formState.llm_model_spec"
+          placeholder="选择用于生成问题的LLM模型"
+          @select-model="handleSelectLLMModel"
+        />
       </a-form-item>
     </a-form>
   </a-modal>
@@ -130,8 +76,10 @@
 import { ref, reactive, computed, watch, h } from 'vue'
 import { message } from 'ant-design-vue'
 import { evaluationApi } from '@/apis/knowledge_api'
+import { useConfigStore } from '@/stores/config'
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue'
-import EmbeddingModelSelector from '@/components/EmbeddingModelSelector.vue'
+
+const configStore = useConfigStore()
 
 const props = defineProps({
   visible: {
@@ -146,22 +94,23 @@ const props = defineProps({
 
 const emit = defineEmits(['update:visible', 'success'])
 
+// 默认基准名称
+const defaultBenchmarkName = () => {
+  const today = new Date().toISOString().slice(0, 10)
+  const suffix = Array.from({ length: 4 }, () => '0123456789abcdefghijklmnopqrstuvwxyz'[Math.floor(Math.random() * 36)]).join('')
+  return `Test-${today}-${suffix}`
+}
+
 // 响应式数据
 const formRef = ref()
 const generating = ref(false)
 
 const formState = reactive({
-  name: '',
+  name: defaultBenchmarkName(),
   description: '',
   count: 10,
-  neighbors_count: 2,
-  embedding_model_id: '',
-  llm_model_spec: '',
-  llm_config: {
-    model: '',
-    temperature: 0.7,
-    max_tokens: 1000
-  }
+  neighbors_count: 1,
+  llm_model_spec: configStore.config?.default_model || ''
 })
 
 // 表单验证规则
@@ -208,11 +157,7 @@ const handleGenerate = async () => {
       description: formState.description,
       count: formState.count,
       neighbors_count: formState.neighbors_count,
-      embedding_model_id: formState.embedding_model_id,
-      llm_config: {
-        ...formState.llm_config,
-        model_spec: formState.llm_model_spec
-      }
+      llm_model_spec: formState.llm_model_spec
     }
 
     const response = await evaluationApi.generateBenchmark(props.databaseId, params)
@@ -242,17 +187,11 @@ const handleCancel = () => {
 const resetForm = () => {
   formRef.value?.resetFields()
   Object.assign(formState, {
-    name: '',
+    name: defaultBenchmarkName(),
     description: '',
     count: 10,
-    neighbors_count: 2,
-    embedding_model_id: '',
-    llm_model_spec: '',
-    llm_config: {
-      model: '',
-      temperature: 0.7,
-      max_tokens: 1000
-    }
+    neighbors_count: 1,
+    llm_model_spec: configStore.config?.default_model || ''
   })
   generating.value = false
 }
@@ -260,28 +199,14 @@ const resetForm = () => {
 // 选择LLM模型
 const handleSelectLLMModel = (modelSpec) => {
   formState.llm_model_spec = modelSpec
-  formState.llm_config.model = modelSpec
 }
 
 // 监听visible变化
 watch(visible, (val) => {
-  if (!val) {
+  if (val) {
     resetForm()
   }
 })
 </script>
 
-<style lang="less" scoped>
-:deep(.ant-card) {
-  .ant-card-head {
-    min-height: auto;
-    padding: 0 12px;
-    border-bottom: 1px solid var(--gray-200);
 
-    .ant-card-head-title {
-      font-size: 14px;
-      padding: 8px 0;
-    }
-  }
-}
-</style>
