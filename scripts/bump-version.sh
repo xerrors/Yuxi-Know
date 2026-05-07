@@ -4,20 +4,29 @@ set -euo pipefail
 # =============================================================================
 # Yuxi 版本号升级脚本
 # =============================================================================
-# 用法: ./scripts/bump-version.sh <新版本号>
+# 用法: ./scripts/bump-version.sh [--dev] <新版本号>
 # 示例: ./scripts/bump-version.sh 0.6.2
+# 示例: ./scripts/bump-version.sh --dev 0.6.2.dev1
 #
 # 该脚本从 backend/package/pyproject.toml 读取当前版本，
 # 自动同步所有需要硬编码版本号的位置。
+# --dev 模式不会更新 README.md 和 docs/intro/quick-start.md 中 git clone --branch 的版本号。
 # =============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # 检查参数
+DEV_MODE=false
+if [ "${1:-}" = "--dev" ]; then
+    DEV_MODE=true
+    shift
+fi
+
 if [ $# -ne 1 ]; then
-    echo "用法: $0 <新版本号>"
+    echo "用法: $0 [--dev] <新版本号>"
     echo "示例: $0 0.6.2"
+    echo "示例: $0 --dev 0.6.2.dev1"
     exit 1
 fi
 
@@ -56,8 +65,10 @@ echo "  - web/package.json"
 echo "  - docker-compose.yml"
 echo "  - docker-compose.prod.yml"
 echo "  - backend/uv.lock"
-echo "  - README.md"
-echo "  - docs/intro/quick-start.md"
+if [ "$DEV_MODE" = false ]; then
+    echo "  - README.md"
+    echo "  - docs/intro/quick-start.md"
+fi
 echo ""
 read -rp "确认继续? [y/N] " confirm
 if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
@@ -113,13 +124,17 @@ sed -i -E "/^name = \"yuxi-workspace\"$/{n;s/^version = \"[^\"]+\"/version = \"$
 # -----------------------------------------------------------------------------
 # 只替换 git clone 命令中的版本标签（确保总是指向最新版本）
 # 发布历史记录（如 [2026/04/01] v0.6.1 版本发布）不修改，保持为历史版本记录
-echo "→ 更新 README.md"
-sed -i -E "s/(git clone --branch v)[0-9]+\.[0-9]+\.[0-9]+/\1${NEW_VERSION}/g" \
-    "${PROJECT_ROOT}/README.md"
+if [ "$DEV_MODE" = false ]; then
+    echo "→ 更新 README.md"
+    sed -i -E "s/(git clone --branch v)[0-9]+\.[0-9]+\.[0-9]+/\1${NEW_VERSION}/g" \
+        "${PROJECT_ROOT}/README.md"
 
-echo "→ 更新 docs/intro/quick-start.md"
-sed -i -E "s/(git clone --branch v)[0-9]+\.[0-9]+\.[0-9]+/\1${NEW_VERSION}/g" \
-    "${PROJECT_ROOT}/docs/intro/quick-start.md"
+    echo "→ 更新 docs/intro/quick-start.md"
+    sed -i -E "s/(git clone --branch v)[0-9]+\.[0-9]+\.[0-9]+/\1${NEW_VERSION}/g" \
+        "${PROJECT_ROOT}/docs/intro/quick-start.md"
+else
+    echo "→ dev 模式，跳过 README.md 和 docs/intro/quick-start.md 的分支版本更新"
+fi
 
 # -----------------------------------------------------------------------------
 # 7. 验证
@@ -146,7 +161,6 @@ grep -E "image: yuxi-web:" "${PROJECT_ROOT}/docker-compose.prod.yml" | head -1 |
 echo ""
 echo "后续步骤:"
 echo "  1. 检查 git diff 确认修改无误"
-echo "  2. 基于 [Roadmap](docs/develop-guides/roadmap.md) 整理后，更新到 docs/develop-guides/changelog.md"
-echo "  3. git add . && git commit -m 'chore(release): bump version to ${NEW_VERSION}'"
-echo "  4. git tag v${NEW_VERSION}"
-echo "  5. git push origin main --tags"
+echo "  2. git add . && git commit -m 'chore(release): bump version to ${NEW_VERSION}'"
+echo "  3. git tag v${NEW_VERSION}"
+echo "  4. git push origin main --tags"
