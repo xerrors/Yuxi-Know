@@ -1115,7 +1115,7 @@ const runUploadTask = (task) => {
         return
       }
 
-      let errorResp = {}
+      let errorResp
       try {
         errorResp = JSON.parse(xhr.responseText || '{}')
       } catch {

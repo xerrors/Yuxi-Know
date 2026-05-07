@@ -50,7 +50,7 @@ export class ChatExporter {
       return { success: true, filename }
     } catch (error) {
       console.error('导出对话失败:', error)
-      throw new Error(`导出失败: ${error.message}`)
+      throw new Error(`导出失败: ${error.message}`, { cause: error })
     }
   }
 

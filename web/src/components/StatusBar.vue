@@ -63,7 +63,7 @@ const currentUser = computed(() => {
 // 问候语计算属性
 const greeting = computed(() => {
   const hour = dayjs().tz('Asia/Shanghai').hour()
-  let greetingText = ''
+  let greetingText
 
   if (hour >= 5 && hour < 12) {
     greetingText = '早上好'

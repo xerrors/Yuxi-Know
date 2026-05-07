@@ -18,15 +18,14 @@ const parseRunSeq = (value) => {
   const text = normalizeRunSeq(value)
   if (text.includes('-')) {
     const [majorRaw, minorRaw] = text.split('-', 2)
-    let major = 0n
-    let minor = 0n
+
     try {
-      major = BigInt(majorRaw || '0')
-      minor = BigInt(minorRaw || '0')
+      const major = BigInt(majorRaw || '0')
+      const minor = BigInt(minorRaw || '0')
+      return { kind: 'stream', major, minor }
     } catch {
       return { kind: 'legacy', value: 0 }
     }
-    return { kind: 'stream', major, minor }
   }
 
   const numberValue = Number.parseInt(text, 10)

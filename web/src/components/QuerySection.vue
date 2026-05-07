@@ -471,7 +471,7 @@ const generateSampleQuestions = async (silent = false) => {
     // 静默模式下不显示错误消息（自动生成时）
     if (!silent) {
       // 提取详细错误信息
-      let errorMsg = '未知错误'
+      let errorMsg
       if (error.response?.data?.detail) {
         errorMsg = error.response.data.detail
       } else if (error.detail) {
