@@ -3,7 +3,7 @@ RAG评估指标计算工具
 简化版：只保留Recall/F1（检索）和 LLM Judge（答案准确性）
 """
 
-import json
+import json_repair
 import textwrap
 from typing import Any
 
@@ -68,11 +68,12 @@ class AnswerMetrics:
             忽略措辞、标点符号或格式上的细微差异。
             只关注核心事实是否准确包含。
 
-            请返回以下JSON格式的结果（不要包含其他文本）：
+            请返回以下JSON格式的结果（不要包含其他文本、Markdown 或注释）：
             {{
-                "score": 1.0,  // 如果答案正确返回 1.0， 错误返回 0.0
+                "score": 1.0,
                 "reasoning": "简要说明判定理由"
             }}
+            score 只能是 1.0 或 0.0。
             """)
         try:
             response = await judge_llm.call(prompt, stream=False)
@@ -85,7 +86,7 @@ class AnswerMetrics:
                 content = content[:-3]
             content = content.strip()
 
-            result = json.loads(content)
+            result = json_repair.loads(content)
             return {"score": float(result.get("score", 0.0)), "reasoning": result.get("reasoning", "")}
         except Exception as e:
             logger.error(f"LLM 评判失败: {e}")
