@@ -269,8 +269,10 @@ services:
       retries: 5
       start_period: 30s
     ports:
-      - "127.0.0.1:9000:9000"
-      - "127.0.0.1:9001:9001"
+      - "${MINIO_PORT1:-9000}:9000"
+      - "${MINIO_PORT2:-9001}:9001"
+      # - "127.0.0.1:9000:9000"
+      # - "127.0.0.1:9001:9001"
     networks:
       - app-network
     restart: unless-stopped
@@ -310,7 +312,8 @@ services:
     image: postgres:16
     container_name: postgres
     ports:
-      - "127.0.0.1:5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
+      # - "127.0.0.1:5432:5432"
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
@@ -331,7 +334,8 @@ services:
     image: redis:7-alpine
     container_name: redis
     ports:
-      - "127.0.0.1:6379:6379"
+    - "${REDIS_PORT:-6379}:6379"
+    # - "127.0.0.1:6379:6379"
     command: redis-server --appendonly yes
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
