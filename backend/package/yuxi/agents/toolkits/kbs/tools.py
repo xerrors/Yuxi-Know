@@ -52,7 +52,7 @@ class ListKBsInput(BaseModel):
     dummy: str = Field(default="", description="Dummy parameter - ignore")
 
 
-@tool(category="knowledge", tags=["知识库"], args_schema=ListKBsInput)
+@tool(category="knowledge", tags=["知识库"], display_name="列出知识库", args_schema=ListKBsInput)
 async def list_kbs(dummy: str, runtime: ToolRuntime) -> str:
     """列出当前用户可访问的知识库列表
 
@@ -88,7 +88,7 @@ class GetMindmapInput(BaseModel):
     kb_name: str = Field(description="知识库名称，用于指定要获取思维导图的知识库")
 
 
-@tool(category="knowledge", tags=["知识库"], args_schema=GetMindmapInput)
+@tool(category="knowledge", tags=["知识库"], display_name="获取思维导图", args_schema=GetMindmapInput)
 async def get_mindmap(kb_name: str, runtime: ToolRuntime) -> str:
     """获取指定知识库的思维导图结构
 
@@ -104,21 +104,11 @@ async def get_mindmap(kb_name: str, runtime: ToolRuntime) -> str:
     if not kb_name:
         return "请提供知识库名称"
 
-    # 获取所有检索器
-    knowledge_base = _get_knowledge_base()
-    retrievers = knowledge_base.get_retrievers()
-
-    # 查找对应的知识库
-    target_kb_id = None
-    target_info = None
-    for kb_id, info in retrievers.items():
-        if info["name"] == kb_name:
-            target_kb_id = kb_id
-            target_info = info
-            break
-
-    if not target_kb_id:
-        return f"知识库 '{kb_name}' 不存在"
+    visible_kbs = await _resolve_visible_knowledge_bases_for_query(runtime)
+    target_info = next((kb for kb in visible_kbs if kb.get("name") == kb_name), None)
+    if not target_info:
+        return f"知识库 '{kb_name}' 不存在或当前会话未启用"
+    target_kb_id = target_info["kb_id"]
 
     try:
         from yuxi.repositories.knowledge_base_repository import KnowledgeBaseRepository
@@ -156,7 +146,7 @@ async def get_mindmap(kb_name: str, runtime: ToolRuntime) -> str:
 QueryKBInput = SearchInputSchema
 
 
-@tool(category="knowledge", tags=["知识库"], args_schema=QueryKBInput)
+@tool(category="knowledge", tags=["知识库"], display_name="检索知识库", args_schema=QueryKBInput)
 async def query_kb(kb_id: str, query_text: str, file_name: str | None = None, runtime: ToolRuntime = None) -> Any:
     """在指定知识库中检索内容
 
@@ -184,7 +174,7 @@ async def query_kb(kb_id: str, query_text: str, file_name: str | None = None, ru
 OpenKBDocumentInput = OpenInputSchema
 
 
-@tool(category="knowledge", tags=["知识库"], args_schema=OpenKBDocumentInput)
+@tool(category="knowledge", tags=["知识库"], display_name="打开知识库文档", args_schema=OpenKBDocumentInput)
 async def open_kb_document(
     kb_id: str,
     file_id: str,
@@ -226,7 +216,7 @@ async def open_kb_document(
 FindKBDocumentInput = FindInputSchema
 
 
-@tool(category="knowledge", tags=["知识库"], args_schema=FindKBDocumentInput)
+@tool(category="knowledge", tags=["知识库"], display_name="定位文档内容", args_schema=FindKBDocumentInput)
 async def find_kb_document(
     kb_id: str,
     file_id: str,
@@ -279,7 +269,7 @@ class SearchFileInput(BaseModel):
     limit: int = Field(default=300, ge=1, le=5000, description="返回数量限制，默认 300")
 
 
-@tool(category="knowledge", tags=["知识库"], args_schema=SearchFileInput)
+@tool(category="knowledge", tags=["知识库"], display_name="搜索知识库文件", args_schema=SearchFileInput)
 async def search_file(
     kb_name: str | None = None,
     query: str | None = None,
@@ -339,7 +329,7 @@ class DownloadKBFileInput(BaseModel):
     )
 
 
-@tool(category="knowledge", tags=["知识库"], args_schema=DownloadKBFileInput)
+@tool(category="knowledge", tags=["知识库"], display_name="下载知识库文件", args_schema=DownloadKBFileInput)
 async def download_kb_file(
     kb_id: str,
     file_id: str,

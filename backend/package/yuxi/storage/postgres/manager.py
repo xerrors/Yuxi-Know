@@ -130,6 +130,15 @@ class PostgresManager(metaclass=SingletonMeta):
             "ALTER TABLE IF EXISTS knowledge_bases ADD COLUMN IF NOT EXISTS query_params JSONB",
             "ALTER TABLE IF EXISTS knowledge_bases ADD COLUMN IF NOT EXISTS additional_params JSONB",
             "ALTER TABLE IF EXISTS knowledge_bases ADD COLUMN IF NOT EXISTS share_config JSONB",
+            (
+                "UPDATE knowledge_bases SET share_config = jsonb_build_object("
+                "'version', 2, "
+                "'read_scope', COALESCE(NULLIF(share_config, '{}'::jsonb), "
+                '\'{"access_level": "global", "department_ids": [], "user_uids": []}\'::jsonb), '
+                "'manage_scope', COALESCE(NULLIF(share_config, '{}'::jsonb), "
+                '\'{"access_level": "global", "department_ids": [], "user_uids": []}\'::jsonb)) '
+                "WHERE share_config IS NULL OR share_config->>'version' IS DISTINCT FROM '2'"
+            ),
             "ALTER TABLE IF EXISTS knowledge_bases ADD COLUMN IF NOT EXISTS mindmap JSONB",
             "ALTER TABLE IF EXISTS knowledge_bases ADD COLUMN IF NOT EXISTS mindmap_file_ids JSONB",
             "ALTER TABLE IF EXISTS knowledge_bases ADD COLUMN IF NOT EXISTS mindmap_metadata JSONB",
@@ -404,6 +413,15 @@ class PostgresManager(metaclass=SingletonMeta):
             "CREATE INDEX IF NOT EXISTS idx_kf_parent ON knowledge_files(parent_id)",
             "CREATE INDEX IF NOT EXISTS idx_kf_status ON knowledge_files(status)",
             "CREATE INDEX IF NOT EXISTS idx_kf_hash ON knowledge_files(content_hash)",
+            # 虚拟目录分组索引：按路径首段聚合，避免大知识库全表扫描 + 磁盘排序
+            (
+                "CREATE INDEX IF NOT EXISTS idx_kf_kb_parent_segment ON knowledge_files "
+                "(kb_id, parent_id, split_part(filename, '/', 1)) WHERE strpos(filename, '/') > 0"
+            ),
+            (
+                "CREATE INDEX IF NOT EXISTS idx_kf_kb_parent_flat ON knowledge_files (kb_id, parent_id) "
+                "WHERE strpos(filename, '/') = 0 AND filename IS NOT NULL AND filename <> ''"
+            ),
             "CREATE INDEX IF NOT EXISTS ix_evaluation_datasets_kb_id ON evaluation_datasets(kb_id)",
             (
                 "CREATE INDEX IF NOT EXISTS ix_evaluation_dataset_items_dataset_index "
@@ -487,6 +505,16 @@ class PostgresManager(metaclass=SingletonMeta):
                 "ALTER TABLE IF EXISTS skills ADD COLUMN IF NOT EXISTS share_config JSONB NOT NULL "
                 'DEFAULT \'{"access_level": "user", "department_ids": [], "user_uids": []}\'::jsonb'
             ),
+            "ALTER TABLE IF EXISTS skills ALTER COLUMN share_config TYPE JSONB USING share_config::jsonb",
+            (
+                "UPDATE skills SET share_config = jsonb_build_object("
+                "'version', 2, 'read_scope', CASE WHEN share_config = '{}'::jsonb THEN jsonb_build_object("
+                "'access_level', 'user', 'department_ids', '[]'::jsonb, "
+                "'user_uids', jsonb_build_array(created_by)) ELSE share_config END, "
+                "'manage_scope', NULL) "
+                "WHERE share_config IS NOT NULL AND share_config->>'version' IS DISTINCT FROM '2'"
+            ),
+            "ALTER TABLE IF EXISTS skills ALTER COLUMN share_config DROP DEFAULT",
             "ALTER TABLE IF EXISTS skills ADD COLUMN IF NOT EXISTS enabled BOOLEAN NOT NULL DEFAULT TRUE",
             "ALTER TABLE IF EXISTS skills ADD COLUMN IF NOT EXISTS content_hash VARCHAR(128)",
             "ALTER TABLE IF EXISTS conversations ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN NOT NULL DEFAULT FALSE",
@@ -532,6 +560,15 @@ class PostgresManager(metaclass=SingletonMeta):
             """,
             "ALTER TABLE IF EXISTS agents ADD COLUMN IF NOT EXISTS backend_id VARCHAR(64)",
             "ALTER TABLE IF EXISTS agents ADD COLUMN IF NOT EXISTS share_config JSONB NOT NULL DEFAULT '{}'::jsonb",
+            "ALTER TABLE IF EXISTS agents ALTER COLUMN share_config TYPE JSONB USING share_config::jsonb",
+            (
+                "UPDATE agents SET share_config = jsonb_build_object("
+                "'version', 2, 'read_scope', CASE WHEN share_config = '{}'::jsonb THEN "
+                '\'{"access_level": "global", "department_ids": [], "user_uids": []}\'::jsonb '
+                "ELSE share_config END, 'manage_scope', NULL) "
+                "WHERE share_config IS NOT NULL AND share_config->>'version' IS DISTINCT FROM '2'"
+            ),
+            "ALTER TABLE IF EXISTS agents ALTER COLUMN share_config DROP DEFAULT",
             "ALTER TABLE IF EXISTS agents ADD COLUMN IF NOT EXISTS is_subagent BOOLEAN NOT NULL DEFAULT FALSE",
             "ALTER TABLE IF EXISTS user_config ADD COLUMN IF NOT EXISTS enable_memory BOOLEAN NOT NULL DEFAULT FALSE",
             """
@@ -611,6 +648,22 @@ class PostgresManager(metaclass=SingletonMeta):
             "ALTER TABLE IF EXISTS agent_runs ADD COLUMN IF NOT EXISTS conversation_thread_id VARCHAR(64)",
             "ALTER TABLE IF EXISTS agent_runs ADD COLUMN IF NOT EXISTS created_by_run_id VARCHAR(64)",
             "ALTER TABLE IF EXISTS agent_runs ADD COLUMN IF NOT EXISTS subagent_thread_relation_id INTEGER",
+            "ALTER TABLE IF EXISTS agent_runs ADD COLUMN IF NOT EXISTS source VARCHAR(32) NOT NULL DEFAULT 'chat'",
+            "ALTER TABLE IF EXISTS agent_runs ADD COLUMN IF NOT EXISTS channel VARCHAR(32) NOT NULL DEFAULT 'web'",
+            "ALTER TABLE IF EXISTS agent_runs ADD COLUMN IF NOT EXISTS external_id VARCHAR(128)",
+            (
+                "ALTER TABLE IF EXISTS agent_runs ADD COLUMN IF NOT EXISTS "
+                "origin_metadata JSONB NOT NULL DEFAULT '{}'::jsonb"
+            ),
+            (
+                "ALTER TABLE IF EXISTS agent_run_requests ADD COLUMN IF NOT EXISTS "
+                "channel VARCHAR(32) NOT NULL DEFAULT 'web'"
+            ),
+            "ALTER TABLE IF EXISTS agent_run_requests ADD COLUMN IF NOT EXISTS external_id VARCHAR(128)",
+            (
+                "ALTER TABLE IF EXISTS agent_run_requests ADD COLUMN IF NOT EXISTS "
+                "origin_metadata JSONB NOT NULL DEFAULT '{}'::jsonb"
+            ),
             "ALTER TABLE IF EXISTS subagent_threads ADD COLUMN IF NOT EXISTS subagent_slug VARCHAR(64)",
             "ALTER TABLE IF EXISTS subagent_threads ADD COLUMN IF NOT EXISTS created_by_run_id VARCHAR(64)",
             """

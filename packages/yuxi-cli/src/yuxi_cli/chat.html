@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Yuxi Chat</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --canvas: #d9d9d9;
+        --surface: #ffffff;
+        --chat: #ededed;
+        --text: #191919;
+        --muted: #8a8a8a;
+        --border: #d6d6d6;
+        --soft: #f2f2f2;
+        --wechat: #07c160;
+        --wechat-hover: #06ad56;
+        --user-bubble: #95ec69;
+        --error: #c63c3c;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--canvas);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+        display: grid;
+        place-items: center;
+      }
+
+      .shell {
+        width: min(980px, calc(100% - 32px));
+        height: min(820px, calc(100vh - 32px));
+        min-height: 620px;
+        display: grid;
+        grid-template-rows: 64px minmax(0, 1fr) 164px;
+        overflow: hidden;
+        background: var(--surface);
+        border: 1px solid #c8c8c8;
+        border-radius: 7px;
+        box-shadow: 0 10px 30px rgb(0 0 0 / 10%);
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 0 22px;
+        background: #f7f7f7;
+        border-bottom: 1px solid var(--border);
+      }
+
+      h1 {
+        margin: 0 0 3px;
+        font-size: 16px;
+        line-height: 1.2;
+        font-weight: 600;
+      }
+
+      .meta {
+        margin: 0;
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.4;
+      }
+
+      button {
+        min-width: 74px;
+        border: 1px solid var(--wechat);
+        border-radius: 4px;
+        background: var(--wechat);
+        color: #ffffff;
+        padding: 8px 15px;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 500;
+        line-height: 1.2;
+        cursor: pointer;
+        transition: background-color 160ms ease, border-color 160ms ease;
+      }
+
+      button:hover { background: var(--wechat-hover); border-color: var(--wechat-hover); }
+      button:focus-visible { outline: 2px solid #118b50; outline-offset: 2px; }
+      button:disabled { cursor: not-allowed; opacity: 0.45; }
+
+      .secondary {
+        min-width: 0;
+        background: #ffffff;
+        color: #4a4a4a;
+        border-color: #d2d2d2;
+      }
+
+      .secondary:hover { background: #ececec; border-color: #c7c7c7; }
+
+      #messages {
+        min-height: 0;
+        padding: 26px 30px 32px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        background: var(--chat);
+      }
+
+      .empty {
+        height: 100%;
+        display: grid;
+        place-items: center;
+        color: var(--muted);
+        text-align: center;
+        font-size: 13px;
+        line-height: 1.7;
+      }
+
+      .message {
+        width: 100%;
+        margin-bottom: 22px;
+        display: flex;
+        align-items: flex-start;
+        gap: 11px;
+        animation: appear 160ms ease-out both;
+      }
+
+      .message.user {
+        flex-direction: row-reverse;
+      }
+
+      .avatar {
+        width: 38px;
+        height: 38px;
+        flex: 0 0 38px;
+        border-radius: 3px;
+        background: #576b95;
+      }
+
+      .message.user .avatar { background: var(--wechat); }
+      .message.error .avatar { background: #d75a57; }
+
+      .bubble {
+        position: relative;
+        max-width: min(68%, 620px);
+        min-height: 38px;
+        padding: 9px 12px;
+        background: #ffffff;
+        border: 1px solid #e1e1e1;
+        border-radius: 4px;
+      }
+
+      .bubble::before {
+        content: "";
+        position: absolute;
+        top: 13px;
+        left: -6px;
+        width: 10px;
+        height: 10px;
+        background: inherit;
+        border-left: inherit;
+        border-bottom: inherit;
+        transform: rotate(45deg);
+      }
+
+      .message.user .bubble {
+        background: var(--user-bubble);
+        border-color: #8cdd64;
+      }
+
+      .message.user .bubble::before {
+        right: -6px;
+        left: auto;
+        border: 0;
+        border-top: 1px solid #8cdd64;
+        border-right: 1px solid #8cdd64;
+      }
+
+      .message.error .bubble {
+        color: var(--error);
+        background: #fff0f0;
+        border-color: #efcece;
+      }
+
+      .message.error .bubble::before { border-color: #efcece; }
+
+      .label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      .content {
+        margin: 0;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        font-family: inherit;
+        font-size: 14px;
+        line-height: 1.65;
+      }
+
+      form {
+        min-height: 0;
+        padding: 13px 18px 15px;
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+      }
+
+      textarea {
+        display: block;
+        width: 100%;
+        min-height: 92px;
+        max-height: 112px;
+        resize: vertical;
+        border: 0;
+        outline: none;
+        background: transparent;
+        color: var(--text);
+        font-family: inherit;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+
+      textarea::placeholder { color: #a9a9a9; }
+      textarea:focus-visible { box-shadow: inset 0 -2px var(--wechat); }
+
+      .composer-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding-top: 7px;
+      }
+
+      #status {
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.4;
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      @keyframes appear {
+        from { opacity: 0; transform: translateY(6px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      @media (max-width: 620px) {
+        body { display: block; }
+        .shell {
+          width: 100%;
+          height: 100dvh;
+          min-height: 540px;
+          grid-template-rows: 58px minmax(0, 1fr) 154px;
+          border: 0;
+          border-radius: 0;
+          box-shadow: none;
+        }
+        header { padding: 0 14px; }
+        #messages { padding: 20px 12px 26px; }
+        .message { gap: 9px; margin-bottom: 18px; }
+        .avatar { width: 34px; height: 34px; flex-basis: 34px; }
+        .bubble { max-width: calc(100% - 92px); }
+        form { padding-inline: 14px; }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .message { animation: none; }
+        button { transition: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <div>
+          <h1>Yuxi Chat</h1>
+          <p class="meta">Agent <span id="agent"></span></p>
+        </div>
+        <button id="new-chat" class="secondary" type="button">新对话</button>
+      </header>
+
+      <section id="messages" aria-live="polite">
+        <div class="empty">暂无消息<br />输入内容开始本地调试</div>
+      </section>
+
+      <form id="composer">
+        <label class="sr-only" for="input">消息内容</label>
+        <textarea id="input" placeholder="输入消息，Enter 发送，Shift + Enter 换行" autofocus></textarea>
+        <div class="composer-row">
+          <span id="status">就绪</span>
+          <button id="send" type="submit">发送</button>
+        </div>
+      </form>
+    </main>
+
+    <script>
+      const sessionToken = __SESSION_TOKEN__;
+      const agentSlug = __AGENT_SLUG__;
+      const messages = document.querySelector("#messages");
+      const composer = document.querySelector("#composer");
+      const input = document.querySelector("#input");
+      const send = document.querySelector("#send");
+      const status = document.querySelector("#status");
+      document.querySelector("#agent").textContent = agentSlug;
+
+      let threadId = null;
+      let running = false;
+      let restingStatus = "就绪";
+
+      function addMessage(role, content = "") {
+        messages.querySelector(".empty")?.remove();
+        const item = document.createElement("article");
+        item.className = `message ${role}`;
+        const avatar = document.createElement("span");
+        avatar.className = "avatar";
+        avatar.setAttribute("aria-hidden", "true");
+        const bubble = document.createElement("div");
+        bubble.className = "bubble";
+        const label = document.createElement("span");
+        label.className = "label";
+        label.textContent = role === "user" ? "You" : role === "error" ? "Error" : "Yuxi";
+        const text = document.createElement("pre");
+        text.className = "content";
+        text.textContent = content;
+        bubble.append(label, text);
+        item.append(avatar, bubble);
+        messages.append(item);
+        messages.scrollTop = messages.scrollHeight;
+        return text;
+      }
+
+      function setRunning(value) {
+        running = value;
+        send.disabled = value;
+        input.disabled = value;
+        status.textContent = value ? "生成中" : restingStatus;
+      }
+
+      async function readEvents(response, output) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let completed = false;
+
+        while (true) {
+          const { value, done } = await reader.read();
+          buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            const event = JSON.parse(line);
+            if (event.type === "meta") threadId = event.thread_id || threadId;
+            if (event.type === "delta") {
+              output.textContent += event.content;
+              messages.scrollTop = messages.scrollHeight;
+            }
+            if (event.type === "command") {
+              output.textContent = JSON.stringify(event.result, null, 2);
+            }
+            if (event.type === "approval_required") {
+              const separator = output.textContent ? "\n\n" : "";
+              output.textContent += `${separator}${event.message}`;
+              restingStatus = "等待审批 · 输入 /approve";
+            }
+            if (event.type === "error") throw new Error(event.message);
+            if (event.type === "done") {
+              completed = ["completed", "waiting_approval"].includes(event.status);
+            }
+          }
+          if (done) break;
+        }
+        if (!completed) throw new Error("回答流在完成前中断，请重试");
+      }
+
+      async function submitMessage() {
+        const message = input.value.trim();
+        if (!message || running) return;
+        restingStatus = "就绪";
+        input.value = "";
+        addMessage("user", message);
+        const output = addMessage("assistant");
+        setRunning(true);
+
+        try {
+          const response = await fetch("/api/chat", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Yuxi-Chat-Token": sessionToken
+            },
+            body: JSON.stringify({ message, thread_id: threadId })
+          });
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || `请求失败：${response.status}`);
+          }
+          await readEvents(response, output);
+        } catch (error) {
+          output.closest(".message").remove();
+          addMessage("error", error.message || String(error));
+        } finally {
+          setRunning(false);
+          input.focus();
+        }
+      }
+
+      composer.addEventListener("submit", (event) => {
+        event.preventDefault();
+        submitMessage();
+      });
+
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          submitMessage();
+        }
+      });
+
+      document.querySelector("#new-chat").addEventListener("click", () => {
+        if (running) return;
+        threadId = null;
+        restingStatus = "就绪";
+        status.textContent = restingStatus;
+        messages.innerHTML = '<div class="empty">暂无消息<br />输入内容开始本地调试</div>';
+        input.focus();
+      });
+    </script>
+  </body>
+</html>

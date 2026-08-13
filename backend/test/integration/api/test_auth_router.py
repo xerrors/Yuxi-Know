@@ -230,7 +230,7 @@ async def test_department_admin_is_limited_to_own_department_users(test_client, 
         role_escalation = await test_client.put(
             f"/api/auth/users/{user_a['id']}", json={"role": "admin"}, headers=dept_a["admin_headers"]
         )
-        assert role_escalation.status_code == 403, role_escalation.text
+        assert role_escalation.status_code == 422, role_escalation.text
 
         cross_delete = await test_client.delete(f"/api/auth/users/{user_b['id']}", headers=dept_a["admin_headers"])
         assert cross_delete.status_code == 403, cross_delete.text

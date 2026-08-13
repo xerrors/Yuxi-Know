@@ -9,6 +9,8 @@ from typing import Any
 import httpx
 import pytest
 
+from test.live_api_cleanup import remove_e2e_thread_storage
+
 pytestmark = [pytest.mark.asyncio, pytest.mark.e2e, pytest.mark.slow]
 
 RUN_TIMEOUT_SECONDS = int(os.getenv("E2E_RUN_TIMEOUT_SECONDS", "300"))
@@ -45,7 +47,11 @@ async def _cancel_run(client: httpx.AsyncClient, headers: dict[str, str], run_id
 async def _create_thread(client: httpx.AsyncClient, headers: dict[str, str], agent_id: str, marker: str) -> str:
     response = await client.post(
         "/api/chat/thread",
-        json={"agent_id": agent_id, "title": f"subagent-stream-e2e-{marker}", "metadata": {"marker": marker}},
+        json={
+            "agent_id": agent_id,
+            "title": f"subagent-stream-e2e-{marker}",
+            "metadata": {"_yuxi_e2e": True, "test": "subagent-stream-e2e", "marker": marker},
+        },
         headers=headers,
     )
     _assert_ok(response)
@@ -199,6 +205,8 @@ async def test_subagent_stream_records_run_and_shares_output_files(
     expected_content = "由这个子智能体创建"
     created_agents: list[str] = []
     run_id: str | None = None
+    thread_id: str | None = None
+    child_thread_id: str | None = None
     run_completed = False
 
     default_response = await e2e_client.get("/api/agent/default", headers=e2e_headers)
@@ -208,7 +216,11 @@ async def test_subagent_stream_records_run_and_shares_output_files(
     if default_context.get("model"):
         base_context["model"] = default_context["model"]
 
-    share_config = {"access_level": "user", "department_ids": [], "user_uids": [uid]}
+    share_config = {
+        "version": 2,
+        "read_scope": {"access_level": "user", "department_ids": [], "user_uids": [uid]},
+        "manage_scope": None,
+    }
 
     try:
         sub_agent = await _create_agent(
@@ -380,5 +392,13 @@ async def test_subagent_stream_records_run_and_shares_output_files(
     finally:
         if not run_completed:
             await _cancel_run(e2e_client, e2e_headers, run_id)
+        for cleanup_thread_id in (thread_id, child_thread_id):
+            if cleanup_thread_id:
+                delete_response = await e2e_client.delete(
+                    f"/api/chat/thread/{cleanup_thread_id}",
+                    headers=e2e_headers,
+                )
+                assert delete_response.status_code in {200, 404}, delete_response.text
+                remove_e2e_thread_storage(cleanup_thread_id)
         for slug in reversed(created_agents):
             await _delete_agent(e2e_client, e2e_headers, slug)

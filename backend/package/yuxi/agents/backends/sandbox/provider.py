@@ -5,10 +5,12 @@ import json
 import os
 import threading
 import time
+import weakref
 from dataclasses import dataclass
 
 from yuxi.utils.logging_config import logger
 
+from .paths import workspace_uid_dirname
 from .provisioner_client import ProvisionerClient, SandboxRecord
 
 
@@ -91,7 +93,8 @@ class ProvisionerSandboxProvider:
 
         self._client = ProvisionerClient(provisioner_url, token=sandbox_provisioner_token())
         self._lock = threading.Lock()
-        self._thread_locks: dict[str, threading.Lock] = {}
+        # 活跃或等待中的调用者持有强引用；空闲作用域的锁自动回收。
+        self._thread_locks: weakref.WeakValueDictionary[str, threading.Lock] = weakref.WeakValueDictionary()
         self._connections: dict[str, SandboxConnection] = {}
         self._last_touch_at: dict[str, float] = {}
         self._touch_interval_seconds = int(os.getenv("SANDBOX_KEEPALIVE_INTERVAL_SECONDS") or 30)
@@ -149,6 +152,7 @@ class ProvisionerSandboxProvider:
         uid: str,
         file_thread_id: str | None = None,
         skills_thread_id: str | None = None,
+        inherit_env: bool = True,
     ) -> str:
         file_id = str(file_thread_id or thread_id).strip()
         skills_id = str(skills_thread_id or thread_id).strip()
@@ -173,10 +177,11 @@ class ProvisionerSandboxProvider:
             record = self._client.create(
                 sandbox_id,
                 thread_id,
-                uid,
-                load_user_agent_env(uid),
+                workspace_uid_dirname(uid),
+                load_user_agent_env(uid) if inherit_env else {},
                 file_thread_id=file_id,
                 skills_thread_id=skills_id,
+                inherit_env=inherit_env,
             )
 
             connection = self._record_to_connection(
@@ -197,6 +202,7 @@ class ProvisionerSandboxProvider:
         create_if_missing: bool = False,
         file_thread_id: str | None = None,
         skills_thread_id: str | None = None,
+        inherit_env: bool = True,
     ) -> SandboxConnection | None:
         file_id = str(file_thread_id or thread_id).strip()
         skills_id = str(skills_thread_id or thread_id).strip()
@@ -221,10 +227,11 @@ class ProvisionerSandboxProvider:
                 record = self._client.create(
                     sandbox_id,
                     thread_id,
-                    uid,
-                    load_user_agent_env(uid),
+                    workspace_uid_dirname(uid),
+                    load_user_agent_env(uid) if inherit_env else {},
                     file_thread_id=file_id,
                     skills_thread_id=skills_id,
+                    inherit_env=inherit_env,
                 )
             else:
                 record = self._client.discover(sandbox_id)
@@ -239,6 +246,33 @@ class ProvisionerSandboxProvider:
                 uid=uid,
                 record=record,
             )
+
+    def release(
+        self,
+        thread_id: str,
+        *,
+        uid: str,
+        file_thread_id: str | None = None,
+        skills_thread_id: str | None = None,
+        clear_cache_on_delete_failure: bool = False,
+    ) -> None:
+        """释放一个指定作用域的 Sandbox，并清理本地连接缓存。"""
+        file_id = str(file_thread_id or thread_id).strip()
+        skills_id = str(skills_thread_id or thread_id).strip()
+        cache_key = _sandbox_key(uid, file_id, skills_id)
+        lock = self._thread_lock(cache_key)
+        with lock:
+            connection = self._connections.get(cache_key)
+            sandbox_id = connection.sandbox_id if connection else sandbox_id_for_thread(file_id, skills_id, uid=uid)
+            try:
+                self._client.delete(sandbox_id)
+            except Exception:
+                if clear_cache_on_delete_failure:
+                    self._connections.pop(cache_key, None)
+                    self._last_touch_at.pop(cache_key, None)
+                raise
+            self._connections.pop(cache_key, None)
+            self._last_touch_at.pop(cache_key, None)
 
     def shutdown(self) -> None:
         with self._lock:

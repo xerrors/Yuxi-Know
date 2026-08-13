@@ -810,8 +810,6 @@ defineExpose({ validateAndFilterConfig })
 
       &.is-readonly {
         .config-item {
-          background: var(--gray-20);
-
           .model-selector.is-readonly {
             opacity: 0.78;
             pointer-events: none;
@@ -858,12 +856,6 @@ defineExpose({ validateAndFilterConfig })
         }
 
         .config-item {
-          background-color: var(--gray-25);
-          padding: 12px;
-          border-radius: 8px;
-          border: 1px solid var(--gray-100);
-          // box-shadow: 0px 0px 2px var(--shadow-3);
-
           :deep(.ant-form-item-label > label) {
             font-weight: 600;
           }

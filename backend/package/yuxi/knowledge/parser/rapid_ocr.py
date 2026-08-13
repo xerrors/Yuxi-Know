@@ -9,8 +9,8 @@ import tempfile
 import time
 from pathlib import Path
 
-import fitz
 import numpy as np
+import pypdfium2 as pdfium
 from PIL import Image
 from rapidocr import EngineType, LangDet, LangRec, ModelType, OCRVersion, RapidOCR
 
@@ -152,8 +152,7 @@ class RapidOCRParser(BaseDocumentProcessor):
         Args:
             pdf_path: PDF 文件路径
             params: 处理参数
-                - zoom_x: 横向缩放 (默认 2)
-                - zoom_y: 纵向缩放 (默认 2)
+                - zoom_x: 渲染缩放倍数 (默认 2)
 
         Returns:
             str: 提取的文本
@@ -163,12 +162,11 @@ class RapidOCRParser(BaseDocumentProcessor):
 
         params = params or {}
         zoom_x = params.get("zoom_x", 2)
-        zoom_y = params.get("zoom_y", 2)
 
         try:
             all_text = []
-            pdf_doc = fitz.open(pdf_path)
-            total_pages = pdf_doc.page_count
+            pdf_doc = pdfium.PdfDocument(pdf_path)
+            total_pages = len(pdf_doc)
 
             logger.info(f"开始处理 PDF: {os.path.basename(pdf_path)} ({total_pages} 页)")
 
@@ -176,10 +174,8 @@ class RapidOCRParser(BaseDocumentProcessor):
             for page_num in range(total_pages):
                 page = pdf_doc[page_num]
 
-                # 转换为图像
-                mat = fitz.Matrix(zoom_x, zoom_y)
-                pix = page.get_pixmap(matrix=mat, alpha=False)
-                img_pil = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                # pypdfium2 仅支持统一缩放（原 zoom_x/zoom_y 默认均为 2）
+                img_pil = page.render(scale=zoom_x).to_pil()
 
                 # 立即处理,不保存到列表
                 text = self.process_image(img_pil)

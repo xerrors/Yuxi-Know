@@ -77,6 +77,7 @@ def fake_chunk_repository(monkeypatch):
 async def test_iter_generated_benchmark_items_uses_progress_base_and_total_progress(monkeypatch):
     fake_llm = TrackingLlm()
     monkeypatch.setattr(benchmark_generation, "select_model", lambda model_spec: fake_llm)
+    monkeypatch.setattr(benchmark_generation, "kb_manager", NoQueryKnowledgeBase())
 
     progress_calls = []
 
@@ -86,7 +87,6 @@ async def test_iter_generated_benchmark_items_uses_progress_base_and_total_progr
     items = [
         item
         async for item in iter_generated_benchmark_items(
-            kb_instance=NoQueryKnowledgeBase(),
             kb_id="db_1",
             count=2,
             neighbors_count=1,
@@ -143,10 +143,10 @@ async def test_generate_dataset_task_resumes_from_existing_items(monkeypatch):
 
     monkeypatch.setattr(eval_service_module, "iter_generated_benchmark_items", fake_iter)
 
-    async def mock_aget_kb(kb_id):
-        return FakeKB()
+    async def mock_get_kb_config(kb_id):
+        return SimpleNamespace(kb_type="milvus")
 
-    monkeypatch.setattr(eval_service_module, "knowledge_base", SimpleNamespace(aget_kb=mock_aget_kb))
+    monkeypatch.setattr(eval_service_module, "kb_manager", SimpleNamespace(get_kb_config=mock_get_kb_config))
     monkeypatch.setattr(eval_service_module, "DATASET_PERSIST_BATCH_SIZE", 1)
 
     added_items = []
@@ -197,10 +197,10 @@ async def test_generate_dataset_task_persists_in_batches(monkeypatch):
 
     monkeypatch.setattr(eval_service_module, "iter_generated_benchmark_items", fake_iter)
 
-    async def mock_aget_kb(kb_id):
-        return FakeKB()
+    async def mock_get_kb_config(kb_id):
+        return SimpleNamespace(kb_type="milvus")
 
-    monkeypatch.setattr(eval_service_module, "knowledge_base", SimpleNamespace(aget_kb=mock_aget_kb))
+    monkeypatch.setattr(eval_service_module, "kb_manager", SimpleNamespace(get_kb_config=mock_get_kb_config))
     monkeypatch.setattr(eval_service_module, "DATASET_PERSIST_BATCH_SIZE", 2)
 
     flush_batches = []
@@ -246,11 +246,11 @@ async def test_generate_dataset_task_fails_when_generated_count_is_below_target(
     async def fake_iter(*args, **kwargs):
         yield {"query": "q1", "gold_answer": "a1", "gold_chunk_ids": ["c1"]}
 
-    async def mock_aget_kb(kb_id):
-        return FakeKB()
+    async def mock_get_kb_config(kb_id):
+        return SimpleNamespace(kb_type="milvus")
 
     monkeypatch.setattr(eval_service_module, "iter_generated_benchmark_items", fake_iter)
-    monkeypatch.setattr(eval_service_module, "knowledge_base", SimpleNamespace(aget_kb=mock_aget_kb))
+    monkeypatch.setattr(eval_service_module, "kb_manager", SimpleNamespace(get_kb_config=mock_get_kb_config))
 
     added_items = []
     metadata_updates = []
@@ -416,10 +416,12 @@ def make_real_generator_service(monkeypatch, kb, batch_size, added_items, metada
     fake_llm = TrackingLlm()
     monkeypatch.setattr(benchmark_generation, "select_model", lambda model_spec: fake_llm)
 
-    async def mock_aget_kb(kb_id):
-        return kb
+    async def mock_get_kb_config(kb_id):
+        return SimpleNamespace(kb_type="milvus")
 
-    monkeypatch.setattr(eval_service_module, "knowledge_base", SimpleNamespace(aget_kb=mock_aget_kb))
+    kb.get_kb_config = mock_get_kb_config
+    monkeypatch.setattr(eval_service_module, "kb_manager", kb)
+    monkeypatch.setattr(benchmark_generation, "kb_manager", kb)
     monkeypatch.setattr(eval_service_module, "DATASET_PERSIST_BATCH_SIZE", batch_size)
 
     class FakeRepo:

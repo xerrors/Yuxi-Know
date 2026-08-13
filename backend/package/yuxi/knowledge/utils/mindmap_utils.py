@@ -115,10 +115,10 @@ async def _list_mindmap_files_page(
 ) -> tuple[dict[str, dict], int]:
     from yuxi.repositories.knowledge_file_repository import KnowledgeFileRepository
 
-    records, total = await KnowledgeFileRepository().list_documents(
+    records, total = await KnowledgeFileRepository().search_files(
         kb_id=kb_id,
-        page=1,
-        page_size=page_size,
+        offset=0,
+        limit=page_size,
         files_only=True,
     )
     return {record.file_id: _file_record_to_mindmap_file(record) for record in records}, total
@@ -523,8 +523,8 @@ async def get_mindmap_databases_overview(uid: str) -> dict[str, Any]:
     file_repo = KnowledgeFileRepository()
     databases = await knowledge_base.get_databases_by_uid(uid)
     db_list = []
-    for db_info in databases.get("databases", []):
-        kb_id = db_info.get("kb_id") or db_info.get("slug")
+    for db_info in databases:
+        kb_id = db_info.kb_id
         if not kb_id:
             continue
 
@@ -533,9 +533,9 @@ async def get_mindmap_databases_overview(uid: str) -> dict[str, Any]:
             {
                 "kb_id": kb_id,
                 "slug": kb_id,
-                "name": db_info.get("name", ""),
-                "description": db_info.get("description", ""),
-                "kb_type": db_info.get("kb_type", ""),
+                "name": db_info.name,
+                "description": db_info.description or "",
+                "kb_type": db_info.kb_type,
                 "file_count": file_count,
             }
         )

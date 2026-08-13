@@ -88,3 +88,24 @@ async def test_get_subagent_run_for_creator_returns_none_for_relation_mismatch(s
     )
 
     assert result is None
+
+
+async def test_create_run_persists_origin_snapshot(session):
+    run = await AgentRunRepository(session).create_run(
+        run_id="origin-run",
+        conversation_thread_id="thread-1",
+        agent_slug="main",
+        uid="user-1",
+        request_id="origin-request",
+        input_payload={"model_spec": "provider:model"},
+        source="agent_call",
+        channel="api",
+        external_id="external-1",
+        origin_metadata={"agent_invocation_meta": {"trace_id": "trace-1"}},
+    )
+    await session.commit()
+
+    assert run.source == "agent_call"
+    assert run.channel == "api"
+    assert run.external_id == "external-1"
+    assert run.origin_metadata == {"agent_invocation_meta": {"trace_id": "trace-1"}}

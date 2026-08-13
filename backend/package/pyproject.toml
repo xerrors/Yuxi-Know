@@ -7,6 +7,10 @@ name = "yuxi"
 version = "0.7.1"
 description = "Yuxi 智能知识库与知识图谱平台核心后端包"
 readme = "README.md"
+license = { text = "MIT" }
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+]
 requires-python = ">=3.12,<3.14"
 dependencies = [
     "agent-sandbox>=0.0.26",
@@ -23,7 +27,6 @@ dependencies = [
     "docling>=2.68.0",
     "docx2txt>=0.9",
     "httpx>=0.27.0",
-    "igraph>=0.11.8",
     "json-repair>=0.54.0",
     "langchain>=1.3.9",
     "langchain-community>=0.4",
@@ -54,8 +57,8 @@ dependencies = [
     "psycopg[binary,pool]>=3.3.3",
     "pyjwt>=2.13.0",
     "pymilvus>=2.5.8",
-    "pymupdf>=1.25.5",
     "pymysql>=1.1.0",
+    "pypdfium2>=5.0.0",
     "pypinyin>=0.55.0",
     "python-dotenv>=1.1.0",
     "python-multipart>=0.0.31",

@@ -52,12 +52,13 @@
               <span>复制 ID</span>
             </button>
             <button
+              v-if="canManageDatabase"
               type="button"
               class="lucide-icon-btn extension-panel-action extension-panel-action-primary"
               @click="showEditModal"
             >
               <Pencil :size="14" />
-              <span>编辑</span>
+              <span>配置</span>
             </button>
           </a-space>
         </div>
@@ -88,6 +89,7 @@
               <div class="file-info-title">
                 <div class="file-info-title-row">
                   <button
+                    v-if="canManageDatabase"
                     type="button"
                     class="lucide-icon-btn extension-panel-action extension-panel-action-primary"
                     @click="showAddFilesModal()"
@@ -96,6 +98,7 @@
                     <span>上传</span>
                   </button>
                   <button
+                    v-if="canManageDatabase"
                     type="button"
                     class="lucide-icon-btn extension-panel-action extension-panel-action-secondary"
                     @click="showCreateFolderModal"
@@ -115,7 +118,7 @@
               </div>
               <div class="file-panel-status">
                 <button
-                  v-if="pendingParseCount > 0"
+                  v-if="canManageDatabase && pendingParseCount > 0"
                   type="button"
                   class="file-stat-card file-stat-action file-stat-summary"
                   :disabled="store.state.chunkLoading"
@@ -128,7 +131,7 @@
                   </div>
                 </button>
                 <button
-                  v-if="pendingIndexCount > 0"
+                  v-if="canManageDatabase && pendingIndexCount > 0"
                   type="button"
                   class="file-stat-card file-stat-action file-stat-summary"
                   :disabled="store.state.chunkLoading"
@@ -155,6 +158,7 @@
                   </div>
                 </div>
                 <button
+                  v-if="canManageDatabase"
                   type="button"
                   class="file-stat-card file-stat-summary file-stat-repair"
                   :disabled="statsRepairing"
@@ -171,6 +175,7 @@
                   </div>
                 </button>
                 <button
+                  v-if="canManageDatabase"
                   type="button"
                   class="file-stat-card file-stat-summary file-stat-repair"
                   :disabled="statsRepairing"
@@ -188,53 +193,29 @@
                 </button>
               </div>
             </div>
-            <FileTable ref="fileTableRef" />
+            <FileTable ref="fileTableRef" :readonly="!canManageDatabase" />
           </div>
 
           <div v-show="activeTab === 'query'" class="tab-panel query-config-panel">
-            <div class="query-config-layout">
-              <div class="query-test-pane">
-                <QuerySection ref="querySectionRef" :visible="true" @toggle-visible="() => {}" />
-              </div>
-              <aside class="query-config-pane" aria-label="检索配置">
-                <div class="search-config-wrapper">
-                  <div class="search-config-header">
-                    <div>
-                      <h3>检索配置</h3>
-                      <p>调整当前知识库的检索参数。</p>
-                    </div>
-                    <button
-                      type="button"
-                      class="lucide-icon-btn extension-panel-action extension-panel-action-primary"
-                      :disabled="searchConfigSaving"
-                      @click="handleInlineSearchConfigSave"
-                    >
-                      <Save :size="14" />
-                      <span>保存</span>
-                    </button>
-                  </div>
-                  <div class="search-config-body">
-                    <SearchConfigPanel
-                      ref="searchConfigPanelRef"
-                      :kb-id="kbId"
-                      @save="handleSearchConfigSave"
-                    />
-                  </div>
-                </div>
-              </aside>
-            </div>
+            <QuerySection ref="querySectionRef" :visible="true" @toggle-visible="() => {}" />
           </div>
 
           <div v-if="isMilvus && activeTab === 'graph'" class="tab-panel">
             <KnowledgeGraphSection
               :visible="true"
               :active="activeTab === 'graph'"
+              :readonly="!canManageDatabase"
               @toggle-visible="() => {}"
             />
           </div>
 
           <div v-if="isMilvus && activeTab === 'mindmap'" class="tab-panel">
-            <MindMapSection v-if="kbId" :kb-id="kbId" ref="mindmapSectionRef" />
+            <MindMapSection
+              v-if="kbId"
+              :kb-id="kbId"
+              :readonly="!canManageDatabase"
+              ref="mindmapSectionRef"
+            />
           </div>
 
           <div v-if="isMilvus && activeTab === 'evaluation'" class="tab-panel">
@@ -260,130 +241,135 @@
       </div>
     </template>
 
-    <a-modal v-model:open="editModalVisible" title="编辑知识库信息" width="700px">
+    <a-modal
+      v-model:open="editModalVisible"
+      title="配置知识库"
+      width="720px"
+      :mask-closable="false"
+      wrap-class-name="database-edit-modal"
+    >
       <template #footer>
-        <a-button danger @click="deleteDatabase" style="margin-right: auto; margin-left: 0">
-          <template #icon>
-            <Trash2 :size="16" style="vertical-align: -3px; margin-right: 4px" />
-          </template>
-          删除数据库
+        <a-button key="close" @click="editModalVisible = false">关闭</a-button>
+        <a-button key="submit" type="primary" :loading="editSaving" @click="handleEditSubmit">
+          保存
         </a-button>
-        <a-button key="back" @click="editModalVisible = false">取消</a-button>
-        <a-button key="submit" type="primary" @click="handleEditSubmit">确定</a-button>
       </template>
       <a-form :model="editForm" :rules="rules" ref="editFormRef" layout="vertical">
-        <a-form-item label="知识库名称" name="name" required>
-          <a-input v-model:value="editForm.name" placeholder="请输入知识库名称" />
-        </a-form-item>
-        <a-form-item label="知识库描述" name="description">
-          <AiTextarea
-            v-model="editForm.description"
-            :name="editForm.name"
-            :files="fileList"
-            placeholder="请输入知识库描述"
-            action-placement="header"
-            :rows="4"
-          />
-        </a-form-item>
+        <a-tabs v-model:active-key="editModalTab" class="database-edit-tabs">
+          <a-tab-pane key="basic" tab="基础信息">
+            <div class="database-edit-tab-content">
+              <a-form-item label="知识库名称" name="name" required>
+                <a-input v-model:value="editForm.name" placeholder="请输入知识库名称" />
+              </a-form-item>
+              <a-form-item label="知识库描述" name="description">
+                <AiTextarea
+                  v-model="editForm.description"
+                  :name="editForm.name"
+                  :files="fileList"
+                  placeholder="请输入知识库描述"
+                  action-placement="header"
+                  :rows="4"
+                />
+              </a-form-item>
 
-        <a-form-item v-if="!isConnector" label="自动生成问题" name="auto_generate_questions">
-          <a-switch
-            v-model:checked="editForm.auto_generate_questions"
-            checked-children="开启"
-            un-checked-children="关闭"
-          />
-          <span style="margin-left: 8px; font-size: 12px; color: var(--gray-500)">
-            上传文件后自动生成测试问题
-          </span>
-        </a-form-item>
+              <a-form-item v-if="!isConnector" name="chunk_preset_id">
+                <template #label>
+                  <span class="chunk-preset-label">
+                    分块策略
+                    <a-tooltip :title="editPresetDescription">
+                      <QuestionCircleOutlined class="chunk-preset-help-icon" />
+                    </a-tooltip>
+                  </span>
+                </template>
+                <a-select
+                  v-model:value="editForm.chunk_preset_id"
+                  :options="chunkPresetOptions"
+                  :loading="chunkPresetLoading"
+                />
+              </a-form-item>
+              <template v-if="isDifyKb">
+                <a-form-item label="Dify API URL" name="dify_api_url">
+                  <a-input
+                    v-model:value="editForm.dify_api_url"
+                    placeholder="例如: https://api.dify.ai/v1"
+                  />
+                </a-form-item>
+                <a-form-item label="Dify Token" name="dify_token">
+                  <a-input-password
+                    v-model:value="editForm.dify_token"
+                    placeholder="请输入 Dify API Token"
+                  />
+                </a-form-item>
+                <a-form-item label="Dataset ID" name="dify_dataset_id">
+                  <a-input
+                    v-model:value="editForm.dify_dataset_id"
+                    placeholder="请输入 Dify dataset_id"
+                  />
+                </a-form-item>
+              </template>
 
-        <a-form-item v-if="!isConnector" name="chunk_preset_id">
-          <template #label>
-            <span class="chunk-preset-label">
-              分块策略
-              <a-tooltip :title="editPresetDescription">
-                <QuestionCircleOutlined class="chunk-preset-help-icon" />
-              </a-tooltip>
-            </span>
-          </template>
-          <a-select
-            v-model:value="editForm.chunk_preset_id"
-            :options="chunkPresetOptions"
-            :loading="chunkPresetLoading"
-          />
-        </a-form-item>
+              <template v-if="isNotionKb">
+                <a-form-item label="Notion Token" name="notion_token">
+                  <a-input-password
+                    v-model:value="editForm.notion_token"
+                    placeholder="留空则保持现有 Token 或使用环境变量"
+                  />
+                </a-form-item>
+                <a-form-item label="Data Source ID" name="notion_data_source_id">
+                  <a-input
+                    v-model:value="editForm.notion_data_source_id"
+                    placeholder="请输入 Notion data_source_id"
+                  />
+                </a-form-item>
+                <a-form-item label="Notion API Version" name="notion_version">
+                  <a-input v-model:value="editForm.notion_version" placeholder="2026-03-11" />
+                </a-form-item>
+              </template>
+            </div>
+          </a-tab-pane>
 
-        <template v-if="isDifyKb">
-          <a-form-item label="Dify API URL" name="dify_api_url">
-            <a-input
-              v-model:value="editForm.dify_api_url"
-              placeholder="例如: https://api.dify.ai/v1"
-            />
-          </a-form-item>
-          <a-form-item label="Dify Token" name="dify_token">
-            <a-input-password
-              v-model:value="editForm.dify_token"
-              placeholder="请输入 Dify API Token"
-            />
-          </a-form-item>
-          <a-form-item label="Dataset ID" name="dify_dataset_id">
-            <a-input
-              v-model:value="editForm.dify_dataset_id"
-              placeholder="请输入 Dify dataset_id"
-            />
-          </a-form-item>
-        </template>
+          <a-tab-pane key="permission" tab="权限配置">
+            <div class="database-edit-tab-content">
+              <a-form-item v-if="canEditShareConfig" name="share_config">
+                <a-form-item-rest>
+                  <ShareConfigForm
+                    ref="shareConfigFormRef"
+                    v-model="editShareConfig"
+                    :auto-select-user-dept="true"
+                    :require-read-scope="true"
+                  >
+                    <template #manage-description>
+                      知识库<strong>仅管理员</strong>可以管理知识库；普通用户无法管理。
+                    </template>
+                  </ShareConfigForm>
+                </a-form-item-rest>
+              </a-form-item>
+              <div v-else-if="database.share_config" class="share-config-readonly">
+                <a-tag :color="shareConfigDisplay.color">{{ shareConfigDisplay.label }}</a-tag>
+                <span class="access-names">{{ shareConfigDisplay.detail }}</span>
+              </div>
+            </div>
+          </a-tab-pane>
 
-        <template v-if="isNotionKb">
-          <a-form-item label="Notion Token" name="notion_token">
-            <a-input-password
-              v-model:value="editForm.notion_token"
-              placeholder="留空则保持现有 Token 或使用环境变量"
-            />
-          </a-form-item>
-          <a-form-item label="Data Source ID" name="notion_data_source_id">
-            <a-input
-              v-model:value="editForm.notion_data_source_id"
-              placeholder="请输入 Notion data_source_id"
-            />
-          </a-form-item>
-          <a-form-item label="Notion API Version" name="notion_version">
-            <a-input v-model:value="editForm.notion_version" placeholder="2026-03-11" />
-          </a-form-item>
-        </template>
-
-        <a-form-item v-if="canEditShareConfig" label="共享设置" name="share_config">
-          <a-form-item-rest>
-            <ShareConfigForm
-              ref="shareConfigFormRef"
-              :model-value="database.share_config"
-              :auto-select-user-dept="true"
-            />
-          </a-form-item-rest>
-        </a-form-item>
-        <a-form-item
-          v-else-if="database.share_config"
-          label="共享设置"
-          name="share_config_readonly"
-        >
-          <div class="share-config-readonly">
-            <a-tag :color="shareConfigDisplay.color">
-              {{ shareConfigDisplay.label }}
-            </a-tag>
-            <span class="access-names">{{ shareConfigDisplay.detail }}</span>
-          </div>
-        </a-form-item>
+          <a-tab-pane key="retrieval" tab="检索配置" force-render>
+            <div class="database-edit-tab-content retrieval-config-content">
+              <p class="database-edit-tab-description">
+                调整当前知识库在检索测试和 Agent 使用时采用的参数。
+              </p>
+              <SearchConfigPanel v-if="editModalVisible" ref="searchConfigPanelRef" :kb-id="kbId" />
+            </div>
+          </a-tab-pane>
+        </a-tabs>
       </a-form>
     </a-modal>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDatabaseStore } from '@/stores/database'
 import { useTaskerStore } from '@/stores/tasker'
-import { useUserStore } from '@/stores/user'
 import {
   ArrowLeft,
   BarChart3,
@@ -398,9 +384,7 @@ import {
   Map as MapIcon,
   Network,
   Pencil,
-  Save,
-  Search,
-  Trash2
+  Search
 } from 'lucide-vue-next'
 import { QuestionCircleOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
@@ -428,7 +412,6 @@ const route = useRoute()
 const router = useRouter()
 const store = useDatabaseStore()
 const taskerStore = useTaskerStore()
-const userStore = useUserStore()
 const {
   chunkPresetSelectOptions: chunkPresetOptions,
   chunkPresetLoading,
@@ -438,6 +421,7 @@ const {
 
 const kbId = computed(() => store.kbId)
 const database = computed(() => store.database)
+const canManageDatabase = computed(() => database.value?.can_manage === true)
 const isCurrentDatabaseLoaded = computed(() => database.value?.kb_id === kbId.value)
 const kbType = computed(() =>
   isCurrentDatabaseLoaded.value ? database.value.kb_type?.toLowerCase() || 'milvus' : ''
@@ -477,7 +461,11 @@ const tabs = computed(() => {
   return [{ key: 'query', label: '检索测试', icon: Search }]
 })
 
-const visibleTabs = computed(() => tabs.value)
+const visibleTabs = computed(() =>
+  canManageDatabase.value
+    ? tabs.value
+    : tabs.value.filter((tab) => ['filetable', 'query', 'graph', 'mindmap'].includes(tab.key))
+)
 const activeTab = ref('filetable')
 
 watch(
@@ -588,22 +576,7 @@ const confirmBatchIndex = () => {
 
 const mindmapSectionRef = ref(null)
 const querySectionRef = ref(null)
-const searchConfigSaving = ref(false)
 const searchConfigPanelRef = ref(null)
-
-const handleSearchConfigSave = () => {
-  store.getDatabaseInfo()
-}
-
-const handleInlineSearchConfigSave = async () => {
-  if (!searchConfigPanelRef.value) return
-  searchConfigSaving.value = true
-  try {
-    await searchConfigPanelRef.value.save()
-  } finally {
-    searchConfigSaving.value = false
-  }
-}
 
 const addFilesModalVisible = ref(false)
 const fileSearchModalVisible = ref(false)
@@ -694,7 +667,7 @@ watch(
     }
 
     if (newFileCount !== oldFileCount) {
-      if (newFileCount > 0) {
+      if (newFileCount > 0 && canManageDatabase.value) {
         setTimeout(async () => {
           if (querySectionRef.value) {
             if (database.value.additional_params?.auto_generate_questions) {
@@ -750,12 +723,18 @@ const copyDatabaseId = async () => {
 const departments = ref([])
 const users = ref([])
 const editModalVisible = ref(false)
+const editModalTab = ref('basic')
+const editSaving = ref(false)
 const editFormRef = ref(null)
 const shareConfigFormRef = ref(null)
+const editShareConfig = ref({
+  version: 2,
+  read_scope: { access_level: 'global', department_ids: [], user_uids: [] },
+  manage_scope: null
+})
 const editForm = reactive({
   name: '',
   description: '',
-  auto_generate_questions: false,
   chunk_preset_id: DEFAULT_CHUNK_PRESET_ID,
   dify_api_url: '',
   dify_token: '',
@@ -774,34 +753,34 @@ const fileList = computed(() => {
   return (store.documentFiles || []).map((f) => f.filename).filter(Boolean)
 })
 
-const canEditShareConfig = computed(() => userStore.isSuperAdmin || userStore.isAdmin)
+const canEditShareConfig = computed(() => canManageDatabase.value)
 
 const shareConfigDisplay = computed(() => {
-  const shareConfig = database.value?.share_config || { access_level: 'global' }
-  if (shareConfig.access_level === 'department') {
-    const departmentIds = shareConfig.department_ids || []
-    const names = departmentIds.map((id) => getDepartmentName(id)).join('、') || '无'
+  const shareConfig = database.value?.share_config || {}
+  const readScope = shareConfig.version === 2 ? shareConfig.read_scope : shareConfig
+  const manageScope = shareConfig.manage_scope
+  const describeScope = (scope) => {
+    if (!scope) return '无'
+    if (scope.access_level === 'global') return '全局'
+    if (scope.access_level === 'department') {
+      const names =
+        (scope.department_ids || []).map((id) => getDepartmentName(id)).join('、') || '无'
+      return `${scope.department_ids?.length || 0} 个部门：${names}`
+    }
+    const names = (scope.user_uids || []).map((uid) => getUserName(uid)).join('、') || '无'
+    return `${scope.user_uids?.length || 0} 个用户：${names}`
+  }
+  if (manageScope) {
     return {
       color: 'blue',
-      label: '部门共享',
-      detail: `${departmentIds.length} 个部门可访问：${names}`
+      label: '分级共享',
+      detail: `读取：${describeScope(readScope)}；管理：${describeScope(manageScope)}`
     }
   }
-
-  if (shareConfig.access_level === 'user') {
-    const userUids = shareConfig.user_uids || []
-    const names = userUids.map((uid) => getUserName(uid)).join('、') || '无'
-    return {
-      color: 'purple',
-      label: '指定人',
-      detail: `${userUids.length} 个用户可访问：${names}`
-    }
-  }
-
   return {
     color: 'green',
-    label: '全局共享',
-    detail: '所有用户可访问'
+    label: readScope?.access_level === 'global' ? '全局只读' : '共享只读',
+    detail: `读取：${describeScope(readScope)}`
   }
 })
 
@@ -833,10 +812,9 @@ const loadUsers = async () => {
 }
 
 const showEditModal = () => {
+  editModalTab.value = 'basic'
   editForm.name = database.value.name || ''
   editForm.description = database.value.description || ''
-  editForm.auto_generate_questions =
-    database.value.additional_params?.auto_generate_questions || false
   editForm.chunk_preset_id =
     database.value.additional_params?.chunk_preset_id || DEFAULT_CHUNK_PRESET_ID
   editForm.dify_api_url = database.value.additional_params?.dify_api_url || ''
@@ -845,6 +823,11 @@ const showEditModal = () => {
   editForm.notion_token = ''
   editForm.notion_data_source_id = database.value.additional_params?.notion_data_source_id || ''
   editForm.notion_version = database.value.additional_params?.notion_version || '2026-03-11'
+  editShareConfig.value = database.value.share_config || {
+    version: 2,
+    read_scope: { access_level: 'global', department_ids: [], user_uids: [] },
+    manage_scope: null
+  }
   editModalVisible.value = true
 }
 
@@ -858,84 +841,91 @@ watch(
   { immediate: true }
 )
 
-const handleEditSubmit = () => {
-  editFormRef.value
-    .validate()
-    .then(async () => {
-      if (shareConfigFormRef.value) {
-        const validation = shareConfigFormRef.value.validate()
-        if (!validation.valid) {
-          message.warning(validation.message)
-          return
-        }
+const handleEditSubmit = async () => {
+  editSaving.value = true
+  try {
+    await editFormRef.value.validate()
+
+    if (shareConfigFormRef.value) {
+      const validation = shareConfigFormRef.value.validate()
+      if (!validation.valid) {
+        editModalTab.value = 'permission'
+        message.warning(validation.message)
+        return
       }
+    }
 
-      const formConfig = shareConfigFormRef.value?.config || { access_level: 'global' }
-      const updateData = {
-        name: editForm.name,
-        description: editForm.description,
-        additional_params: {},
-        share_config: {
-          access_level: formConfig.access_level,
-          department_ids:
-            formConfig.access_level === 'department' ? formConfig.department_ids || [] : [],
-          user_uids: formConfig.access_level === 'user' ? formConfig.user_uids || [] : []
-        }
+    const updateData = {
+      name: editForm.name,
+      description: editForm.description,
+      additional_params: {},
+      share_config: editShareConfig.value
+    }
+
+    if (isDifyKb.value) {
+      if (
+        !editForm.dify_api_url?.trim() ||
+        !editForm.dify_token?.trim() ||
+        !editForm.dify_dataset_id?.trim()
+      ) {
+        editModalTab.value = 'basic'
+        message.error('请完整填写 Dify API URL、Token 和 Dataset ID')
+        return
       }
-
-      if (isDifyKb.value) {
-        if (
-          !editForm.dify_api_url?.trim() ||
-          !editForm.dify_token?.trim() ||
-          !editForm.dify_dataset_id?.trim()
-        ) {
-          message.error('请完整填写 Dify API URL、Token 和 Dataset ID')
-          return
-        }
-        if (!editForm.dify_api_url.trim().endsWith('/v1')) {
-          message.error('Dify API URL 必须以 /v1 结尾')
-          return
-        }
-        updateData.additional_params = {
-          dify_api_url: editForm.dify_api_url.trim(),
-          dify_token: editForm.dify_token.trim(),
-          dify_dataset_id: editForm.dify_dataset_id.trim()
-        }
-      } else if (isNotionKb.value) {
-        if (!editForm.notion_data_source_id?.trim()) {
-          message.error('请填写 Notion Data Source ID')
-          return
-        }
-        updateData.additional_params = {
-          notion_data_source_id: editForm.notion_data_source_id.trim(),
-          notion_version: editForm.notion_version?.trim() || '2026-03-11'
-        }
-        if (editForm.notion_token?.trim()) {
-          updateData.additional_params.notion_token = editForm.notion_token.trim()
-        }
-      } else {
-        updateData.additional_params = {
-          auto_generate_questions: editForm.auto_generate_questions,
-          chunk_preset_id: editForm.chunk_preset_id || DEFAULT_CHUNK_PRESET_ID
-        }
+      if (!editForm.dify_api_url.trim().endsWith('/v1')) {
+        editModalTab.value = 'basic'
+        message.error('Dify API URL 必须以 /v1 结尾')
+        return
       }
+      updateData.additional_params = {
+        dify_api_url: editForm.dify_api_url.trim(),
+        dify_token: editForm.dify_token.trim(),
+        dify_dataset_id: editForm.dify_dataset_id.trim()
+      }
+    } else if (isNotionKb.value) {
+      if (!editForm.notion_data_source_id?.trim()) {
+        editModalTab.value = 'basic'
+        message.error('请填写 Notion Data Source ID')
+        return
+      }
+      updateData.additional_params = {
+        notion_data_source_id: editForm.notion_data_source_id.trim(),
+        notion_version: editForm.notion_version?.trim() || '2026-03-11'
+      }
+      if (editForm.notion_token?.trim()) {
+        updateData.additional_params.notion_token = editForm.notion_token.trim()
+      }
+    } else {
+      updateData.additional_params = {
+        chunk_preset_id: editForm.chunk_preset_id || DEFAULT_CHUNK_PRESET_ID
+      }
+    }
 
-      await store.updateDatabaseInfo(updateData)
-      editModalVisible.value = false
-    })
-    .catch((err) => {
-      console.error('表单验证失败:', err)
-    })
-}
+    if (searchConfigPanelRef.value?.hasChanges?.()) {
+      const searchConfigSaved = await searchConfigPanelRef.value.save({ notify: false })
+      if (searchConfigSaved === false) {
+        editModalTab.value = 'retrieval'
+        return
+      }
+    }
 
-const deleteDatabase = () => {
-  store.deleteDatabase()
+    await store.updateDatabaseInfo(updateData)
+  } catch (err) {
+    editModalTab.value = 'basic'
+    console.error('表单验证失败:', err)
+  } finally {
+    editSaving.value = false
+  }
 }
 
 onMounted(() => {
   loadChunkPresetOptions()
   loadDepartments()
   loadUsers()
+})
+
+onUnmounted(() => {
+  store.stopAutoRefresh()
 })
 </script>
 
@@ -1068,48 +1058,11 @@ onMounted(() => {
 
 .query-config-panel {
   overflow: hidden;
-}
 
-.query-config-layout {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  gap: 12px;
-}
-
-.query-test-pane {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-}
-
-.query-test-pane :deep(.query-section) {
-  flex: 1;
-  min-width: 0;
-}
-
-.query-config-pane {
-  width: 360px;
-  flex: 0 0 360px;
-  min-height: 0;
-  display: flex;
-}
-
-.query-config-pane .search-config-wrapper {
-  width: 100%;
-}
-
-.query-config-pane :deep(.ant-row) {
-  margin-right: 0 !important;
-  margin-left: 0 !important;
-}
-
-.query-config-pane :deep(.ant-col) {
-  max-width: 100%;
-  flex: 0 0 100%;
-  padding-right: 0 !important;
-  padding-left: 0 !important;
+  :deep(.query-section) {
+    flex: 1;
+    min-width: 0;
+  }
 }
 
 .file-panel-toolbar {
@@ -1273,45 +1226,39 @@ onMounted(() => {
   }
 }
 
-.search-config-wrapper {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--gray-200);
-  border-radius: 8px;
-  background: var(--gray-0);
-  overflow: hidden;
+.database-edit-tabs :deep(.ant-tabs-nav) {
+  margin-bottom: 20px;
 }
 
-.search-config-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--gray-150);
-  flex-shrink: 0;
-
-  h3 {
-    margin: 0 0 4px;
-    font-size: 16px;
-    font-weight: 600;
-    color: var(--gray-900);
-  }
-
-  p {
-    margin: 0;
-    font-size: 13px;
-    color: var(--gray-500);
-  }
+.database-edit-tab-content {
+  min-height: 360px;
 }
 
-.search-config-body {
-  flex: 1;
-  min-height: 0;
+.database-edit-tab-description {
+  margin: 0 0 16px;
+  color: var(--gray-500);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.retrieval-config-content {
+  padding: 0 2px;
+}
+
+:global(.database-edit-modal .ant-modal-body) {
+  max-height: min(680px, 70vh);
   overflow-y: auto;
-  padding: 16px;
+}
+
+:global(.database-edit-modal .ant-modal-footer) {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+:global(.database-edit-modal .ant-modal-footer .ant-btn + .ant-btn) {
+  margin-inline-start: 0;
 }
 
 .share-config-readonly {
@@ -1337,19 +1284,14 @@ onMounted(() => {
   font-size: 14px;
 }
 
+.form-item-help-text {
+  margin-left: 8px;
+  color: var(--gray-500);
+  font-size: 12px;
+}
+
 @media (max-width: 1024px) {
-  .query-config-layout {
-    flex-direction: column;
-    overflow-y: auto;
-  }
-
-  .query-test-pane {
-    min-height: 360px;
-  }
-
-  .query-config-pane {
-    width: 100%;
-    flex: 0 0 auto;
+  .database-edit-tab-content {
     min-height: 320px;
   }
 }
@@ -1371,14 +1313,9 @@ onMounted(() => {
     min-width: 104px;
   }
 
-  .query-config-layout {
-    flex-direction: column;
-  }
-
-  .query-config-pane {
-    width: 100%;
-    flex: 0 0 auto;
-    min-height: 320px;
+  .retrieval-config-content :deep(.ant-col) {
+    max-width: 100%;
+    flex: 0 0 100%;
   }
 
   .file-panel-toolbar {

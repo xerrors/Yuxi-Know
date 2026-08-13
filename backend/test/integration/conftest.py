@@ -22,12 +22,15 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from test.live_api_cleanup import cleanup_pytest_knowledge_resources  # noqa: E402
+
 load_dotenv(PROJECT_ROOT / ".env", override=False)
 load_dotenv(PROJECT_ROOT / "test/.env.test", override=False)
 
 API_BASE_URL = os.getenv("TEST_BASE_URL", "http://localhost:5050").rstrip("/")
 ADMIN_LOGIN = os.getenv("TEST_USERNAME")
 ADMIN_PASSWORD = os.getenv("TEST_PASSWORD")
+LITE_MODE = os.getenv("LITE_MODE", "").lower() in {"true", "1"}
 
 _ADMIN_TOKEN_CACHE: str | None = None
 HTTP_TIMEOUT = httpx.Timeout(60.0, connect=5.0)
@@ -106,11 +109,11 @@ def admin_headers(admin_token: str) -> dict[str, str]:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def cleanup_test_knowledge_databases():
+def cleanup_test_knowledge_resources():
     async def run_cleanup() -> None:
         global _ADMIN_TOKEN_CACHE
 
-        if not ADMIN_LOGIN or not ADMIN_PASSWORD:
+        if LITE_MODE or not ADMIN_LOGIN or not ADMIN_PASSWORD:
             return
 
         if not _ADMIN_TOKEN_CACHE:
@@ -124,47 +127,22 @@ def cleanup_test_knowledge_databases():
                     data={"username": ADMIN_LOGIN, "password": ADMIN_PASSWORD},
                 )
                 if response.status_code != 200:
-                    return
+                    raise RuntimeError(
+                        f"Test resource cleanup login failed (status={response.status_code}): {response.text}"
+                    )
                 token = response.json().get("access_token")
                 if not token:
-                    return
+                    raise RuntimeError("Test resource cleanup login succeeded but no access token was returned")
                 _ADMIN_TOKEN_CACHE = token
 
         headers = {"Authorization": f"Bearer {_ADMIN_TOKEN_CACHE}"}
 
         async with httpx.AsyncClient(base_url=API_BASE_URL, timeout=HTTP_TIMEOUT, follow_redirects=True) as client:
-            try:
-                list_response = await client.get("/api/knowledge/databases", headers=headers)
-            except Exception as exc:
-                print(f"Warning: Failed to list knowledge databases for cleanup: {exc}")
-                return
+            await cleanup_pytest_knowledge_resources(client, headers)
 
-            if list_response.status_code != 200:
-                return
-
-            databases = list_response.json().get("databases", [])
-            prefixes = ("pytest_", "py_test")
-            for entry in databases:
-                name = entry.get("name") or ""
-                slug = entry.get("slug")
-                if not slug or not isinstance(name, str) or not name.startswith(prefixes):
-                    continue
-                try:
-                    delete_response = await client.delete(f"/api/knowledge/databases/{slug}", headers=headers)
-                    if delete_response.status_code not in (200, 404):
-                        print(f"Warning: Failed to cleanup knowledge database {slug}: {delete_response.text}")
-                except Exception as exc:
-                    print(f"Warning: Exception during cleanup of {slug}: {exc}")
-
-    try:
-        anyio.run(run_cleanup)
-    except Exception as exc:
-        print(f"Warning: Exception during session cleanup startup: {exc}")
+    anyio.run(run_cleanup)
     yield
-    try:
-        anyio.run(run_cleanup)
-    except Exception as exc:
-        print(f"Warning: Exception during session cleanup teardown: {exc}")
+    anyio.run(run_cleanup)
 
 
 def _docker_api_request(method: str, path: str) -> list[dict] | dict:

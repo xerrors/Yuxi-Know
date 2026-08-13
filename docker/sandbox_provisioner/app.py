@@ -86,6 +86,7 @@ class CreateSandboxRequest(BaseModel):
     skills_thread_id: str | None = None
     uid: str
     env: dict[str, str] = Field(default_factory=dict)
+    inherit_env: bool = True
 
 
 class SandboxResponse(BaseModel):
@@ -138,12 +139,14 @@ class MemoryProvisionerBackend:
         *,
         file_thread_id: str | None = None,
         skills_thread_id: str | None = None,
+        inherit_env: bool = True,
     ) -> SandboxRecord:
         _ = thread_id
         _ = file_thread_id
         _ = skills_thread_id
         _ = uid
         _ = env
+        _ = inherit_env
         with self._lock:
             existing = self._records.get(sandbox_id)
             if existing is not None:
@@ -440,6 +443,7 @@ class LocalContainerProvisionerBackend:
         *,
         file_thread_id: str | None = None,
         skills_thread_id: str | None = None,
+        inherit_env: bool = True,
     ) -> SandboxRecord:
         with self._lock:
             safe_thread_id = self._validate_thread_id(thread_id)
@@ -513,7 +517,7 @@ class LocalContainerProvisionerBackend:
                 # Keep it ephemeral and mount persistent user-data underneath it.
                 "tmpfs": {"/home/gem": "rw,exec,mode=777"},
             }
-            sandbox_env = merged_sandbox_env(self._sandbox_env, env or {})
+            sandbox_env = merged_sandbox_env(self._sandbox_env, env or {}) if inherit_env else {}
             if sandbox_env:
                 run_kwargs["environment"] = sandbox_env
 
@@ -645,12 +649,11 @@ class KubernetesProvisionerBackend:
         *,
         file_thread_id: str,
         skills_thread_id: str,
+        inherit_env: bool,
     ):
         pod_name = self._pod_name(sandbox_id)
-        env_vars = [
-            self._client.V1EnvVar(name=key, value=value)
-            for key, value in merged_sandbox_env(self._sandbox_env, env).items()
-        ]
+        sandbox_env = merged_sandbox_env(self._sandbox_env, env) if inherit_env else {}
+        env_vars = [self._client.V1EnvVar(name=key, value=value) for key, value in sandbox_env.items()]
         return self._client.V1Pod(
             metadata=self._client.V1ObjectMeta(
                 name=pod_name,
@@ -663,6 +666,7 @@ class KubernetesProvisionerBackend:
                 },
             ),
             spec=self._client.V1PodSpec(
+                automount_service_account_token=False,
                 restart_policy="Never",
                 security_context=self._client.V1PodSecurityContext(
                     fs_group=0,
@@ -812,6 +816,7 @@ class KubernetesProvisionerBackend:
         *,
         file_thread_id: str | None = None,
         skills_thread_id: str | None = None,
+        inherit_env: bool = True,
     ) -> SandboxRecord:
         from kubernetes.client.rest import ApiException
 
@@ -847,6 +852,7 @@ class KubernetesProvisionerBackend:
                         env or {},
                         file_thread_id=safe_file_thread_id,
                         skills_thread_id=safe_skills_thread_id,
+                        inherit_env=inherit_env,
                     ),
                 )
             except ApiException as exc:
@@ -1107,6 +1113,7 @@ def create_sandbox(payload: CreateSandboxRequest):
             payload.env,
             file_thread_id=payload.file_thread_id,
             skills_thread_id=payload.skills_thread_id,
+            inherit_env=payload.inherit_env,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

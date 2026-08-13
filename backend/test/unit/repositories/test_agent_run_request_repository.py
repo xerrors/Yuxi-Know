@@ -70,6 +70,26 @@ async def test_create_persists_request_with_queued_status(session):
     assert created.status == "queued"
 
 
+async def test_create_persists_origin_metadata(session):
+    created = await AgentRunRequestRepository(session).create(
+        request_id="origin-request",
+        uid="user-1",
+        agent_slug="main",
+        conversation_thread_id="thread-1",
+        source="agent_call",
+        channel="api",
+        external_id="external-1",
+        origin_metadata={"agent_invocation_meta": {"trace_id": "trace-1"}},
+        input_message_id=100,
+    )
+    await session.commit()
+
+    assert created.source == "agent_call"
+    assert created.channel == "api"
+    assert created.external_id == "external-1"
+    assert created.origin_metadata == {"agent_invocation_meta": {"trace_id": "trace-1"}}
+
+
 async def test_get_by_request_id_returns_none_when_missing(session):
     repo = AgentRunRequestRepository(session)
     assert await repo.get_by_request_id("nope") is None

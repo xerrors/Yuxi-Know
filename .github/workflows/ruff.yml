@@ -1,8 +1,9 @@
 # GitHub Actions workflow for Ruff code formatting and linting
-# 自动运行 Ruff 格式检查和修复
+# 自动运行 Ruff 格式检查
 #
-# 触发条件：
-# 1. Push 到 main 分支时：自动格式化并提交
+# 触发场景：
+# 1. Pull Request：发现问题直接标红，要求开发者本地运行 make format
+# 2. Push 到 main：仅检查并在发现问题时标红，不修改仓库内容
 
 name: Ruff Format Check
 
@@ -15,26 +16,30 @@ on:
       - 'backend/pyproject.toml'
       - 'Makefile'
       - '.github/workflows/ruff.yml'
-
-# 设置写入权限，允许自动提交格式化代码
-permissions:
-  contents: write
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'backend/**/*.py'
+      - 'backend/pyproject.toml'
+      - 'Makefile'
+      - '.github/workflows/ruff.yml'
 
 jobs:
-  ruff:
+  ruff-check:
     name: Ruff Format & Lint
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: backend
-
     steps:
       # 1. 检出代码
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       # 2. 安装 uv（项目使用 uv 作为包管理器）
       - name: Install uv
@@ -55,7 +60,6 @@ jobs:
 
       # 5. 运行 Ruff 格式检查（与项目的 make lint 命令一致）
       - name: Run Ruff format check
-        id: ruff-format
         run: |
           set +e  # 不立即退出失败
 
@@ -73,85 +77,26 @@ jobs:
 
           # 检查是否有任何错误
           if [ $ruff_check_result -eq 0 ] && [ $ruff_format_result -eq 0 ] && [ $ruff_import_result -eq 0 ]; then
-            echo "ruff_format_passed=true" >> $GITHUB_OUTPUT
             echo "✅ Ruff format check passed"
-          else
-            echo "ruff_format_passed=false" >> $GITHUB_OUTPUT
-            echo "❌ Ruff format check failed"
-            echo "::warning::Ruff format check found issues that should be addressed"
-
-            # 汇总错误信息
-            echo "## Ruff Format Issues Summary" > $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "The following formatting issues were found:" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-
-            # 运行 ruff check 以获取详细错误信息
-            echo "### Detailed Issues:" >> $GITHUB_STEP_SUMMARY
-            uv run python -m ruff check package --output-format=github >> $GITHUB_STEP_SUMMARY 2>&1 || true
-
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "To fix these issues locally, run:" >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-            echo "make format" >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          fi
-
-      # 6. 针对不同事件类型执行不同操作
-      - name: Process Ruff Results
-        if: ${{ github.event_name == 'push' }}
-        env:
-          GIT_AUTHOR_NAME: "GitHub Actions"
-          GIT_AUTHOR_EMAIL: "actions@github.com"
-          GIT_COMMITTER_NAME: "GitHub Actions"
-          GIT_COMMITTER_EMAIL: "actions@github.com"
-        run: |
-          echo "Processing push event to main branch..."
-
-          # 检查当前是否有未提交的修改
-          if ! git diff --exit-code --quiet; then
-            echo "⚠️  Warning: There are uncommitted changes before formatting"
-            echo "The formatting process might need to handle this specially."
-          fi
-
-          # 先检查是否有格式问题
-          echo "Checking for formatting issues..."
-          set +e
-          uv run python -m ruff check package --quiet
-          has_ruff_issues=$?
-          set -e
-
-          if [ $has_ruff_issues -eq 0 ]; then
-            echo "✅ No formatting issues found"
             exit 0
           fi
 
-          echo "Formatting issues detected, running automatic fixes..."
+          echo "❌ Ruff format check failed"
+          echo "::error::Ruff format check found issues that must be addressed"
 
-          # 自动应用格式修复（与项目的 make format 命令一致）
-          echo "Running uv run ruff format package"
-          uv run ruff format package
+          # 汇总错误信息
+          echo "## Ruff Format Issues Summary" > $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The following formatting issues were found:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
 
-          echo "Running uv run ruff check package --fix"
-          uv run ruff check package --fix
+          # 运行 ruff check 以获取详细错误信息
+          echo "### Detailed Issues:" >> $GITHUB_STEP_SUMMARY
+          uv run python -m ruff check package --output-format=github >> $GITHUB_STEP_SUMMARY 2>&1 || true
 
-          echo "Running uv run python -m ruff check --select I package --fix"
-          uv run python -m ruff check --select I package --fix
-
-          # 检查是否有格式变更
-          echo "Checking for formatting changes..."
-          if git diff --exit-code --quiet; then
-            echo "✅ No formatting changes needed"
-          else
-            echo "📝 Formatting changes detected"
-            echo "Changed files:"
-            git diff --name-only
-
-            # 添加所有变更并提交
-            git add .
-            git commit -m "style: auto-format with ruff [skip ci]"
-
-            echo "📤 Pushing formatting changes..."
-            git push
-            echo "✅ Formatting changes committed and pushed"
-          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "To fix these issues locally, run:" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "make format" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          exit 1

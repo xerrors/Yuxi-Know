@@ -54,6 +54,7 @@
       :loading="store.fileBrowser.loading"
       :pagination="tablePagination"
       :selection="tableSelection"
+      :scroll="{ x: 868 }"
       :empty-text="emptyText"
       refreshable
       :refreshing="refreshing"
@@ -90,6 +91,7 @@
 
             <a-button
               type="text"
+              v-if="!readonly"
               @click="toggleSelectionMode"
               title="多选"
               class="panel-action-btn"
@@ -116,7 +118,7 @@
                     :class="{ 'is-loading': refreshing }"
                     @click="handleRefresh"
                   >
-                    <RotateCw size="16" :class="{ spin: refreshing }" />
+                    <ListRestart size="16" :class="{ spin: refreshing }" />
                     <span>刷新</span>
                   </div>
 
@@ -139,6 +141,7 @@
                   <div
                     class="overflow-action-item"
                     :class="{ active: isSelectionMode }"
+                    v-if="!readonly"
                     @click="toggleSelectionMode"
                   >
                     <CheckSquare size="16" />
@@ -152,7 +155,7 @@
       </template>
 
       <template #before-table>
-        <div class="batch-actions" v-if="isSelectionMode">
+        <div class="batch-actions" v-if="!readonly && isSelectionMode">
           <div class="batch-info">
             <a-checkbox
               :checked="isAllSelected"
@@ -224,7 +227,7 @@
         <div class="file-status-cell">
           <template v-if="!row.is_folder">
             <button
-              v-if="hasStatusAction(row)"
+              v-if="!readonly && hasStatusAction(row)"
               type="button"
               class="file-status-pill file-status-action"
               :disabled="lock"
@@ -246,6 +249,31 @@
         </div>
       </template>
 
+      <template #cell-content_amount="{ row }">
+        <span v-if="row.is_folder" class="file-content-amount">-</span>
+        <a-tooltip v-else :title="formatChunkAmount(row)">
+          <span class="file-content-amount">{{ formatTokenAmount(row) }}</span>
+        </a-tooltip>
+      </template>
+
+      <template #cell-created_by="{ row }">
+        <span v-if="row.is_folder || !row.created_by" class="file-creator-empty">-</span>
+        <a-tooltip v-else :title="row.created_by_name || row.created_by">
+          <span class="file-creator">
+            <FallbackAvatar
+              :src="row.created_by_avatar"
+              :default-src="generatePixelAvatar(row.created_by)"
+              :name="row.created_by_name || row.created_by"
+              :seed="row.created_by"
+              kind="user"
+              :size="24"
+              :alt="row.created_by_name || row.created_by"
+            />
+            <span class="file-creator-name">{{ row.created_by_name || row.created_by }}</span>
+          </span>
+        </a-tooltip>
+      </template>
+
       <template #cell-created_at="{ row, text }">
         <span class="file-time-cell">
           {{ row.is_folder ? '-' : formatFileTableTime(text) }}
@@ -264,11 +292,22 @@
             <template #content>
               <div class="file-action-list">
                 <template v-if="row.is_folder">
-                  <a-button type="text" block @click="showCreateFolderModal(row.file_id)">
+                  <a-button
+                    v-if="!readonly"
+                    type="text"
+                    block
+                    @click="showCreateFolderModal(row.file_id)"
+                  >
                     <template #icon><component :is="h(FolderPlus)" size="14" /></template>
                     新建子文件夹
                   </a-button>
-                  <a-button type="text" block danger @click="handleDeleteFolder(row)">
+                  <a-button
+                    v-if="!readonly"
+                    type="text"
+                    block
+                    danger
+                    @click="handleDeleteFolder(row)"
+                  >
                     <template #icon><component :is="h(Trash2)" size="14" /></template>
                     删除文件夹
                   </a-button>
@@ -286,7 +325,7 @@
 
                   <!-- Parse Action -->
                   <a-button
-                    v-if="canParseFile(row)"
+                    v-if="!readonly && canParseFile(row)"
                     type="text"
                     block
                     @click="handleParseFile(row)"
@@ -298,7 +337,7 @@
 
                   <!-- Index Action -->
                   <a-button
-                    v-if="getFilePrimaryAction(row)?.type === FILE_ACTIONS.INDEX"
+                    v-if="!readonly && getFilePrimaryAction(row)?.type === FILE_ACTIONS.INDEX"
                     type="text"
                     block
                     @click="handleIndexFile(row)"
@@ -310,7 +349,7 @@
 
                   <!-- Reindex Action -->
                   <a-button
-                    v-if="canReindexFile(row)"
+                    v-if="!readonly && canReindexFile(row)"
                     type="text"
                     block
                     @click="handleReindexFile(row)"
@@ -321,6 +360,7 @@
                   </a-button>
 
                   <a-button
+                    v-if="!readonly"
                     type="text"
                     block
                     danger
@@ -372,6 +412,7 @@ import {
   Trash2,
   Download,
   RotateCw,
+  ListRestart,
   Ellipsis,
   FolderPlus,
   CheckSquare,
@@ -382,6 +423,12 @@ import {
 } from 'lucide-vue-next'
 
 const store = useDatabaseStore()
+
+const props = defineProps({
+  readonly: { type: Boolean, default: false }
+})
+
+const readonly = computed(() => props.readonly)
 
 const applyFilters = async (overrides = {}) => {
   const nextStatus = overrides.status ?? statusFilter.value
@@ -611,13 +658,27 @@ const columnsCompact = [
     dataIndex: 'filename',
     key: 'filename',
     ellipsis: true,
-    width: undefined, // 不设置宽度，让它占据剩余空间
+    width: 280,
     sorter: (a, b) => {
       if (a.is_folder && !b.is_folder) return -1
       if (!a.is_folder && b.is_folder) return 1
       return (a.filename || '').localeCompare(b.filename || '')
     },
     sortDirections: ['ascend', 'descend']
+  },
+  {
+    title: '内容量',
+    dataIndex: 'content_amount',
+    key: 'content_amount',
+    width: 110,
+    sorter: (a, b) => Number(a.token_count || 0) - Number(b.token_count || 0),
+    sortDirections: ['ascend', 'descend']
+  },
+  {
+    title: '创建人',
+    dataIndex: 'created_by',
+    key: 'created_by',
+    width: 130
   },
   {
     title: '状态',
@@ -703,7 +764,7 @@ const getCheckboxProps = (record) => ({
 })
 
 const tableSelection = computed(() => {
-  if (!isSelectionMode.value) return null
+  if (readonly.value || !isSelectionMode.value) return null
   return {
     selectedRowKeys: selectedRowKeys.value,
     onChange: onSelectChange,
@@ -712,11 +773,13 @@ const tableSelection = computed(() => {
 })
 
 const handleDeleteFile = (fileId) => {
+  if (readonly.value) return
   store.handleDeleteFile(fileId)
   closePopover(fileId)
 }
 
 const handleDeleteFolder = (record) => {
+  if (readonly.value) return
   closePopover(record.file_id)
   Modal.confirm({
     title: '删除文件夹',
@@ -735,10 +798,12 @@ const handleDeleteFolder = (record) => {
 }
 
 const handleBatchDelete = () => {
+  if (readonly.value) return
   store.handleBatchDelete()
 }
 
 const handleBatchParse = async () => {
+  if (readonly.value) return
   const validKeys = selectedRowKeys.value.filter((key) => {
     const file = files.value.find((f) => f.file_id === key)
     return canParseFile(file)
@@ -994,12 +1059,26 @@ const formatFileTableTime = (value) => {
   return parsed.format('YYYY年MM月DD日')
 }
 
+const formatContentCount = (value) => {
+  const number = Number(value || 0)
+  const absValue = Math.abs(number)
+  if (absValue >= 1_000_000) return `${(number / 1_000_000).toFixed(1)}m`
+  if (absValue >= 1_000) return `${(number / 1_000).toFixed(1)}k`
+  return number.toLocaleString('zh-CN')
+}
+
+const formatTokenAmount = (file) => `${formatContentCount(file?.token_count)} Tokens`
+
+const formatChunkAmount = (file) => `${formatContentCount(file?.chunk_count)} Chunks`
+
 // 导入工具函数
 import { parseToShanghai } from '@/utils/time'
 import { buildChunkParamsPayload, isPlainObject } from '@/utils/chunkUtils'
 import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue'
 import FileBrowserTable from '@/components/common/FileBrowserTable.vue'
 import FileTypeIcon from '@/components/common/FileTypeIcon.vue'
+import FallbackAvatar from '@/components/common/FallbackAvatar.vue'
+import { generatePixelAvatar } from '@/utils/pixelAvatar'
 </script>
 
 <style scoped lang="less">
@@ -1223,6 +1302,33 @@ import FileTypeIcon from '@/components/common/FileTypeIcon.vue'
 .file-time-cell {
   color: var(--gray-600);
   white-space: nowrap;
+}
+
+.file-content-amount {
+  color: var(--gray-600);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.file-creator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+  vertical-align: middle;
+}
+
+.file-creator-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--gray-700);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-creator-empty {
+  color: var(--gray-400);
 }
 
 .panel-action-btn {

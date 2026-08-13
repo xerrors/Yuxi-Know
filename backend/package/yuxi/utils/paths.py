@@ -19,10 +19,21 @@ CONVERSATION_HISTORY_DIR_NAME = "conversation_history"
 VIRTUAL_SKILLS_PATH = "/home/gem/skills"
 
 VIRTUAL_PATH_WORKSPACE = (Path(VIRTUAL_PATH_PREFIX) / WORKSPACE_DIR_NAME).as_posix()
+VIRTUAL_PATH_WORKSPACE_SKILLS = (Path(VIRTUAL_PATH_WORKSPACE) / WORKSPACE_AGENTS_DIR_NAME / "skills").as_posix()
 VIRTUAL_PATH_UPLOADS = (Path(VIRTUAL_PATH_PREFIX) / UPLOADS_DIR_NAME).as_posix()
 VIRTUAL_PATH_OUTPUTS = (Path(VIRTUAL_PATH_PREFIX) / OUTPUTS_DIR_NAME).as_posix()
 VIRTUAL_PATH_LARGE_TOOL_RESULTS = (Path(VIRTUAL_PATH_OUTPUTS) / LARGE_TOOL_RESULTS_DIR_NAME).as_posix()
 VIRTUAL_PATH_CONVERSATION_HISTORY = (Path(VIRTUAL_PATH_OUTPUTS) / CONVERSATION_HISTORY_DIR_NAME).as_posix()
+
+
+def ensure_within_root(path: Path, root: Path, *, error_message: str) -> Path:
+    """确认真实路径位于指定根目录内，否则拒绝越界访问。"""
+    try:
+        path.relative_to(root)
+    except ValueError:
+        raise ValueError(error_message) from None
+    return path
+
 
 __all__ = [
     "VIRTUAL_PATH_PREFIX",
@@ -34,9 +45,11 @@ __all__ = [
     "LARGE_TOOL_RESULTS_DIR_NAME",
     "CONVERSATION_HISTORY_DIR_NAME",
     "VIRTUAL_PATH_WORKSPACE",
+    "VIRTUAL_PATH_WORKSPACE_SKILLS",
     "VIRTUAL_PATH_UPLOADS",
     "VIRTUAL_PATH_OUTPUTS",
     "VIRTUAL_PATH_LARGE_TOOL_RESULTS",
     "VIRTUAL_PATH_CONVERSATION_HISTORY",
     "VIRTUAL_SKILLS_PATH",
+    "ensure_within_root",
 ]

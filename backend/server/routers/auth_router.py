@@ -4,7 +4,7 @@ from yuxi.utils import logger
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status, UploadFile, File
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -69,9 +69,10 @@ class UserCreate(BaseModel):
 
 
 class UserUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     username: str | None = None
     password: str | None = Field(default=None, min_length=8)
-    role: str | None = None
     phone_number: str | None = None
     avatar: str | None = None
     department_id: int | None = None
@@ -712,23 +713,11 @@ async def update_user(
             detail="只有超级管理员才能修改超级管理员账户",
         )
 
-    # 超级管理员账户不能被降级（只能由其他超级管理员修改）
-    if user.role == "superadmin" and user_data.role and user_data.role != "superadmin" and current_user.id != user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="不能降级超级管理员账户",
-        )
-
     if current_user.role == "admin":
         if user.role != "user":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="管理员只能修改普通用户账户",
-            )
-        if user_data.role is not None and user_data.role != "user":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="管理员只能将用户角色设置为普通用户",
             )
 
     # 更新信息
@@ -749,20 +738,6 @@ async def update_user(
     if user_data.password is not None:
         user.password_hash = AuthUtils.hash_password(user_data.password)
         update_details.append("密码已更新")
-
-    if user_data.role is not None:
-        # 检查是否将管理员降级为普通用户
-        if user.role == "admin" and user_data.role == "user" and user.department_id is not None:
-            admin_count = await UserRepository().get_admin_count_in_department(
-                user.department_id, exclude_user_id=user_id
-            )
-            if admin_count <= 1:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="不能将管理员降级为普通用户，因为该用户是当前部门的唯一管理员",
-                )
-        user.role = user_data.role
-        update_details.append(f"角色: {user_data.role}")
 
     if user_data.phone_number is not None:
         user.phone_number = user_data.phone_number

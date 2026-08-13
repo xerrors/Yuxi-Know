@@ -4,6 +4,7 @@ Integration tests for knowledge router endpoints.
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from pathlib import Path
 
@@ -115,11 +116,19 @@ async def test_admin_can_manage_knowledge_databases(test_client, admin_headers, 
     list_response = await test_client.get("/api/knowledge/databases", headers=admin_headers)
     assert list_response.status_code == 200, list_response.text
     databases = list_response.json().get("databases", [])
-    assert any(entry["kb_id"] == kb_id for entry in databases)
+    database = next(entry for entry in databases if entry["kb_id"] == kb_id)
+    assert database["metadata"] == database["additional_params"]
+    assert database["status"] == "已连接"
+    assert database["row_count"] == (database["stats"]["row_count"] or database["stats"]["file_count"])
+    assert database["effective_permission"] == "manage"
+    assert database["can_manage"] is True
 
     get_response = await test_client.get(f"/api/knowledge/databases/{kb_id}", headers=admin_headers)
     assert get_response.status_code == 200, get_response.text
-    assert get_response.json()["kb_id"] == kb_id
+    detail = get_response.json()
+    assert detail["kb_id"] == kb_id
+    assert detail["metadata"] == detail["additional_params"]
+    assert detail["stats"]["row_count"] == detail["row_count"]
 
     update_response = await test_client.put(
         f"/api/knowledge/databases/{kb_id}",
@@ -156,7 +165,9 @@ async def test_create_database_with_chunk_preset(test_client, admin_headers):
 
     create_response = await test_client.post("/api/knowledge/databases", json=payload, headers=admin_headers)
     assert create_response.status_code == 200, create_response.text
-    kb_id = create_response.json()["kb_id"]
+    create_payload = create_response.json()
+    assert create_payload["files"] == {}
+    kb_id = create_payload["kb_id"]
 
     info_response = await test_client.get(f"/api/knowledge/databases/{kb_id}", headers=admin_headers)
     assert info_response.status_code == 200, info_response.text
@@ -309,6 +320,39 @@ async def test_admin_can_create_vector_db_with_reranker(test_client, admin_heade
     use_reranker_option2 = next((opt for opt in options2 if opt.get("key") == "use_reranker"), None)
     assert use_reranker_option2 is not None
     assert use_reranker_option2.get("default") is True  # 保存的值
+
+
+async def test_concurrent_query_param_updates_preserve_all_options(test_client, admin_headers):
+    """并发的部分更新应在数据库事务内合并，而不是后写覆盖先写。"""
+    payload = {
+        "database_name": f"pytest_query_params_{uuid.uuid4().hex[:6]}",
+        "description": "Concurrent query params update",
+        "kb_type": "dify",
+        "additional_params": {
+            "dify_api_url": "https://api.dify.ai/v1",
+            "dify_token": "test-token",
+            "dify_dataset_id": "dataset-123",
+        },
+    }
+    create_response = await test_client.post("/api/knowledge/databases", json=payload, headers=admin_headers)
+    assert create_response.status_code == 200, create_response.text
+    kb_id = create_response.json()["kb_id"]
+    endpoint = f"/api/knowledge/databases/{kb_id}/query-params"
+
+    first_response, second_response = await asyncio.gather(
+        test_client.put(endpoint, json={"final_top_k": 7}, headers=admin_headers),
+        test_client.put(endpoint, json={"similarity_threshold": 0.42}, headers=admin_headers),
+    )
+
+    assert first_response.status_code == 200, first_response.text
+    assert second_response.status_code == 200, second_response.text
+
+    params_response = await test_client.get(endpoint, headers=admin_headers)
+    assert params_response.status_code == 200, params_response.text
+    options = params_response.json()["params"]["options"]
+    saved_options = {option["key"]: option["default"] for option in options}
+    assert saved_options["final_top_k"] == 7
+    assert saved_options["similarity_threshold"] == 0.42
 
 
 async def test_create_dify_database_success(test_client, admin_headers):
@@ -524,7 +568,11 @@ async def test_create_database_defaults_to_global_share_config(test_client, admi
     database = await _create_test_database(test_client, admin_headers)
     kb_id = database["kb_id"]
     try:
-        assert database["share_config"] == {"access_level": "global", "department_ids": [], "user_uids": []}
+        assert database["share_config"] == {
+            "version": 2,
+            "read_scope": {"access_level": "global", "department_ids": [], "user_uids": []},
+            "manage_scope": None,
+        }
     finally:
         await test_client.delete(f"/api/knowledge/databases/{kb_id}", headers=admin_headers)
 
@@ -538,15 +586,16 @@ async def test_department_share_config_filters_accessible_databases(test_client,
     try:
         user_a = await _create_test_user(test_client, admin_headers, department_a["id"])
         user_b = await _create_test_user(test_client, admin_headers, department_b["id"])
+        scope = {"access_level": "department", "department_ids": [department_a["id"]], "user_uids": []}
         database = await _create_test_database(
             test_client,
             admin_headers,
-            {"access_level": "department", "department_ids": [department_a["id"]], "user_uids": []},
+            {"version": 2, "read_scope": scope, "manage_scope": scope},
         )
 
         saved_config = database["share_config"]
-        assert saved_config["access_level"] == "department"
-        assert department_a["id"] in saved_config["department_ids"]
+        assert saved_config["manage_scope"]["access_level"] == "department"
+        assert department_a["id"] in saved_config["manage_scope"]["department_ids"]
 
         assert database["kb_id"] in await _accessible_kb_ids(test_client, user_a["headers"])
         assert database["kb_id"] not in await _accessible_kb_ids(test_client, user_b["headers"])
@@ -570,15 +619,16 @@ async def test_user_share_config_filters_accessible_databases(test_client, admin
     try:
         user_a = await _create_test_user(test_client, admin_headers, department_a["id"])
         user_b = await _create_test_user(test_client, admin_headers, department_b["id"])
+        scope = {"access_level": "user", "department_ids": [], "user_uids": [user_a["user"]["uid"]]}
         database = await _create_test_database(
             test_client,
             admin_headers,
-            {"access_level": "user", "department_ids": [], "user_uids": [user_a["user"]["uid"]]},
+            {"version": 2, "read_scope": scope, "manage_scope": scope},
         )
 
         saved_config = database["share_config"]
-        assert saved_config["access_level"] == "user"
-        assert user_a["user"]["uid"] in saved_config["user_uids"]
+        assert saved_config["manage_scope"]["access_level"] == "user"
+        assert user_a["user"]["uid"] in saved_config["manage_scope"]["user_uids"]
 
         assert database["kb_id"] in await _accessible_kb_ids(test_client, user_a["headers"])
         assert database["kb_id"] not in await _accessible_kb_ids(test_client, user_b["headers"])

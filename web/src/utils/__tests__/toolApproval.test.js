@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   buildToolApprovalDecisions,
   hasPendingInterruptPayload,
+  isRunInterruptedConflict,
   isThreadWaitingForUserAction,
   isToolApprovalMode,
   resolveToolApprovalMode
@@ -57,10 +58,7 @@ assert.equal(
   }),
   true
 )
-assert.equal(
-  isThreadWaitingForUserAction({ queueSnapshot: { status: 'interrupted' } }),
-  true
-)
+assert.equal(isThreadWaitingForUserAction({ queueSnapshot: { status: 'interrupted' } }), true)
 assert.equal(
   isThreadWaitingForUserAction({
     pendingInterrupt: null,
@@ -68,5 +66,12 @@ assert.equal(
   }),
   false
 )
+assert.equal(
+  isRunInterruptedConflict({
+    response: { status: 409, data: { detail: { code: 'run_interrupted' } } }
+  }),
+  true
+)
+assert.equal(isRunInterruptedConflict(new Error('线程正在等待用户回答或审批')), false)
 
 console.log('toolApproval: all assertions passed')

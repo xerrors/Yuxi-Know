@@ -98,6 +98,45 @@ export class MessageProcessor {
   }
 
   /**
+   * 提取一轮对话中已成功登记的交付物路径。
+   * @param {Object} conv - 单轮对话
+   * @returns {Array<string>} 去重后的交付物路径
+   */
+  static extractArtifactsFromConversation(conv) {
+    if (!conv || !Array.isArray(conv.messages)) return []
+
+    const artifacts = []
+    const seenPaths = new Set()
+    for (const message of conv.messages) {
+      if (message?.type !== 'ai' || !Array.isArray(message.tool_calls)) continue
+
+      for (const toolCall of message.tool_calls) {
+        const toolName = toolCall?.name || toolCall?.function?.name
+        if (toolName !== 'present_artifacts') continue
+        if (!toolCall.tool_call_result && toolCall.status !== 'success') continue
+
+        let args = toolCall.args ?? toolCall.function?.arguments
+        if (typeof args === 'string') {
+          try {
+            args = JSON.parse(args)
+          } catch {
+            continue
+          }
+        }
+
+        const filepaths = Array.isArray(args?.filepaths) ? args.filepaths : []
+        for (const filepath of filepaths) {
+          const normalizedPath = typeof filepath === 'string' ? filepath.trim() : ''
+          if (!normalizedPath || seenPaths.has(normalizedPath)) continue
+          seenPaths.add(normalizedPath)
+          artifacts.push(normalizedPath)
+        }
+      }
+    }
+    return artifacts
+  }
+
+  /**
    * 提取一轮对话中所有知识库检索块
    * @param {Object} conv - 单轮对话
    * @param {Array} databases - 知识库列表
@@ -218,7 +257,12 @@ export class MessageProcessor {
 
       for (const toolCall of msg.tool_calls) {
         const toolName = (toolCall?.name || toolCall?.function?.name || '').toLowerCase()
-        if (!toolName.includes('tavily_search')) continue
+        if (
+          !toolName.includes('web_search') &&
+          !toolName.includes('tavily_search') &&
+          !toolName.includes('doubao_search')
+        )
+          continue
 
         const content = toolCall?.tool_call_result?.content
         const parsed = parseToolResultContent(content)

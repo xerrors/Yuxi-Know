@@ -103,6 +103,105 @@ async def test_concurrent_reject_requests_never_enter_queue(monkeypatch: pytest.
         await engine.dispose()
 
 
+async def test_concurrent_steer_requests_keep_one_pending(monkeypatch: pytest.MonkeyPatch):
+    """Conversation 行锁保证同一线程只接受一个待处理 Steer。"""
+    thread_id = f"pytest-steer-{uuid.uuid4()}"
+    uid = f"pytest-user-{uuid.uuid4()}"
+    active_run_id = f"active-{uuid.uuid4()}"
+    active_request_id = f"active-request-{uuid.uuid4()}"
+    request_ids = [f"steer-{uuid.uuid4()}" for _ in range(2)]
+    engine = create_async_engine(os.environ["POSTGRES_URL"], pool_pre_ping=True)
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+
+    monkeypatch.setattr(agent_request_queue_service, "resolve_agent_run_config", lambda *args: ("model", "default"))
+
+    async with session_factory() as db:
+        conversation = Conversation(thread_id=thread_id, uid=uid, agent_id="main", status="active")
+        db.add(conversation)
+        await db.flush()
+        active_message = Message(
+            conversation_id=conversation.id,
+            request_id=active_request_id,
+            role="user",
+            content="active",
+            delivery_status="dispatched",
+        )
+        db.add(active_message)
+        await db.flush()
+        db.add(
+            AgentRunRequest(
+                request_id=active_request_id,
+                uid=uid,
+                agent_slug="main",
+                conversation_thread_id=thread_id,
+                source="chat",
+                queue_policy="enqueue",
+                status="dispatched",
+                input_message_id=active_message.id,
+                input_payload={},
+            )
+        )
+        db.add(
+            AgentRun(
+                id=active_run_id,
+                conversation_thread_id=thread_id,
+                agent_slug="main",
+                uid=uid,
+                status="running",
+                request_id=active_request_id,
+                conversation_id=conversation.id,
+                run_type="chat",
+                input_payload={},
+            )
+        )
+        await db.commit()
+
+    async def submit(request_id: str):
+        async with session_factory() as db:
+            try:
+                result = await agent_request_queue_service.intake_request(
+                    db=db,
+                    request_id=request_id,
+                    uid=uid,
+                    agent_slug="main",
+                    thread_id=thread_id,
+                    queue_policy="steer",
+                    input_message=build_chat_input_message(request_id),
+                    agent_item=MagicMock(),
+                    agent_backend=MagicMock(),
+                )
+                await db.commit()
+                return result
+            except Exception:
+                await db.rollback()
+                raise
+
+    try:
+        results = await asyncio.wait_for(
+            asyncio.gather(*(submit(request_id) for request_id in request_ids), return_exceptions=True),
+            timeout=10,
+        )
+
+        accepted = [result for result in results if not isinstance(result, Exception)]
+        conflicts = [result for result in results if isinstance(result, HTTPException)]
+        assert len(accepted) == 1
+        assert accepted[0].status == "queued"
+        assert accepted[0].queue_policy == "steer"
+        assert len(conflicts) == 1
+        assert conflicts[0].status_code == 409
+        assert conflicts[0].detail["code"] == "steer_already_pending"
+
+        async with session_factory() as db:
+            requests = (
+                await db.scalars(select(AgentRunRequest).where(AgentRunRequest.request_id.in_(request_ids)))
+            ).all()
+        assert len(requests) == 1
+        assert requests[0].queue_policy == "steer"
+        assert requests[0].status == "queued"
+    finally:
+        await _cleanup_queue_test_thread(session_factory, engine, thread_id)
+
+
 async def test_concurrent_enqueue_dispatches_fifo_head(monkeypatch: pytest.MonkeyPatch):
     thread_id = f"pytest-enqueue-{uuid.uuid4()}"
     uid = f"pytest-user-{uuid.uuid4()}"

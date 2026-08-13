@@ -11,8 +11,16 @@ async def resolve_visible_knowledge_bases_for_context(context) -> list[dict[str,
         setattr(context, "_visible_knowledge_bases", [])
         return []
 
-    result = await knowledge_base.get_databases_by_uid(str(uid))
-    databases = result.get("databases") or []
+    summaries = await knowledge_base.get_databases_by_uid(str(uid))
+    databases = [
+        {
+            "kb_id": summary.kb_id,
+            "name": summary.name,
+            "description": summary.description,
+            "kb_type": summary.kb_type,
+        }
+        for summary in summaries
+    ]
     enabled_knowledges = getattr(context, "knowledges", None)
     if enabled_knowledges is not None:
         enabled_ids = {str(value).strip() for value in enabled_knowledges if str(value).strip()}

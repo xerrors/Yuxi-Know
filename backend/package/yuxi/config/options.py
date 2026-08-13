@@ -37,10 +37,17 @@ class Option:
         if record is None:
             raise ValueError(f"配置项不存在: {self.key}")
         stored = dict(record.value or {})
-        return {
-            field["key"]: stored.get(field["key"]) or os.getenv(field.get("environment", "")) or None
-            for field in _fields(record)
-        }
+        resolved = {}
+        for field in _fields(record):
+            field_key = field["key"]
+            stored_value = stored.get(field_key)
+            if field.get("type") == "list[str]" and field_key in stored:
+                resolved[field_key] = stored[field_key]
+                continue
+
+            environment_value = os.getenv(field.get("environment", ""))
+            resolved[field_key] = stored_value or environment_value or field.get("default")
+        return resolved
 
 
 mineru_ocr_host_opts = Option(
@@ -123,6 +130,23 @@ paddleocr_api_opts = Option(
     },
 )
 
+remote_skill_source_policy = Option(
+    key="remote_skill_source_policy",
+    name="远程 Skill 来源",
+    description="配置允许远程安装 Skill 的来源域名。",
+    params={
+        "fields": [
+            {
+                "key": "allowed_hosts",
+                "label": "允许的来源域名",
+                "type": "list[str]",
+                "default": ["github.com", "modelscope.cn"],
+                "help": "仅精确匹配域名；保存空列表会关闭远程安装。",
+            }
+        ]
+    },
+)
+
 OPTION_DEFINITIONS = {
     option.key: option
     for option in (
@@ -130,6 +154,7 @@ OPTION_DEFINITIONS = {
         mineru_official_api_opts,
         pp_structure_v3_ocr_host_opts,
         paddleocr_api_opts,
+        remote_skill_source_policy,
     )
 }
 
@@ -239,7 +264,14 @@ def _fields(record: ConfigOption) -> list[dict[str, Any]]:
     return list((record.params or {}).get("fields") or [])
 
 
-def _normalize_value(field: dict[str, Any], value: Any) -> str:
+def _normalize_value(field: dict[str, Any], value: Any) -> Any:
+    if field.get("type") == "list[str]":
+        if not isinstance(value, list):
+            raise ValueError("配置值必须是列表")
+        if not all(isinstance(item, str) for item in value):
+            raise ValueError("配置值必须是字符串列表")
+        return value
+
     normalized = str(value or "").strip()
     if field.get("type") == "url" and normalized:
         return str(_URL_ADAPTER.validate_python(normalized))

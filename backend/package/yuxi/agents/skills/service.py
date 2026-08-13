@@ -10,6 +10,10 @@ import threading
 import time
 import uuid
 import zipfile
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
+from dataclasses import dataclass, replace
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -20,9 +24,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from yuxi import config as sys_config
 from yuxi.agents.mcp.service import get_enabled_mcp_server_slugs
 from yuxi.agents.skills.repository import SkillRepository
+from yuxi.permissions import ResourcePermission, normalize_permission_config, resolve_skill_permission
 from yuxi.storage.postgres.models_business import Skill, User
+from yuxi.storage.redis import get_async_redis_client
 from yuxi.utils.logging_config import logger
-from yuxi.utils.share_config import SHARE_ACCESS_LEVELS, normalize_share_config
+from yuxi.utils.paths import ensure_within_root
 
 SKILL_SLUG_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 SKILL_NAME_PATTERN = SKILL_SLUG_PATTERN
@@ -59,13 +65,70 @@ TEXT_FILE_EXTENSIONS = {
 
 BUILTIN_SKILL_OPERATOR = "builtin-system"
 SKILL_SOURCE_TYPES = {"builtin", "upload", "remote"}
-ACCESS_LEVELS = SHARE_ACCESS_LEVELS
 ADMIN_ROLES = {"admin", "superadmin"}
 DEFAULT_SKILL_SHARE_CONFIG = {"access_level": "user", "department_ids": [], "user_uids": []}
 BUILTIN_SKILL_SHARE_CONFIG = {"access_level": "global", "department_ids": [], "user_uids": []}
 SKILL_DRAFT_TTL_SECONDS = 60 * 60
+PERSONAL_SKILL_CACHE_TTL_SECONDS = 5 * 60
+PERSONAL_SKILL_CACHE_PREFIX = "yuxi:skills:personal:v1:"
+PERSONAL_SKILL_SCAN_LOCK_PREFIX = "yuxi:skills:personal:scan-lock:v1:"
+PERSONAL_SKILL_SCAN_LOCK_TIMEOUT_SECONDS = 30
+PERSONAL_SKILL_SCAN_LOCK_WAIT_SECONDS = 10
+PERSONAL_SKILL_SOURCE_TYPE = "personal"
+WORKSPACE_SKILLS_RELATIVE_DIR = Path("agents") / "skills"
 _THREAD_SKILLS_LOCK = threading.Lock()
 _THREAD_SKILLS_LOCKS: dict[str, threading.Lock] = {}
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedSkill:
+    """描述当前用户最终可用的 Skill 及其真实来源。"""
+
+    id: Any
+    slug: str
+    name: str
+    description: str
+    source_type: str
+    source_scope: str
+    source_dir: Path
+    enabled: bool
+    created_by: str | None
+    share_config: dict[str, Any] | None
+    tool_dependencies: list[str]
+    mcp_dependencies: list[str]
+    skill_dependencies: list[str]
+    overrides_shared: bool = False
+    shadowed_by_personal: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        """返回可安全提供给前端的 Skill 元数据。"""
+        data = {
+            "id": self.id,
+            "slug": self.slug,
+            "name": self.name,
+            "description": self.description,
+            "source_type": self.source_type,
+            "source_scope": self.source_scope,
+            "enabled": self.enabled,
+            "created_by": self.created_by,
+            "tool_dependencies": self.tool_dependencies,
+            "mcp_dependencies": self.mcp_dependencies,
+            "skill_dependencies": self.skill_dependencies,
+            "overrides_shared": self.overrides_shared,
+            "shadowed_by_personal": self.shadowed_by_personal,
+        }
+        if self.share_config is not None:
+            data["share_config"] = self.share_config
+        return data
+
+
+@dataclass(frozen=True, slots=True)
+class PersonalSkillSnapshot:
+    """承载一次个人 Skill 元数据快照。"""
+
+    items: list[ResolvedSkill]
+    scanned_at: str
+    from_cache: bool
 
 
 def _get_thread_skills_lock(thread_id: str) -> threading.Lock:
@@ -114,55 +177,35 @@ def normalize_skill_share_config(
     share_config: dict | None,
     *,
     operator_uid: str,
-    operator_department_id: int | str | None,
     source_type: str = "upload",
     allowed_access_levels: set[str] | None = None,
 ) -> dict:
     if source_type == "builtin":
-        return BUILTIN_SKILL_SHARE_CONFIG.copy()
+        return {"version": 2, "read_scope": BUILTIN_SKILL_SHARE_CONFIG.copy(), "manage_scope": None}
 
-    return normalize_share_config(
-        share_config,
-        default_config=DEFAULT_SKILL_SHARE_CONFIG,
-        default_access_level="user",
-        invalid_access_level_message="无效的 Skill 权限等级",
-        user_uid=operator_uid,
-        department_id=operator_department_id,
+    default_scope = {
+        "access_level": "user",
+        "department_ids": [],
+        "user_uids": [operator_uid],
+    }
+    return normalize_permission_config(
+        share_config or {"version": 2, "read_scope": default_scope, "manage_scope": None},
         allowed_access_levels=allowed_access_levels,
         unauthorized_access_level_message="当前用户无权使用该 Skill 共享范围",
+        strict=True,
     )
 
 
 def user_can_access_skill(user: User, skill: Skill, *, require_enabled: bool = True) -> bool:
     if require_enabled and not skill.enabled:
         return False
-    if user.role == "superadmin":
-        return True
-
-    user_uid = str(user.uid or "")
-    if user_uid and skill.created_by == user_uid:
-        return True
-
-    share_config = skill.share_config or DEFAULT_SKILL_SHARE_CONFIG.copy()
-    access_level = share_config.get("access_level")
-    if access_level == "global":
-        return True
-    if access_level == "department":
-        if user.department_id is None:
-            return False
-        try:
-            return int(user.department_id) in [int(value) for value in share_config.get("department_ids") or []]
-        except (TypeError, ValueError):
-            return False
-    if access_level == "user":
-        return bool(user_uid and user_uid in (share_config.get("user_uids") or []))
-    return False
+    return resolve_skill_permission(user, skill) != ResourcePermission.NONE
 
 
 def user_can_manage_skill(user: User, skill: Skill) -> bool:
     if is_builtin_skill(skill):
         return user.role in ADMIN_ROLES
-    return user.role in ADMIN_ROLES or skill.created_by == str(user.uid or "")
+    return resolve_skill_permission(user, skill) == ResourcePermission.MANAGE
 
 
 def can_skill_depend_on(parent: Skill, dependency: Skill) -> bool:
@@ -171,23 +214,38 @@ def can_skill_depend_on(parent: Skill, dependency: Skill) -> bool:
     if is_builtin_skill(dependency):
         return True
 
-    dep_config = dependency.share_config or DEFAULT_SKILL_SHARE_CONFIG.copy()
-    parent_config = parent.share_config or DEFAULT_SKILL_SHARE_CONFIG.copy()
-    dep_level = dep_config.get("access_level")
-    parent_level = parent_config.get("access_level")
+    dep_config = normalize_permission_config(dependency.share_config)
+    parent_config = normalize_permission_config(parent.share_config)
+    dependency_scopes = [scope for scope in (dep_config["read_scope"], dep_config["manage_scope"]) if scope]
+    parent_scopes = [scope for scope in (parent_config["read_scope"], parent_config["manage_scope"]) if scope]
+    owner_scope = {"access_level": "user", "department_ids": [], "user_uids": []}
+    if not dependency_scopes:
+        dependency_scopes = [{**owner_scope, "user_uids": [str(dependency.created_by or "")]}]
+    if not parent_scopes:
+        parent_scopes = [{**owner_scope, "user_uids": [str(parent.created_by or "")]}]
+    return all(
+        any(_scope_contains(dependency_scope, parent_scope) for dependency_scope in dependency_scopes)
+        for parent_scope in parent_scopes
+    )
 
-    if dep_level == "global":
+
+def _scope_contains(container: dict, target: dict) -> bool:
+    """判断一个共享范围是否完整覆盖另一个范围。"""
+
+    container_level = container.get("access_level")
+    target_level = target.get("access_level")
+    if container_level == "global":
         return True
-    if parent_level == "global":
+    if target_level == "global" or container_level != target_level:
         return False
-    if parent_level == "department" and dep_level == "department":
-        parent_ids = {int(value) for value in parent_config.get("department_ids") or []}
-        dep_ids = {int(value) for value in dep_config.get("department_ids") or []}
-        return parent_ids.issubset(dep_ids)
-    if parent_level == "user" and dep_level == "user":
-        parent_uids = {str(value) for value in parent_config.get("user_uids") or []}
-        dep_uids = {str(value) for value in dep_config.get("user_uids") or []}
-        return parent_uids.issubset(dep_uids)
+    if target_level == "department":
+        container_ids = {int(value) for value in container.get("department_ids") or []}
+        target_ids = {int(value) for value in target.get("department_ids") or []}
+        return target_ids.issubset(container_ids)
+    if target_level == "user":
+        container_uids = {str(value) for value in container.get("user_uids") or []}
+        target_uids = {str(value) for value in target.get("user_uids") or []}
+        return target_uids.issubset(container_uids)
     return False
 
 
@@ -244,6 +302,29 @@ def _load_skill_draft(draft_id: str) -> tuple[Path, dict]:
     return draft_dir, data
 
 
+def _load_and_select_draft_items(
+    draft_id: str, slugs: list[str] | None, operator: User
+) -> tuple[Path, dict, list[dict]]:
+    """加载安装草稿，校验权限与来源类型，并按需筛选选中的条目。"""
+    draft_dir, data = _load_skill_draft(draft_id)
+    if data.get("created_by") != operator.uid and operator.role not in ADMIN_ROLES:
+        raise ValueError("无权确认该安装草稿")
+    if data.get("source_type") not in {"upload", "remote"}:
+        raise ValueError("无效的安装草稿来源")
+
+    draft_items = data.get("items") or []
+    if slugs is not None:
+        selected_slugs = set(slugs)
+        if not selected_slugs:
+            raise ValueError("至少选择一个 Skill")
+        available_slugs = {str(item.get("slug") or "").strip() for item in draft_items}
+        if selected_slugs - available_slugs:
+            raise ValueError("确认安装包含草稿外的 Skill")
+        draft_items = [item for item in draft_items if str(item.get("slug") or "").strip() in selected_slugs]
+
+    return draft_dir, data, draft_items
+
+
 def get_thread_skills_root_dir(thread_id: str) -> Path:
     safe_thread_id = str(thread_id or "").strip()
     if not safe_thread_id:
@@ -256,10 +337,34 @@ def get_thread_skills_root_dir(thread_id: str) -> Path:
     return root
 
 
-def sync_thread_readable_skills(thread_id: str, selected_slugs: list[str] | None) -> Path:
+async def sync_thread_readable_skills_async(
+    thread_id: str,
+    selected_slugs: list[str] | None,
+    source_dirs: dict[str, str | Path] | None = None,
+) -> Path:
+    """在线程池同步共享 Skill 投影，避免阻塞 Agent 事件循环。"""
+    return await asyncio.to_thread(
+        sync_thread_readable_skills,
+        thread_id,
+        selected_slugs,
+        source_dirs,
+    )
+
+
+def sync_thread_readable_skills(
+    thread_id: str,
+    selected_slugs: list[str] | None,
+    source_dirs: dict[str, str | Path] | None = None,
+) -> Path:
+    """将最终生效的 Skill 来源同步到线程只读目录。"""
     skills_root = get_skills_root_dir().resolve()
     thread_skills_root = get_thread_skills_root_dir(thread_id)
     normalized_slugs = [slug for slug in normalize_string_list(selected_slugs) if is_valid_skill_slug(slug)]
+    normalized_sources = {
+        slug: Path(path).resolve()
+        for slug, path in (source_dirs or {}).items()
+        if slug in normalized_slugs and isinstance(path, (str, Path))
+    }
     readable_slugs = set(normalized_slugs)
     with _get_thread_skills_lock(thread_id):
         for entry in thread_skills_root.iterdir():
@@ -271,14 +376,11 @@ def sync_thread_readable_skills(thread_id: str, selected_slugs: list[str] | None
                 entry.unlink()
 
         for slug in normalized_slugs:
-            source_dir = (skills_root / slug).resolve()
+            source_dir = normalized_sources.get(slug, (skills_root / slug).resolve())
             target_dir = thread_skills_root / slug
 
-            try:
-                source_dir.relative_to(skills_root)
-            except ValueError:
-                continue
-            if not source_dir.is_dir():
+            if source_dir.is_symlink() or not source_dir.is_dir() or _dir_contains_symlink(source_dir):
+                logger.warning(f"跳过不存在或包含符号链接的 Skill 来源: slug={slug}")
                 if target_dir.exists() or target_dir.is_symlink():
                     if target_dir.is_dir() and not target_dir.is_symlink():
                         shutil.rmtree(target_dir)
@@ -317,13 +419,16 @@ def _build_builtin_skill_dir_path(slug: str) -> str:
     return (Path("skills") / slug).as_posix()
 
 
+def _dir_contains_symlink(path: Path) -> bool:
+    """检查目录内是否包含任意符号链接子路径。"""
+    return any(child.is_symlink() for child in path.rglob("*"))
+
+
 def _dirs_equal(dir1: Path, dir2: Path) -> bool:
-    """检查两个目录内容是否相同（通过文件列表比较）"""
+    """检查两个目录的文件路径与内容是否完全一致。"""
     if not dir1.exists() or not dir2.exists():
         return False
-    list1 = sorted([f.relative_to(dir1) for f in dir1.rglob("*") if f.is_file()])
-    list2 = sorted([f.relative_to(dir2) for f in dir2.rglob("*") if f.is_file()])
-    return list1 == list2
+    return _compute_dir_hash(dir1) == _compute_dir_hash(dir2)
 
 
 def _compute_dir_hash(source_dir: Path) -> str:
@@ -340,7 +445,13 @@ def _compute_dir_hash(source_dir: Path) -> str:
     return hasher.hexdigest()
 
 
-def _replace_skill_target(target_dir: Path, source_dir: Path) -> None:
+def _replace_skill_target(
+    target_dir: Path,
+    source_dir: Path,
+    *,
+    validate: Callable[[Path], None] | None = None,
+) -> None:
+    """将 source_dir 原子地复制为 target_dir：先复制到临时目录，可选校验后再替换。"""
     temp_target = target_dir.with_name(f".{target_dir.name}.tmp-{uuid.uuid4().hex[:8]}")
     trash_dir: Path | None = None
     if temp_target.exists():
@@ -348,6 +459,8 @@ def _replace_skill_target(target_dir: Path, source_dir: Path) -> None:
 
     shutil.copytree(source_dir, temp_target, symlinks=False)
     try:
+        if validate is not None:
+            validate(temp_target)
         if target_dir.exists():
             trash_dir = target_dir.with_name(f".{target_dir.name}.bak-{uuid.uuid4().hex[:8]}")
             target_dir.rename(trash_dir)
@@ -367,10 +480,45 @@ async def list_accessible_skills(
     user: User,
     *,
     require_enabled: bool = True,
-) -> list[Skill]:
-    repo = SkillRepository(db)
-    items = await repo.list_enabled() if require_enabled else await repo.list_all()
-    return [item for item in items if user_can_access_skill(user, item, require_enabled=require_enabled)]
+    refresh_personal: bool = False,
+) -> list[ResolvedSkill]:
+    """返回当前用户最终生效的共享与个人 Skill。"""
+    shared_items, personal_snapshot = await asyncio.gather(
+        _list_accessible_shared_skills(db, user, require_enabled=require_enabled),
+        list_personal_skills(str(user.uid), refresh=refresh_personal),
+    )
+    personal_by_slug = {item.slug: item for item in personal_snapshot.items}
+
+    effective: dict[str, ResolvedSkill] = {}
+    for item in shared_items:
+        effective[item.slug] = _resolved_shared_skill(
+            item,
+            shadowed_by_personal=item.slug in personal_by_slug,
+        )
+    for slug, item in personal_by_slug.items():
+        effective[slug] = replace(item, overrides_shared=slug in effective)
+    return list(effective.values())
+
+
+async def list_skill_cards_for_user(
+    db: AsyncSession,
+    user: User,
+    *,
+    refresh_personal: bool = False,
+) -> tuple[list[ResolvedSkill], PersonalSkillSnapshot]:
+    """返回管理页所需的共享与个人 Skill 卡片。"""
+    shared_items, personal_snapshot = await asyncio.gather(
+        list_visible_skills_for_management(db, user),
+        list_personal_skills(str(user.uid), refresh=refresh_personal),
+    )
+    personal_slugs = {item.slug for item in personal_snapshot.items}
+    shared_slugs = {item.slug for item in shared_items}
+
+    personal_cards = [replace(item, overrides_shared=item.slug in shared_slugs) for item in personal_snapshot.items]
+    shared_cards = [
+        _resolved_shared_skill(item, shadowed_by_personal=item.slug in personal_slugs) for item in shared_items
+    ]
+    return [*personal_cards, *shared_cards], personal_snapshot
 
 
 async def list_manageable_skills(db: AsyncSession, user: User) -> list[Skill]:
@@ -398,7 +546,7 @@ async def list_skills(db: AsyncSession) -> list[Skill]:
 
 async def list_skill_slugs(db: AsyncSession, *, user: User | None = None) -> list[str]:
     if user is not None:
-        return [item.slug for item in await list_accessible_skills(db, user) if isinstance(item.slug, str)]
+        return await _list_shared_skill_slugs(db, user)
     result = await db.execute(
         select(Skill.slug).where(Skill.enabled.is_(True)).order_by(Skill.updated_at.desc(), Skill.id.desc())
     )
@@ -427,6 +575,23 @@ async def get_skill_dependency_options(
         "mcps": mcp_names,
         "skills": skill_slugs,
     }
+
+
+async def _list_accessible_shared_skills(
+    db: AsyncSession,
+    user: User,
+    *,
+    require_enabled: bool = True,
+) -> list[Skill]:
+    """按现有共享范围返回用户可访问的数据库 Skill。"""
+    repo = SkillRepository(db)
+    items = await repo.list_enabled() if require_enabled else await repo.list_all()
+    return [item for item in items if user_can_access_skill(user, item, require_enabled=require_enabled)]
+
+
+async def _list_shared_skill_slugs(db: AsyncSession, user: User) -> list[str]:
+    """返回依赖配置可引用的共享 Skill slug。"""
+    return [item.slug for item in await _list_accessible_shared_skills(db, user) if isinstance(item.slug, str)]
 
 
 def _get_all_tool_names() -> list[str]:
@@ -486,7 +651,7 @@ async def update_skill_dependencies(
     item = await get_manageable_skill_or_raise(db, operator, slug)
     _ensure_non_builtin(item)
     repo = SkillRepository(db)
-    skill_items = await list_accessible_skills(db, operator)
+    skill_items = await _list_accessible_shared_skills(db, operator)
     available_skills = {skill.slug: skill for skill in skill_items}
     tools, mcps, skills = await _validate_dependencies(
         parent=item,
@@ -624,6 +789,252 @@ def _parse_skill_dir_metadata(source_skill_dir: Path) -> dict[str, Any]:
     }
 
 
+def get_personal_skills_root_dir(uid: str) -> Path:
+    """返回认证用户的个人 Skill 根目录。"""
+    from yuxi.agents.backends.sandbox.paths import sandbox_workspace_dir
+    from yuxi.services.mention_search_service import WORKSPACE_THREAD_PLACEHOLDER
+
+    root = sandbox_workspace_dir(WORKSPACE_THREAD_PLACEHOLDER, uid) / WORKSPACE_SKILLS_RELATIVE_DIR
+    root.mkdir(parents=True, exist_ok=True)
+    return root.resolve()
+
+
+async def list_personal_skills(uid: str, *, refresh: bool = False) -> PersonalSkillSnapshot:
+    """读取个人 Skill Redis 快照，必要时重新扫描工作区。"""
+    redis = await get_async_redis_client()
+    root = get_personal_skills_root_dir(uid)
+
+    if not refresh:
+        cached = await _read_personal_skill_cache(redis, uid, root)
+        if cached is not None:
+            return cached
+
+    async with _personal_skill_scan_lock(redis, uid):
+        if not refresh:
+            cached = await _read_personal_skill_cache(redis, uid, root)
+            if cached is not None:
+                return cached
+        return await _scan_and_cache_personal_skills(redis, uid)
+
+
+async def install_personal_skill_dir(
+    uid: str,
+    source_dir: Path | str,
+    *,
+    refresh_cache: bool = True,
+) -> ResolvedSkill:
+    """将一个 Skill 原子安装到当前用户个人工作区。"""
+    redis = await get_async_redis_client()
+    async with _personal_skill_scan_lock(redis, uid):
+        item = await asyncio.to_thread(_install_personal_skill_dir_sync, uid, Path(source_dir))
+        if refresh_cache:
+            try:
+                await _scan_and_cache_personal_skills(redis, uid)
+            except Exception as exc:
+                logger.exception(f"个人 Skill 已安装但缓存刷新失败: uid={uid}, slug={item.slug}")
+                raise RuntimeError("个人 Skill 已安装，但列表缓存刷新失败，请手动刷新") from exc
+        return item
+
+
+async def read_personal_skill_file(uid: str, slug: str, relative_path: str) -> dict[str, Any]:
+    """读取个人 Skill 中的文本文件。"""
+    skill_dir = _resolve_personal_skill_dir(uid, slug)
+    if not skill_dir.is_dir():
+        raise ValueError("个人 Skill 不存在")
+    target, normalized_path = _resolve_relative_path(skill_dir, relative_path)
+    if not target.is_file():
+        raise ValueError("文件不存在")
+    if not _is_text_path(target):
+        raise ValueError("仅支持读取文本文件")
+    return {"path": normalized_path, "content": target.read_text(encoding="utf-8")}
+
+
+async def delete_personal_skill(uid: str, slug: str) -> PersonalSkillSnapshot:
+    """删除当前用户个人 Skill，并立即刷新缓存。"""
+    redis = await get_async_redis_client()
+    async with _personal_skill_scan_lock(redis, uid):
+        skill_dir = _resolve_personal_skill_dir(uid, slug)
+        if not skill_dir.is_dir():
+            raise ValueError("个人 Skill 不存在")
+        await asyncio.to_thread(shutil.rmtree, skill_dir)
+        try:
+            return await _scan_and_cache_personal_skills(redis, uid)
+        except Exception as exc:
+            logger.exception(f"个人 Skill 已删除但缓存刷新失败: uid={uid}, slug={slug}")
+            raise RuntimeError("个人 Skill 已删除，但列表缓存刷新失败，请手动刷新") from exc
+
+
+def _resolved_shared_skill(item: Skill, *, shadowed_by_personal: bool = False) -> ResolvedSkill:
+    """将数据库 Skill 适配为统一的有效 Skill 描述。"""
+    source_scope = "builtin" if is_builtin_skill(item) else "shared"
+    return ResolvedSkill(
+        id=item.id,
+        slug=item.slug,
+        name=item.name,
+        description=item.description,
+        source_type=item.source_type,
+        source_scope=source_scope,
+        source_dir=_resolve_skill_dir(item),
+        enabled=bool(item.enabled),
+        created_by=item.created_by,
+        share_config=normalize_permission_config(
+            item.share_config,
+        ),
+        tool_dependencies=normalize_string_list(item.tool_dependencies),
+        mcp_dependencies=normalize_string_list(item.mcp_dependencies),
+        skill_dependencies=normalize_string_list(item.skill_dependencies),
+        shadowed_by_personal=shadowed_by_personal,
+    )
+
+
+def _resolved_personal_skill(uid: str, root: Path, metadata: dict[str, Any]) -> ResolvedSkill:
+    """将个人目录元数据适配为不含共享语义的有效 Skill 描述。"""
+    slug = str(metadata["slug"])
+    if not is_valid_skill_slug(slug):
+        raise ValueError("个人 Skill 缓存包含非法 slug")
+    source_dir = ensure_within_root((root / slug).resolve(), root, error_message="个人 Skill 路径越界")
+
+    return ResolvedSkill(
+        id=f"personal:{slug}",
+        slug=slug,
+        name=str(metadata["name"]),
+        description=str(metadata["description"]),
+        source_type=PERSONAL_SKILL_SOURCE_TYPE,
+        source_scope=PERSONAL_SKILL_SOURCE_TYPE,
+        source_dir=source_dir,
+        enabled=True,
+        created_by=uid,
+        share_config=None,
+        tool_dependencies=[],
+        mcp_dependencies=[],
+        skill_dependencies=[],
+    )
+
+
+@asynccontextmanager
+async def _personal_skill_scan_lock(redis: Any, uid: str) -> AsyncIterator[None]:
+    """串行化同一用户的个人 Skill 扫描与文件变更。"""
+    lock = redis.lock(
+        _personal_skill_scan_lock_key(uid),
+        timeout=PERSONAL_SKILL_SCAN_LOCK_TIMEOUT_SECONDS,
+        blocking_timeout=PERSONAL_SKILL_SCAN_LOCK_WAIT_SECONDS,
+    )
+    async with lock:
+        yield
+
+
+async def _read_personal_skill_cache(
+    redis: Any,
+    uid: str,
+    root: Path,
+) -> PersonalSkillSnapshot | None:
+    """读取并校验一个用户的个人 Skill 缓存。"""
+    cache_key = _personal_skill_cache_key(uid)
+    cached = await redis.get(cache_key)
+    if not cached:
+        return None
+
+    try:
+        payload = json.loads(cached)
+        if payload.get("schema_version") != 1:
+            raise ValueError("个人 Skill 缓存版本不匹配")
+        items = [_resolved_personal_skill(uid, root, item) for item in payload["items"]]
+        return PersonalSkillSnapshot(
+            items=items,
+            scanned_at=str(payload["scanned_at"]),
+            from_cache=True,
+        )
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        logger.warning(f"个人 Skill 缓存无效，将重新扫描: uid={uid}, error={exc}")
+        await redis.delete(cache_key)
+        return None
+
+
+async def _scan_and_cache_personal_skills(
+    redis: Any,
+    uid: str,
+) -> PersonalSkillSnapshot:
+    """扫描个人 Skill 并写入五分钟 Redis 快照。"""
+    items = await asyncio.to_thread(_scan_personal_skills, uid)
+    scanned_at = datetime.now(UTC).isoformat()
+    payload = {
+        "schema_version": 1,
+        "scanned_at": scanned_at,
+        "items": [{"slug": item.slug, "name": item.name, "description": item.description} for item in items],
+    }
+    await redis.set(
+        _personal_skill_cache_key(uid),
+        json.dumps(payload, ensure_ascii=False),
+        ex=PERSONAL_SKILL_CACHE_TTL_SECONDS,
+    )
+    return PersonalSkillSnapshot(items=items, scanned_at=scanned_at, from_cache=False)
+
+
+def _scan_personal_skills(uid: str) -> list[ResolvedSkill]:
+    """扫描并校验当前用户个人 Skill 的直接子目录。"""
+    root = get_personal_skills_root_dir(uid)
+    items: list[ResolvedSkill] = []
+    for entry in sorted(root.iterdir(), key=lambda path: path.name):
+        if entry.is_symlink() or not entry.is_dir() or not is_valid_skill_slug(entry.name):
+            logger.warning(f"跳过非法个人 Skill 目录: uid={uid}, name={entry.name}")
+            continue
+        if _dir_contains_symlink(entry):
+            logger.warning(f"跳过包含符号链接的个人 Skill: uid={uid}, slug={entry.name}")
+            continue
+
+        try:
+            metadata = _parse_skill_dir_metadata(entry)
+            if metadata["slug"] != entry.name:
+                raise ValueError("目录名必须与 SKILL.md slug 一致")
+            items.append(_resolved_personal_skill(uid, root, metadata))
+        except Exception as exc:
+            logger.warning(f"跳过无法解析的个人 Skill: uid={uid}, slug={entry.name}, error={exc}")
+    return items
+
+
+def _install_personal_skill_dir_sync(uid: str, source_dir: Path) -> ResolvedSkill:
+    """在持有用户级锁时将一个 Skill 原子复制到个人目录。"""
+    root = get_personal_skills_root_dir(uid)
+    source_dir = source_dir.resolve()
+    if source_dir.is_symlink() or _dir_contains_symlink(source_dir):
+        raise ValueError("个人 Skill 不允许包含符号链接")
+
+    metadata = _parse_skill_dir_metadata(source_dir)
+    slug = metadata["slug"]
+    target_dir = root / slug
+    if target_dir.exists() or target_dir.is_symlink():
+        raise ValueError(f"个人工作区已存在同名 Skill: {slug}")
+
+    def _validate_slug_unchanged(copied_dir: Path) -> None:
+        copied_metadata = _parse_skill_dir_metadata(copied_dir)
+        if copied_metadata["slug"] != slug:
+            raise ValueError("个人 Skill slug 在复制过程中发生变化")
+
+    _replace_skill_target(target_dir, source_dir, validate=_validate_slug_unchanged)
+    return _resolved_personal_skill(uid, root, metadata)
+
+
+def _resolve_personal_skill_dir(uid: str, slug: str) -> Path:
+    """安全解析当前用户的个人 Skill 目录。"""
+    if not is_valid_skill_slug(slug):
+        raise ValueError("无效 skill slug")
+    root = get_personal_skills_root_dir(uid)
+    target = ensure_within_root((root / slug).resolve(), root, error_message="个人 Skill 路径越界")
+    if target.is_symlink():
+        raise ValueError("个人 Skill 路径非法")
+    return target
+
+
+def _personal_skill_cache_key(uid: str) -> str:
+    """返回当前用户的个人 Skill 缓存 key。"""
+    return f"{PERSONAL_SKILL_CACHE_PREFIX}{uid}"
+
+
+def _personal_skill_scan_lock_key(uid: str) -> str:
+    """返回当前用户的个人 Skill 扫描锁 key。"""
+    return f"{PERSONAL_SKILL_SCAN_LOCK_PREFIX}{uid}"
+
+
 async def _stage_skill_draft_item(
     repo: SkillRepository,
     *,
@@ -656,7 +1067,6 @@ def _build_default_share_payload(operator: User) -> dict[str, Any]:
     default_share_config = normalize_skill_share_config(
         None,
         operator_uid=operator.uid,
-        operator_department_id=operator.department_id,
         allowed_access_levels=set(get_allowed_skill_access_levels(operator)),
     )
     return {
@@ -733,11 +1143,7 @@ def _resolve_relative_path(skill_dir: Path, relative_path: str, *, allow_root: b
     if ".." in pure.parts:
         raise ValueError("非法路径：不允许上级路径引用")
 
-    target = (skill_dir / pure).resolve()
-    try:
-        target.relative_to(skill_dir)
-    except ValueError:
-        raise ValueError("非法路径：越界访问被拒绝") from None
+    target = ensure_within_root((skill_dir / pure).resolve(), skill_dir, error_message="非法路径：越界访问被拒绝")
 
     return target, rel
 
@@ -849,16 +1255,23 @@ async def prepare_remote_skill_install(
         preparation = await prepare_remote_skills_batch(source=source, skills=skills)
         items: list[dict[str, Any]] = []
         for result in preparation.results:
+            slug = result.get("slug", "")
             if not result.get("success"):
-                items.append(
-                    {"slug": result.get("slug", ""), "success": False, "error": result.get("error", "安装失败")}
-                )
+                item = {"slug": slug, "success": False, "error": result.get("error", "安装失败")}
+                items.append(item)
                 continue
-            item = await _stage_skill_draft_item(
-                repo,
-                source_skill_dir=Path(result["source_dir"]),
-                draft_items_dir=items_dir,
-            )
+
+            try:
+                item = await _stage_skill_draft_item(
+                    repo,
+                    source_skill_dir=Path(result["source_dir"]),
+                    draft_items_dir=items_dir,
+                )
+            except Exception as e:
+                item = {"slug": slug, "success": False, "error": str(e)}
+                items.append(item)
+                continue
+
             items.append(item)
 
         data = {
@@ -886,20 +1299,15 @@ async def confirm_skill_install_draft(
     *,
     draft_id: str,
     share_config: dict | None,
+    slugs: list[str] | None = None,
     operator: User,
 ) -> list[dict[str, Any]]:
-    draft_dir, data = _load_skill_draft(draft_id)
-    if data.get("created_by") != operator.uid and operator.role not in ADMIN_ROLES:
-        raise ValueError("无权确认该安装草稿")
-
+    draft_dir, data, draft_items = _load_and_select_draft_items(draft_id, slugs, operator)
     source_type = data.get("source_type")
-    if source_type not in {"upload", "remote"}:
-        raise ValueError("无效的安装草稿来源")
 
     normalized_share_config = normalize_skill_share_config(
         share_config,
         operator_uid=operator.uid,
-        operator_department_id=operator.department_id,
         source_type=source_type,
         allowed_access_levels=set(get_allowed_skill_access_levels(operator)),
     )
@@ -908,26 +1316,28 @@ async def confirm_skill_install_draft(
     skills_root = get_skills_root_dir()
     results: list[dict[str, Any]] = []
 
-    for draft_item in data.get("items") or []:
+    for draft_item in draft_items:
+        slug = str(draft_item.get("slug") or "").strip()
         if not draft_item.get("success", True):
-            results.append(
-                {"slug": draft_item.get("slug", ""), "success": False, "error": draft_item.get("error", "安装失败")}
-            )
+            result = {"slug": slug, "success": False, "error": draft_item.get("error", "安装失败")}
+            results.append(result)
             continue
 
-        slug = str(draft_item.get("slug") or "").strip()
         if not is_valid_skill_slug(slug):
-            results.append({"slug": slug, "success": False, "error": "无效 skill slug"})
+            result = {"slug": slug, "success": False, "error": "无效 skill slug"}
+            results.append(result)
             continue
         if await repo.exists_slug(slug) or (skills_root / slug).exists():
-            results.append({"slug": slug, "success": False, "error": "Skill slug 已被占用，请重新解析安装"})
+            result = {"slug": slug, "success": False, "error": "Skill slug 已被占用，请重新解析安装"}
+            results.append(result)
             continue
 
         source_dir = (draft_dir / str(draft_item.get("source_dir", ""))).resolve()
         try:
             source_dir.relative_to(draft_dir.resolve())
         except ValueError:
-            results.append({"slug": slug, "success": False, "error": "安装草稿路径非法"})
+            result = {"slug": slug, "success": False, "error": "安装草稿路径非法"}
+            results.append(result)
             continue
 
         try:
@@ -944,7 +1354,8 @@ async def confirm_skill_install_draft(
                 final_dir = skills_root / slug
                 if final_dir.exists():
                     shutil.rmtree(temp_target, ignore_errors=True)
-                    results.append({"slug": slug, "success": False, "error": "Skill slug 已被占用，请重新解析安装"})
+                    result = {"slug": slug, "success": False, "error": "Skill slug 已被占用，请重新解析安装"}
+                    results.append(result)
                     continue
                 temp_target.rename(final_dir)
 
@@ -962,16 +1373,87 @@ async def confirm_skill_install_draft(
                         enabled=True,
                         created_by=operator.uid,
                     )
-                    results.append({"slug": item.slug, "success": True, "skill": item.to_dict()})
+                    result = {"slug": item.slug, "success": True, "skill": item.to_dict()}
+                    results.append(result)
                 except Exception:
                     shutil.rmtree(final_dir, ignore_errors=True)
                     raise
         except Exception as e:
             if hasattr(db, "rollback"):
                 await db.rollback()
-            results.append({"slug": slug, "success": False, "error": str(e)})
+            result = {"slug": slug, "success": False, "error": str(e)}
+            results.append(result)
 
     if any(item.get("success") for item in results):
+        shutil.rmtree(draft_dir, ignore_errors=True)
+    return results
+
+
+async def confirm_personal_skill_install_draft(
+    *,
+    draft_id: str,
+    slugs: list[str] | None,
+    operator: User,
+) -> list[dict[str, Any]]:
+    """确认草稿并将选中 Skill 安装到当前用户个人工作区。"""
+    draft_dir, _data, draft_items = _load_and_select_draft_items(draft_id, slugs, operator)
+
+    results: list[dict[str, Any]] = []
+    for draft_item in draft_items:
+        requested_slug = str(draft_item.get("slug") or "").strip()
+        personal_slug = str(draft_item.get("original_name") or requested_slug).strip()
+        if not draft_item.get("success", True):
+            results.append(
+                {
+                    "slug": personal_slug,
+                    "requested_slug": requested_slug,
+                    "success": False,
+                    "error": draft_item.get("error", "安装失败"),
+                }
+            )
+            continue
+        if not is_valid_skill_slug(personal_slug):
+            results.append(
+                {
+                    "slug": personal_slug,
+                    "requested_slug": requested_slug,
+                    "success": False,
+                    "error": "无效 skill slug",
+                }
+            )
+            continue
+
+        source_dir = (draft_dir / str(draft_item.get("source_dir", ""))).resolve()
+        try:
+            source_dir.relative_to(draft_dir.resolve())
+            parsed = _parse_skill_dir_metadata(source_dir)
+            if parsed["slug"] != personal_slug:
+                raise ValueError("安装草稿中的个人 Skill slug 不一致")
+            item = await install_personal_skill_dir(
+                str(operator.uid),
+                source_dir,
+                refresh_cache=False,
+            )
+            results.append(
+                {
+                    "slug": item.slug,
+                    "requested_slug": requested_slug,
+                    "success": True,
+                    "skill": item.to_dict(),
+                }
+            )
+        except Exception as exc:
+            results.append(
+                {
+                    "slug": personal_slug,
+                    "requested_slug": requested_slug,
+                    "success": False,
+                    "error": str(exc),
+                }
+            )
+
+    if any(item.get("success") for item in results):
+        await list_personal_skills(str(operator.uid), refresh=True)
         shutil.rmtree(draft_dir, ignore_errors=True)
     return results
 
@@ -1002,7 +1484,11 @@ async def import_skill_dir(
         source_skill_dir=source_skill_dir,
         created_by=created_by,
         source_type=source_type,
-        share_config=share_config or DEFAULT_SKILL_SHARE_CONFIG.copy(),
+        share_config=normalize_skill_share_config(
+            share_config,
+            operator_uid=created_by or "",
+            source_type=source_type,
+        ),
     )
 
 
@@ -1226,7 +1712,6 @@ async def update_skill_share_config(
     normalized = normalize_skill_share_config(
         share_config,
         operator_uid=operator.uid,
-        operator_department_id=operator.department_id,
         source_type=item.source_type,
         allowed_access_levels=set(get_allowed_skill_access_levels(operator)),
     )

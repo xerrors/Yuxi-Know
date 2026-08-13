@@ -400,6 +400,11 @@ class BaseAgent:
             return self._async_conn
 
         conn = await aiosqlite.connect(os.path.join(self.workdir, "aio_history.db"))
+        # WAL + busy_timeout：api 与 worker 多进程会并发写同一 checkpoint 库，
+        # 默认回滚日志模式下写写/读写互斥，超时后抛 SQLITE_BUSY。WAL 让写不阻塞读、崩溃可恢复。
+        for pragma in ("PRAGMA journal_mode=WAL", "PRAGMA busy_timeout=5000", "PRAGMA synchronous=NORMAL"):
+            cursor = await conn.execute(pragma)
+            await cursor.fetchall()
         # Patch: langgraph's AsyncSqliteSaver expects is_alive() method which aiosqlite may not have
         if not hasattr(conn, "is_alive"):
             conn.is_alive = lambda: True

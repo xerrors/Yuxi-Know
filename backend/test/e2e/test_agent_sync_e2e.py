@@ -22,7 +22,7 @@ async def _create_thread(client: httpx.AsyncClient, headers: dict[str, str], age
         json={
             "agent_id": agent_slug,
             "title": f"agent-sync-e2e-{uuid.uuid4().hex[:8]}",
-            "metadata": {"test": "agent-sync-e2e"},
+            "metadata": {"_yuxi_e2e": True, "test": "agent-sync-e2e"},
         },
         headers=headers,
     )
@@ -58,7 +58,11 @@ async def _create_sync_agent(client: httpx.AsyncClient, headers: dict[str, str],
             "backend_id": "ChatbotAgent",
             "description": "真实同步 Agent E2E 临时智能体",
             "config_json": {"context": context},
-            "share_config": {"access_level": "user", "department_ids": [], "user_uids": [uid]},
+            "share_config": {
+                "version": 2,
+                "read_scope": {"access_level": "user", "department_ids": [], "user_uids": [uid]},
+                "manage_scope": None,
+            },
         },
         headers=headers,
     )

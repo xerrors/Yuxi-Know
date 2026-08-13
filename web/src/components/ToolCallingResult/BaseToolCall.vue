@@ -94,7 +94,7 @@ import { ref, computed } from 'vue'
 import { Loader, ChevronsUpDown, ChevronsDownUp, XCircle, CheckCircle } from 'lucide-vue-next'
 import { useAgentStore } from '@/stores/agent'
 import { storeToRefs } from 'pinia'
-import { getToolCallId, getToolIcon } from './toolRegistry'
+import { getToolCallId, getToolIcon, getToolName, findToolInList } from './toolRegistry'
 
 const props = defineProps({
   toolCall: {
@@ -126,7 +126,7 @@ const props = defineProps({
 })
 
 const agentStore = useAgentStore()
-const { availableTools } = storeToRefs(agentStore)
+const { availableTools, toolMetadata } = storeToRefs(agentStore)
 
 const isExpanded = ref(props.defaultExpanded)
 const isTimeline = computed(() => props.appearance === 'timeline')
@@ -144,13 +144,21 @@ const effectiveStatus = computed(() => {
 })
 
 // Tool Name Logic
+// 展示优先级：完整工具元数据中的 display name > 前端兜底名称映射 > 工具 id
 const toolId = computed(() => getToolCallId(props.toolCall))
 
 const toolName = computed(() => {
-  const toolsList = availableTools.value ? Object.values(availableTools.value) : []
-  const tool = toolsList.find((t) => t.id === toolId.value)
-  return tool ? tool.name : toolId.value
+  const tool = findToolInList(toolId.value, toolMetadataList.value)
+  return tool ? tool.name : getToolName(toolId.value)
 })
+
+const toolMetadataList = computed(() =>
+  toolMetadata.value.length
+    ? toolMetadata.value
+    : availableTools.value
+      ? Object.values(availableTools.value)
+      : []
+)
 
 // Tool Icon Mapping
 const toolIcon = computed(() => getToolIcon(toolId.value))

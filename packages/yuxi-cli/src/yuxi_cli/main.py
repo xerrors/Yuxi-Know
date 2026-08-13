@@ -7,6 +7,7 @@ from rich.console import Console
 
 from yuxi_cli import __version__
 from yuxi_cli.agent_eval import AgentEvalError, AgentEvalOptions, run_langfuse_agent_experiment
+from yuxi_cli.chat_web import ChatWebError, run_web_chat
 from yuxi_cli.client import ClientError
 from yuxi_cli.commands import (
     CommandError,
@@ -161,6 +162,25 @@ def logout(
         _print_remote_context(store, remote)
         logout_command(store, remote, local_only, console)
     except (ConfigError, ClientError) as exc:
+        _handle_error(exc)
+
+
+@app.command()
+def chat(
+    remote: str | None = typer.Option(None, "--remote", help="Remote name."),
+    agent_slug: str = typer.Option(
+        "default-chatbot", "--agent-slug", help="Yuxi agent slug."
+    ),
+    no_open: bool = typer.Option(
+        False, "--no-open", help="Print URL without opening a browser."
+    ),
+):
+    """Start a temporary local web chat."""
+    store = _store()
+    try:
+        _print_remote_context(store, remote)
+        run_web_chat(store, remote, agent_slug, console, no_open=no_open)
+    except (ConfigError, ClientError, ChatWebError) as exc:
         _handle_error(exc)
 
 

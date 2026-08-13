@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from yuxi.agents.mcp.service import MCPServerNotFoundError
+from yuxi.storage.postgres.models_business import User
 
 from server.routers.mcp_router import mcp
 from server.utils.auth_middleware import get_admin_user, get_db, get_required_user
-from yuxi.storage.postgres.models_business import User
 
 
 def _build_app(*, allow_admin: bool = True) -> FastAPI:
@@ -46,6 +47,8 @@ def test_update_mcp_server_status(monkeypatch):
 
     class DummyServer:
         def __init__(self, enabled):
+            self.slug = "demo-mcp"
+            self.transport = "streamable_http"
             self.enabled = enabled
 
         def to_dict(self):
@@ -71,7 +74,7 @@ def test_update_mcp_server_status(monkeypatch):
 
 def test_update_mcp_server_status_not_found(monkeypatch):
     async def fake_set_server_enabled(db, name, enabled, updated_by=None):
-        raise ValueError(f"Server '{name}' does not exist")
+        raise MCPServerNotFoundError(f"Server '{name}' does not exist")
 
     monkeypatch.setattr("server.routers.mcp_router.set_server_enabled", fake_set_server_enabled)
 
@@ -80,12 +83,24 @@ def test_update_mcp_server_status_not_found(monkeypatch):
     assert resp.status_code == 404, resp.text
 
 
+def test_update_mcp_server_status_rejects_legacy_stdio(monkeypatch):
+    async def fake_set_server_enabled(db, name, enabled, updated_by=None):
+        raise ValueError("历史 stdio MCP 已被禁用")
+
+    monkeypatch.setattr("server.routers.mcp_router.set_server_enabled", fake_set_server_enabled)
+
+    client = TestClient(_build_app())
+    resp = client.put("/api/system/mcp-servers/legacy-stdio/status", json={"enabled": True})
+    assert resp.status_code == 400, resp.text
+
+
 def test_get_mcp_servers_normal_user_is_stripped(monkeypatch):
     class DummyServer:
         def __init__(self):
             self.name = "test-mcp"
+            self.slug = "test-mcp"
             self.description = "test mcp description"
-            self.transport = "stdio"
+            self.transport = "streamable_http"
             self.url = "http://localhost:8000"
             self.command = "python"
             self.args = ["-m", "mcp"]
@@ -151,6 +166,22 @@ def test_create_mcp_server_rejects_extra_config_fields():
     assert resp.status_code == 422, resp.text
 
 
+def test_create_mcp_server_rejects_stdio_command():
+    client = TestClient(_build_app())
+    resp = client.post(
+        "/api/system/mcp-servers",
+        json={
+            "slug": "unsafe-mcp",
+            "name": "Unsafe MCP",
+            "transport": "stdio",
+            "command": "python3",
+            "args": ["-c", "print('unsafe')"],
+        },
+    )
+
+    assert resp.status_code == 422, resp.text
+
+
 def test_update_mcp_server_rejects_extra_config_fields():
     client = TestClient(_build_app())
     resp = client.put(
@@ -164,3 +195,36 @@ def test_update_mcp_server_rejects_extra_config_fields():
     )
 
     assert resp.status_code == 422, resp.text
+
+
+def test_update_builtin_mcp_server_rejects_connection_changes(monkeypatch):
+    async def fake_update_mcp_server(db, slug, **kwargs):
+        raise PermissionError("系统内置 MCP 的连接配置由代码管理，无法通过接口修改")
+
+    monkeypatch.setattr("server.routers.mcp_router.update_mcp_server", fake_update_mcp_server)
+
+    client = TestClient(_build_app())
+    resp = client.put(
+        "/api/system/mcp-servers/mcp-server-chart",
+        json={
+            "transport": "streamable_http",
+            "url": "https://example.com/mcp",
+        },
+    )
+
+    assert resp.status_code == 403, resp.text
+
+
+def test_update_mcp_server_not_found(monkeypatch):
+    async def fake_update_mcp_server(db, slug, **kwargs):
+        raise MCPServerNotFoundError(f"Server '{slug}' does not exist")
+
+    monkeypatch.setattr("server.routers.mcp_router.update_mcp_server", fake_update_mcp_server)
+
+    client = TestClient(_build_app())
+    resp = client.put(
+        "/api/system/mcp-servers/missing",
+        json={"name": "Missing MCP"},
+    )
+
+    assert resp.status_code == 404, resp.text

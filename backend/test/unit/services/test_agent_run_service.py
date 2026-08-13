@@ -483,6 +483,8 @@ async def test_stream_agent_run_events_compacts_verbose_false(monkeypatch: pytes
                         "agent_slug": "deep-research",
                         "backend_id": "ChatbotAgent",
                         "uid": "user-1",
+                        "run_type": "chat",
+                        "source": "chat",
                     },
                     "created_at": "2026-05-27T00:00:00+00:00",
                 },
@@ -621,9 +623,12 @@ async def test_stream_agent_run_events_compacts_verbose_false(monkeypatch: pytes
     ):
         chunks.append(chunk)
 
-    assert len(chunks) == 3
+    assert len(chunks) == 4
 
-    init_data = _sse_data(chunks[0])
+    metadata_data = _sse_data(chunks[0])
+    assert metadata_data["payload"] == {"run_type": "chat", "source": "chat"}
+
+    init_data = _sse_data(chunks[1])
     init_chunk = init_data["payload"]["chunk"]
     assert init_data["request_id"] == "req-1"
     assert init_data["payload"]["name"] == "yuxi.init"
@@ -634,7 +639,7 @@ async def test_stream_agent_run_events_compacts_verbose_false(monkeypatch: pytes
     assert "image_content" not in init_chunk["msg"]
     assert "extra_metadata" not in init_chunk["msg"]
 
-    message_data = _sse_data(chunks[1])
+    message_data = _sse_data(chunks[2])
     message_chunk = message_data["payload"]["items"][0]
     assert message_data["request_id"] == "req-1"
     assert "request_id" not in message_chunk
@@ -645,7 +650,7 @@ async def test_stream_agent_run_events_compacts_verbose_false(monkeypatch: pytes
     assert "thread_id" not in message_chunk["stream_event"]
     assert "namespace" not in message_chunk["stream_event"]
 
-    end_data = _sse_data(chunks[2])
+    end_data = _sse_data(chunks[3])
     assert end_data["request_id"] == "req-1"
     assert end_data["payload"]["status"] == "completed"
     assert "request_id" not in end_data["payload"]["chunk"]
@@ -900,6 +905,8 @@ async def test_create_resume_run_marks_input_message_source(monkeypatch: pytest.
             conversation_thread_id="thread-1",
             status="interrupted",
             input_payload={"model_spec": "parent-model", "tool_approval_mode": "default"},
+            source="agent_call",
+            channel="api",
         ),
     )
 
@@ -918,8 +925,47 @@ async def test_create_resume_run_marks_input_message_source(monkeypatch: pytest.
     assert db.created_run_kwargs["run_type"] == "resume"
     assert db.created_run_kwargs["created_by_run_id"] == "parent-run"
     assert db.created_run_kwargs["input_message_id"] == 11
+    assert db.created_run_kwargs["source"] == "agent_call"
+    assert db.created_run_kwargs["channel"] == "api"
     assert db.added[0].message_type == "resume"
     assert db.added[0].extra_metadata["source"] == "ask_user_question_resume"
+
+
+@pytest.mark.asyncio
+async def test_create_resume_run_preserves_explicit_origin_snapshot(monkeypatch: pytest.MonkeyPatch):
+    db = _patch_agent_run_creation(
+        monkeypatch,
+        parent_run=SimpleNamespace(
+            id="parent-run",
+            conversation_thread_id="thread-1",
+            status="interrupted",
+            input_payload={"model_spec": "parent-model", "tool_approval_mode": "default"},
+            source="agent_call",
+            channel="api",
+            external_id="original-message",
+            origin_metadata={"original": "metadata"},
+        ),
+    )
+
+    await agent_run_service.create_agent_run_view(
+        input_message=None,
+        agent_slug="default",
+        thread_id="thread-1",
+        meta={"request_id": "resume-req"},
+        current_uid="user-1",
+        db=db,
+        resume={"decisions": [{"type": "approve"}]},
+        created_by_run_id="parent-run",
+        source="chat",
+        channel="web",
+        external_id="approval-message",
+        origin_metadata={"approval": "metadata"},
+    )
+
+    assert db.created_run_kwargs["source"] == "chat"
+    assert db.created_run_kwargs["channel"] == "web"
+    assert db.created_run_kwargs["external_id"] == "approval-message"
+    assert db.created_run_kwargs["origin_metadata"] == {"approval": "metadata"}
 
 
 @pytest.mark.asyncio

@@ -4,6 +4,7 @@ from typing import Any
 import httpx
 
 from yuxi.knowledge.implementations.read_only_connectors import ReadOnlyConnectors
+from yuxi.knowledge.read_models import KnowledgeBaseConfig
 from yuxi.utils import logger
 
 DIFY_REQUIRED_PARAMS = ("dify_api_url", "dify_token", "dify_dataset_id")
@@ -63,19 +64,26 @@ class DifyKB(ReadOnlyConnectors):
             raise ValueError("Dify api_url 必须以 /v1 结尾")
         return params
 
-    async def aquery(self, query_text: str, kb_id: str, agent_call: bool = False, **kwargs) -> list[dict]:
+    async def aquery(
+        self,
+        query_text: str,
+        kb_id: str,
+        *,
+        config: KnowledgeBaseConfig,
+        agent_call: bool = False,
+        **kwargs,
+    ) -> list[dict]:
         del agent_call
-        metadata = self.databases_meta.get(kb_id, {}).get("metadata", {}) or {}
-        api_url = str(metadata.get("dify_api_url") or "").strip()
-        token = str(metadata.get("dify_token") or "").strip()
-        dataset_id = str(metadata.get("dify_dataset_id") or "").strip()
+        additional_params = config.additional_params
+        api_url = str(additional_params.get("dify_api_url") or "").strip()
+        token = str(additional_params.get("dify_token") or "").strip()
+        dataset_id = str(additional_params.get("dify_dataset_id") or "").strip()
 
         if not api_url or not token or not dataset_id:
             logger.error(f"Dify config incomplete for kb_id={kb_id}")
             return []
 
-        query_params = self._get_query_params(kb_id)
-        merged = {**query_params, **kwargs}
+        merged = {**config.query_options, **kwargs}
 
         search_mode = str(merged.get("search_mode", "vector")).lower()
         search_method_map = {

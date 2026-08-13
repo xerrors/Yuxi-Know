@@ -33,6 +33,27 @@ def test_provisioner_client_sends_bearer_token(monkeypatch):
     ]
 
 
+def test_provisioner_client_can_disable_sandbox_environment(monkeypatch):
+    calls = []
+
+    def fake_request(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(
+            status_code=200,
+            json=lambda: {"sandbox_id": "sandbox-1", "sandbox_url": "http://sandbox"},
+        )
+
+    monkeypatch.setattr("yuxi.agents.backends.sandbox.provisioner_client.httpx.request", fake_request)
+    client = ProvisionerClient(
+        "http://sandbox-provisioner:8002",
+        token="test-provisioner-token-that-is-long-enough",
+    )
+
+    client.create("sandbox-1", "thread-1", "user-1", {"SECRET": "value"}, inherit_env=False)
+
+    assert calls[0]["json"]["inherit_env"] is False
+
+
 def test_sandbox_provisioner_token_reads_environment(monkeypatch):
     monkeypatch.setenv("SANDBOX_PROVISIONER_TOKEN", "test-provisioner-token-that-is-long-enough")
 

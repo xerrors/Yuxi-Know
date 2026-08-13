@@ -11,7 +11,7 @@ from yuxi.knowledge.eval.benchmark_generation import (
     normalize_generation_concurrency_count,
 )
 from yuxi.knowledge.eval.evaluator import aggregate_metrics, evaluate_question
-from yuxi.knowledge.runtime import knowledge_base
+from yuxi.knowledge.runtime import knowledge_base as kb_manager
 from yuxi.models import select_model
 from yuxi.repositories.evaluation_repository import EvaluationRepository
 from yuxi.repositories.knowledge_base_repository import KnowledgeBaseRepository
@@ -494,17 +494,13 @@ class EvaluationService:
                 logger.exception(f"保存残余题目失败: {dataset_id}")
 
         try:
-            kb_instance = await knowledge_base.aget_kb(kb_id)
-            if not kb_instance:
-                await report_progress(100, "知识库不存在")
-                raise ValueError("Knowledge Base not found")
-            if kb_instance.kb_type != "milvus":
+            kb_config = await kb_manager.get_kb_config(kb_id)
+            if kb_config.kb_type != "milvus":
                 await report_progress(100, "仅支持 commonrag/Milvus 类型知识库生成评估数据集")
                 raise ValueError("Unsupported KB type for dataset generation")
 
             try:
                 async for item in iter_generated_benchmark_items(
-                    kb_instance=kb_instance,
                     kb_id=kb_id,
                     count=remaining_count,
                     neighbors_count=neighbors_count,
@@ -585,9 +581,7 @@ class EvaluationService:
                 query_params = (kb_row.query_params if kb_row else None) or {}
                 retrieval_config = query_params.get("options", {}) if isinstance(query_params, dict) else {}
                 if not retrieval_config:
-                    kb_instance = await knowledge_base.aget_kb(kb_id)
-                    if kb_instance:
-                        retrieval_config = kb_instance._get_default_query_params(kb_id).get("options", {})
+                    retrieval_config = (await kb_manager.get_kb_config(kb_id)).query_options
                 logger.info(f"从知识库 {kb_id} 加载检索配置: {list(retrieval_config.keys())}")
             except Exception as e:
                 logger.error(f"获取知识库检索配置失败: {e}")
@@ -648,10 +642,6 @@ class EvaluationService:
             if not dataset_items:
                 raise ValueError("Dataset has no items")
 
-            kb_instance = await knowledge_base.aget_kb(kb_id)
-            if not kb_instance:
-                raise ValueError(f"Knowledge Base {kb_id} not found")
-
             judge_llm = None
             if dataset_row.has_gold_answers:
                 judge_model_spec = retrieval_config.get("judge_llm") or retrieval_config.get("answer_llm")
@@ -692,7 +682,6 @@ class EvaluationService:
                     "gold_answer": item.gold_answer,
                 }
                 question_result = await evaluate_question(
-                    kb_instance=kb_instance,
                     kb_id=kb_id,
                     question_data=question_data,
                     retrieval_config=retrieval_config,

@@ -130,11 +130,28 @@ else
         fi
     done
 
-    # Get TAVILY_API_KEY (optional)
+    # Get Web Search Provider and API Key (optional)
     echo ""
-    echo "🔍 Tavily API Key (optional) - for search service"
-    echo "Get your API key from: https://app.tavily.com/"
-    read -p "Please enter your TAVILY_API_KEY (press Enter to skip): " TAVILY_API_KEY
+    echo "🔍 Web Search Provider (optional)"
+    echo "1) doubao (Doubao Custom Search)"
+    echo "2) tavily (Tavily Search)"
+    read -p "Please select web search provider (1 for doubao, 2 for tavily, press Enter to skip): " SEARCH_CHOICE
+
+    WEB_SEARCH_PROVIDER=""
+    DOUBAO_SEARCH_API_KEY=""
+    TAVILY_API_KEY=""
+
+    if [ "$SEARCH_CHOICE" = "1" ] || [ "$SEARCH_CHOICE" = "doubao" ]; then
+        WEB_SEARCH_PROVIDER="doubao"
+        echo "Get your Doubao API Key from Volcengine Console https://console.volcengine.com/search-infinity/api-key"
+        read -s -p "Please enter your DOUBAO_SEARCH_API_KEY: " DOUBAO_SEARCH_API_KEY
+        echo ""
+    elif [ "$SEARCH_CHOICE" = "2" ] || [ "$SEARCH_CHOICE" = "tavily" ]; then
+        WEB_SEARCH_PROVIDER="tavily"
+        echo "Get your Tavily API key from: https://app.tavily.com/"
+        read -s -p "Please enter your TAVILY_API_KEY: " TAVILY_API_KEY
+        echo ""
+    fi
 
     echo ""
     echo "JWT security settings"
@@ -163,9 +180,15 @@ else
 # SiliconFlow API Key (required)
 SILICONFLOW_API_KEY=${SILICONFLOW_API_KEY}
 
-# Tavily API Key (optional - for search service)
+# Web Search Provider settings
 EOF
 
+    if [ -n "$WEB_SEARCH_PROVIDER" ]; then
+        echo "WEB_SEARCH_PROVIDER=${WEB_SEARCH_PROVIDER}" >> .env
+    fi
+    if [ -n "$DOUBAO_SEARCH_API_KEY" ]; then
+        echo "DOUBAO_SEARCH_API_KEY=${DOUBAO_SEARCH_API_KEY}" >> .env
+    fi
     if [ -n "$TAVILY_API_KEY" ]; then
         echo "TAVILY_API_KEY=${TAVILY_API_KEY}" >> .env
     fi

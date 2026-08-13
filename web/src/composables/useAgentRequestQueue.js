@@ -3,7 +3,12 @@ import { processRunSseResponse } from '@/composables/useAgentRunStream'
 import { IDLE_QUEUE_SNAPSHOT } from '@/composables/useAgentThreadState'
 import { handleChatError } from '@/utils/errorHandler'
 
-export function useAgentRequestQueue({ getThreadState, startRunStream, onStreamError }) {
+export function useAgentRequestQueue({
+  getThreadState,
+  resetOnGoingConv,
+  startRunStream,
+  onStreamError
+}) {
   const removeRequestFromQueue = (ts, requestId) => {
     if (!ts || !ts.queuedRequests) return
     ts.queuedRequests = ts.queuedRequests.filter((r) => r.request_id !== requestId)
@@ -91,7 +96,14 @@ export function useAgentRequestQueue({ getThreadState, startRunStream, onStreamE
           if (data.run_id) {
             removeRequestFromQueue(tsInner, requestId)
             stopRequestStream(threadId, requestId)
-            void startRunStream(threadId, data.run_id, requestId)
+
+            // 旧 Run 尚未 finalize 时保留已渲染内容；startRunStream 会 flush 并中止旧订阅。
+            // 若旧 Run 已 finalize，则其 history 刷新已在途，可以清理残留的 ongoing 状态。
+            if (!tsInner.activeRunId) {
+              resetOnGoingConv(threadId, { preserveRequestStreams: true })
+            }
+            tsInner.pendingRequestId = requestId
+            void startRunStream(threadId, data.run_id, '0-0')
           }
         } else if (event === 'cancelled' || event === 'rejected' || event === 'failed') {
           entry.status = event
@@ -141,11 +153,27 @@ export function useAgentRequestQueue({ getThreadState, startRunStream, onStreamE
     }
   }
 
+  const steerRequest = async (threadId, agentSlug, requestId) => {
+    const ts = getThreadState(threadId)
+    if (!ts || !threadId || !agentSlug || !requestId) return false
+
+    try {
+      await agentApi.steerRequest(requestId)
+      await syncQueuedRequests(threadId, agentSlug)
+      void startRequestStream(threadId, requestId)
+      return true
+    } catch (error) {
+      handleChatError(error, 'steer')
+      return false
+    }
+  }
+
   return {
     startRequestStream,
     stopAllRequestStreams,
     cancelRequest,
     syncQueuedRequests,
-    continueQueue
+    continueQueue,
+    steerRequest
   }
 }

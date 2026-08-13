@@ -40,6 +40,7 @@ class ProvisionerClient:
         *,
         file_thread_id: str | None = None,
         skills_thread_id: str | None = None,
+        inherit_env: bool = True,
     ) -> SandboxRecord:
         response = self._request(
             "POST",
@@ -51,6 +52,7 @@ class ProvisionerClient:
                 "skills_thread_id": skills_thread_id or thread_id,
                 "uid": uid,
                 "env": env or {},
+                "inherit_env": inherit_env,
             },
         )
         if response.status_code >= 400:

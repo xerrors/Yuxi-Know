@@ -6,13 +6,14 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
-import fitz
 import pandas as pd
 import pytest
 import yuxi.knowledge.parser.factory as factory_module
 import yuxi.knowledge.parser.unified as parser_unified
 from docx import Document
 from PIL import Image
+from pypdf import PdfWriter
+from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
 from yuxi.knowledge.parser.factory import DocumentProcessorFactory
 from yuxi.knowledge.parser.mineru import MinerUParser
@@ -111,11 +112,25 @@ def test_rapid_ocr_health_check_does_not_load_model(monkeypatch: pytest.MonkeyPa
 
 
 def _build_pdf(file_path: Path, text: str) -> None:
-    doc = fitz.open()
-    page = doc.new_page()
-    page.insert_text((72, 72), text)
-    doc.save(str(file_path))
-    doc.close()
+    """用 pypdf 构造带文本的最小 PDF（pypdfium2 只读不能写，测试造 PDF 改用 pypdf）。"""
+    writer = PdfWriter()
+    page = writer.add_blank_page(width=595, height=842)
+    escaped = text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+    stream = DecodedStreamObject()
+    stream.set_data(f"BT /F1 12 Tf 72 720 Td ({escaped}) Tj ET".encode())
+    page[NameObject("/Contents")] = writer._add_object(stream)
+    font = DictionaryObject(
+        {
+            NameObject("/Type"): NameObject("/Font"),
+            NameObject("/Subtype"): NameObject("/Type1"),
+            NameObject("/BaseFont"): NameObject("/Helvetica"),
+            NameObject("/Encoding"): NameObject("/WinAnsiEncoding"),
+        }
+    )
+    resources = DictionaryObject()
+    resources[NameObject("/Font")] = DictionaryObject({NameObject("/F1"): font})
+    page[NameObject("/Resources")] = writer._add_object(resources)
+    writer.write(str(file_path))
 
 
 def _build_docx(file_path: Path, text: str) -> None:

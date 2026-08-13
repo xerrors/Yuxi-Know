@@ -64,6 +64,7 @@ import { ref, reactive, computed, watch } from 'vue'
 import { useDatabaseStore } from '@/stores/database'
 import { message } from 'ant-design-vue'
 import { queryApi } from '@/apis/knowledge_api'
+import { createSearchConfigSnapshot, searchConfigChanged } from '@/utils/searchConfig'
 
 const props = defineProps({
   kbId: {
@@ -80,6 +81,10 @@ const loading = ref(false)
 const error = ref('')
 const queryParams = ref([])
 const meta = reactive({})
+const initialConfig = ref({})
+
+const getConfigSnapshot = () => createSearchConfigSnapshot(queryParams.value, meta)
+const hasChanges = () => searchConfigChanged(getConfigSnapshot(), initialConfig.value)
 
 const isDependencySatisfied = (param) => {
   const dependency = param.depend_on
@@ -115,6 +120,7 @@ const updateMeta = (key, value) => {
 const loadQueryParams = async () => {
   if (!props.kbId) {
     queryParams.value = []
+    initialConfig.value = {}
     return
   }
 
@@ -133,13 +139,13 @@ const loadQueryParams = async () => {
       }
     }
     for (const param of queryParams.value) {
+      delete meta[param.key]
       if (param.default !== undefined) {
         meta[param.key] = param.type === 'boolean' ? Boolean(param.default) : param.default
       }
     }
     meta.include_distances = true
-
-    loadSavedConfig()
+    initialConfig.value = getConfigSnapshot()
   } catch (err) {
     console.error('Failed to load query params:', err)
     error.value = err.message || '加载查询参数失败'
@@ -148,29 +154,7 @@ const loadQueryParams = async () => {
   }
 }
 
-const loadSavedConfig = () => {
-  if (!props.kbId) return
-
-  const saved = localStorage.getItem(`search-config-${props.kbId}`)
-  if (saved) {
-    try {
-      const savedConfig = JSON.parse(saved)
-      queryParams.value.forEach((param) => {
-        if (param.type === 'boolean' && savedConfig[param.key] !== undefined) {
-          if (typeof savedConfig[param.key] === 'string') {
-            savedConfig[param.key] = savedConfig[param.key] === 'true'
-          }
-        }
-      })
-      Object.assign(meta, savedConfig)
-    } catch (e) {
-      console.warn('Failed to parse saved config:', e)
-    }
-  }
-  meta.include_distances = true
-}
-
-const save = async () => {
+const save = async ({ notify = true } = {}) => {
   if (!props.kbId) {
     message.error('无法保存配置：缺少知识库ID')
     return false
@@ -181,9 +165,9 @@ const save = async () => {
   try {
     const response = await queryApi.updateKnowledgeBaseQueryParams(props.kbId, { ...meta })
     if (response.message === 'success') {
-      localStorage.setItem(`search-config-${props.kbId}`, JSON.stringify(meta))
       Object.assign(store.meta, meta)
-      message.success('配置已保存')
+      initialConfig.value = getConfigSnapshot()
+      if (notify) message.success('配置已保存')
       emit('save', { ...meta })
       return true
     } else {
@@ -216,7 +200,7 @@ watch(
   { immediate: true }
 )
 
-defineExpose({ save, resetToDefaults, loadQueryParams })
+defineExpose({ save, resetToDefaults, loadQueryParams, hasChanges })
 </script>
 
 <style lang="less" scoped>

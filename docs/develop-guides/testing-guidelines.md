@@ -21,6 +21,12 @@
   - 覆盖 run、viewer、附件、文件落盘等完整流程
   - 默认数量少、执行更慢
 
+其他子项目约定：
+
+- 前端单元测试统一放在 `web/test/unit`，通过 `pnpm test:unit` 运行。
+- `packages/yuxi-cli` 是独立 Python 包，沿用 Python 社区惯例放在 `packages/yuxi-cli/tests`。
+- 同一个子项目内不要同时创建 `test` 和 `tests` 两个测试根目录。
+
 ## 2. 新增测试时怎么选目录
 
 新增测试前先判断：
@@ -170,6 +176,12 @@ backend/test/run_tests.sh unit
 backend/test/run_tests.sh integration
 backend/test/run_tests.sh e2e
 backend/test/run_tests.sh all
+```
+
+运行前端单元测试：
+
+```bash
+docker compose exec web pnpm test:unit
 ```
 
 ## 10. 推荐的日常开发流程

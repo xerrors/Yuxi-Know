@@ -263,6 +263,8 @@ class SubagentRunService:
             persisted_input_message=persisted_input_message,
             created_by_run_id=creator_run.id,
             subagent_thread_relation_id=relation.id,
+            source="subagent",
+            channel="internal",
         )
 
     async def _ensure_child_conversation(

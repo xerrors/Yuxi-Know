@@ -58,7 +58,7 @@ async def test_subagent_summary_trim_limit_matches_summary_threshold(monkeypatch
     captured: dict = {}
     _patch_common_graph_deps(monkeypatch, subagent_graph, captured)
 
-    middlewares = await subagent_graph._build_middlewares(_context(summary_threshold=64))
+    middlewares = await subagent_graph._build_middlewares(_context(summary_threshold=64), "default")
 
     assert captured["summary_kwargs"]["trigger"] == ("tokens", 64 * 1024)
     assert captured["summary_kwargs"]["trim_tokens_to_summarize"] == 64 * 1024

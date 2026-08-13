@@ -19,7 +19,11 @@ pytestmark = [pytest.mark.asyncio, pytest.mark.e2e, pytest.mark.slow]
 async def _create_thread(client: httpx.AsyncClient, headers: dict[str, str], agent_id: str) -> str:
     response = await client.post(
         "/api/chat/thread",
-        json={"agent_id": agent_id, "title": f"viewer-fs-e2e-{uuid.uuid4().hex[:8]}", "metadata": {}},
+        json={
+            "agent_id": agent_id,
+            "title": f"viewer-fs-e2e-{uuid.uuid4().hex[:8]}",
+            "metadata": {"_yuxi_e2e": True, "test": "viewer-fs-e2e"},
+        },
         headers=headers,
     )
     assert response.status_code == 200, response.text

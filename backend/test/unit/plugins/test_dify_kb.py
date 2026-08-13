@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from yuxi.knowledge.implementations.dify import DifyKB
+from yuxi.knowledge.read_models import KnowledgeBaseConfig
 
 
 class _FakeResponse:
@@ -80,24 +81,23 @@ def test_dify_validation_rejects_missing_or_invalid_params():
 async def test_dify_kb_aquery_maps_records(monkeypatch, tmp_path):
     kb = DifyKB(str(tmp_path))
     slug = "kb_test_dify"
-    kb.databases_meta[slug] = {
-        "name": "dify-kb",
-        "description": "test",
-        "kb_type": "dify",
-        "query_params": {
-            "options": {
-                "search_mode": "vector",
-                "final_top_k": 5,
-                "score_threshold_enabled": True,
-                "similarity_threshold": 0.3,
-            }
-        },
-        "metadata": {
-            "dify_api_url": "https://api.dify.ai/v1",
-            "dify_token": "token",
-            "dify_dataset_id": "dataset-123",
-        },
+    query_options = {
+        "search_mode": "vector",
+        "final_top_k": 5,
+        "score_threshold_enabled": True,
+        "similarity_threshold": 0.3,
     }
+    additional_params = {
+        "dify_api_url": "https://api.dify.ai/v1",
+        "dify_token": "token",
+        "dify_dataset_id": "dataset-123",
+    }
+    config = KnowledgeBaseConfig(
+        kb_id=slug,
+        kb_type="dify",
+        query_params={"options": query_options},
+        additional_params=additional_params,
+    )
 
     payload = {
         "records": [
@@ -118,7 +118,11 @@ async def test_dify_kb_aquery_maps_records(monkeypatch, tmp_path):
         lambda **kwargs: _FakeAsyncClient(response_payload=payload, **kwargs),
     )
 
-    result = await kb.aquery("hello", slug)
+    result = await kb.aquery(
+        "hello",
+        slug,
+        config=config,
+    )
     assert len(result) == 1
     assert result[0]["content"] == "hello world"
     assert result[0]["score"] == 0.98
@@ -132,22 +136,26 @@ async def test_dify_kb_aquery_maps_records(monkeypatch, tmp_path):
 async def test_dify_kb_aquery_error_returns_empty(monkeypatch, tmp_path):
     kb = DifyKB(str(tmp_path))
     slug = "kb_test_dify_error"
-    kb.databases_meta[slug] = {
-        "name": "dify-kb",
-        "description": "test",
-        "kb_type": "dify",
-        "query_params": {"options": {}},
-        "metadata": {
-            "dify_api_url": "https://api.dify.ai/v1",
-            "dify_token": "token",
-            "dify_dataset_id": "dataset-123",
-        },
+    additional_params = {
+        "dify_api_url": "https://api.dify.ai/v1",
+        "dify_token": "token",
+        "dify_dataset_id": "dataset-123",
     }
+    config = KnowledgeBaseConfig(
+        kb_id=slug,
+        kb_type="dify",
+        query_params={"options": {}},
+        additional_params=additional_params,
+    )
 
     monkeypatch.setattr(
         "yuxi.knowledge.implementations.dify.httpx.AsyncClient",
         lambda **kwargs: _FakeAsyncClient(raises=RuntimeError("boom"), **kwargs),
     )
 
-    result = await kb.aquery("hello", slug)
+    result = await kb.aquery(
+        "hello",
+        slug,
+        config=config,
+    )
     assert result == []

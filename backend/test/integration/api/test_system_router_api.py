@@ -4,7 +4,14 @@ Integration tests for system router endpoints.
 
 from __future__ import annotations
 
+import os
+from copy import deepcopy
+
 import pytest
+from sqlalchemy import update
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from yuxi.config.options import get_option
+from yuxi.storage.postgres.models_business import ConfigOption
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
@@ -69,6 +76,7 @@ async def test_ocr_options_and_config_options_permissions(
         "mineru_official_api_opts",
         "pp_structure_v3_ocr_host_opts",
         "paddleocr_api_opts",
+        "remote_skill_source_policy",
     }
     assert all("deepseek" not in item["key"] for item in configs)
     official = next(item for item in configs if item["key"] == "mineru_official_api_opts")
@@ -99,6 +107,42 @@ async def test_config_option_update_is_visible_and_restored(test_client, admin_h
             headers=admin_headers,
         )
         assert restore_response.status_code == 200, restore_response.text
+
+
+async def test_remote_skill_policy_explicit_empty_list_is_visible_and_restored(test_client, admin_headers):
+    engine = create_async_engine(os.environ["POSTGRES_URL"])
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+
+    try:
+        async with session_factory() as db:
+            record = await get_option(db, "remote_skill_source_policy")
+            assert record is not None
+            previous_value = deepcopy(record.value)
+            previous_updated_by = record.updated_by
+            previous_updated_at = record.updated_at
+
+        try:
+            update_response = await test_client.put(
+                "/api/system/config/options/remote_skill_source_policy",
+                json={"value": {"allowed_hosts": []}},
+                headers=admin_headers,
+            )
+            assert update_response.status_code == 200, update_response.text
+            assert update_response.json()["option"]["value"]["allowed_hosts"] == []
+        finally:
+            async with session_factory() as db:
+                await db.execute(
+                    update(ConfigOption)
+                    .where(ConfigOption.key == "remote_skill_source_policy")
+                    .values(
+                        value=previous_value,
+                        updated_by=previous_updated_by,
+                        updated_at=previous_updated_at,
+                    )
+                )
+                await db.commit()
+    finally:
+        await engine.dispose()
 
 
 async def test_ocr_health_is_available_to_logged_in_users_and_returns_all_methods(

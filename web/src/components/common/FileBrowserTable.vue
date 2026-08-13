@@ -14,7 +14,7 @@
               :title="item.title || item.path || item.name"
               @click="handleBreadcrumbClick(item, index)"
             >
-              {{ item.name || rootLabel }}
+              <span class="file-browser-breadcrumb-label">{{ item.name || rootLabel }}</span>
             </button>
             <slot name="breadcrumb-suffix" />
           </nav>
@@ -31,7 +31,7 @@
             aria-label="刷新"
             @click="$emit('refresh')"
           >
-            <template #icon><RotateCw :size="16" /></template>
+            <template #icon><ListRestart :size="16" /></template>
           </a-button>
         </a-tooltip>
       </div>
@@ -46,6 +46,7 @@
       :loading="loading"
       :pagination="tablePagination"
       :row-selection="tableSelection"
+      :scroll="scroll"
       :row-class-name="resolveRowClassName"
       :custom-row="resolveCustomRow"
       class="file-browser-ant-table"
@@ -98,7 +99,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { RotateCw } from 'lucide-vue-next'
+import { ListRestart } from 'lucide-vue-next'
 import FileTypeIcon from '@/components/common/FileTypeIcon.vue'
 
 const props = defineProps({
@@ -112,6 +113,7 @@ const props = defineProps({
   rowClassName: { type: [String, Function], default: '' },
   pagination: { type: Object, default: null },
   selection: { type: Object, default: null },
+  scroll: { type: Object, default: undefined },
   emptyText: { type: String, default: '暂无文件' },
   rootLabel: { type: String, default: '文件' },
   refreshable: { type: Boolean, default: false },
@@ -303,6 +305,7 @@ const handleTableChange = (pagination, filters, sorter, extra) => {
   transition: color 0.16s ease;
 
   &::after {
+    flex: 0 0 auto;
     content: '/';
     margin: 0 8px;
     color: var(--gray-300);
@@ -322,6 +325,13 @@ const handleTableChange = (pagination, filters, sorter, extra) => {
     color: var(--gray-900);
     cursor: default;
   }
+}
+
+.file-browser-breadcrumb-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .file-browser-actions {

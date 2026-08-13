@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import importlib
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
 from yuxi.agents.skills import service as skill_service
 from yuxi.agents.toolkits.buildin import install_skill as exported_install_skill
 
@@ -33,28 +33,38 @@ async def test_install_skill_from_sandbox_installs_as_current_user_private_skill
     assert exported_install_skill.name == "install_skill"
 
     calls = {}
+    event_loop_thread_id = threading.get_ident()
     db = SimpleNamespace()
     source_dir = tmp_path / "demo-skill"
 
     def prepare_skill_from_sandbox(source, thread_id, uid, staging_root):
+        calls["prepare_thread_id"] = threading.get_ident()
         calls["prepare"] = {
             "source": source,
             "thread_id": thread_id,
             "uid": uid,
             "staging_root": staging_root,
         }
-        return source_dir, "demo-skill"
+        return source_dir
 
-    async def import_skill_dir(db_arg, **kwargs):
-        calls["import"] = {"db": db_arg, **kwargs}
-        return SimpleNamespace(slug="demo-skill")
+    async def install_personal_skill_dir(uid, source_dir_arg, **kwargs):
+        calls["install"] = {"uid": uid, "source_dir": source_dir_arg, **kwargs}
+        return SimpleNamespace(
+            slug="demo-skill",
+            name="Demo Skill",
+            description="demo description",
+            source_scope="personal",
+            tool_dependencies=[],
+            mcp_dependencies=[],
+            skill_dependencies=[],
+        )
 
     async def enable_skills(db_arg, thread_id, uid, skill_slugs):
         calls["enable"] = {"db": db_arg, "thread_id": thread_id, "uid": uid, "skill_slugs": skill_slugs}
         return True
 
-    def sync_thread_readable_skills(thread_id, skills):
-        calls["sync"] = {"thread_id": thread_id, "skills": skills}
+    async def sync_thread_readable_skills_async(thread_id, skills, sources):
+        calls["sync"] = {"thread_id": thread_id, "skills": skills, "sources": sources}
 
     monkeypatch.setattr(
         install_skill_module,
@@ -71,24 +81,31 @@ async def test_install_skill_from_sandbox_installs_as_current_user_private_skill
         "get_async_session_context",
         lambda: _AsyncSessionContext(db),
     )
-    monkeypatch.setattr(skill_service, "import_skill_dir", import_skill_dir)
-    monkeypatch.setattr(skill_service, "sync_thread_readable_skills", sync_thread_readable_skills)
+    monkeypatch.setattr(skill_service, "install_personal_skill_dir", install_personal_skill_dir)
+    monkeypatch.setattr(skill_service, "sync_thread_readable_skills_async", sync_thread_readable_skills_async)
 
+    runtime = _runtime(
+        uid="normal-user",
+        thread_id="thread-1",
+        skills=["existing-skill"],
+        _readable_skills=["existing-skill", "demo-skill"],
+        _prompt_skills=["existing-skill", "demo-skill"],
+        _runtime_skill_sources={
+            "existing-skill": "/tmp/shared/existing-skill",
+            "demo-skill": "/tmp/shared/demo-skill",
+        },
+    )
     result = await install_skill_module._run_install_task(
         " /home/gem/user-data/workspace/demo-skill ",
-        _runtime(uid="normal-user", thread_id="thread-1", skills=["existing-skill"]),
+        runtime,
         "tool-1",
     )
 
     assert result.update["activated_skills"] == ["demo-skill"]
     assert "成功安装并激活技能" in result.update["messages"][0].content
     assert calls["prepare"]["uid"] == "normal-user"
-    assert calls["import"]["created_by"] == "normal-user"
-    assert calls["import"]["share_config"] == {
-        "access_level": "user",
-        "department_ids": [],
-        "user_uids": ["normal-user"],
-    }
+    assert calls["prepare_thread_id"] != event_loop_thread_id
+    assert calls["install"] == {"uid": "normal-user", "source_dir": source_dir}
     assert calls["prepare"]["source"] == "/home/gem/user-data/workspace/demo-skill"
     assert calls["enable"] == {
         "db": db,
@@ -96,7 +113,27 @@ async def test_install_skill_from_sandbox_installs_as_current_user_private_skill
         "uid": "normal-user",
         "skill_slugs": ["demo-skill"],
     }
-    assert calls["sync"] == {"thread_id": "thread-1", "skills": ["existing-skill", "demo-skill"]}
+    assert result.update["messages"][0].content.splitlines() == [
+        "✅ 成功安装并激活技能: demo-skill",
+        "📁 安装位置: /home/gem/user-data/workspace/agents/skills/demo-skill",
+    ]
+    assert runtime.context.skills == ["existing-skill", "demo-skill"]
+    assert runtime.context._readable_skills == ["existing-skill", "demo-skill"]
+    assert runtime.context._prompt_skills == ["existing-skill", "demo-skill"]
+    assert runtime.context._runtime_skill_sources == {"existing-skill": "/tmp/shared/existing-skill"}
+    assert runtime.context._runtime_skill_metadata == {
+        "demo-skill": {
+            "name": "Demo Skill",
+            "description": "demo description",
+            "path": "/home/gem/user-data/workspace/agents/skills/demo-skill/SKILL.md",
+        }
+    }
+    assert runtime.context._runtime_skill_dependency_map == {"demo-skill": {"tools": [], "mcps": [], "skills": []}}
+    assert calls["sync"] == {
+        "thread_id": "thread-1",
+        "skills": ["existing-skill"],
+        "sources": {"existing-skill": "/tmp/shared/existing-skill"},
+    }
 
 
 @pytest.mark.asyncio
@@ -260,38 +297,65 @@ async def test_enable_skills_does_not_update_mismatched_runtime_uid(monkeypatch)
     assert "loaded_agent" not in calls
 
 
-def test_prepare_skill_invalid_virtual_path_does_not_fallback_to_sandbox(monkeypatch, tmp_path: Path):
-    calls = {}
-
-    def resolve_virtual_path(*_args, **_kwargs):
-        raise ValueError("path traversal detected")
+def test_prepare_skill_from_sandbox_uses_sandbox_api_without_host_path_resolution(monkeypatch, tmp_path: Path):
+    remote_dir = "/home/gem/user-data/workspace/demo-skill"
 
     class FakeProvisionerSandboxBackend:
-        def __init__(self, *_args, **_kwargs):
-            calls["fallback"] = True
+        def __init__(self, *, thread_id, uid):
+            assert thread_id == "thread-1"
+            assert uid == "user-1"
 
-    monkeypatch.setattr(sandbox_backend_module, "resolve_virtual_path", resolve_virtual_path)
-    monkeypatch.setattr(sandbox_backend_module, "ProvisionerSandboxBackend", FakeProvisionerSandboxBackend)
-    monkeypatch.setattr(skill_service, "is_valid_skill_slug", lambda _slug: True)
-
-    with pytest.raises(ValueError, match="path traversal detected"):
-        install_skill_module._prepare_skill_from_sandbox(
-            "/home/gem/user-data/workspace/demo-skill",
-            "thread-1",
-            "user-1",
-            tmp_path,
-        )
-
-    assert "fallback" not in calls
-
-
-def test_collect_sandbox_file_paths_rejects_more_than_1000_files():
-    class FakeBackend:
-        def ls(self, _remote_dir):
+        def ls(self, path):
+            assert path == remote_dir
             return SimpleNamespace(
                 error=None,
-                entries=[{"path": f"/skill/file-{idx}.txt", "is_dir": False} for idx in range(1001)],
+                entries=[{"path": f"{remote_dir}/SKILL.md", "is_dir": False, "size": 6}],
             )
 
-    with pytest.raises(ValueError, match="最多 1000 个文件"):
-        install_skill_module._collect_sandbox_file_paths(FakeBackend(), "/skill")
+        def download_files(self, paths):
+            assert paths == [f"{remote_dir}/SKILL.md"]
+            return [SimpleNamespace(error=None, content=b"# demo")]
+
+    monkeypatch.setattr(
+        sandbox_backend_module,
+        "resolve_virtual_path",
+        lambda *_args, **_kwargs: pytest.fail("不得将不可信 Sandbox 路径解析为 API 宿主路径"),
+    )
+    monkeypatch.setattr(sandbox_backend_module, "ProvisionerSandboxBackend", FakeProvisionerSandboxBackend)
+
+    staging = install_skill_module._prepare_skill_from_sandbox(
+        remote_dir,
+        "thread-1",
+        "user-1",
+        tmp_path / "staging",
+    )
+
+    assert (staging / "SKILL.md").read_text(encoding="utf-8") == "# demo"
+
+
+def test_prepare_skill_from_sandbox_preserves_download_error_message(monkeypatch, tmp_path: Path):
+    remote_dir = "/home/gem/user-data/workspace/demo-skill"
+
+    class FakeProvisionerSandboxBackend:
+        def __init__(self, *, thread_id, uid):
+            assert thread_id == "thread-1"
+            assert uid == "user-1"
+
+        def ls(self, _path):
+            return SimpleNamespace(
+                error=None,
+                entries=[{"path": f"{remote_dir}/SKILL.md", "is_dir": False, "size": 1}],
+            )
+
+        def download_files(self, _paths):
+            return [SimpleNamespace(error="read_failed", content=None)]
+
+    monkeypatch.setattr(sandbox_backend_module, "ProvisionerSandboxBackend", FakeProvisionerSandboxBackend)
+
+    with pytest.raises(ValueError, match="下载沙盒文件失败"):
+        install_skill_module._prepare_skill_from_sandbox(
+            remote_dir,
+            "thread-1",
+            "user-1",
+            tmp_path / "staging",
+        )

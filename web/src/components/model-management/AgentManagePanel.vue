@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { message, Modal } from 'ant-design-vue'
-import { Plus, RefreshCw, Trash2, SquarePen, Bot, MessageCirclePlus } from 'lucide-vue-next'
+import { Plus, RefreshCw, Trash2, SquarePen, Bot, ChevronRight } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 
 import { agentApi } from '@/apis/agent_api'
@@ -12,6 +12,7 @@ import InfoCard from '@/components/shared/InfoCard.vue'
 import FallbackAvatar from '@/components/common/FallbackAvatar.vue'
 import ExtensionCardGrid from '@/components/extensions/ExtensionCardGrid.vue'
 import { generatePixelAvatar } from '@/utils/pixelAvatar'
+import { getShareConfigLabel } from '@/utils/shareConfig'
 
 const agentStore = useAgentStore()
 const router = useRouter()
@@ -65,11 +66,15 @@ const agentStats = computed(() => ({
   total: managedAgents.value.length,
   builtin: managedAgents.value.filter(isBuiltinAgent).length,
   manageable: managedAgents.value.filter((agent) => agent.can_manage).length,
-  global: managedAgents.value.filter((agent) => agent.share_config?.access_level === 'global')
-    .length
+  global: managedAgents.value.filter(
+    (agent) => (agent.share_config?.read_scope || agent.share_config)?.access_level === 'global'
+  ).length
 }))
 const canManageAgent = (agent) => !!agent?.can_manage
 const getAgentDefaultIconSrc = (agent) => (agent.id ? generatePixelAvatar(agent.id) : '')
+
+/** 返回智能体共享范围的简短展示文案。 */
+const getAgentShareLabel = (agent) => getShareConfigLabel(agent?.share_config)
 
 // ============ Agent Operations ============
 const loadAgentBackends = async () => {
@@ -179,7 +184,7 @@ defineExpose({
             :subtitle="agent.slug || agent.id"
             :description="agent.description || '暂无描述'"
             :default-icon="Bot"
-            :tags="[]"
+            :tags="[{ name: getAgentShareLabel(agent), color: 'gray' }]"
             class="config-card agent-card"
             @click="canManageAgent(agent) && openEditAgentModal(agent)"
           >
@@ -219,18 +224,16 @@ defineExpose({
               </a-menu>
             </template>
 
-            <template v-if="group.key === 'agents'" #tags>
-              <div class="agent-card-actions">
-                <a-button
-                  type="text"
-                  size="small"
-                  class="lucide-icon-btn agent-chat-entry"
-                  @click.stop="openAgentChat(agent)"
-                >
-                  <MessageCirclePlus :size="14" />
-                  去对话
-                </a-button>
-              </div>
+            <template v-if="group.key === 'agents'" #tag-actions>
+              <a-button
+                type="text"
+                size="small"
+                class="agent-chat-entry"
+                @click.stop="openAgentChat(agent)"
+              >
+                去对话
+                <ChevronRight :size="14" />
+              </a-button>
             </template>
           </InfoCard>
         </ExtensionCardGrid>
@@ -287,29 +290,25 @@ defineExpose({
   margin-top: auto;
 }
 
-.agent-card-actions {
-  display: flex;
-  justify-content: flex-start;
-  width: 100%;
-  margin-top: auto;
-}
-
 .agent-chat-entry {
-  min-width: 88px;
-  height: 32px;
-  padding: 2px 10px;
+  display: inline-flex;
+  align-items: center;
+  min-width: auto;
+  height: 24px;
+  padding: 0 2px;
   border: 0;
-  border-radius: 8px;
-  background: var(--gray-100);
+  border-radius: 4px;
+  background: transparent;
   box-shadow: none;
-  color: var(--gray-800);
+  color: var(--gray-600);
   font-size: 12px;
+  gap: 1px;
 
   &:hover {
     border: 0;
-    background: var(--gray-700);
+    background: transparent;
     box-shadow: none;
-    color: var(--gray-0);
+    color: var(--main-700);
   }
 
   &:focus:not(:focus-visible) {

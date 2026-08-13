@@ -41,7 +41,7 @@
               </div>
               <div class="actions-right">
                 <a-button
-                  v-if="isMilvus"
+                  v-if="isMilvus && !readonly"
                   class="action-btn index-action-btn"
                   :class="{ 'has-index-label': hasPendingGraphChunks }"
                   @click="toggleBuildPanel"
@@ -69,11 +69,15 @@
           v-if="showGraphConfigEmpty"
           class="graph-empty-state"
           title="暂无知识图谱"
-          description="配置抽取器后，才能从当前知识库构建实体与关系。"
+          :description="
+            readonly
+              ? '图谱尚未构建，请等待知识库管理员配置抽取器并索引后查看。'
+              : '配置抽取器后，才能从当前知识库构建实体与关系。'
+          "
           :icon="Network"
           full-height
         >
-          <template #actions>
+          <template v-if="!readonly" #actions>
             <a-button type="primary" class="lucide-icon-btn" @click="openGraphConfig">
               <Settings :size="16" />
               配置抽取器
@@ -94,7 +98,7 @@
               清空搜索
             </a-button>
             <a-button
-              v-else-if="hasPendingGraphChunks && !isBuildActive"
+              v-else-if="!readonly && hasPendingGraphChunks && !isBuildActive"
               type="primary"
               class="lucide-icon-btn"
               @click="startGraphBuild"
@@ -158,7 +162,7 @@
 
         <!-- 索引管理浮动面板 -->
         <transition name="slide-fade">
-          <div v-if="isMilvus && showBuildPanel" class="floating-panel build-panel">
+          <div v-if="isMilvus && !readonly && showBuildPanel" class="floating-panel build-panel">
             <div class="panel-header">
               <span class="panel-title">索引管理</span>
               <a-button
@@ -433,6 +437,10 @@ const GRAPH_SUPPORTED_KB_TYPES = new Set([MILVUS_KB_TYPE])
 
 const props = defineProps({
   active: {
+    type: Boolean,
+    default: false
+  },
+  readonly: {
     type: Boolean,
     default: false
   }

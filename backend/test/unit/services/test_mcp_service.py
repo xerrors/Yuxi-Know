@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
 import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-
 from yuxi.agents.mcp import service as mcp_service
 from yuxi.storage.postgres import manager as postgres_manager
 from yuxi.storage.postgres.models_business import MCPServer
@@ -98,6 +98,169 @@ async def test_ensure_builtin_mcp_servers_preserves_user_server_with_retired_slu
     assert server.created_by == "admin"
 
 
+async def test_ensure_builtin_mcp_servers_disables_legacy_user_stdio(monkeypatch, mcp_session):
+    legacy_server = MCPServer(
+        slug="legacy-stdio",
+        name="历史 stdio",
+        transport="stdio",
+        command="python3",
+        enabled=1,
+        created_by="system",
+        updated_by="system",
+    )
+    mcp_session.add(legacy_server)
+    await mcp_session.commit()
+
+    monkeypatch.setattr(
+        postgres_manager.pg_manager,
+        "get_async_session_context",
+        lambda: _AsyncSessionContext(mcp_session),
+    )
+
+    await mcp_service.ensure_builtin_mcp_servers_in_db()
+
+    await mcp_session.refresh(legacy_server)
+    assert legacy_server.enabled == 0
+
+
+async def test_runtime_configs_exclude_user_created_stdio_servers(mcp_session):
+    mcp_session.add_all(
+        [
+            MCPServer(
+                slug="mcp-server-chart",
+                name="内置 stdio",
+                transport="stdio",
+                command="tampered-command",
+                args=["--unsafe"],
+                enabled=1,
+                created_by="system",
+                updated_by="system",
+            ),
+            MCPServer(
+                slug="user-stdio",
+                name="用户 stdio",
+                transport="stdio",
+                command="python3",
+                args=["-c", "print('unsafe')"],
+                enabled=1,
+                created_by="admin",
+                updated_by="admin",
+            ),
+            MCPServer(
+                slug="forged-system-stdio",
+                name="伪造系统 stdio",
+                transport="stdio",
+                command="python3",
+                args=["-c", "print('unsafe')"],
+                enabled=1,
+                created_by="system",
+                updated_by="system",
+            ),
+            MCPServer(
+                slug="remote-http",
+                name="远程 HTTP",
+                transport="streamable_http",
+                url="https://example.com/mcp",
+                command="python3",
+                args=["-c", "print('stale')"],
+                enabled=1,
+                created_by="admin",
+                updated_by="admin",
+            ),
+        ]
+    )
+    await mcp_session.commit()
+
+    configs = await mcp_service._load_enabled_mcp_server_configs(db=mcp_session)
+    slugs = await mcp_service.get_enabled_mcp_server_slugs(db=mcp_session)
+
+    assert set(configs) == {"mcp-server-chart", "remote-http"}
+    assert set(slugs) == {"mcp-server-chart", "remote-http"}
+    assert configs["mcp-server-chart"]["command"] == "npx"
+    assert configs["mcp-server-chart"]["args"] == ["-y", "@antv/mcp-server-chart"]
+    assert "command" not in configs["remote-http"]
+    assert "args" not in configs["remote-http"]
+
+
+async def test_create_mcp_server_rejects_user_created_stdio(mcp_session):
+    with pytest.raises(ValueError, match="stdio"):
+        await mcp_service.create_mcp_server(
+            mcp_session,
+            slug="unsafe-mcp",
+            name="Unsafe MCP",
+            transport="stdio",
+            created_by="admin",
+        )
+
+    server = await mcp_session.scalar(select(MCPServer).where(MCPServer.slug == "unsafe-mcp"))
+    assert server is None
+
+
+async def test_create_mcp_server_rejects_builtin_slug(mcp_session):
+    with pytest.raises(ValueError, match="slug"):
+        await mcp_service.create_mcp_server(
+            mcp_session,
+            slug="mcp-server-chart",
+            name="伪造内置 MCP",
+            transport="streamable_http",
+            url="https://example.com/mcp",
+            created_by="admin",
+        )
+
+
+async def test_update_builtin_mcp_server_rejects_connection_changes(mcp_session):
+    server = MCPServer(
+        slug="mcp-server-chart",
+        name="内置 stdio",
+        transport="stdio",
+        command="trusted-command",
+        enabled=1,
+        created_by="system",
+        updated_by="system",
+    )
+    mcp_session.add(server)
+    await mcp_session.commit()
+
+    with pytest.raises(PermissionError, match="系统内置"):
+        await mcp_service.update_mcp_server(
+            mcp_session,
+            slug="mcp-server-chart",
+            transport="streamable_http",
+            url="https://example.com/mcp",
+            updated_by="admin",
+        )
+
+    await mcp_session.refresh(server)
+    assert server.transport == "stdio"
+    assert server.command == "trusted-command"
+
+
+async def test_update_legacy_stdio_requires_remote_url(mcp_session):
+    legacy_server = MCPServer(
+        slug="legacy-stdio",
+        name="历史 stdio",
+        transport="stdio",
+        command="python3",
+        enabled=0,
+        created_by="admin",
+        updated_by="admin",
+    )
+    mcp_session.add(legacy_server)
+    await mcp_session.commit()
+
+    with pytest.raises(ValueError, match="url 必填"):
+        await mcp_service.update_mcp_server(
+            mcp_session,
+            slug="legacy-stdio",
+            transport="streamable_http",
+            updated_by="admin",
+        )
+
+    await mcp_session.refresh(legacy_server)
+    assert legacy_server.transport == "stdio"
+    assert legacy_server.command == "python3"
+
+
 async def test_get_enabled_mcp_tools_loads_latest_config_from_db(monkeypatch):
     captured: list[dict] = []
 
@@ -126,9 +289,7 @@ async def test_get_enabled_mcp_tools_loads_latest_config_from_db(monkeypatch):
     assert captured == [
         {
             "server_name": "demo",
-            "additional_servers": {
-                "demo": {"transport": "stdio", "command": "demo", "disabled_tools": ["tool_b"]}
-            },
+            "additional_servers": {"demo": {"transport": "stdio", "command": "demo", "disabled_tools": ["tool_b"]}},
             "disabled_tools": ["tool_b"],
         }
     ]

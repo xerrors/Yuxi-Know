@@ -38,18 +38,27 @@
     <!-- 助手消息 -->
     <div v-else-if="message.type === 'ai'" class="assistant-message">
       <div v-if="parsedData.reasoning_content" class="reasoning-box">
-        <a-collapse v-model:activeKey="reasoningActiveKey" :bordered="false">
-          <template #expandIcon="{ isActive }">
-            <caret-right-outlined :rotate="isActive ? 90 : 0" />
-          </template>
-          <a-collapse-panel
-            key="show"
-            :header="message.status == 'reasoning' ? '正在思考...' : '推理过程'"
-            class="reasoning-header"
-          >
-            <p class="reasoning-content">{{ parsedData.reasoning_content }}</p>
-          </a-collapse-panel>
-        </a-collapse>
+        <button
+          type="button"
+          class="reasoning-summary"
+          :class="{ 'is-expanded': reasoningExpanded }"
+          :aria-expanded="!isReasoningActive && reasoningExpanded"
+          :disabled="isReasoningActive"
+          @click="toggleReasoningExpanded"
+        >
+          <span class="summary-leading">
+            <LoaderCircle v-if="isReasoningActive" size="14" class="reasoning-loading" />
+            <Brain v-else size="14" />
+          </span>
+          <span class="summary-title">{{ isReasoningActive ? 'Thinking...' : '推理过程' }}</span>
+          <span v-if="!isReasoningActive" class="summary-trailing">
+            <ChevronDown v-if="reasoningExpanded" size="14" />
+            <ChevronRight v-else size="14" />
+          </span>
+        </button>
+        <div v-if="!isReasoningActive && reasoningExpanded" class="reasoning-panel">
+          <p class="reasoning-content">{{ parsedData.reasoning_content }}</p>
+        </div>
       </div>
 
       <!-- 消息内容 -->
@@ -148,9 +157,8 @@
 
 <script setup>
 import { computed, ref, onUnmounted } from 'vue'
-import { CaretRightOutlined } from '@ant-design/icons-vue'
 import RefsComponent from '@/components/RefsComponent.vue'
-import { Copy, Check, X } from 'lucide-vue-next'
+import { Brain, Check, ChevronDown, ChevronRight, Copy, LoaderCircle, X } from 'lucide-vue-next'
 import ToolCallsGroupComponent from '@/components/ToolCallsGroupComponent.vue'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 import MentionTextRenderer from '@/components/common/MentionTextRenderer.vue'
@@ -261,7 +269,13 @@ const copyToClipboard = async (text) => {
 }
 
 // 推理面板展开状态
-const reasoningActiveKey = ref(['hide'])
+const reasoningExpanded = ref(false)
+const isReasoningActive = computed(() => props.message.status === 'reasoning')
+
+const toggleReasoningExpanded = () => {
+  if (isReasoningActive.value) return
+  reasoningExpanded.value = !reasoningExpanded.value
+}
 
 // 错误消息处理
 const displayError = computed(() => {
@@ -438,43 +452,57 @@ const parsedData = computed(() => {
   }
 
   .reasoning-box {
-    margin-top: 10px;
-    margin-bottom: 15px;
-    border-radius: 8px;
-    border: 1px solid var(--gray-150);
-    background-color: var(--gray-25);
-    overflow: hidden;
-    transition: all 0.2s ease;
+    width: 100%;
+    padding: 0;
+    margin: 8px 0;
 
-    :deep(.ant-collapse) {
-      background-color: transparent;
+    .reasoning-summary {
+      appearance: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      max-width: 100%;
+      padding: 0;
       border: none;
+      background: transparent;
+      color: var(--gray-700);
+      font-size: 13px;
+      line-height: 20px;
+      text-align: left;
+      cursor: pointer;
+      user-select: none;
 
-      .ant-collapse-item {
-        border: none;
-
-        .ant-collapse-header {
-          padding: 8px 12px;
-          font-size: 14px;
-          font-weight: 500;
-          color: var(--gray-700);
-          transition: all 0.2s ease;
-
-          .ant-collapse-expand-icon {
-            color: var(--gray-400);
-          }
-        }
-
-        .ant-collapse-content {
-          border: none;
-          background-color: transparent;
-
-          .ant-collapse-content-box {
-            padding: 16px;
-            background-color: var(--gray-25);
-          }
-        }
+      &:hover:not(:disabled),
+      &.is-expanded {
+        color: var(--gray-800);
       }
+
+      &:disabled {
+        cursor: default;
+      }
+
+      .summary-leading,
+      .summary-trailing {
+        display: inline-flex;
+        align-items: center;
+        flex-shrink: 0;
+        color: var(--gray-600);
+      }
+
+      .summary-title {
+        font-weight: 400;
+        white-space: nowrap;
+      }
+
+      .reasoning-loading {
+        animation: rotate 1s linear infinite;
+      }
+    }
+
+    .reasoning-panel {
+      margin-top: 4px;
+      padding: 4px 0 4px 22px;
+      border-top: 1px solid var(--gray-100);
     }
 
     .reasoning-content {

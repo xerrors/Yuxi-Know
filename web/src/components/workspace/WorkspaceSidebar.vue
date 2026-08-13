@@ -23,7 +23,7 @@
         @click="$emit('select-path', savedArtifactsPath)"
       >
         <FileTypeIcon is-dir folder-variant="favorite" :size="18" />
-        <span>Saved Artifacts</span>
+        <span>保存的交付物</span>
       </button>
       <button
         type="button"
@@ -32,7 +32,7 @@
         @click="$emit('select-path', agentsPath)"
       >
         <FileTypeIcon is-dir folder-variant="agent" :size="18" />
-        <span>Agents</span>
+        <span>智能体文件</span>
       </button>
     </section>
 

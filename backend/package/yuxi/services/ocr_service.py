@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from yuxi.config.options import (
     mineru_ocr_host_opts,
     mineru_official_api_opts,

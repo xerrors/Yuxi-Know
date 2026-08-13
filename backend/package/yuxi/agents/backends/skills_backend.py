@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 from deepagents.backends import FilesystemBackend
 from deepagents.backends.protocol import (
@@ -22,8 +22,8 @@ from yuxi.agents.skills.service import get_skills_root_dir, is_valid_skill_slug
 class SelectedSkillsReadonlyBackend(FilesystemBackend):
     """只读 skills backend，仅暴露选中的技能目录。"""
 
-    def __init__(self, *, selected_slugs: list[str] | None):
-        super().__init__(root_dir=get_skills_root_dir(), virtual_mode=True)
+    def __init__(self, *, selected_slugs: list[str] | None, root_dir: Path | None = None):
+        super().__init__(root_dir=root_dir or get_skills_root_dir(), virtual_mode=True)
         self._selected_slugs = {
             str(slug).strip()
             for slug in (selected_slugs or [])

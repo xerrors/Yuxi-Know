@@ -14,6 +14,7 @@ from yuxi.services.agent_request_queue_service import (
     NOT_IMPLEMENTED_QUEUE_POLICIES,
     cancel_queued_request,
     intake_request,
+    steer_queued_request,
     validate_queue_policy,
 )
 from yuxi.storage.postgres.models_business import AgentRunRequest, Base, Message
@@ -33,6 +34,10 @@ def test_validate_queue_policy_accepts_reject():
     validate_queue_policy("reject")
 
 
+def test_validate_queue_policy_accepts_steer():
+    validate_queue_policy("steer")
+
+
 @pytest.mark.parametrize("policy", list(NOT_IMPLEMENTED_QUEUE_POLICIES))
 def test_validate_queue_policy_rejects_unimplemented(policy):
     from fastapi import HTTPException
@@ -48,6 +53,58 @@ def test_validate_queue_policy_rejects_unknown():
     with pytest.raises(HTTPException) as exc_info:
         validate_queue_policy("unknown")
     assert exc_info.value.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_intake_rejects_steer_for_unsupported_source(session):
+    from fastapi import HTTPException
+    from yuxi.services.input_message_service import build_chat_input_message
+
+    with pytest.raises(HTTPException) as exc_info:
+        await intake_request(
+            db=session,
+            request_id="request-agent-call-steer",
+            uid="user-1",
+            agent_slug="main",
+            thread_id="t1",
+            source="agent_call",
+            queue_policy="steer",
+            input_message=build_chat_input_message("steer"),
+            agent_item=MagicMock(),
+            agent_backend=MagicMock(),
+        )
+
+    assert exc_info.value.status_code == 422
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("active_source", ["chat", "channel"])
+async def test_channel_steer_is_accepted_for_active_message_run(
+    session, monkeypatch: pytest.MonkeyPatch, active_source: str
+):
+    from yuxi.services import agent_request_queue_service
+    from yuxi.services.input_message_service import build_chat_input_message
+
+    monkeypatch.setattr(agent_request_queue_service, "resolve_agent_run_config", lambda *args: ("model", "default"))
+    await _seed_thread(session)
+    await _seed_active_run(session, source=active_source)
+
+    result = await intake_request(
+        db=session,
+        request_id="request-channel-steer",
+        uid="user-1",
+        agent_slug="main",
+        thread_id="t1",
+        source="channel",
+        channel="cli",
+        queue_policy="steer",
+        input_message=build_chat_input_message("steer"),
+        agent_item=MagicMock(),
+        agent_backend=MagicMock(),
+    )
+
+    assert result.status == "queued"
+    assert result.queue_policy == "steer"
 
 
 # ── AgentRunCreate request model ──
@@ -83,7 +140,38 @@ async def _seed_thread(session, *, uid="user-1", msg_id=100, conv_id=10):
     await session.commit()
 
 
-async def _create_request(session, *, request_id, uid="user-1", msg_id=100):
+async def _seed_active_run(session, *, source="chat", status="running", run_type="chat"):
+    """在线程内创建可供 Steer 门禁识别的活跃 Run。"""
+    from yuxi.repositories.agent_run_request_repository import AgentRunRequestRepository
+    from yuxi.storage.postgres.models_business import AgentRun
+
+    session.add(Message(id=101, conversation_id=10, role="user", content="active"))
+    await AgentRunRequestRepository(session).create(
+        request_id="active-request",
+        uid="user-1",
+        agent_slug="main",
+        conversation_thread_id="t1",
+        source=source,
+        input_message_id=101,
+        status="dispatched",
+    )
+    session.add(
+        AgentRun(
+            id="active-run",
+            conversation_thread_id="t1",
+            agent_slug="main",
+            uid="user-1",
+            status=status,
+            request_id="active-request",
+            conversation_id=10,
+            run_type=run_type,
+            input_payload={},
+        )
+    )
+    await session.commit()
+
+
+async def _create_request(session, *, request_id, uid="user-1", msg_id=100, queue_policy="enqueue"):
     from yuxi.repositories.agent_run_request_repository import AgentRunRequestRepository
 
     repo = AgentRunRequestRepository(session)
@@ -93,9 +181,142 @@ async def _create_request(session, *, request_id, uid="user-1", msg_id=100):
         agent_slug="main",
         conversation_thread_id="t1",
         input_message_id=msg_id,
+        queue_policy=queue_policy,
     )
     await session.commit()
     return repo
+
+
+# ── steer reuses the queued request model ──
+
+
+@pytest.mark.asyncio
+async def test_steer_request_is_prioritized_without_new_status(session):
+    from yuxi.repositories.agent_run_request_repository import AgentRunRequestRepository
+
+    await _seed_thread(session)
+    session.add(Message(id=101, conversation_id=10, role="user", content="steer"))
+    await session.commit()
+    await _create_request(session, request_id="request-enqueue")
+    await _create_request(session, request_id="request-steer", msg_id=101, queue_policy="steer")
+
+    repo = AgentRunRequestRepository(session)
+    queued = await repo.list_queued(uid="user-1", agent_slug="main", conversation_thread_id="t1")
+
+    assert [request.request_id for request in queued] == ["request-steer", "request-enqueue"]
+    assert queued[0].status == "queued"
+    assert await repo.get_queue_position("request-steer") == 1
+    assert await repo.get_queue_position("request-enqueue") == 2
+
+
+@pytest.mark.asyncio
+async def test_queued_request_can_be_upgraded_to_steer(session):
+    await _seed_thread(session)
+    await _seed_active_run(session)
+    await _create_request(session, request_id="request-upgrade")
+
+    result = await steer_queued_request(request_id="request-upgrade", current_uid="user-1", db=session)
+
+    request = await session.scalar(select(AgentRunRequest).where(AgentRunRequest.request_id == "request-upgrade"))
+    assert result.status == "queued"
+    assert result.queue_policy == "steer"
+    assert result.queue_position == 1
+    assert request.queue_policy == "steer"
+
+
+@pytest.mark.asyncio
+async def test_queued_request_upgrade_requires_running_main_chat(session):
+    from fastapi import HTTPException
+
+    await _seed_thread(session)
+    await _create_request(session, request_id="request-upgrade")
+
+    with pytest.raises(HTTPException) as exc_info:
+        await steer_queued_request(request_id="request-upgrade", current_uid="user-1", db=session)
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail["code"] == "run_not_steerable"
+
+
+@pytest.mark.asyncio
+async def test_second_pending_steer_is_rejected(session):
+    from fastapi import HTTPException
+
+    await _seed_thread(session)
+    await _seed_active_run(session)
+    session.add(Message(id=102, conversation_id=10, role="user", content="next"))
+    await session.commit()
+    await _create_request(session, request_id="request-steer", queue_policy="steer")
+    await _create_request(session, request_id="request-next", msg_id=102)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await steer_queued_request(request_id="request-next", current_uid="user-1", db=session)
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail["code"] == "steer_already_pending"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("source", "status", "run_type"),
+    [
+        ("agent_call", "running", "chat"),
+        ("chat", "running", "resume"),
+        ("chat", "cancel_requested", "chat"),
+        ("chat", "pending", "chat"),
+    ],
+)
+async def test_steer_rejects_unsupported_active_run_before_persisting(session, source, status, run_type):
+    from fastapi import HTTPException
+    from yuxi.services.input_message_service import build_chat_input_message
+
+    await _seed_thread(session)
+    await _seed_active_run(session, source=source, status=status, run_type=run_type)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await intake_request(
+            db=session,
+            request_id="request-steer",
+            uid="user-1",
+            agent_slug="main",
+            thread_id="t1",
+            queue_policy="steer",
+            input_message=build_chat_input_message("steer"),
+            agent_item=MagicMock(),
+            agent_backend=MagicMock(),
+        )
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail["code"] == "run_not_steerable"
+    assert (
+        await session.scalar(
+            select(sa_func.count()).select_from(AgentRunRequest).where(AgentRunRequest.request_id == "request-steer")
+        )
+        == 0
+    )
+
+
+@pytest.mark.asyncio
+async def test_pending_steer_cannot_be_cancelled_until_active_run_finishes(session):
+    from fastapi import HTTPException
+    from yuxi.storage.postgres.models_business import AgentRun
+
+    await _seed_thread(session)
+    await _seed_active_run(session)
+    await _create_request(session, request_id="request-steer", queue_policy="steer")
+
+    with pytest.raises(HTTPException) as exc_info:
+        await cancel_queued_request(request_id="request-steer", current_uid="user-1", db=session)
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail["code"] == "steer_in_progress"
+
+    active_run = await session.get(AgentRun, "active-run")
+    active_run.status = "cancelled"
+    active_run.finished_at = utc_now_naive()
+    await session.flush()
+
+    assert await cancel_queued_request(request_id="request-steer", current_uid="user-1", db=session) == "cancelled"
 
 
 # ── cancel_queued_request ──

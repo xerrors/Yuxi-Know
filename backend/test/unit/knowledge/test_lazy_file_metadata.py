@@ -10,7 +10,7 @@ class FakeKnowledgeBase(KnowledgeBase):
     def kb_type(self) -> str:
         return "fake"
 
-    async def _create_kb_instance(self, kb_id: str, config: dict):
+    async def _create_kb_instance(self, kb_id: str, embedding_model_spec: str | None):
         return None
 
     async def _initialize_kb_instance(self, instance) -> None:
@@ -71,42 +71,9 @@ def make_file_record(**overrides):
 
 
 @pytest.mark.asyncio
-async def test_load_metadata_does_not_load_file_records(monkeypatch, tmp_path):
-    kb = FakeKnowledgeBase(str(tmp_path))
-
-    class FakeKbRepo:
-        async def get_all(self):
-            return [
-                SimpleNamespace(
-                    kb_id="db",
-                    name="Docs",
-                    description="",
-                    kb_type="fake",
-                    embedding_model_spec=None,
-                    llm_model_spec=None,
-                    query_params=None,
-                    additional_params={"chunk_preset_id": "general"},
-                    created_at=None,
-                )
-            ]
-
-    def fail_resolve_processing_params(*args, **kwargs):
-        raise AssertionError("startup metadata loading should not normalize every file")
-
-    monkeypatch.setattr("yuxi.repositories.knowledge_base_repository.KnowledgeBaseRepository", lambda: FakeKbRepo())
-    monkeypatch.setattr("yuxi.knowledge.base.resolve_processing_params", fail_resolve_processing_params)
-
-    await kb._load_metadata()
-
-    assert kb._metadata_loaded is True
-    assert set(kb.databases_meta) == {"db"}
-    assert not hasattr(kb, "files_meta")
-
-
-@pytest.mark.asyncio
 async def test_update_file_params_lazy_loads_single_file(monkeypatch, tmp_path):
     kb = FakeKnowledgeBase(str(tmp_path))
-    kb.databases_meta["db"] = {"metadata": {"chunk_preset_id": "general"}}
+    additional_params = {"chunk_preset_id": "general"}
 
     class FakeFileRepo:
         def __init__(self):
@@ -126,7 +93,13 @@ async def test_update_file_params_lazy_loads_single_file(monkeypatch, tmp_path):
     file_repo = FakeFileRepo()
     monkeypatch.setattr("yuxi.repositories.knowledge_file_repository.KnowledgeFileRepository", lambda: file_repo)
 
-    await kb.update_file_params("db", "file-1", {"chunk_preset_id": "qa"}, operator_id="user-2")
+    await kb.update_file_params(
+        "db",
+        "file-1",
+        {"chunk_preset_id": "qa"},
+        operator_id="user-2",
+        additional_params=additional_params,
+    )
 
     assert not hasattr(kb, "files_meta")
     assert len(file_repo.updated) == 1

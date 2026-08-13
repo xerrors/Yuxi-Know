@@ -7,6 +7,11 @@ export const listSkills = async () => {
   return apiGet(BASE_URL)
 }
 
+export const listSkillCards = async ({ refreshPersonal = false } = {}) => {
+  const query = refreshPersonal ? '?refresh_personal=true' : ''
+  return apiGet(`${USER_BASE_URL}${query}`)
+}
+
 export const listAccessibleSkills = async () => {
   return apiGet(`${USER_BASE_URL}/accessible`)
 }
@@ -29,10 +34,20 @@ export const searchRemoteSkills = async (query) => {
   return apiPost(`${USER_BASE_URL}/remote/search`, { query })
 }
 
-export const confirmSkillInstallDraft = async (draftId, shareConfig) => {
+export const confirmSkillInstallDraft = async (draftId, shareConfig, slugs) => {
   return apiPost(`${USER_BASE_URL}/install-drafts/${encodeURIComponent(draftId)}/confirm`, {
-    share_config: shareConfig
+    share_config: shareConfig,
+    slugs
   })
+}
+
+export const confirmPersonalSkillInstallDraft = async (draftId, slugs) => {
+  return apiPost(
+    `${USER_BASE_URL}/personal/install-drafts/${encodeURIComponent(draftId)}/confirm`,
+    {
+      slugs
+    }
+  )
 }
 
 export const discardSkillInstallDraft = async (draftId) => {
@@ -58,6 +73,12 @@ export const getSkillTree = async (slug) => {
 
 export const getSkillFile = async (slug, path) => {
   return apiGet(`${BASE_URL}/${encodeURIComponent(slug)}/file?path=${encodeURIComponent(path)}`)
+}
+
+export const getPersonalSkillFile = async (slug, path) => {
+  return apiGet(
+    `${USER_BASE_URL}/personal/${encodeURIComponent(slug)}/file?path=${encodeURIComponent(path)}`
+  )
 }
 
 export const createSkillFile = async (slug, payload) => {
@@ -94,24 +115,31 @@ export const deleteSkill = async (slug) => {
   return apiDelete(`${BASE_URL}/${encodeURIComponent(slug)}`)
 }
 
+export const deletePersonalSkill = async (slug) => {
+  return apiDelete(`${USER_BASE_URL}/personal/${encodeURIComponent(slug)}`)
+}
+
 export const deleteSkillsBatch = async (slugs) => {
   return apiPost(`${BASE_URL}/delete-batch`, { slugs })
 }
 
 export const skillApi = {
   listSkills,
+  listSkillCards,
   listAccessibleSkills,
   prepareSkillUpload,
   listRemoteSkills,
   prepareRemoteSkills,
   searchRemoteSkills,
   confirmSkillInstallDraft,
+  confirmPersonalSkillInstallDraft,
   discardSkillInstallDraft,
   getSkillDependencyOptions,
   listBuiltinSkills,
   syncBuiltinSkills,
   getSkillTree,
   getSkillFile,
+  getPersonalSkillFile,
   createSkillFile,
   updateSkillFile,
   updateSkillDependencies,
@@ -120,6 +148,7 @@ export const skillApi = {
   deleteSkillFile,
   exportSkill,
   deleteSkill,
+  deletePersonalSkill,
   deleteSkillsBatch
 }
 

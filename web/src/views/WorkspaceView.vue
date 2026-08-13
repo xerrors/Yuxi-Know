@@ -10,13 +10,16 @@
           <template #icon><CircleHelp :size="16" /></template>
           使用说明
         </a-button>
-        <a-button :disabled="activeSourceKey !== 'personal'" @click="openCreateDirectoryModal">
+        <a-button
+          :disabled="activeSourceKey !== 'personal' || isReadonlyWorkspacePath"
+          @click="openCreateDirectoryModal"
+        >
           新建文件夹
         </a-button>
         <a-button
           type="primary"
           :loading="uploadingFile"
-          :disabled="activeSourceKey !== 'personal'"
+          :disabled="activeSourceKey !== 'personal' || isReadonlyWorkspacePath"
           @click="openUploadFilePicker"
         >
           上传文件
@@ -78,9 +81,11 @@
             :deleting-paths="deletingPaths"
             :selection-mode="selectionMode"
             :loading="loadingTree"
-            :readonly="isKnowledgeSource"
+            :readonly="isReadonlyWorkspacePath"
             :root-label="selectedDatabase?.name || '工作区'"
-            :breadcrumb-items="isKnowledgeSource ? knowledgeBreadcrumbItems : null"
+            :breadcrumb-items="
+              isKnowledgeSource ? knowledgeBreadcrumbItems : workspaceBreadcrumbItems
+            "
             :pagination="isKnowledgeSource ? knowledgePagination : null"
             @select-entry="handleSelectEntry"
             @breadcrumb-click="handleListBreadcrumbClick"
@@ -104,7 +109,7 @@
             :file="previewFile"
             :file-path="selectedPreviewPath"
             :loading="loadingPreview"
-            :editable="!isKnowledgeSource"
+            :editable="!isReadonlyWorkspacePath"
             :saving="savingPreviewFile"
             @close="closePreview"
             @save="handleSavePreviewFile"
@@ -225,6 +230,8 @@ const userStore = useUserStore()
 const activeSourceKey = ref('personal')
 const currentPath = ref('/')
 const knowledgeBreadcrumbItems = ref([])
+const workspaceBreadcrumbItems = ref(null)
+const threadTitleMap = ref({})
 const entries = ref([])
 const selectedEntry = ref(null)
 const selectedPaths = ref([])
@@ -253,6 +260,8 @@ const previewRequestId = ref(0)
 const INLINE_PREVIEW_MIN_WIDTH = 960
 const MAX_WORKSPACE_UPLOAD_FILES = 50
 const AGENTS_WORKSPACE_PATH = '/agents'
+const CHATS_WORKSPACE_PATH = '/agents/chats'
+const CHATS_BREADCRUMB_LABEL = '历史对话'
 const knowledgeFileBrowser = reactive({
   parentId: null,
   pathPrefix: '',
@@ -276,6 +285,9 @@ const isAgentsWorkspacePath = computed(
   () =>
     activeSourceKey.value === 'personal' &&
     isSameOrChildPath(currentPath.value, AGENTS_WORKSPACE_PATH)
+)
+const isReadonlyWorkspacePath = computed(
+  () => isKnowledgeSource.value || isSameOrChildPath(currentPath.value, CHATS_WORKSPACE_PATH)
 )
 const selectedPreviewPath = computed(() =>
   selectedEntry.value?.source === 'knowledge'
@@ -440,6 +452,12 @@ const loadWorkspaceEntries = async (path = '/') => {
     entries.value = response.entries || []
     currentPath.value = path
     knowledgeBreadcrumbItems.value = []
+    if (comparablePath(path) === CHATS_WORKSPACE_PATH) {
+      threadTitleMap.value = Object.fromEntries(
+        entries.value.filter((entry) => entry.title).map((entry) => [entry.name, entry.title])
+      )
+    }
+    workspaceBreadcrumbItems.value = buildWorkspaceBreadcrumbItems()
     syncSelectedPaths()
     if (!selectedPaths.value.length) {
       selectionMode.value = false
@@ -450,6 +468,24 @@ const loadWorkspaceEntries = async (path = '/') => {
   } finally {
     loadingTree.value = false
   }
+}
+
+const buildWorkspaceBreadcrumbItems = () => {
+  const segments = comparablePath(currentPath.value).split('/').filter(Boolean)
+  if (!segments.length) return null
+  return segments.reduce(
+    (items, segment) => {
+      const parentPath = items[items.length - 1].path
+      const path = parentPath === '/' ? `/${segment}` : `${parentPath}/${segment}`
+      const name =
+        path === CHATS_WORKSPACE_PATH
+          ? CHATS_BREADCRUMB_LABEL
+          : threadTitleMap.value[segment] || segment
+      items.push({ name, path })
+      return items
+    },
+    [{ name: '工作区', path: '/' }]
+  )
 }
 
 const loadKnowledgeEntries = async (
@@ -640,8 +676,8 @@ const closePreview = () => {
 }
 
 const handleSavePreviewFile = async (content) => {
-  if (selectedEntry.value?.source === 'knowledge') {
-    message.warning('知识库文件为只读，无法保存')
+  if (isReadonlyWorkspacePath.value) {
+    message.warning('当前文件为只读，无法保存')
     return
   }
   if (!selectedEntry.value?.path || savingPreviewFile.value) return
@@ -667,7 +703,7 @@ const handleSavePreviewFile = async (content) => {
 }
 
 const openCreateDirectoryModal = () => {
-  if (activeSourceKey.value !== 'personal') return
+  if (activeSourceKey.value !== 'personal' || isReadonlyWorkspacePath.value) return
   newDirectoryName.value = ''
   createDirectoryModalVisible.value = true
 }
@@ -704,7 +740,8 @@ const createDirectory = async () => {
 }
 
 const openUploadFilePicker = () => {
-  if (activeSourceKey.value !== 'personal' || uploadingFile.value) return
+  if (activeSourceKey.value !== 'personal' || isReadonlyWorkspacePath.value || uploadingFile.value)
+    return
   if (uploadInputRef.value) {
     uploadInputRef.value.value = ''
     uploadInputRef.value.click()

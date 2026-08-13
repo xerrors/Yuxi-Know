@@ -3,7 +3,25 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
+from yuxi.knowledge.read_models import KnowledgeBaseDetail
 from yuxi.knowledge.utils import sample_question_utils as sq
+
+
+def _database_detail(files: dict | None = None, *, name: str = "测试知识库") -> KnowledgeBaseDetail:
+    return KnowledgeBaseDetail(
+        kb_id="kb_1",
+        name=name,
+        description=None,
+        kb_type="milvus",
+        embedding_model_spec=None,
+        llm_model_spec=None,
+        query_params={},
+        additional_params={},
+        share_config={"version": 2, "read_scope": None, "manage_scope": None},
+        created_by=None,
+        created_at=None,
+        files=files,
+    )
 
 
 def test_parse_sample_questions_content_strips_json_fence():
@@ -20,8 +38,8 @@ def test_parse_sample_questions_content_rejects_invalid_payload():
 @pytest.mark.asyncio
 async def test_generate_database_sample_questions_rejects_empty_files(monkeypatch):
     class FakeKnowledgeBase:
-        async def get_database_info(self, kb_id: str, include_files: bool = False) -> dict:
-            return {"name": "空知识库", "kb_type": "milvus", "files": {}}
+        async def get_database_info(self, kb_id: str, include_files: bool = False) -> KnowledgeBaseDetail:
+            return _database_detail({}, name="空知识库")
 
     monkeypatch.setattr(sq, "knowledge_base", FakeKnowledgeBase())
     monkeypatch.setattr(
@@ -42,12 +60,8 @@ async def test_generate_database_sample_questions_saves_and_returns_questions(mo
     saved: dict = {}
 
     class FakeKnowledgeBase:
-        async def get_database_info(self, kb_id: str, include_files: bool = False) -> dict:
-            return {
-                "name": "测试知识库",
-                "kb_type": "milvus",
-                "files": {"file_1": {"filename": "demo.md", "file_type": "md"}},
-            }
+        async def get_database_info(self, kb_id: str, include_files: bool = False) -> KnowledgeBaseDetail:
+            return _database_detail({"file_1": {"filename": "demo.md", "file_type": "md"}})
 
     class FakeModel:
         async def call(self, messages, stream: bool = False):
@@ -82,12 +96,8 @@ async def test_generate_database_sample_questions_saves_and_returns_questions(mo
 @pytest.mark.asyncio
 async def test_generate_database_sample_questions_maps_invalid_json(monkeypatch):
     class FakeKnowledgeBase:
-        async def get_database_info(self, kb_id: str, include_files: bool = False) -> dict:
-            return {
-                "name": "测试知识库",
-                "kb_type": "milvus",
-                "files": {"file_1": {"filename": "demo.md", "file_type": "md"}},
-            }
+        async def get_database_info(self, kb_id: str, include_files: bool = False) -> KnowledgeBaseDetail:
+            return _database_detail({"file_1": {"filename": "demo.md", "file_type": "md"}})
 
     class FakeModel:
         async def call(self, messages, stream: bool = False):

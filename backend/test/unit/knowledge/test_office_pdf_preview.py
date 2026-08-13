@@ -13,7 +13,7 @@ class FakeKnowledgeBase(KnowledgeBase):
     def kb_type(self) -> str:
         return "fake"
 
-    async def _create_kb_instance(self, kb_id: str, config: dict):
+    async def _create_kb_instance(self, kb_id: str, embedding_model_spec: str | None):
         return None
 
     async def _initialize_kb_instance(self, instance) -> None:
@@ -43,9 +43,6 @@ class FakeKnowledgeBase(KnowledgeBase):
     async def get_file_info(self, kb_id: str, file_id: str) -> dict:
         return {}
 
-    async def _save_metadata(self) -> None:
-        pass
-
 
 class FakeMinioClient:
     KB_BUCKETS = {"parsed": "knowledgebases"}
@@ -74,7 +71,6 @@ class FakeMinioClient:
 
 def make_kb(tmp_path) -> FakeKnowledgeBase:
     kb = FakeKnowledgeBase(str(tmp_path))
-    kb.databases_meta["db1"] = {"metadata": {}}
     kb.test_file_meta = {
         "file_id": "file1",
         "kb_id": "db1",

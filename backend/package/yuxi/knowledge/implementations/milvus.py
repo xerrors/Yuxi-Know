@@ -24,12 +24,14 @@ from pymilvus import (
 from yuxi.knowledge.base import FileStatus, KnowledgeBase
 from yuxi.knowledge.chunking.ragflow_like.dispatcher import chunk_markdown
 from yuxi.knowledge.chunking.ragflow_like.nlp import count_tokens
+from yuxi.knowledge.read_models import KnowledgeBaseConfig
 from yuxi.knowledge.utils.kb_utils import resolve_processing_params
 from yuxi.models.providers.cache import model_cache
 from yuxi.repositories.knowledge_chunk_repository import KnowledgeChunkRepository
 from yuxi.repositories.knowledge_file_repository import KnowledgeFileRepository
 from yuxi.services.ocr_service import parse_document
 from yuxi.utils import hashstr, logger
+from yuxi.utils.datetime_utils import utc_isoformat
 
 MILVUS_AVAILABLE = True
 CONTENT_SPARSE_FIELD = "content_sparse"
@@ -338,14 +340,10 @@ class MilvusKB(KnowledgeBase):
             logger.error(f"Failed to connect to Milvus: {e}")
             raise
 
-    async def _create_kb_instance(self, kb_id: str, kb_config: dict) -> Any:
+    async def _create_kb_instance(self, kb_id: str, embedding_model_spec: str | None) -> Any:
         """创建 Milvus 集合"""
         logger.info(f"Creating Milvus collection for {kb_id}")
 
-        if not (metadata := self.databases_meta.get(kb_id)):
-            raise ValueError(f"Database {kb_id} not found")
-
-        embedding_model_spec = metadata.get("embedding_model_spec")
         if not embedding_model_spec:
             raise ValueError(f"Embedding model spec not found for database {kb_id}")
 
@@ -480,17 +478,14 @@ class MilvusKB(KnowledgeBase):
         method = model.batch_encode if sync else model.abatch_encode
         return partial(method, batch_size=batch_size)
 
-    async def _get_milvus_collection(self, kb_id: str):
+    async def _get_or_create_milvus_collection(self, kb_id: str, embedding_model_spec: str | None):
         """获取或创建 Milvus 集合"""
         if kb_id in self.collections:
             return self.collections[kb_id]
 
-        if kb_id not in self.databases_meta:
-            return None
-
         try:
             # 创建集合
-            collection = await self._create_kb_instance(kb_id, {})
+            collection = await self._create_kb_instance(kb_id, embedding_model_spec)
             await self._initialize_kb_instance(collection)
 
             self.collections[kb_id] = collection
@@ -500,6 +495,15 @@ class MilvusKB(KnowledgeBase):
             logger.error(f"Failed to create Milvus collection for {kb_id}: {e}")
             logger.error(f"Traceback: {traceback.format_exc()}")
             return None
+
+    def _get_existing_milvus_collection(self, kb_id: str) -> Collection | None:
+        """获取已存在的集合，不因删除操作创建新集合。"""
+        collection = self.collections.get(kb_id)
+        if collection is not None:
+            return collection
+        if not utility.has_collection(kb_id, using=self.connection_alias):
+            return None
+        return Collection(name=kb_id, using=self.connection_alias)
 
     def _split_text_into_chunks(self, text: str, file_id: str, filename: str, params: dict) -> list[dict]:
         """将文本分割成块"""
@@ -645,7 +649,14 @@ class MilvusKB(KnowledgeBase):
         return f'file_id in ["{joined_ids}"]'
 
     async def index_file(
-        self, kb_id: str, file_id: str, operator_id: str | None = None, params: dict | None = None
+        self,
+        kb_id: str,
+        file_id: str,
+        operator_id: str | None = None,
+        params: dict | None = None,
+        *,
+        embedding_model_spec: str | None,
+        additional_params: dict[str, Any],
     ) -> dict:
         """
         Index parsed file (Status: INDEXING -> INDEXED/ERROR_INDEXING)
@@ -659,15 +670,11 @@ class MilvusKB(KnowledgeBase):
         Returns:
             Updated file metadata
         """
-        if kb_id not in self.databases_meta:
-            raise ValueError(f"Database {kb_id} not found")
-
         # Get/Create collection
-        collection = await self._get_milvus_collection(kb_id)
+        collection = await self._get_or_create_milvus_collection(kb_id, embedding_model_spec)
         if not collection:
             raise ValueError(f"Failed to get Milvus collection for {kb_id}")
 
-        embedding_model_spec = self.databases_meta[kb_id].get("embedding_model_spec")
         embedding_function = self._get_embedding_function(embedding_model_spec)
 
         file_meta = await self._load_file_meta(kb_id, file_id)
@@ -678,7 +685,7 @@ class MilvusKB(KnowledgeBase):
             "done",
         }
         params = resolve_processing_params(
-            kb_additional_params=self.databases_meta.get(kb_id, {}).get("metadata"),
+            kb_additional_params=additional_params,
             file_processing_params=file_meta.get("processing_params"),
             request_params=params,
         )
@@ -755,7 +762,6 @@ class MilvusKB(KnowledgeBase):
                 }
             )
 
-            await self.refresh_database_stats(kb_id)
             return result
 
         except (Exception, asyncio.CancelledError) as e:
@@ -771,16 +777,20 @@ class MilvusKB(KnowledgeBase):
             await KnowledgeFileRepository().update_fields(file_id=file_id, kb_id=kb_id, data=update_data)
             raise
 
-    async def update_content(self, kb_id: str, file_ids: list[str], params: dict | None = None) -> list[dict]:
+    async def update_content(
+        self,
+        kb_id: str,
+        file_ids: list[str],
+        params: dict | None = None,
+        *,
+        embedding_model_spec: str | None,
+        additional_params: dict[str, Any],
+    ) -> list[dict]:
         """更新内容 - 根据file_ids重新解析文件并更新向量库"""
-        if kb_id not in self.databases_meta:
-            raise ValueError(f"Database {kb_id} not found")
-
-        collection = await self._get_milvus_collection(kb_id)
+        collection = await self._get_or_create_milvus_collection(kb_id, embedding_model_spec)
         if not collection:
             raise ValueError(f"Failed to get Milvus collection for {kb_id}")
 
-        embedding_model_spec = self.databases_meta[kb_id].get("embedding_model_spec")
         embedding_function = self._get_embedding_function(embedding_model_spec)
 
         # 处理默认参数
@@ -805,7 +815,7 @@ class MilvusKB(KnowledgeBase):
             try:
                 # 更新状态为处理中
                 resolved_params = resolve_processing_params(
-                    kb_additional_params=self.databases_meta.get(kb_id, {}).get("metadata"),
+                    kb_additional_params=additional_params,
                     file_processing_params=file_meta.get("processing_params"),
                     request_params=params,
                 )
@@ -842,8 +852,6 @@ class MilvusKB(KnowledgeBase):
                     kb_id=kb_id,
                     data={"status": FileStatus.INDEXED, "error_message": None, **chunk_stats},
                 )
-                await self.refresh_database_stats(kb_id)
-
                 # 返回更新后的文件信息
                 updated_file_meta = file_meta.copy()
                 updated_file_meta["status"] = FileStatus.INDEXED
@@ -891,16 +899,24 @@ class MilvusKB(KnowledgeBase):
             chunk["distance"] = hit.distance
         return chunk
 
-    async def aquery(self, query_text: str, kb_id: str, agent_call: bool = False, **kwargs) -> list[dict]:
+    async def aquery(
+        self,
+        query_text: str,
+        kb_id: str,
+        *,
+        config: KnowledgeBaseConfig,
+        agent_call: bool = False,
+        **kwargs,
+    ) -> list[dict]:
         """异步查询知识库"""
-        collection = await self._get_milvus_collection(kb_id)
+        embedding_model_spec = config.embedding_model_spec
+        collection = await self._get_or_create_milvus_collection(kb_id, embedding_model_spec)
         if not collection:
             raise ValueError(f"Database {kb_id} not found")
 
-        query_params = self._get_query_params(kb_id)
         # 合并查询参数：kwargs（临时参数）优先级高于 query_params（持久化参数）
         # 这样允许用户在单次查询中临时覆盖持久化配置
-        merged_kwargs = {**query_params, **kwargs}
+        merged_kwargs = {**config.query_options, **kwargs}
 
         try:
             # 查询参数（从 merged_kwargs 读取）
@@ -929,7 +945,6 @@ class MilvusKB(KnowledgeBase):
             output_fields = ["content", "chunk_id", "file_id", "chunk_index"]
             retrieved_chunks: list[dict] = []
             if search_mode == "vector":
-                embedding_model_spec = self.databases_meta[kb_id].get("embedding_model_spec")
                 embedding_function = self._get_embedding_function(embedding_model_spec, sync=True)
                 query_embedding = await _run_milvus_query_io(embedding_function, [query_text])
 
@@ -984,7 +999,6 @@ class MilvusKB(KnowledgeBase):
 
                 logger.debug(f"Milvus BM25 query response: {len(retrieved_chunks)} chunks found")
             else:
-                embedding_model_spec = self.databases_meta[kb_id].get("embedding_model_spec")
                 embedding_function = self._get_embedding_function(embedding_model_spec, sync=True)
                 query_embedding = await _run_milvus_query_io(embedding_function, [query_text])
                 bm25_top_k = int(merged_kwargs.get("bm25_top_k", recall_top_k))
@@ -1029,7 +1043,13 @@ class MilvusKB(KnowledgeBase):
                 logger.debug(f"Milvus hybrid query response: {len(retrieved_chunks)} chunks found")
 
             if use_graph_retrieval:
-                graph_chunks = await self._retrieve_graph_chunks(query_text, kb_id, retrieved_chunks, merged_kwargs)
+                graph_chunks = await self._retrieve_graph_chunks(
+                    query_text,
+                    kb_id,
+                    retrieved_chunks,
+                    merged_kwargs,
+                    embedding_model_spec,
+                )
                 if graph_chunks:
                     graph_weight = float(merged_kwargs.get("graph_weight", 1.0))
                     retrieved_chunks = self._fuse_chunk_rankings(retrieved_chunks, graph_chunks, graph_weight)
@@ -1086,12 +1106,12 @@ class MilvusKB(KnowledgeBase):
         kb_id: str,
         base_chunks: list[dict],
         query_params: dict[str, Any],
+        embedding_model_spec: str | None,
     ) -> list[dict]:
         try:
             from yuxi.knowledge.graphs.milvus_graph_service import MilvusGraphService
             from yuxi.knowledge.graphs.milvus_graph_vector_store import MilvusGraphVectorStore
 
-            embedding_model_spec = self.databases_meta[kb_id].get("embedding_model_spec")
             if not embedding_model_spec:
                 return []
 
@@ -1232,7 +1252,7 @@ class MilvusKB(KnowledgeBase):
             except Exception as e:
                 logger.error(f"Failed to delete graph data for file {file_id}: {e}")
         await chunk_repo.delete_by_file_id(file_id)
-        collection = await self._get_milvus_collection(kb_id)
+        collection = self._get_existing_milvus_collection(kb_id)
 
         if collection:
             # 先查询文件是否存在，避免不必要的删除操作
@@ -1245,7 +1265,6 @@ class MilvusKB(KnowledgeBase):
             kb_id=kb_id,
             data={"chunk_count": 0, "token_count": 0},
         )
-        await self.refresh_database_stats(kb_id)
 
     async def delete_file(self, kb_id: str, file_id: str) -> None:
         """删除文件（包括元数据）"""
@@ -1253,7 +1272,6 @@ class MilvusKB(KnowledgeBase):
         await self.delete_file_chunks_only(kb_id, file_id)
 
         await KnowledgeFileRepository().delete(file_id)
-        await self.refresh_database_stats(kb_id)
 
     async def get_file_basic_info(self, kb_id: str, file_id: str) -> dict:
         """获取文件基本信息（仅元数据）"""
@@ -1306,8 +1324,8 @@ class MilvusKB(KnowledgeBase):
         content_info = await self._get_file_content_from_meta(file_id, file_meta)
         return {"meta": file_meta, **content_info}
 
-    async def delete_database(self, kb_id: str) -> dict:
-        """删除数据库，同时清除Milvus中的集合"""
+    async def cleanup_database_resources(self, kb_id: str) -> dict:
+        """清理知识库资源，同时删除 Milvus 集合。"""
 
         def delete_milvus_collections() -> None:
             try:
@@ -1325,8 +1343,53 @@ class MilvusKB(KnowledgeBase):
 
         await asyncio.to_thread(delete_milvus_collections)
 
-        # Call base method to delete local files and metadata
-        return await super().delete_database(kb_id)
+        return await super().cleanup_database_resources(kb_id)
+
+    async def detect_data_inconsistencies(
+        self,
+        known_kb_ids: set[str],
+        managed_kb_ids: set[str],
+    ) -> dict[str, list[dict]]:
+        """检测 Milvus 集合与知识库元数据之间的不一致。"""
+        inconsistencies: dict[str, list[dict]] = {"missing_collections": [], "missing_files": []}
+        try:
+            collection_names = set(utility.list_collections(using=self.connection_alias))
+            for collection_name in collection_names:
+                if not collection_name.startswith("kb_") or collection_name in known_kb_ids:
+                    continue
+
+                collection_info = {"collection_name": collection_name, "detected_at": utc_isoformat()}
+                try:
+                    collection = Collection(name=collection_name, using=self.connection_alias)
+                    collection_info["count"] = collection.num_entities
+                    collection_info["description"] = collection.description
+                except Exception as exc:
+                    logger.warning(f"无法获取集合 {collection_name} 的详细信息: {exc}")
+                    collection_info["count"] = "unknown"
+                inconsistencies["missing_collections"].append(collection_info)
+
+            file_repo = KnowledgeFileRepository()
+            for kb_id in managed_kb_ids:
+                try:
+                    if not utility.has_collection(kb_id, using=self.connection_alias):
+                        continue
+                    collection = Collection(name=kb_id, using=self.connection_alias)
+                    file_count = (await file_repo.get_kb_file_stats(kb_id))["file_count"]
+                    if collection.num_entities > 0 and file_count == 0:
+                        inconsistencies["missing_files"].append(
+                            {
+                                "kb_id": kb_id,
+                                "vector_count": collection.num_entities,
+                                "metadata_files_count": file_count,
+                                "detected_at": utc_isoformat(),
+                            }
+                        )
+                except Exception as exc:
+                    logger.debug(f"检查数据库 {kb_id} 的文件一致性时出错: {exc}")
+        except Exception as exc:
+            logger.error(f"检测 Milvus 数据不一致时出错: {exc}")
+
+        return inconsistencies
 
     def get_query_params_config(self, kb_id: str, **kwargs) -> dict:
         """获取 Milvus 知识库的查询参数配置"""

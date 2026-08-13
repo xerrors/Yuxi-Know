@@ -11,7 +11,7 @@ contention on the same row.
 
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.storage.postgres.models_business import AgentRunRequest
@@ -41,6 +41,9 @@ class AgentRunRequestRepository:
         agent_slug: str,
         conversation_thread_id: str,
         source: str = "chat",
+        channel: str = "web",
+        external_id: str | None = None,
+        origin_metadata: dict | None = None,
         queue_policy: str = "enqueue",
         input_message_id: int,
         input_payload: dict | None = None,
@@ -52,6 +55,9 @@ class AgentRunRequestRepository:
             agent_slug=agent_slug,
             conversation_thread_id=conversation_thread_id,
             source=source,
+            channel=channel,
+            external_id=external_id,
+            origin_metadata=origin_metadata or {},
             queue_policy=queue_policy,
             status=status,
             input_message_id=input_message_id,
@@ -68,7 +74,7 @@ class AgentRunRequestRepository:
         agent_slug: str,
         conversation_thread_id: str,
     ):
-        """Base SELECT for queued requests in a (uid, agent, thread) tuple, ordered by FIFO."""
+        """返回线程待处理请求；Steer 优先，其余请求保持 FIFO。"""
         return (
             select(AgentRunRequest)
             .where(
@@ -77,8 +83,31 @@ class AgentRunRequestRepository:
                 AgentRunRequest.conversation_thread_id == conversation_thread_id,
                 AgentRunRequest.status == "queued",
             )
-            .order_by(AgentRunRequest.created_at.asc(), AgentRunRequest.id.asc())
+            .order_by(
+                (AgentRunRequest.queue_policy != "steer").asc(),
+                AgentRunRequest.created_at.asc(),
+                AgentRunRequest.id.asc(),
+            )
         )
+
+    async def get_pending_steer(
+        self,
+        *,
+        uid: str,
+        agent_slug: str,
+        conversation_thread_id: str,
+    ) -> AgentRunRequest | None:
+        """读取线程内尚未派发的 Steer 请求。"""
+        result = await self.db.execute(
+            select(AgentRunRequest).where(
+                AgentRunRequest.uid == str(uid),
+                AgentRunRequest.agent_slug == agent_slug,
+                AgentRunRequest.conversation_thread_id == conversation_thread_id,
+                AgentRunRequest.queue_policy == "steer",
+                AgentRunRequest.status == "queued",
+            )
+        )
+        return result.scalar_one_or_none()
 
     async def get_queue_head(
         self,
@@ -111,6 +140,9 @@ class AgentRunRequestRepository:
         """给定已加载的请求对象，返回 1-based FIFO 位置；不在 queued 队列返回 0。"""
         if request.status != "queued":
             return 0
+        if request.queue_policy == "steer":
+            return 1
+
         result = await self.db.execute(
             select(func.count())
             .select_from(AgentRunRequest)
@@ -119,7 +151,13 @@ class AgentRunRequestRepository:
                 AgentRunRequest.agent_slug == request.agent_slug,
                 AgentRunRequest.conversation_thread_id == request.conversation_thread_id,
                 AgentRunRequest.status == "queued",
-                (AgentRunRequest.created_at, AgentRunRequest.id) < (request.created_at, request.id),
+                or_(
+                    AgentRunRequest.queue_policy == "steer",
+                    and_(
+                        AgentRunRequest.queue_policy != "steer",
+                        (AgentRunRequest.created_at, AgentRunRequest.id) < (request.created_at, request.id),
+                    ),
+                ),
             )
         )
         return int(result.scalar_one()) + 1

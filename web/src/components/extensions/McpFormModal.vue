@@ -29,7 +29,6 @@
             <a-select v-model:value="form.transport">
               <a-select-option value="streamable_http">streamable_http</a-select-option>
               <a-select-option value="sse">sse</a-select-option>
-              <a-select-option value="stdio">stdio</a-select-option>
             </a-select>
           </a-form-item>
         </a-col>
@@ -73,22 +72,6 @@
           </a-col>
         </a-row>
       </template>
-      <template v-if="isStdioTransport">
-        <a-form-item label="命令" required class="form-item">
-          <a-input v-model:value="form.command" placeholder="例如：npx 或 /path/to/server" />
-        </a-form-item>
-        <a-form-item label="参数" class="form-item">
-          <a-select
-            v-model:value="form.args"
-            mode="tags"
-            placeholder="输入参数后回车添加，如：-m"
-            style="width: 100%"
-          />
-        </a-form-item>
-        <a-form-item label="环境变量" class="form-item">
-          <McpEnvEditor v-model="form.env" />
-        </a-form-item>
-      </template>
       <a-form-item label="标签" class="form-item">
         <a-select
           v-model:value="form.tags"
@@ -105,7 +88,6 @@
 import { ref, reactive, computed, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { mcpApi } from '@/apis/mcp_api'
-import McpEnvEditor from '@/components/McpEnvEditor.vue'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -128,22 +110,12 @@ const form = reactive({
   description: '',
   transport: 'streamable_http',
   url: '',
-  command: '',
-  args: [],
-  env: null,
   headersText: '',
   timeout: null,
   sse_read_timeout: null,
   tags: [],
   icon: ''
 })
-
-const isStdioTransport = computed(
-  () =>
-    String(form.transport || '')
-      .trim()
-      .toLowerCase() === 'stdio'
-)
 
 watch(
   () => props.open,
@@ -155,9 +127,6 @@ watch(
         description: props.editData.description || '',
         transport: props.editData.transport || 'streamable_http',
         url: props.editData.url || '',
-        command: props.editData.command || '',
-        args: props.editData.args || [],
-        env: props.editData.env || null,
         headersText: props.editData.headers ? JSON.stringify(props.editData.headers, null, 2) : '',
         timeout: props.editData.timeout,
         sse_read_timeout: props.editData.sse_read_timeout,
@@ -171,9 +140,6 @@ watch(
         description: '',
         transport: 'streamable_http',
         url: '',
-        command: '',
-        args: [],
-        env: null,
         headersText: '',
         timeout: null,
         sse_read_timeout: null,
@@ -203,9 +169,6 @@ const handleFormSubmit = async () => {
       description: form.description || null,
       transport: form.transport,
       url: form.url || null,
-      command: form.command || null,
-      args: form.args.length > 0 ? form.args : null,
-      env: form.env,
       headers,
       timeout: form.timeout || null,
       sse_read_timeout: form.sse_read_timeout || null,
@@ -230,13 +193,6 @@ const handleFormSubmit = async () => {
         return
       }
     }
-    if (data.transport === 'stdio') {
-      if (!data.command?.trim()) {
-        message.error('StdIO 类型必须填写命令')
-        return
-      }
-    }
-
     if (props.editMode) {
       const { slug, ...updateData } = data
       const result = await mcpApi.updateMcpServer(props.editData?.slug || slug, updateData)

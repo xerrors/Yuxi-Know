@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import re
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from yuxi.utils.paths import (
     WORKSPACE_AGENT_CONTEXT_FILES,
     WORKSPACE_AGENTS_DIR_NAME,
     WORKSPACE_DIR_NAME,
+    ensure_within_root,
 )
 
 _SAFE_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -35,18 +37,25 @@ def _thread_root_dir(thread_id: str) -> Path:
     return Path(conf.save_dir) / "threads" / safe_thread_id / "user-data"
 
 
-def _validate_uid(uid: str) -> str:
+def workspace_uid_dirname(uid: str) -> str:
+    """Return a path-safe, stable workspace directory name for a logical UID.
+
+    Database and OIDC subject identifiers may contain characters such as ``:``
+    that are valid identity data but unsafe in filesystem path components.
+    Legacy simple UIDs retain their directory name; all other values use a
+    namespaced SHA-256 digest at the filesystem boundary only.
+    """
     value = str(uid or "").strip()
     if not value:
         raise ValueError("uid is required")
-    if not _SAFE_ID_RE.match(value):
-        raise ValueError("uid contains invalid characters")
-    return value
+    if _SAFE_ID_RE.fullmatch(value):
+        return value
+    return f"uid-{hashlib.sha256(value.encode('utf-8')).hexdigest()}"
 
 
-def _global_user_data_dir(uid: str) -> Path:
+def global_user_data_dir(uid: str) -> Path:
     """Return the shared host-side directory used for one user's workspace files."""
-    safe_uid = _validate_uid(uid)
+    safe_uid = workspace_uid_dirname(uid)
     return Path(conf.save_dir) / "threads" / "shared" / safe_uid
 
 
@@ -56,7 +65,7 @@ def sandbox_user_data_dir(thread_id: str) -> Path:
 
 def sandbox_workspace_dir(thread_id: str, uid: str) -> Path:
     validate_thread_id(thread_id)
-    return _global_user_data_dir(uid) / WORKSPACE_DIR_NAME
+    return global_user_data_dir(uid) / WORKSPACE_DIR_NAME
 
 
 def sandbox_workspace_agent_context_file(thread_id: str, uid: str, filename: str) -> Path:
@@ -70,9 +79,7 @@ def _threads_root_dir() -> Path:
 def _resolve_threads_child_path(path: Path) -> Path:
     root = _threads_root_dir()
     resolved = path.resolve(strict=False)
-    if not resolved.is_relative_to(root):
-        raise ValueError("path resolved outside threads root")
-    return resolved
+    return ensure_within_root(resolved, root, error_message="path resolved outside threads root")
 
 
 def _chmod_writable(path: Path, *, dir: bool = False) -> None:
@@ -120,7 +127,7 @@ def sandbox_outputs_dir(thread_id: str) -> Path:
 
 
 def ensure_thread_dirs(thread_id: str, uid: str) -> None:
-    _resolve_threads_child_path(_global_user_data_dir(uid)).mkdir(parents=True, exist_ok=True)
+    _resolve_threads_child_path(global_user_data_dir(uid)).mkdir(parents=True, exist_ok=True)
     workspace_dir = _resolve_threads_child_path(sandbox_workspace_dir(thread_id, uid))
     workspace_dir.mkdir(parents=True, exist_ok=True)
     ensure_workspace_default_files(workspace_dir)
@@ -164,10 +171,7 @@ def resolve_virtual_path(thread_id: str, virtual_path: str, *, uid: str) -> Path
     relative_path = clean_virtual_path[len(virtual_prefix) :].lstrip("/")
     base_dir, target_path = _resolve_user_data_base_dir(thread_id, uid, relative_path)
 
-    try:
-        target_path.relative_to(base_dir)
-    except ValueError as exc:
-        raise ValueError("path traversal detected") from exc
+    ensure_within_root(target_path, base_dir, error_message="path traversal detected")
 
     return target_path
 

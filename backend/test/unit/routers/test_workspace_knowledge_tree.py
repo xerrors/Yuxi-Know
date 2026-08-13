@@ -6,15 +6,8 @@ from fastapi.testclient import TestClient
 from server.routers import workspace_router
 from server.routers.workspace_router import workspace
 from server.utils.auth_middleware import get_required_user
+from yuxi.knowledge.read_models import KnowledgeBaseDetail
 from yuxi.storage.postgres.models_business import User
-
-
-class SupportsDocuments:
-    supports_documents = True
-
-
-class NoDocuments:
-    supports_documents = False
 
 
 class FakeKnowledgeBase:
@@ -25,12 +18,21 @@ class FakeKnowledgeBase:
     async def check_accessible(self, _user, _kb_id):
         return True
 
-    async def get_database_info(self, kb_id):
-        return {
-            "kb_id": kb_id,
-            "name": "知识库",
-            "kb_type": "milvus" if self.supports else "dify",
-        }
+    async def get_database_document_support(self, kb_id):
+        database = KnowledgeBaseDetail(
+            kb_id=kb_id,
+            name="知识库",
+            description=None,
+            kb_type="milvus" if self.supports else "dify",
+            embedding_model_spec=None,
+            llm_model_spec=None,
+            query_params={},
+            additional_params={},
+            share_config={"version": 2, "read_scope": None, "manage_scope": None},
+            created_by=None,
+            created_at=None,
+        )
+        return database, self.supports
 
     async def list_document_files(self, **kwargs):
         self.list_calls.append(kwargs)
@@ -72,7 +74,7 @@ class FakeKnowledgeBase:
         }
 
 
-def _build_client(monkeypatch, fake_kb: FakeKnowledgeBase, kb_class) -> TestClient:
+def _build_client(monkeypatch, fake_kb: FakeKnowledgeBase) -> TestClient:
     app = FastAPI()
     app.include_router(workspace, prefix="/api")
 
@@ -81,17 +83,12 @@ def _build_client(monkeypatch, fake_kb: FakeKnowledgeBase, kb_class) -> TestClie
 
     app.dependency_overrides[get_required_user] = fake_required_user
     monkeypatch.setattr(workspace_router, "knowledge_base", fake_kb)
-    monkeypatch.setattr(
-        workspace_router.KnowledgeBaseFactory,
-        "get_kb_class",
-        staticmethod(lambda _kb_type: kb_class),
-    )
     return TestClient(app)
 
 
 def test_workspace_knowledge_tree_uses_paginated_document_listing(monkeypatch):
     fake_kb = FakeKnowledgeBase()
-    client = _build_client(monkeypatch, fake_kb, SupportsDocuments)
+    client = _build_client(monkeypatch, fake_kb)
 
     response = client.get(
         "/api/workspace/knowledge/tree",
@@ -129,7 +126,7 @@ def test_workspace_knowledge_tree_uses_paginated_document_listing(monkeypatch):
 
 
 def test_workspace_knowledge_tree_rejects_non_document_kb(monkeypatch):
-    client = _build_client(monkeypatch, FakeKnowledgeBase(supports=False), NoDocuments)
+    client = _build_client(monkeypatch, FakeKnowledgeBase(supports=False))
 
     response = client.get("/api/workspace/knowledge/tree", params={"kb_id": "kb_1"})
 

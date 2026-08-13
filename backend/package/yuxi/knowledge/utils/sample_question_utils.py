@@ -86,12 +86,12 @@ async def generate_database_sample_questions(kb_id: str, count: int = 10) -> dic
     if not db_info:
         raise HTTPException(status_code=404, detail=f"知识库 {kb_id} 不存在")
 
-    kb_type = (db_info.get("kb_type") or "").lower()
+    kb_type = db_info.kb_type.lower()
     if not KnowledgeBaseFactory.get_kb_class(kb_type).supports_documents:
-        raise HTTPException(status_code=400, detail=f"{db_info.get('name') or kb_type} 不支持基于文件生成测试问题")
+        raise HTTPException(status_code=400, detail=f"{db_info.name or kb_type} 不支持基于文件生成测试问题")
 
-    db_name = db_info.get("name", "")
-    all_files = db_info.get("files", {})
+    db_name = db_info.name
+    all_files = db_info.files or {}
     if not all_files:
         raise HTTPException(status_code=400, detail="知识库中没有文件")
 

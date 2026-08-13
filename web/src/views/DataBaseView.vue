@@ -161,7 +161,12 @@
             ref="shareConfigFormRef"
             v-model="shareConfig"
             :auto-select-user-dept="true"
-          />
+            :require-read-scope="true"
+          >
+            <template #manage-description>
+              知识库<strong>仅管理员</strong>可以管理知识库；普通用户无法管理。
+            </template>
+          </ShareConfigForm>
         </div>
       </div>
       <template #footer>
@@ -228,14 +233,14 @@
                 <span>复制 ID</span>
               </span>
             </a-menu-item>
-            <a-menu-item key="edit">
+            <a-menu-item v-if="database.can_manage" key="edit">
               <span class="lucide-menu-item">
                 <Pencil :size="15" />
                 <span>编辑知识库</span>
               </span>
             </a-menu-item>
             <a-menu-divider />
-            <a-menu-item key="delete" danger>
+            <a-menu-item v-if="database.can_manage" key="delete" danger>
               <span class="lucide-menu-item">
                 <Trash2 :size="15" />
                 <span>删除知识库</span>
@@ -269,6 +274,7 @@ import dayjs, { parseToShanghai } from '@/utils/time'
 import AiTextarea from '@/components/AiTextarea.vue'
 import { useChunkPresetOptions } from '@/composables/useChunkPresetOptions'
 import { getKbTypeLabel, getKbTypeIcon, getKbTypeColor, kbUtils } from '@/utils/kb_utils'
+import { getShareConfigLabel } from '@/utils/shareConfig'
 import { DEFAULT_CHUNK_PRESET_ID } from '@/utils/chunkUtils'
 
 const route = useRoute()
@@ -319,9 +325,9 @@ const state = reactive({
 })
 
 const createDefaultShareConfig = () => ({
-  access_level: 'global',
-  department_ids: [],
-  user_uids: []
+  version: 2,
+  read_scope: { access_level: 'global', department_ids: [], user_uids: [] },
+  manage_scope: null
 })
 
 const shareConfig = ref(createDefaultShareConfig())
@@ -451,12 +457,7 @@ const buildRequestData = () => {
       newDatabase.chunk_preset_id || DEFAULT_CHUNK_PRESET_ID
   }
 
-  requestData.share_config = {
-    access_level: shareConfig.value.access_level,
-    department_ids:
-      shareConfig.value.access_level === 'department' ? shareConfig.value.department_ids || [] : [],
-    user_uids: shareConfig.value.access_level === 'user' ? shareConfig.value.user_uids || [] : []
-  }
+  requestData.share_config = shareConfig.value
 
   // 根据类型添加特定配置
   if (['milvus'].includes(newDatabase.kb_type)) {
@@ -523,12 +524,16 @@ const cardTags = (database) => {
     {
       name: getKbTypeLabel(database.kb_type || 'milvus'),
       color: getKbTypeColor(database.kb_type || 'milvus')
+    },
+    {
+      name: getShareConfigLabel(database.share_config),
+      color: 'gray'
     }
   ]
   if (database.embedding_model_spec) {
     tags.push({
       name: database.embedding_model_spec.split('/').slice(-1)[0],
-      color: 'blue'
+      color: 'gray'
     })
   }
   return tags

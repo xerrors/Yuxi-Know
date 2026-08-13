@@ -11,7 +11,11 @@ from deepagents.backends.composite import (
 from deepagents.backends.protocol import FileInfo, GlobResult
 from deepagents.middleware.filesystem import FilesystemMiddleware
 
-from yuxi.agents.skills.service import normalize_string_list
+from yuxi.agents.skills.service import (
+    get_thread_skills_root_dir,
+    normalize_string_list,
+    sync_thread_readable_skills_async,
+)
 from yuxi.utils.paths import VIRTUAL_PATH_CONVERSATION_HISTORY, VIRTUAL_PATH_LARGE_TOOL_RESULTS, VIRTUAL_PATH_OUTPUTS
 
 from .sandbox import ProvisionerSandboxBackend
@@ -116,7 +120,7 @@ class YuxiFilesystemMiddleware(FilesystemMiddleware):
 class _BackendScope:
     thread_id: str
     uid: str
-    readable_skills: list[str]
+    skill_sources: dict[str, str]
     file_thread_id: str
     skills_thread_id: str
 
@@ -152,28 +156,54 @@ class _BackendScope:
             raise ValueError(f"uid is required in {error_context}")
 
         selected = getattr(readable_skills_source, "_readable_skills", [])
+        readable_skills = normalize_string_list(selected if isinstance(selected, list) else [])
+        raw_sources = getattr(readable_skills_source, "_runtime_skill_sources", {})
+        skill_sources = {
+            slug: str(path)
+            for slug, path in (raw_sources.items() if isinstance(raw_sources, dict) else [])
+            if slug in readable_skills and isinstance(path, str) and path
+        }
         return cls(
             thread_id=thread_id,
             uid=uid,
-            readable_skills=normalize_string_list(selected if isinstance(selected, list) else []),
+            skill_sources=skill_sources,
             file_thread_id=string_value("file_thread_id") or thread_id,
             skills_thread_id=string_value("skills_thread_id") or thread_id,
         )
 
     def create_backend(self) -> CompositeBackend:
+        thread_skills_root = get_thread_skills_root_dir(self.skills_thread_id)
         return CustomCompositeBackend(
             default=ProvisionerSandboxBackend(
                 thread_id=self.thread_id,
                 uid=self.uid,
-                readable_skills=self.readable_skills,
+                readable_skills=list(self.skill_sources),
+                skill_sources=self.skill_sources,
                 file_thread_id=self.file_thread_id,
                 skills_thread_id=self.skills_thread_id,
             ),
             routes={
-                "/skills/": SelectedSkillsReadonlyBackend(selected_slugs=self.readable_skills),
+                "/skills/": SelectedSkillsReadonlyBackend(
+                    selected_slugs=list(self.skill_sources),
+                    root_dir=thread_skills_root,
+                ),
             },
             artifacts_root=VIRTUAL_PATH_OUTPUTS,
         )
+
+
+async def sync_agent_context_skills(context) -> None:
+    """在 Agent Run 初始化时同步当前上下文的共享 Skill 投影。"""
+    scope = _BackendScope.from_sources(
+        context,
+        readable_skills_source=context,
+        error_context="runtime context",
+    )
+    await sync_thread_readable_skills_async(
+        scope.skills_thread_id,
+        list(scope.skill_sources),
+        scope.skill_sources,
+    )
 
 
 def create_agent_composite_backend(runtime) -> CompositeBackend:
@@ -187,11 +217,16 @@ def create_agent_filesystem_middleware(
 ) -> FilesystemMiddleware:
     backend = create_agent_composite_backend
     if context is not None:
-        backend = _BackendScope.from_sources(
-            context,
-            readable_skills_source=context,
-            error_context="runtime context",
-        ).create_backend()
+
+        def build_context_backend(_runtime):
+            """按可变运行上下文重建文件作用域，读取已同步的 Skill 投影。"""
+            return _BackendScope.from_sources(
+                context,
+                readable_skills_source=context,
+                error_context="runtime context",
+            ).create_backend()
+
+        backend = build_context_backend
     middleware = YuxiFilesystemMiddleware(
         backend=backend,
         tool_token_limit_before_evict=tool_token_limit_before_evict,

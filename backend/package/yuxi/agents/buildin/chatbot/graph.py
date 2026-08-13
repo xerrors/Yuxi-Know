@@ -3,7 +3,7 @@ from langchain.agents import create_agent
 from langchain.agents.middleware import ModelRetryMiddleware, TodoListMiddleware
 
 from yuxi.agents import BaseAgent, load_chat_model, resolve_chat_model_spec
-from yuxi.agents.backends import create_agent_filesystem_middleware
+from yuxi.agents.backends import create_agent_filesystem_middleware, sync_agent_context_skills
 from yuxi.agents.context import (
     DEFAULT_SUMMARY_KEEP_MESSAGES,
     DEFAULT_SUMMARY_L2_TRIGGER_RATIO,
@@ -15,6 +15,7 @@ from yuxi.agents.context import (
 )
 from yuxi.agents.middlewares import (
     ImageInputCompatibilityMiddleware,
+    SteerMiddleware,
     TokenUsageMiddleware,
     create_summary_middleware,
     save_attachments_to_fs,
@@ -54,6 +55,7 @@ async def _build_middlewares(context):
     )
 
     middlewares = [
+        SteerMiddleware(),
         create_agent_filesystem_middleware(
             getattr(context, "tool_token_limit", DEFAULT_TOOL_RESULT_EVICTION_K_TOKENS) * 1024,
             context=context,
@@ -97,6 +99,7 @@ class ChatbotAgent(BaseAgent):
             context or self.context_schema(),
             context_schema=self.context_schema,
         )
+        await sync_agent_context_skills(context)
 
         # 使用 create_agent 创建智能体
         model_spec = resolve_chat_model_spec(context.model)

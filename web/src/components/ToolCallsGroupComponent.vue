@@ -41,12 +41,19 @@
 <script setup>
 import { computed, ref, watch, inject } from 'vue'
 import { ChevronDown, ChevronRight, Atom } from 'lucide-vue-next'
+import { storeToRefs } from 'pinia'
+import { useAgentStore } from '@/stores/agent'
 import { ToolCallRenderer } from '@/components/ToolCallingResult'
 import {
   getToolCallId,
+  getToolName,
+  findToolInList,
   isSubagentToolCall,
   normalizeToolCalls
 } from '@/components/ToolCallingResult/toolRegistry'
+
+const agentStore = useAgentStore()
+const { availableTools, toolMetadata } = storeToRefs(agentStore)
 
 const activeSubagentToolCallIds = inject('activeSubagentToolCallIds', null)
 
@@ -100,13 +107,19 @@ watch(
   { immediate: true }
 )
 
+// 工具名称展示优先级：display_label > 完整工具元数据中的 display name > 前端兜底名称映射 > 工具 id
 const getToolCallLabel = (toolCall) => {
   const displayLabel = String(toolCall?.display_label || '').trim()
   if (displayLabel) return displayLabel
 
-  const rawName = getToolCallId(toolCall)
-  const name = typeof rawName === 'string' ? rawName.replaceAll('_', ' ') : 'tool'
-  return name.charAt(0).toUpperCase() + name.slice(1)
+  const toolId = getToolCallId(toolCall)
+  const toolsList = toolMetadata.value.length
+    ? toolMetadata.value
+    : availableTools.value
+      ? Object.values(availableTools.value)
+      : []
+  const tool = findToolInList(toolId, toolsList)
+  return tool ? tool.name : getToolName(toolId)
 }
 
 const toolCallsSummaryTitle = computed(() => {

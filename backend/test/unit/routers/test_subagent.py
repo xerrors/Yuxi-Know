@@ -153,17 +153,20 @@ def test_normal_user_can_create_agent(monkeypatch):
             "name": "Personal Bot",
             "slug": "personal-bot",
             "backend_id": "ChatbotAgent",
-            "share_config": {"access_level": "global", "department_ids": [], "user_uids": []},
+            "share_config": {
+                "version": 2,
+                "read_scope": {"access_level": "global"},
+                "manage_scope": None,
+            },
         },
     )
 
     assert response.status_code == 200, response.text
-    assert _CreateRepo.created_payload["creator"].uid == "user"
-    assert _CreateRepo.created_payload["creator"].role == "user"
+    assert _CreateRepo.created_payload["created_by"] == "user"
     assert _CreateRepo.created_payload["share_config"] == {
-        "access_level": "global",
-        "department_ids": [],
-        "user_uids": [],
+        "version": 2,
+        "read_scope": {"access_level": "global"},
+        "manage_scope": None,
     }
 
 

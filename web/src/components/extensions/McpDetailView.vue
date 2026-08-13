@@ -20,7 +20,8 @@
           <button
             type="button"
             @click="handleTestServer"
-            :disabled="testLoading"
+            :disabled="testLoading || server?.requires_migration"
+            :title="server?.requires_migration ? '请先迁移为远程 MCP' : ''"
             class="lucide-icon-btn extension-panel-action extension-panel-action-secondary"
           >
             <Zap :size="14" v-if="!testLoading" />
@@ -29,7 +30,8 @@
           <button
             type="button"
             @click="startEdit"
-            :disabled="isEditing || !server"
+            :disabled="isEditing || !server || server.is_builtin"
+            :title="server?.is_builtin ? '系统内置 MCP 的连接配置由代码管理' : ''"
             class="lucide-icon-btn extension-panel-action extension-panel-action-secondary"
           >
             <Pencil :size="14" />
@@ -41,12 +43,12 @@
             :class="[
               'lucide-icon-btn',
               'extension-panel-action',
-              server?.enabled === false
+              server?.enabled === false && !server?.requires_migration
                 ? 'extension-panel-action-primary'
                 : 'extension-panel-action-danger'
             ]"
           >
-            <Plus v-if="server?.enabled === false" :size="14" />
+            <Plus v-if="server?.enabled === false && !server?.requires_migration" :size="14" />
             <Trash2 v-else :size="14" />
             <span>{{ actionLabel }}</span>
           </button>
@@ -57,6 +59,12 @@
     <div class="detail-content-wrapper">
       <a-spin :spinning="loading">
         <div v-if="server" class="detail-content-inner">
+          <a-alert
+            v-if="server.requires_migration"
+            type="warning"
+            show-icon
+            message="此 stdio MCP 已禁用，请编辑为 SSE 或 Streamable HTTP，或直接删除。"
+          />
           <a-tabs v-model:activeKey="detailTab" class="detail-tabs">
             <a-tab-pane key="general">
               <template #tab>
@@ -93,7 +101,6 @@
                               >streamable_http</a-select-option
                             >
                             <a-select-option value="sse">sse</a-select-option>
-                            <a-select-option value="stdio">stdio</a-select-option>
                           </a-select>
                         </a-form-item>
                         <a-form-item label="图标" class="form-item">
@@ -148,14 +155,6 @@
                           </a-form-item>
                         </div>
                       </template>
-                      <template v-if="isStdioTransport">
-                        <a-form-item label="命令" required class="form-item form-item-full">
-                          <a-input
-                            v-model:value="editForm.command"
-                            placeholder="例如：npx 或 /path/to/server"
-                          />
-                        </a-form-item>
-                      </template>
                       <a-form-item label="标签" class="form-item form-item-full">
                         <a-select
                           v-model:value="editForm.tags"
@@ -169,7 +168,7 @@
                     <section class="form-section">
                       <div class="form-section-title">
                         <span>高级配置</span>
-                        <small>请求头、启动参数和环境变量会直接影响 MCP 运行。</small>
+                        <small>请求头会直接影响 MCP 连接。</small>
                       </div>
                       <template
                         v-if="
@@ -185,21 +184,6 @@
                           />
                           <div class="form-helper">
                             请输入合法 JSON 对象，留空表示不发送额外请求头。
-                          </div>
-                        </a-form-item>
-                      </template>
-                      <template v-if="isStdioTransport">
-                        <a-form-item label="参数" class="form-item form-item-full">
-                          <a-select
-                            v-model:value="editForm.args"
-                            mode="tags"
-                            placeholder="输入参数后回车添加，如：-m"
-                            style="width: 100%"
-                          />
-                        </a-form-item>
-                        <a-form-item label="环境变量" class="form-item form-item-full">
-                          <div class="env-editor-shell">
-                            <McpEnvEditor v-model="editForm.env" />
                           </div>
                         </a-form-item>
                       </template>
@@ -302,7 +286,7 @@
               </div>
             </a-tab-pane>
 
-            <a-tab-pane key="tools">
+            <a-tab-pane v-if="!server.requires_migration" key="tools">
               <template #tab>
                 <span class="tab-title"><Wrench :size="14" />工具 ({{ tools.length }})</span>
               </template>
@@ -421,7 +405,6 @@ import {
 } from 'lucide-vue-next'
 import { mcpApi } from '@/apis/mcp_api'
 import { formatFullDateTime } from '@/utils/time'
-import McpEnvEditor from '@/components/McpEnvEditor.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -447,9 +430,6 @@ const editForm = reactive({
   description: '',
   transport: 'streamable_http',
   url: '',
-  command: '',
-  args: [],
-  env: null,
   headersText: '',
   timeout: null,
   sse_read_timeout: null,
@@ -458,8 +438,9 @@ const editForm = reactive({
 })
 
 const actionLabel = computed(() => {
+  if (server.value?.requires_migration) return '删除'
   if (server.value?.enabled === false) return '添加'
-  return server.value?.created_by === 'system' ? '移除' : '删除'
+  return server.value?.is_builtin ? '移除' : '删除'
 })
 
 const filteredTools = computed(() => {
@@ -471,13 +452,6 @@ const filteredTools = computed(() => {
       (t.description && t.description.toLowerCase().includes(search))
   )
 })
-
-const isStdioTransport = computed(
-  () =>
-    String(editForm.transport || '')
-      .trim()
-      .toLowerCase() === 'stdio'
-)
 
 const goBack = () => {
   router.push({ path: '/extensions', query: { tab: 'mcp' } })
@@ -495,11 +469,8 @@ const resetEditForm = (data) => {
     slug: data?.slug || '',
     name: data?.name || '',
     description: data?.description || '',
-    transport: data?.transport || 'streamable_http',
+    transport: data?.requires_migration ? 'streamable_http' : data?.transport || 'streamable_http',
     url: data?.url || '',
-    command: data?.command || '',
-    args: data?.args || [],
-    env: data?.env || null,
     headersText: data?.headers ? JSON.stringify(data.headers, null, 2) : '',
     timeout: data?.timeout,
     sse_read_timeout: data?.sse_read_timeout,
@@ -536,9 +507,6 @@ const buildEditPayload = () => {
     description: editForm.description || null,
     transport: editForm.transport,
     url: editForm.url || null,
-    command: editForm.command || null,
-    args: editForm.args.length > 0 ? editForm.args : null,
-    env: editForm.env,
     headers,
     timeout: editForm.timeout || null,
     sse_read_timeout: editForm.sse_read_timeout || null,
@@ -558,10 +526,6 @@ const validateEditPayload = (data) => {
   }
   if (['sse', 'streamable_http'].includes(data.transport) && !data.url?.trim()) {
     message.error('HTTP 类型必须填写 MCP URL')
-    return false
-  }
-  if (data.transport === 'stdio' && !data.command?.trim()) {
-    message.error('StdIO 类型必须填写命令')
     return false
   }
   return true
@@ -594,7 +558,7 @@ const fetchServer = async () => {
     loading.value = true
     const result = await mcpApi.getMcpServer(slug.value)
     if (result.success) {
-      if (result.data?.enabled === false) {
+      if (result.data?.enabled === false && !result.data?.requires_migration) {
         server.value = null
         message.info('请先添加 MCP 后再查看详情')
         router.replace({ path: '/extensions', query: { tab: 'mcp' } })
@@ -678,11 +642,15 @@ const handleTestServer = async () => {
 
 const handleDangerAction = async () => {
   if (!server.value) return
+  if (server.value.requires_migration) {
+    confirmDeleteServer(server.value)
+    return
+  }
   if (server.value.enabled === false) {
     await handleSetServerEnabled(server.value, true)
     return
   }
-  if (server.value.created_by === 'system') {
+  if (server.value.is_builtin) {
     await handleSetServerEnabled(server.value, false)
     return
   }

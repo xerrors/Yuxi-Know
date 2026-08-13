@@ -52,6 +52,7 @@
 | OpenRouter | `openrouter` | chat, embedding | `OPENROUTER_API_KEY` |
 | ModelScope | `modelscope` | chat | `MODELSCOPE_ACCESS_TOKEN` |
 | OpenCode | `opencode` | chat | 无默认环境变量 |
+| OpenCode Go | `opencode-go` | chat | 无默认环境变量 |
 | SiliconFlow | `siliconflow-cn` | chat, embedding, rerank | `SILICONFLOW_API_KEY` |
 | SiliconFlow International | `siliconflow` | chat, embedding, rerank | `SILICONFLOW_GLOBAL_API_KEY` |
 

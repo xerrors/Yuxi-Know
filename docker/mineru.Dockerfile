@@ -15,8 +15,10 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Install mineru latest
-RUN python3 -m pip install -U 'mineru[core]>=3.0.0' -i https://mirrors.aliyun.com/pypi/simple --break-system-packages && \
+# Install mineru with pinned version.
+# MinerU 许可证随版本变化：3.0.x = AGPL-3.0；3.1.0+ = Apache-2.0 + 附加条款
+# （MAU>1 亿或月收入>$2000 万需商业许可，在线服务须标注归属）。锁版本保证构建产物许可可预期。
+RUN python3 -m pip install -U 'mineru[core]==3.4.4' -i https://mirrors.aliyun.com/pypi/simple --break-system-packages && \
     python3 -m pip cache purge
 
 # Download models and update the configuration file

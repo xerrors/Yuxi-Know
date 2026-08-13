@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { agentApi, databaseApi, mcpApi, skillApi } from '@/apis'
+import { agentApi, databaseApi, mcpApi, skillApi, toolApi } from '@/apis'
 import { isDefaultAllAgentResourceKind } from '@/utils/agentConfigUtils'
 import { handleChatError } from '@/utils/errorHandler'
 
@@ -44,6 +44,8 @@ export const useAgentStore = defineStore(
     const availableKnowledgeBases = ref([])
     const availableMcps = ref([])
     const availableSkills = ref([])
+    // 完整工具元数据（含 buildin / knowledge 等全部分类的 display_name），用于工具名称展示映射
+    const toolMetadata = ref([])
 
     const agentConfig = ref({})
     const originalAgentConfig = ref({})
@@ -97,11 +99,21 @@ export const useAgentStore = defineStore(
       }
     }
 
+    async function fetchToolMetadata() {
+      try {
+        const result = await toolApi.getTools()
+        toolMetadata.value = result?.data || []
+      } catch (e) {
+        console.warn('Failed to fetch tool metadata:', e)
+        toolMetadata.value = []
+      }
+    }
+
     async function initialize() {
       if (isInitialized.value || isInitializing.value) return
       isInitializing.value = true
       try {
-        await Promise.all([fetchAgents(), fetchMentionResources()])
+        await Promise.all([fetchAgents(), fetchMentionResources(), fetchToolMetadata()])
 
         const targetAgentId = getPreferredAgentId(agents.value, selectedAgentId.value)
         if (targetAgentId) {
@@ -271,6 +283,7 @@ export const useAgentStore = defineStore(
       availableKnowledgeBases.value = []
       availableMcps.value = []
       availableSkills.value = []
+      toolMetadata.value = []
       agentConfig.value = {}
       originalAgentConfig.value = {}
       agentDetails.value = {}
@@ -288,6 +301,7 @@ export const useAgentStore = defineStore(
       availableKnowledgeBases,
       availableMcps,
       availableSkills,
+      toolMetadata,
       agentConfig,
       originalAgentConfig,
       agentDetails,

@@ -7,7 +7,7 @@ import {
   LibraryBig,
   Box,
   FolderKanban,
-  PanelLeftClose,
+  PanelLeft,
   PanelLeftOpen,
   MessageCirclePlus,
   Search
@@ -277,7 +277,7 @@ provide('settingsModal', {
           aria-label="折叠侧边栏"
           @click="toggleSidebar"
         >
-          <PanelLeftClose size="18" />
+          <PanelLeft size="18" />
         </button>
       </div>
       <div class="nav">

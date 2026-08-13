@@ -35,6 +35,10 @@ def _open_kb_document_callable():
     return _tool_callable(tools.open_kb_document)
 
 
+def _get_mindmap_callable():
+    return _tool_callable(tools.get_mindmap)
+
+
 async def _run_tool(callback, **kwargs):
     result = callback(**kwargs)
     if inspect.isawaitable(result):
@@ -52,6 +56,10 @@ async def _run_find_kb_document(**kwargs):
 
 async def _run_open_kb_document(**kwargs):
     return await _run_tool(_open_kb_document_callable(), **kwargs)
+
+
+async def _run_get_mindmap(**kwargs):
+    return await _run_tool(_get_mindmap_callable(), **kwargs)
 
 
 def _build_test_window(content: str, offset: int = 0, limit: int = 1800) -> dict:
@@ -81,20 +89,19 @@ def _patch_retrievers(monkeypatch, *, kb_type: str = "milvus", retriever=None):
         return {"kb_id": kb_id, "name": "FAQ", "kb_type": kb_type}, kb_type != "dify"
 
     manager = SimpleNamespace(
-        get_retrievers=lambda: {
-            "db-1": {
-                "name": "FAQ",
-                "retriever": retriever or object(),
-                "metadata": {"kb_type": kb_type},
-            }
-        },
         find_file_content=_not_configured,
         open_file_content=_not_configured,
         get_database_document_support=_fake_get_database_document_support,
     )
-    # 复用真实 manager 的 retrieve/open_document/find_in_document，使其内部走上面的 mock。
+
+    async def _retrieve(kb_id: str, query: str, **options):
+        if kb_id != "db-1":
+            raise ValueError(f"知识库资源 '{kb_id}' 不存在")
+        return await (retriever or object())(query, **options)
+
+    manager.retrieve = _retrieve
+    # 复用真实 manager 的文档操作方法，使其内部走上面的 mock。
     for name in (
-        "retrieve",
         "open_document",
         "find_in_document",
         "_require_kb_supports_documents",
@@ -109,6 +116,36 @@ def _patch_retrievers(monkeypatch, *, kb_type: str = "milvus", retriever=None):
 async def _fake_visible_kbs(runtime):
     del runtime
     return [{"kb_id": "db-1", "name": "FAQ", "kb_type": "milvus"}]
+
+
+@pytest.mark.asyncio
+async def test_get_mindmap_resolves_current_visible_knowledge_base(monkeypatch) -> None:
+    async def fake_get_by_kb_id(_self, kb_id: str):
+        assert kb_id == "db-1"
+        return SimpleNamespace(name="Renamed FAQ", mindmap={"content": "Root", "children": []})
+
+    monkeypatch.setattr(tools, "_resolve_visible_knowledge_bases_for_query", _fake_visible_kbs)
+    monkeypatch.setattr(
+        "yuxi.repositories.knowledge_base_repository.KnowledgeBaseRepository.get_by_kb_id",
+        fake_get_by_kb_id,
+    )
+
+    result = await _run_get_mindmap(kb_name="FAQ", runtime=SimpleNamespace(context=SimpleNamespace()))
+
+    assert "知识库 FAQ 的思维导图结构" in result
+    assert "- Root" in result
+
+
+@pytest.mark.asyncio
+async def test_get_mindmap_rejects_knowledge_base_outside_runtime_scope(monkeypatch) -> None:
+    async def no_visible_kbs(_runtime):
+        return []
+
+    monkeypatch.setattr(tools, "_resolve_visible_knowledge_bases_for_query", no_visible_kbs)
+
+    result = await _run_get_mindmap(kb_name="FAQ", runtime=SimpleNamespace(context=SimpleNamespace()))
+
+    assert result == "知识库 'FAQ' 不存在或当前会话未启用"
 
 
 @pytest.mark.asyncio
@@ -665,16 +702,16 @@ async def test_search_file_total_reflects_full_set_not_page(monkeypatch) -> None
 
 def _patch_download_manager(monkeypatch, *, kb_type: str = "milvus", file_download=None):
     """复用 _patch_retrievers 的 _require_kb_supports_documents 真实逻辑，并绑定真实
-    get_file_download，仅 mock _get_kb_for_database 与底层 kb 实例的下载方法——这样
+    get_file_download，仅 mock get_kb_executor 与底层 kb 实例的下载方法——这样
     manager 内部的只读源校验路径会被真正走到，而非被整方法替换绕过。"""
     manager = _patch_retrievers(monkeypatch, kb_type=kb_type)
     manager.get_file_download = MethodType(KnowledgeBaseManager.get_file_download, manager)
 
-    async def _fake_get_kb_for_database(kb_id: str):
+    async def fake_get_kb_executor(kb_id: str):
         del kb_id
         return SimpleNamespace(get_file_download=file_download or _async_get_file_download(b"", "file"))
 
-    manager._get_kb_for_database = _fake_get_kb_for_database
+    manager.get_kb_executor = fake_get_kb_executor
     return manager
 
 

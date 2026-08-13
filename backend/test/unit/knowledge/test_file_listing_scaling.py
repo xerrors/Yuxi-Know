@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from yuxi.knowledge.manager import KnowledgeBaseManager
+from yuxi.permissions import ResourcePermission
 
 pytestmark = pytest.mark.asyncio
 
@@ -14,6 +15,15 @@ class FakeKnowledgeBaseClass:
 
 
 class FakeKnowledgeBaseRepository:
+    async def get_all(self):
+        record = await self.get_by_kb_id("kb_1")
+        record.additional_params = {
+            "chunk_preset_id": "general",
+            "stats": {"file_count": 2, "folder_count": 1, "row_count": 3},
+        }
+        record.created_by = "user_1"
+        return [record]
+
     async def get_by_kb_id(self, kb_id):
         if kb_id != "kb_1":
             return None
@@ -29,6 +39,7 @@ class FakeKnowledgeBaseRepository:
             share_config=None,
             mindmap=None,
             sample_questions=[],
+            created_by="user_1",
             created_at=None,
         )
 
@@ -54,6 +65,9 @@ class FakeKnowledgeFileRepository:
                 created_at=None,
                 updated_at=None,
                 file_size=0,
+                chunk_count=0,
+                token_count=0,
+                created_by="user_1",
             ),
             SimpleNamespace(
                 file_id="file_1",
@@ -69,6 +83,9 @@ class FakeKnowledgeFileRepository:
                 created_at=None,
                 updated_at=None,
                 file_size=1024,
+                chunk_count=9,
+                token_count=128,
+                created_by="user_1",
             ),
         ]
 
@@ -104,6 +121,19 @@ class FakeKnowledgeFileRepository:
         return {"folder_1": 1}
 
 
+class FakeUserRepository:
+    async def list_by_uids(self, uids):
+        if "user_1" not in uids:
+            return []
+        return [
+            SimpleNamespace(
+                uid="user_1",
+                username="测试用户",
+                to_dict=lambda: {"avatar": "https://example.com/avatar.png"},
+            )
+        ]
+
+
 @pytest.fixture(autouse=True)
 def patch_repositories(monkeypatch):
     FakeKnowledgeFileRepository.list_calls = []
@@ -116,6 +146,10 @@ def patch_repositories(monkeypatch):
     monkeypatch.setattr(
         "yuxi.repositories.knowledge_file_repository.KnowledgeFileRepository",
         FakeKnowledgeFileRepository,
+    )
+    monkeypatch.setattr(
+        "yuxi.repositories.user_repository.UserRepository",
+        FakeUserRepository,
     )
     monkeypatch.setattr(
         "yuxi.knowledge.manager.KnowledgeBaseFactory.is_type_supported",
@@ -132,10 +166,107 @@ async def test_get_database_info_omits_files_by_default():
 
     result = await manager.get_database_info("kb_1")
 
-    assert result["kb_id"] == "kb_1"
-    assert "files" not in result
-    assert result["stats"]["file_count"] == 2
-    assert result["stats"]["total_size"] == 1024
+    assert result.kb_id == "kb_1"
+    assert result.files is None
+    assert result.file_count == 2
+    assert result.total_size == 1024
+
+
+async def test_get_databases_does_not_initialize_knowledge_backend(monkeypatch):
+    manager = KnowledgeBaseManager("/tmp/yuxi-test")
+
+    def fail_if_initialized(_kb_type):
+        pytest.fail("知识库列表不应初始化 Milvus 等后端实例")
+
+    monkeypatch.setattr(manager, "_get_or_create_kb_instance", fail_if_initialized)
+
+    result = await manager.get_databases()
+
+    database = result[0]
+    assert database.kb_id == "kb_1"
+    assert database.name == "知识库"
+    assert database.row_count == 3
+    assert database.file_count == 2
+    assert database.additional_params["chunk_preset_id"] == "general"
+    assert "stats" not in database.additional_params
+    assert database.created_by == "user_1"
+
+
+async def test_get_databases_skips_rows_with_invalid_metadata(monkeypatch):
+    class BrokenKnowledgeBaseClass:
+        @classmethod
+        def normalize_additional_params(cls, _additional_params):
+            raise ValueError("Notion 参数缺失: notion_data_source_id")
+
+    class MultiKnowledgeBaseRepository:
+        async def get_all(self):
+            return [
+                SimpleNamespace(
+                    kb_id="kb_bad",
+                    name="坏配置",
+                    description="",
+                    kb_type="notion",
+                    embedding_model_spec=None,
+                    llm_model_spec=None,
+                    query_params=None,
+                    additional_params={},
+                    share_config=None,
+                    created_at=None,
+                    created_by="user_1",
+                ),
+                SimpleNamespace(
+                    kb_id="kb_good",
+                    name="可用库",
+                    description="",
+                    kb_type="milvus",
+                    embedding_model_spec=None,
+                    llm_model_spec=None,
+                    query_params=None,
+                    additional_params={"chunk_preset_id": "general"},
+                    share_config=None,
+                    created_at=None,
+                    created_by="user_1",
+                ),
+            ]
+
+    monkeypatch.setattr(
+        "yuxi.knowledge.manager.KnowledgeBaseFactory.get_kb_class",
+        staticmethod(lambda kb_type: BrokenKnowledgeBaseClass if kb_type == "notion" else FakeKnowledgeBaseClass),
+    )
+    monkeypatch.setattr(
+        "yuxi.repositories.knowledge_base_repository.KnowledgeBaseRepository",
+        MultiKnowledgeBaseRepository,
+    )
+
+    manager = KnowledgeBaseManager("/tmp/yuxi-test")
+    result = await manager.get_databases()
+
+    assert [db.kb_id for db in result] == ["kb_good"]
+
+
+async def test_get_databases_by_user_sets_permission_and_redacts_readonly_secrets(monkeypatch):
+    class SecretKnowledgeBaseRepository(FakeKnowledgeBaseRepository):
+        async def get_all(self):
+            record = await self.get_by_kb_id("kb_1")
+            record.additional_params = {"dify_token": "secret", "chunk_preset_id": "general"}
+            record.created_by = "user_1"
+            return [record]
+
+    monkeypatch.setattr(
+        "yuxi.repositories.knowledge_base_repository.KnowledgeBaseRepository",
+        SecretKnowledgeBaseRepository,
+    )
+    manager = KnowledgeBaseManager("/tmp/yuxi-test")
+
+    readonly = await manager.get_databases_by_user({"uid": "user_2", "role": "admin", "department_id": None})
+    owner = await manager.get_databases_by_user({"uid": "user_1", "role": "admin", "department_id": None})
+
+    assert readonly[0].effective_permission == ResourcePermission.READ
+    assert readonly[0].can_manage is False
+    assert "dify_token" not in readonly[0].additional_params
+    assert owner[0].effective_permission == ResourcePermission.MANAGE
+    assert owner[0].can_manage is True
+    assert owner[0].additional_params["dify_token"] == "secret"
 
 
 async def test_list_document_files_returns_lightweight_paginated_items():
@@ -166,14 +297,17 @@ async def test_list_document_files_returns_lightweight_paginated_items():
     ]
     assert result["items"][0]["has_children"] is True
     assert result["items"][1]["file_size"] == 1024
+    assert result["items"][1]["chunk_count"] == 9
+    assert result["items"][1]["token_count"] == 128
+    assert result["items"][1]["created_by"] == "user_1"
+    assert result["items"][1]["created_by_name"] == "测试用户"
+    assert result["items"][1]["created_by_avatar"] == "https://example.com/avatar.png"
     assert result["items"][1]["has_original_file"] is True
     assert result["items"][1]["has_parsed_markdown"] is True
 
     returned_keys = set(result["items"][1])
     assert "path" not in returned_keys
     assert "markdown_file" not in returned_keys
-    assert "chunk_count" not in returned_keys
-    assert "token_count" not in returned_keys
     assert "processing_params" not in returned_keys
 
 

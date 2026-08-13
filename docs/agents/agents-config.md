@@ -236,7 +236,7 @@ config_json.context + runtime ids -> context_schema instance
 
 - `_visible_knowledge_bases`：当前会话实际可查询的知识库对象
 - `_prompt_skills`：需要注入提示词的 Skill 闭包
-- `_readable_skills`：`/home/gem/skills` 和沙盒可读的 Skill 闭包
+- `_readable_skills`：当前运行时可读的 Skill 闭包，包括共享只读投影与个人工作区 Skill
 
 随后 Graph 构建会直接使用这份 Context：
 
@@ -250,7 +250,7 @@ config_json.context + runtime ids -> context_schema instance
 
 - 普通 Agent 默认使用当前 `thread_id` 作为文件与 Skills 作用域
 - 子智能体使用 child `thread_id` 做 checkpoint，`file_thread_id` 指向父会话 uploads/outputs，`skills_thread_id` 指向子智能体自身 Skills 作用域
-- 通过 `_readable_skills` 决定 `/home/gem/skills` 的可读范围
+- 通过 `_readable_skills` 与来源映射决定共享/内置 Skill 的 `/home/gem/skills` 投影；个人 Skill 直接读取工作区
 
 所以 Context 既是输入配置，也是 Graph 创建前整理出的运行时资源上下文。
 

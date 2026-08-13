@@ -8,7 +8,7 @@
 
 运行时准备不是中间件，但它决定后续中间件能看到什么资源。内置 Agent 创建 Graph 前会先执行以下步骤：
 
-- `prepare_agent_runtime_context`：按当前用户权限过滤工具、知识库、MCP、Skills 和子智能体，并派生 `_visible_knowledge_bases`、`_prompt_skills`、`_readable_skills`
+- `prepare_agent_runtime_context`：按当前用户权限过滤工具、知识库、MCP、Skills 和子智能体，并派生 `_visible_knowledge_bases`、`_prompt_skills`、`_readable_skills` 与最终 `_runtime_skill_sources`
 - `build_prompt_with_context`：基于 Context 生成系统提示词
 - `load_chat_model(context.model)`：加载主模型
 - `resolve_configured_runtime_tools(context)`：加载已配置的内置工具和 MCP 工具
@@ -47,7 +47,9 @@
 `SkillsMiddleware` 分两步工作：
 
 1. 模型调用前读取 `_prompt_skills`，把可见 Skill 的名称、描述和 `SKILL.md` 路径追加到系统提示。
-2. 工具调用后检查模型是否读取了 `/home/gem/skills/<slug>/SKILL.md`。如果该 Skill 在 `_readable_skills` 范围内，就把它写入 `activated_skills`，并在后续模型调用中追加它声明的工具和 MCP 依赖。
+2. 工具调用后检查模型是否读取了共享路径 `/home/gem/skills/<slug>/SKILL.md` 或个人路径
+   `/home/gem/user-data/workspace/agents/skills/<slug>/SKILL.md`。如果该 Skill 在 `_readable_skills`
+   范围内，就把它写入 `activated_skills`，并在后续模型调用中追加它声明的工具和 MCP 依赖。
 
 这种设计让 Skill 可以先作为说明可见，只有模型真正读取并激活后才扩展工具集，避免一开始就把所有依赖工具塞进上下文。
 

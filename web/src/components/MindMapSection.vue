@@ -19,8 +19,11 @@
           <MapIcon :size="24" />
         </div>
         <p class="empty-title">暂无思维导图</p>
-        <p class="empty-description">从当前知识库内容生成结构化导图。</p>
+        <p class="empty-description">
+          {{ readonly ? '思维导图尚未生成，请等待知识库管理员生成后查看。' : '从当前知识库内容生成结构化导图。' }}
+        </p>
         <button
+          v-if="!readonly"
           type="button"
           class="lucide-icon-btn mindmap-primary-action"
           @click="generateMindmap"
@@ -35,6 +38,7 @@
         <div class="mindmap-toolbar">
           <a-space :size="8">
             <button
+              v-if="!readonly"
               type="button"
               class="lucide-icon-btn mindmap-toolbar-btn"
               :disabled="generating"
@@ -45,7 +49,7 @@
               <span class="toolbar-text">重新生成</span>
             </button>
             <button
-              v-if="isIncremental && mindmapData"
+              v-if="!readonly && isIncremental && mindmapData"
               type="button"
               class="lucide-icon-btn mindmap-toolbar-btn mindmap-toolbar-btn--accent"
               :disabled="generating"
@@ -89,6 +93,10 @@ const props = defineProps({
   kbId: {
     type: String,
     required: true
+  },
+  readonly: {
+    type: Boolean,
+    default: false
   }
 })
 

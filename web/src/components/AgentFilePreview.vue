@@ -272,7 +272,7 @@ import {
   Download,
   Globe,
   Maximize,
-  PanelRightClose,
+  PanelRight,
   FilePen,
   Save,
   X
@@ -368,7 +368,7 @@ const closeTitle = computed(() =>
   props.closeVariant === 'collapse-right' ? '收起预览面板' : '关闭预览'
 )
 const closeIconComponent = computed(() =>
-  props.closeVariant === 'collapse-right' ? PanelRightClose : X
+  props.closeVariant === 'collapse-right' ? PanelRight : X
 )
 const htmlPreviewMode = ref('render')
 const editMode = ref('preview')
@@ -535,7 +535,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 4px 12px;
+  padding: 4px calc(var(--page-padding) - 4px);
   border-bottom: 1px solid var(--gray-150);
   background: var(--gray-25);
 }

@@ -52,6 +52,25 @@ yuxi status
 yuxi logout
 ```
 
+## 本地网页聊天
+
+运行下面的命令会在 `127.0.0.1` 的随机端口启动一个临时网页，并自动在浏览器中打开：
+
+```bash
+yuxi chat
+```
+
+该网页通过 CLI 代理当前 remote 的 Agent API，使用已经保存在本地的 API Key，并流式显示回答。API Key 不会发送到浏览器。关闭终端中的进程后，本地网页服务随即停止。
+
+默认调用 `default-chatbot`，也可以指定其他智能体或 remote：
+
+```bash
+yuxi chat --agent-slug my-agent
+yuxi chat --remote production
+```
+
+在不能自动打开浏览器的环境中，可使用 `yuxi chat --no-open`，然后手动访问终端打印的本地地址。当前页面定位为基础调试工具，支持纯文本对话、新建会话、`/state` 查看线程状态和 `/approve` 继续工具审批；附件与 `ask_user_question` 仍需使用正式 Web 界面。
+
 ## 上传知识库文件
 
 上传目录时，如果不指定 `--kb-id`，CLI 会拉取当前 remote 中可用的知识库并在终端中选择：

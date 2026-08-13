@@ -6,7 +6,7 @@ from langchain.agents.middleware import ModelRetryMiddleware, TodoListMiddleware
 from langchain.agents.middleware.types import AgentMiddleware
 
 from yuxi.agents import BaseAgent, BaseState, load_chat_model, resolve_chat_model_spec
-from yuxi.agents.backends import create_agent_filesystem_middleware
+from yuxi.agents.backends import create_agent_filesystem_middleware, sync_agent_context_skills
 from yuxi.agents.buildin.chatbot.prompt import TODO_MID_PROMPT, build_prompt_with_context
 from yuxi.agents.buildin.subagent.context import SubAgentContext
 from yuxi.agents.context import (
@@ -136,6 +136,7 @@ class SubAgentBackend(BaseAgent):
             context or self.context_schema(),
             context_schema=self.context_schema,
         )
+        await sync_agent_context_skills(context)
         model_spec = resolve_chat_model_spec(context.model)
         tool_approval_mode = normalize_tool_approval_mode(getattr(context, "tool_approval_mode", "default"))
         disabled_tools = _disabled_tools_for(tool_approval_mode)

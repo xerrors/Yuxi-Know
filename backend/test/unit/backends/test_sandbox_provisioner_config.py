@@ -144,6 +144,42 @@ def test_docker_mount_checks_use_file_and_skills_thread_ids(monkeypatch, tmp_pat
     assert backend._is_expected_skills_mount(container, "parent-thread") is False
 
 
+def test_docker_sandbox_mounts_shared_workspace_without_thread_history_projection(monkeypatch, tmp_path):
+    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
+    module = _load_module()
+    captured = []
+
+    class FakeContainer:
+        name = "yuxi-sandbox-sandbox-1"
+        status = "running"
+        attrs = {"State": {"Status": "running"}}
+
+        def reload(self):
+            return None
+
+    backend = _docker_backend(
+        module,
+        tmp_path,
+        lambda image, **kwargs: captured.append((image, kwargs)) or FakeContainer(),
+    )
+    monkeypatch.setattr(backend, "_get_container", lambda _sandbox_id: None)
+    monkeypatch.setattr(backend, "_ensure_network", backend._network_name)
+    monkeypatch.setattr(backend, "_ensure_user_data_writable", lambda _container: None)
+    monkeypatch.setattr(module, "wait_for_sandbox_ready", lambda _url, timeout_seconds: True)
+
+    backend.create("sandbox-1", "thread-1", "user-1")
+
+    volumes = captured[0][1]["volumes"]
+    destinations = {mount["bind"] for mount in volumes.values()}
+    assert destinations == {
+        "/home/gem/user-data/workspace",
+        "/home/gem/user-data/uploads",
+        "/home/gem/user-data/outputs",
+        "/home/gem/skills",
+    }
+    assert all("/agents/chats" not in destination for destination in destinations)
+
+
 def test_kubernetes_mount_check_uses_file_and_skills_thread_ids(monkeypatch):
     monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
     module = _load_module()
@@ -235,6 +271,30 @@ def test_authenticated_management_api_returns_proxied_sandbox_url(monkeypatch):
         {"sandbox_id": sandbox_id, "sandbox_url": expected_url, "status": "Running"}
     ]
     assert delete_response.status_code == 200
+
+
+def test_create_sandbox_forwards_environment_policy(monkeypatch):
+    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
+    module = _load_module()
+    calls = []
+
+    def create(*_args, **kwargs):
+        calls.append(kwargs)
+        return module.SandboxRecord(sandbox_id="sandbox-1", sandbox_url="http://sandbox", status="Running")
+
+    monkeypatch.setattr(module, "backend_impl", SimpleNamespace(create=create))
+    monkeypatch.setattr(module.idle_reaper, "touch", lambda _sandbox_id: None)
+
+    module.create_sandbox(
+        module.CreateSandboxRequest(
+            sandbox_id="sandbox-1",
+            thread_id="thread-1",
+            uid="user-1",
+            inherit_env=False,
+        )
+    )
+
+    assert calls[0]["inherit_env"] is False
 
 
 def test_authenticated_proxy_forwards_request_without_management_token(monkeypatch):
@@ -372,6 +432,64 @@ def test_docker_backend_uses_private_network_without_published_port(monkeypatch,
     assert captured[0][0] == "sandbox-image"
     assert captured[0][1]["network"] == "yuxi-know-sandbox-sandbox-1"
     assert "ports" not in captured[0][1]
+
+
+def test_docker_backend_can_disable_sandbox_environment(monkeypatch, tmp_path):
+    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
+    module = _load_module()
+    captured = []
+
+    class FakeContainer:
+        name = "yuxi-sandbox-sandbox-1"
+        status = "running"
+        attrs = {"State": {"Status": "running"}}
+
+        def reload(self):
+            return None
+
+    backend = _docker_backend(
+        module,
+        tmp_path,
+        lambda image, **kwargs: captured.append((image, kwargs)) or FakeContainer(),
+    )
+    backend._sandbox_env = {"GLOBAL_SECRET": "value"}
+    monkeypatch.setattr(backend, "_get_container", lambda _sandbox_id: None)
+    monkeypatch.setattr(backend, "_ensure_network", backend._network_name)
+    monkeypatch.setattr(backend, "_ensure_user_data_writable", lambda _container: None)
+    monkeypatch.setattr(module, "wait_for_sandbox_ready", lambda _url, timeout_seconds: True)
+
+    backend.create("sandbox-1", "thread-1", "user-1", {"USER_SECRET": "value"}, inherit_env=False)
+
+    assert "environment" not in captured[0][1]
+
+
+def test_kubernetes_sandbox_disables_service_account_token_and_environment(monkeypatch):
+    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
+    module = _load_module()
+
+    class FakeKubernetesClient:
+        def __getattr__(self, _name):
+            return lambda *_args, **kwargs: SimpleNamespace(**kwargs)
+
+    backend = object.__new__(module.KubernetesProvisionerBackend)
+    backend._client = FakeKubernetesClient()
+    backend._sandbox_image = "sandbox-image"
+    backend._container_port = 8080
+    backend._thread_pvc = "threads"
+    backend._sandbox_env = {"GLOBAL_SECRET": "value"}
+
+    pod = backend._build_pod_spec(
+        "sandbox-1",
+        "thread-1",
+        "user-1",
+        {"USER_SECRET": "value"},
+        file_thread_id="thread-1",
+        skills_thread_id="thread-1",
+        inherit_env=False,
+    )
+
+    assert pod.spec.automount_service_account_token is False
+    assert pod.spec.containers[0].env == []
 
 
 def test_docker_backend_cleans_up_container_and_network_when_health_check_fails(monkeypatch, tmp_path):

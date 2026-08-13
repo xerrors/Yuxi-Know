@@ -25,6 +25,7 @@ export const modelAvatars = {
   moonshotai: avatar('moonshot', '#16191e'),
   'moonshotai-cn': avatar('moonshot', '#16191e'),
   opencode: avatar('opencode', '#000'),
+  'opencode-go': avatar('opencode', '#000'),
   openai: avatar('openai', '#000'),
   openrouter: avatar(
     'openrouter',

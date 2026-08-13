@@ -52,3 +52,13 @@ format:
 	cd backend && UV_PYTHON=$(BACKEND_PYTHON) uv run ruff check --select I package --fix
 	cd web && pnpm run format
 	cd web && pnpm run lint
+
+# 只检查不修改，供提交前与 CI 使用（与 ruff.yml 的命令保持一致）
+lint:
+	cd backend && UV_PYTHON=$(BACKEND_PYTHON) uv run ruff check package
+	cd backend && UV_PYTHON=$(BACKEND_PYTHON) uv run ruff check --select I package
+	cd web && pnpm run lint
+
+# 后端单元测试（不依赖 docker 服务）；integration/e2e 需在容器环境运行
+test:
+	cd backend && UV_PYTHON=$(BACKEND_PYTHON) uv run pytest -m unit $(PYTEST_ARGS)

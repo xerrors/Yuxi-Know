@@ -451,20 +451,19 @@ async def resolve_agent_resource_options(
     if "knowledges" in fields_to_load:
         from yuxi.knowledge.runtime import knowledge_base
 
-        databases = (await knowledge_base.get_databases_by_user(user)).get("databases", [])
+        databases = await knowledge_base.get_databases_by_user(user)
         options["knowledges"] = [
-            _resource_option(item.get("kb_id"), item.get("name"), item.get("description"))
-            for item in databases
-            if isinstance(item, dict) and item.get("kb_id")
+            _resource_option(item.kb_id, item.name, item.description) for item in databases if item.kb_id
         ]
     if "mcps" in fields_to_load:
-        from yuxi.agents.mcp.service import get_all_mcp_servers
+        from yuxi.agents.mcp.service import get_all_mcp_servers, get_enabled_mcp_server_slugs
 
         servers = await get_all_mcp_servers(db)
+        enabled_slugs = set(await get_enabled_mcp_server_slugs(db=db))
         options["mcps"] = [
             _resource_option(server.slug, server.name, server.description)
             for server in servers
-            if server.enabled and server.slug
+            if server.slug in enabled_slugs
         ]
     if "skills" in fields_to_load:
         from yuxi.agents.skills.service import list_accessible_skills
@@ -548,6 +547,7 @@ async def prepare_agent_runtime_context(
             setattr(context, "_readable_skills", [])
             setattr(context, "_runtime_skill_metadata", {})
             setattr(context, "_runtime_skill_dependency_map", {})
+            setattr(context, "_runtime_skill_sources", {})
             return context
 
         raw_resources = {
@@ -572,5 +572,6 @@ async def prepare_agent_runtime_context(
         setattr(context, "_readable_skills", skill_scope["readable_skills"])
         setattr(context, "_runtime_skill_metadata", skill_scope["runtime_skill_metadata"])
         setattr(context, "_runtime_skill_dependency_map", skill_scope["runtime_skill_dependency_map"])
+        setattr(context, "_runtime_skill_sources", skill_scope.get("runtime_skill_sources", {}))
 
     return context

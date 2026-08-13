@@ -15,7 +15,7 @@ from collections.abc import Callable
 from typing import Any, cast
 
 from langchain_mcp_adapters.client import MultiServerMCPClient
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.storage.postgres.models_business import MCPServer
@@ -34,7 +34,7 @@ _mcp_tools_cache: dict[str, list[Callable[..., Any]]] = {}
 
 # MCP tools statistics (for reporting enabled/disabled counts)
 _mcp_tools_stats: dict[str, dict[str, int]] = {}
-_UNSET = object()
+_USER_CONFIGURABLE_TRANSPORTS = ("sse", "streamable_http")
 
 # Default MCP Server configurations (Imported to DB on first run)
 _DEFAULT_MCP_SERVERS = {
@@ -47,6 +47,7 @@ _DEFAULT_MCP_SERVERS = {
         "tags": ["内置", "图表"],
     },
 }
+_BUILTIN_MCP_SERVER_SLUGS = tuple(_DEFAULT_MCP_SERVERS)
 
 _RETIRED_BUILTIN_MCP_SERVER_SLUGS = ("sequentialthinking",)
 
@@ -64,6 +65,37 @@ _SYNCED_MCP_FIELDS = (
     "icon",
 )
 
+
+class MCPServerNotFoundError(ValueError):
+    """表示指定的 MCP 服务器不存在。"""
+
+
+def is_builtin_mcp_server(server: MCPServer) -> bool:
+    """判断 MCP 是否由代码中的内置定义管理。"""
+    return server.slug in _BUILTIN_MCP_SERVER_SLUGS
+
+
+def requires_mcp_stdio_migration(server: MCPServer) -> bool:
+    """判断 MCP 是否为升级后需要迁移的用户 stdio 配置。"""
+    return server.transport == "stdio" and not is_builtin_mcp_server(server)
+
+
+def _to_runtime_mcp_config(server: MCPServer) -> dict[str, Any]:
+    """生成运行时 MCP 配置，内置连接字段始终以代码定义为准。"""
+    if not is_builtin_mcp_server(server):
+        return server.to_mcp_config()
+
+    builtin = _DEFAULT_MCP_SERVERS[server.slug]
+    config = {
+        key: builtin[key]
+        for key in ("transport", "url", "command", "args", "env", "headers", "timeout", "sse_read_timeout")
+        if builtin.get(key) is not None
+    }
+    if server.disabled_tools:
+        config["disabled_tools"] = server.disabled_tools
+    return config
+
+
 # =============================================================================
 # === Core Logic (Moved from agents/common/mcp.py) ===
 # =============================================================================
@@ -76,6 +108,21 @@ async def ensure_builtin_mcp_servers_in_db() -> None:
     try:
         async with pg_manager.get_async_session_context() as session:
             any_changed = False
+
+            result = await session.execute(
+                select(MCPServer).where(
+                    MCPServer.transport == "stdio",
+                    ~MCPServer.slug.in_(_BUILTIN_MCP_SERVER_SLUGS),
+                    MCPServer.enabled == 1,
+                )
+            )
+            for server in result.scalars().all():
+                server.enabled = 0
+                server.updated_by = "system"
+                clear_mcp_server_tools_cache(server.slug)
+                any_changed = True
+                logger.warning(f"Disabled legacy user stdio MCP server '{server.slug}'")
+
             for slug in _RETIRED_BUILTIN_MCP_SERVER_SLUGS:
                 result = await session.execute(
                     select(MCPServer).filter(MCPServer.slug == slug, MCPServer.created_by == "system")
@@ -121,6 +168,9 @@ async def ensure_builtin_mcp_servers_in_db() -> None:
                     if getattr(existing, field) != next_value:
                         setattr(existing, field, next_value)
                         server_changed = True
+                if existing.created_by != "system":
+                    existing.created_by = "system"
+                    server_changed = True
                 if server_changed:
                     existing.updated_by = "system"
                     any_changed = True
@@ -163,12 +213,15 @@ async def _load_enabled_mcp_server_configs(
 ) -> dict[str, dict[str, Any]]:
     """Load enabled MCP server configs directly from the database."""
     if db is not None:
-        stmt = select(MCPServer).where(MCPServer.enabled == 1)
+        stmt = select(MCPServer).where(
+            MCPServer.enabled == 1,
+            or_(MCPServer.transport != "stdio", MCPServer.slug.in_(_BUILTIN_MCP_SERVER_SLUGS)),
+        )
         if names:
             stmt = stmt.where(MCPServer.slug.in_(names))
         result = await db.execute(stmt)
         servers = result.scalars().all()
-        return {server.slug: server.to_mcp_config() for server in servers}
+        return {server.slug: _to_runtime_mcp_config(server) for server in servers}
 
     from yuxi.storage.postgres.manager import pg_manager
 
@@ -185,7 +238,12 @@ async def get_enabled_mcp_server_config(server_slug: str, *, db: AsyncSession | 
 async def get_enabled_mcp_server_slugs(*, db: AsyncSession | None = None) -> list[str]:
     """Get enabled MCP server slugs from the database."""
     if db is not None:
-        result = await db.execute(select(MCPServer.slug).where(MCPServer.enabled == 1))
+        result = await db.execute(
+            select(MCPServer.slug).where(
+                MCPServer.enabled == 1,
+                or_(MCPServer.transport != "stdio", MCPServer.slug.in_(_BUILTIN_MCP_SERVER_SLUGS)),
+            )
+        )
         return [name for name in result.scalars().all() if isinstance(name, str)]
 
     from yuxi.storage.postgres.manager import pg_manager
@@ -282,6 +340,9 @@ async def get_mcp_tools(
                     f"{len(all_processed_tools)} tools loaded."
                 )
 
+        except ExceptionGroup as e:
+            logger.warning(f"MCP server '{server_slug}' failed with group error: {e}")
+            return []
         except Exception as e:
             logger.exception(f"Failed to load tools from MCP server '{server_slug}': {e}")
             return []
@@ -358,9 +419,6 @@ async def create_mcp_server(
     name: str,
     transport: str,
     url: str = None,
-    command: str = None,
-    args: list = None,
-    env: dict = None,
     description: str = None,
     headers: dict = None,
     timeout: int = None,
@@ -370,6 +428,11 @@ async def create_mcp_server(
     created_by: str = None,
 ) -> MCPServer:
     """Create server."""
+    if slug in _BUILTIN_MCP_SERVER_SLUGS:
+        raise ValueError("系统内置 MCP 的 slug 由代码保留，无法通过接口创建")
+    if transport not in _USER_CONFIGURABLE_TRANSPORTS:
+        raise ValueError("用户创建的 MCP 仅支持 sse 或 streamable_http，不允许启动 stdio 本地进程")
+
     existing = await get_mcp_server(db, slug)
     if existing:
         raise ValueError(f"Server slug '{slug}' already exists")
@@ -380,9 +443,6 @@ async def create_mcp_server(
         description=description,
         transport=transport,
         url=url,
-        command=command,
-        args=args,
-        env=env,
         headers=headers,
         timeout=timeout,
         sse_read_timeout=sse_read_timeout,
@@ -409,9 +469,6 @@ async def update_mcp_server(
     description: str = None,
     transport: str = None,
     url: str = None,
-    command: str = None,
-    args: list = None,
-    env: Any = _UNSET,
     headers: dict = None,
     timeout: int = None,
     sse_read_timeout: int = None,
@@ -422,7 +479,17 @@ async def update_mcp_server(
     """Update server configuration."""
     server = await get_mcp_server(db, slug)
     if not server:
-        raise ValueError(f"Server '{slug}' does not exist")
+        raise MCPServerNotFoundError(f"Server '{slug}' does not exist")
+    if is_builtin_mcp_server(server):
+        raise PermissionError("系统内置 MCP 的连接配置由代码管理，无法通过接口修改")
+
+    next_transport = transport or server.transport
+    if next_transport not in _USER_CONFIGURABLE_TRANSPORTS:
+        raise ValueError("用户创建的 MCP 仅支持 sse 或 streamable_http，不允许启动 stdio 本地进程")
+
+    next_url = url if url is not None else server.url
+    if not next_url or not next_url.strip():
+        raise ValueError(f"传输类型为 {next_transport} 时，url 必填")
 
     if name is not None:
         server.name = name
@@ -432,12 +499,9 @@ async def update_mcp_server(
         server.transport = transport
     if url is not None:
         server.url = url
-    if command is not None:
-        server.command = command
-    if args is not None:
-        server.args = args
-    if env is not _UNSET:
-        server.env = env
+    server.command = None
+    server.args = None
+    server.env = None
     if headers is not None:
         server.headers = headers
     if timeout is not None:
@@ -486,7 +550,9 @@ async def set_server_enabled(
     """Set server enabled status."""
     server = await get_mcp_server(db, slug)
     if not server:
-        raise ValueError(f"Server '{slug}' does not exist")
+        raise MCPServerNotFoundError(f"Server '{slug}' does not exist")
+    if enabled and requires_mcp_stdio_migration(server):
+        raise ValueError("历史 stdio MCP 已被禁用，请改为 sse 或 streamable_http 后再启用")
 
     server.enabled = 1 if enabled else 0
     if updated_by is not None:
@@ -519,7 +585,7 @@ async def toggle_tool_enabled(
     """
     server = await get_mcp_server(db, server_slug)
     if not server:
-        raise ValueError(f"Server '{server_slug}' does not exist")
+        raise MCPServerNotFoundError(f"Server '{server_slug}' does not exist")
 
     disabled_tools = list(server.disabled_tools or [])
 

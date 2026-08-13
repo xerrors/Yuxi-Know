@@ -19,10 +19,9 @@ from yuxi.services.agent_request_queue_service import (
     cancel_queued_request as cancel_queued_request_svc,
     continue_thread_queue,
     finalize_dispatch,
-    finalize_intake,
     get_request as get_request_svc,
     get_thread_queue_snapshot,
-    intake_request,
+    steer_queued_request,
     stream_request_events,
 )
 from yuxi.services.agent_run_service import (
@@ -34,6 +33,7 @@ from yuxi.services.agent_run_service import (
     stream_agent_run_events,
 )
 from yuxi.services.input_message_service import build_chat_input_message
+from yuxi.services.run_submission_service import RunOrigin, RunSubmissionCommand, submit_run_command
 from yuxi.storage.postgres.manager import pg_manager
 from yuxi.storage.postgres.models_business import User
 
@@ -75,7 +75,10 @@ class AgentRunCreate(BaseModel):
     tool_approval_mode: str | None = Field(None, description="可选，本次运行的工具审批模式覆盖")
     resume: Any | None = Field(None, description="可选，恢复时传给 LangGraph 的输入载荷，非布尔值")
     created_by_run_id: str | None = Field(None, description="可选，创建本 run 的父 run ID；resume 时为被恢复的 run ID")
-    queue_policy: str = Field("enqueue", description="排队策略：enqueue（默认排队）或 reject（运行中拒绝）")
+    queue_policy: str = Field(
+        "enqueue",
+        description="排队策略：enqueue（默认排队）、reject（运行中拒绝）或 steer（优先接替）",
+    )
 
 
 def _backend_info(info: dict) -> dict:
@@ -274,6 +277,8 @@ async def create_agent_run(
 ):
     # resume 路径：恢复已有 LangGraph 状态，跳过 request 入队与派发，直接新建 run。
     if payload.resume is not None:
+        if payload.queue_policy != "enqueue":
+            raise HTTPException(status_code=422, detail="queue_policy 仅支持普通 Chat 请求")
         input_message = None
         if payload.query:
             input_message = build_chat_input_message(payload.query, payload.image_content)
@@ -297,45 +302,21 @@ async def create_agent_run(
 
     input_message = build_chat_input_message(payload.query or "", payload.image_content)
 
-    agent_repo = AgentRepository(db)
-    agent_item = await agent_repo.get_visible_by_slug(slug=payload.agent_slug, user=current_user, kind="main")
-    if not agent_item:
-        raise HTTPException(status_code=404, detail="智能体不存在")
-    agent_backend = agent_manager.get_agent(agent_item.backend_id)
-    if not agent_backend:
-        raise HTTPException(status_code=404, detail=f"智能体后端 {agent_item.backend_id} 不存在")
-
-    result = await intake_request(
-        db=db,
-        request_id=request_id,
-        uid=str(current_user.uid),
-        agent_slug=payload.agent_slug,
-        thread_id=payload.thread_id,
-        source="chat",
-        queue_policy=payload.queue_policy,
-        input_message=input_message,
-        agent_item=agent_item,
-        agent_backend=agent_backend,
-        model_spec=payload.model_spec,
-        tool_approval_mode=payload.tool_approval_mode,
-        meta={**meta, "tool_approval_mode": payload.tool_approval_mode},
-    )
-
-    await finalize_intake(db=db, intake=result)
-
-    return {
-        "request_id": result.request_id,
-        "status": result.status,
-        "queue_policy": result.queue_policy,
-        "queue_position": result.queue_position,
-        "message_id": result.message_id,
-        "run_id": result.run_id,
-        "stream_url": f"/api/agent/runs/{result.run_id}/events" if result.run_id else None,
-        "request_events_url": (
-            f"/api/agent/requests/{result.request_id}/events" if result.status == "queued" else None
+    return await submit_run_command(
+        command=RunSubmissionCommand(
+            agent_slug=payload.agent_slug,
+            thread_id=payload.thread_id,
+            request_id=request_id,
+            input_message=input_message,
+            origin=RunOrigin(source="chat", channel="web"),
+            request_metadata={**meta, "tool_approval_mode": payload.tool_approval_mode},
+            model_spec=payload.model_spec,
+            tool_approval_mode=payload.tool_approval_mode,
+            queue_policy=payload.queue_policy,
         ),
-        "thread_id": result.thread_id,
-    }
+        current_user=current_user,
+        db=db,
+    )
 
 
 @agent_router.get("/requests/{request_id}")
@@ -391,6 +372,24 @@ async def cancel_request(
     status = await cancel_queued_request_svc(request_id=request_id, current_uid=str(current_user.uid), db=db)
     await db.commit()
     return {"request_id": request_id, "status": status}
+
+
+@agent_router.post("/requests/{request_id}/steer")
+async def steer_request(
+    request_id: str,
+    current_user: User = Depends(get_required_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await steer_queued_request(request_id=request_id, current_uid=str(current_user.uid), db=db)
+    await db.commit()
+    return {
+        "request_id": result.request_id,
+        "thread_id": result.thread_id,
+        "status": result.status,
+        "queue_policy": result.queue_policy,
+        "queue_position": result.queue_position,
+        "request_events_url": f"/api/agent/requests/{result.request_id}/events",
+    }
 
 
 @agent_router.get("/requests/{request_id}/events")

@@ -1,0 +1,47 @@
+# 后端单元测试 CI：此前后端 pytest 从未接入 CI，改动回归无人把关。
+# 本工作流在 push/PR 时运行 unit 层测试（不依赖 docker 服务）。
+name: Backend Unit Tests
+
+on:
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'backend/pyproject.toml'
+      - 'Makefile'
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+      - 'backend/pyproject.toml'
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    name: Backend unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.7.2"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: uv sync --group test
+
+      - name: Run unit tests
+        run: uv run pytest -m unit -q

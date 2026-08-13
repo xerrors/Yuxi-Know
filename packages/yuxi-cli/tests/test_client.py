@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from yuxi_cli.client import YuxiClient
+import httpx
+
+from yuxi_cli.client import YuxiClient, _iter_sse_events
 from yuxi_cli.config import Remote
 
 
@@ -37,6 +39,79 @@ def test_run_agent_eval_uses_invocation_endpoint(monkeypatch):
     assert call["json"]["agent_slug"] == "default-chatbot"
     assert call["json"]["evaluation"] == {"dataset_name": "dataset-1"}
     assert call["json"]["meta"] == {"request_id": "req-1"}
+
+
+def test_create_agent_chat_run_uses_channel_endpoint(monkeypatch):
+    client, calls = _patched_client(monkeypatch)
+    try:
+        client.create_agent_chat_run(
+            message="你好",
+            agent_slug="default-chatbot",
+            thread_id="thread-1",
+            request_id="request-1",
+        )
+    finally:
+        client.close()
+
+    call = calls[-1]
+    assert call["method"] == "POST"
+    assert call["path"] == "/agent-invocation/channel/messages"
+    assert call["json"] == {
+        "channel": "cli",
+        "account_id": "local",
+        "chat_id": "cli",
+        "agent_slug": "default-chatbot",
+        "thread_id": "thread-1",
+        "message_id": "request-1",
+        "request_id": "request-1",
+        "message": {"type": "text", "text": "你好"},
+    }
+
+
+def test_iter_sse_events_supports_multiline_data_and_ignores_heartbeat():
+    lines = iter(
+        [
+            ": heartbeat",
+            "",
+            "id: 1-0",
+            "event: messages",
+            'data: {"payload":',
+            'data: {"status":"loading"}}',
+            "",
+        ]
+    )
+
+    assert list(_iter_sse_events(lines)) == [
+        {
+            "id": "1-0",
+            "event": "messages",
+            "data": '{"payload":\n{"status":"loading"}}',
+        }
+    ]
+
+
+def test_stream_agent_run_events_sends_auth_and_uses_compact_events():
+    remote = Remote(name="local", url="http://localhost:5173", api_key="yxkey_test")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/agent/runs/run-1/events"
+        assert request.url.params["verbose"] == "false"
+        assert request.headers["Authorization"] == "Bearer yxkey_test"
+        return httpx.Response(
+            200,
+            text='event: end\ndata: {"payload":{"status":"completed"}}\n\n',
+            headers={"Content-Type": "text/event-stream"},
+        )
+
+    client = YuxiClient(remote)
+    client.client.close()
+    client.client = httpx.Client(transport=httpx.MockTransport(handler))
+    try:
+        events = list(client.stream_agent_run_events("run-1"))
+    finally:
+        client.close()
+
+    assert events == [{"event": "end", "data": '{"payload":{"status":"completed"}}'}]
 
 
 def test_list_external_databases_uses_external_path(monkeypatch):

@@ -129,6 +129,7 @@
               <span class="suggestion-text">{{ example }}</span>
             </button>
             <button
+              v-if="canGenerateQuestions"
               type="button"
               class="suggestion-row"
               @click="() => generateSampleQuestions(false)"
@@ -138,11 +139,14 @@
             </button>
           </div>
 
-          <div v-else class="suggestions-empty">
+          <div v-else-if="canGenerateQuestions" class="suggestions-empty">
             <button class="suggestion-row" @click="() => generateSampleQuestions(false)">
               <RefreshCw class="suggestion-icon" />
               <span class="suggestion-text">生成示例问题</span>
             </button>
+          </div>
+          <div v-else class="suggestions-empty">
+            <span class="suggestion-text">暂无示例问题</span>
           </div>
         </div>
       </div>
@@ -179,6 +183,9 @@ const searchLoading = computed(() => store.state.searchLoading)
 const queryResult = ref('')
 const showRawData = ref(false)
 const showQuerySuggestions = computed(() => !searchLoading.value && !queryResult.value)
+
+// 示例问题生成属于写操作，仅对拥有管理权限（非只读权限）的知识库开放
+const canGenerateQuestions = computed(() => store.database?.can_manage === true)
 
 // 查询测试
 const queryText = ref('')

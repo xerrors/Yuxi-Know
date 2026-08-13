@@ -36,7 +36,6 @@ const configStore = useConfigStore()
 const loading = ref(false)
 const remoteLoading = ref(false)
 const saving = ref(false)
-const togglingProviderId = ref(null)
 const providers = ref([])
 const searchQuery = ref('')
 const modelTestLoadingBySpec = ref({})
@@ -122,13 +121,15 @@ const filteredProviders = computed(() => {
       )
     : providers.value
   return [...filtered].sort((a, b) => {
-    if (a.is_enabled !== b.is_enabled) return a.is_enabled ? -1 : 1
     if (a.is_enabled && b.is_enabled && a.credential_status !== b.credential_status) {
       return a.credential_status === 'warning' ? 1 : -1
     }
     return a.provider_id.localeCompare(b.provider_id)
   })
 })
+
+const enabledProviders = computed(() => filteredProviders.value.filter((p) => p.is_enabled))
+const disabledProviders = computed(() => filteredProviders.value.filter((p) => !p.is_enabled))
 
 const providerStats = computed(() => {
   let enabled = 0,
@@ -311,10 +312,8 @@ function getProviderInfo(provider) {
 }
 
 function getProviderStatus(provider) {
-  if (!provider.is_enabled) return { label: '未启用', level: 'info', showDot: false }
   if (provider.credential_status === 'warning') return { label: '凭证缺失', level: 'warning' }
-  if (provider.is_enabled) return { label: '', level: 'success' }
-  return null
+  return { label: '', level: 'success' }
 }
 
 const openCreateProviderModal = () => {
@@ -419,6 +418,21 @@ const saveProvider = async () => {
   }
 }
 
+const saveProviderAndEnable = async () => {
+  saving.value = true
+  try {
+    const payload = { ...buildProviderPayload(), is_enabled: true }
+    await modelProviderApi.updateProvider(providerForm.provider_id, payload)
+    message.success('供应商已保存并启用')
+    showProviderModal.value = false
+    await loadProviders()
+  } catch (error) {
+    message.error(error.message || '保存失败')
+  } finally {
+    saving.value = false
+  }
+}
+
 const deleteProvider = async (provider) => {
   if (providerContainsDefaultModel(provider.provider_id)) {
     warnDefaultModelProtected()
@@ -455,25 +469,6 @@ const deleteProviderFromEdit = async () => {
   const provider = providers.value.find((p) => p.provider_id === editingProviderId.value)
   if (provider) {
     deleteProvider(provider)
-  }
-}
-
-const toggleProviderEnabled = async (provider, checked) => {
-  if (!checked && providerContainsDefaultModel(provider.provider_id)) {
-    warnDefaultModelProtected()
-    return
-  }
-
-  togglingProviderId.value = provider.provider_id
-  try {
-    await modelProviderApi.updateProvider(provider.provider_id, { is_enabled: checked })
-    message.success(checked ? '已启用' : '已停用')
-    await loadProviders()
-  } catch (error) {
-    message.error(error.message || '操作失败')
-    await loadProviders()
-  } finally {
-    togglingProviderId.value = null
   }
 }
 
@@ -733,50 +728,86 @@ defineExpose({
       </template>
     </PageShoulder>
 
-    <ExtensionCardGrid :min-width="320">
-      <InfoCard
-        v-for="provider in filteredProviders"
-        :key="provider.provider_id"
-        :title="provider.display_name"
-        :subtitle="provider.provider_id"
-        :default-icon="Globe"
-        :info="getProviderInfo(provider)"
-        :status="getProviderStatus(provider)"
-        @click="openEditProviderModal(provider)"
-      >
-        <template #icon>
-          <span
-            class="provider-avatar"
-            role="img"
-            :aria-label="`${provider.display_name} 图标`"
-            :style="{
-              background: getProviderAvatar(provider).background,
-              '--provider-avatar-scale': getProviderAvatar(provider).scale,
-              '--provider-avatar-filter': getProviderAvatar(provider).filter
-            }"
-          >
-            <img :src="getProviderAvatar(provider).icon" alt="" />
-          </span>
-        </template>
-        <template #footer>
-          <button class="view-models-btn" type="button" @click.stop="openModelsModal(provider)">
-            <Settings2 :size="14" />
-            管理模型
-            <span v-if="provider.enabled_models?.length" class="enabled-count"
-              >（已启用 {{ provider.enabled_models.length }} 个）</span
+    <div
+      v-if="!loading && enabledProviders.length === 0 && disabledProviders.length === 0"
+      class="provider-empty-state"
+    >
+      <a-empty
+        :image="false"
+        :description="searchQuery ? '无匹配供应商' : '暂无供应商，点击上方按钮新增'"
+      />
+    </div>
+
+    <template v-else>
+      <div v-if="enabledProviders.length" class="provider-section-header">
+        已启用（{{ enabledProviders.length }}）
+      </div>
+      <ExtensionCardGrid v-if="enabledProviders.length" :min-width="320">
+        <InfoCard
+          v-for="provider in enabledProviders"
+          :key="provider.provider_id"
+          :title="provider.display_name"
+          :subtitle="provider.provider_id"
+          :default-icon="Globe"
+          :info="getProviderInfo(provider)"
+          :status="getProviderStatus(provider)"
+          @click="openEditProviderModal(provider)"
+        >
+          <template #icon>
+            <span
+              class="provider-avatar"
+              role="img"
+              :aria-label="`${provider.display_name} 图标`"
+              :style="{
+                background: getProviderAvatar(provider).background,
+                '--provider-avatar-scale': getProviderAvatar(provider).scale,
+                '--provider-avatar-filter': getProviderAvatar(provider).filter
+              }"
             >
-          </button>
-          <span class="provider-enable-switch" @click.stop>
-            <a-switch
-              size="small"
-              :checked="provider.is_enabled"
-              :loading="togglingProviderId === provider.provider_id"
-              @change="(checked) => toggleProviderEnabled(provider, checked)"
-            />
-          </span>
-        </template>
-      </InfoCard>
-    </ExtensionCardGrid>
+              <img :src="getProviderAvatar(provider).icon" alt="" />
+            </span>
+          </template>
+          <template #footer>
+            <button class="view-models-btn" type="button" @click.stop="openModelsModal(provider)">
+              <Settings2 :size="14" />
+              管理模型
+              <span v-if="provider.enabled_models?.length" class="enabled-count"
+                >（已启用 {{ provider.enabled_models.length }} 个）</span
+              >
+            </button>
+          </template>
+        </InfoCard>
+      </ExtensionCardGrid>
+
+      <div v-if="disabledProviders.length" class="provider-section-header">
+        未启用（{{ disabledProviders.length }}）
+      </div>
+      <ExtensionCardGrid v-if="disabledProviders.length" :min-width="320">
+        <InfoCard
+          v-for="provider in disabledProviders"
+          :key="provider.provider_id"
+          variant="mini"
+          :title="provider.display_name"
+          :description="provider.provider_id"
+          @click="openEditProviderModal(provider)"
+        >
+          <template #icon>
+            <span
+              class="provider-avatar"
+              role="img"
+              :aria-label="`${provider.display_name} 图标`"
+              :style="{
+                background: getProviderAvatar(provider).background,
+                '--provider-avatar-scale': getProviderAvatar(provider).scale,
+                '--provider-avatar-filter': getProviderAvatar(provider).filter
+              }"
+            >
+              <img :src="getProviderAvatar(provider).icon" alt="" />
+            </span>
+          </template>
+        </InfoCard>
+      </ExtensionCardGrid>
+    </template>
 
     <!-- Provider Edit Modal -->
     <a-modal
@@ -799,7 +830,14 @@ defineExpose({
           <span v-else></span>
           <div class="provider-modal-footer-actions">
             <a-button @click="showProviderModal = false">取消</a-button>
+            <template v-if="editingProviderId && !providerForm.is_enabled">
+              <a-button :loading="saving" @click="saveProvider">仅保存</a-button>
+              <a-button type="primary" :loading="saving" @click="saveProviderAndEnable">
+                保存并启用
+              </a-button>
+            </template>
             <a-button
+              v-else
               type="primary"
               :loading="saving"
               @click="editingProviderId ? saveProvider() : createProvider()"
@@ -809,7 +847,7 @@ defineExpose({
           </div>
         </div>
       </template>
-      <div class="modal-form">
+      <div class="modal-form" autocomplete="off">
         <div class="form-row">
           <label class="form-label">
             <span>Provider ID</span>
@@ -817,11 +855,16 @@ defineExpose({
               v-model:value="providerForm.provider_id"
               :disabled="!!editingProviderId"
               placeholder="my-provider"
+              autocomplete="off"
             />
           </label>
           <label class="form-label">
             <span>展示名称</span>
-            <a-input v-model:value="providerForm.display_name" placeholder="My Provider" />
+            <a-input
+              v-model:value="providerForm.display_name"
+              placeholder="My Provider"
+              autocomplete="off"
+            />
           </label>
         </div>
 
@@ -831,6 +874,7 @@ defineExpose({
             <a-input
               v-model:value="providerForm.base_url"
               placeholder="https://api.example.com/v1"
+              autocomplete="off"
             />
           </label>
           <label class="form-label">
@@ -850,11 +894,21 @@ defineExpose({
         <div class="form-row">
           <label class="form-label">
             <span>API Key Env</span>
-            <a-input v-model:value="providerForm.api_key_env" placeholder="环境变量名" />
+            <a-input
+              v-model:value="providerForm.api_key_env"
+              placeholder="环境变量名"
+              autocomplete="off"
+            />
           </label>
           <label class="form-label">
             <span>API Key</span>
-            <a-input-password v-model:value="providerForm.api_key" />
+            <a-input-password
+              v-model:value="providerForm.api_key"
+              autocomplete="new-password"
+              autocapitalize="none"
+              autocorrect="off"
+              spellcheck="false"
+            />
           </label>
         </div>
 
@@ -1314,9 +1368,20 @@ defineExpose({
   }
 }
 
-.provider-enable-switch {
-  display: inline-flex;
+.provider-section-header {
+  padding: 12px var(--page-padding) 0;
+  color: var(--gray-500);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+}
+
+.provider-empty-state {
+  display: flex;
   align-items: center;
+  justify-content: center;
+  padding: 100px 20px;
+  text-align: center;
 }
 
 .enabled-count {

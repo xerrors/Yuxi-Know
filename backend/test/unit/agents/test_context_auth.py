@@ -6,6 +6,23 @@ import types
 from dataclasses import dataclass, field
 
 import pytest
+from yuxi.knowledge.read_models import KnowledgeBaseSummary
+
+
+def _knowledge_summary(kb_id: str) -> KnowledgeBaseSummary:
+    return KnowledgeBaseSummary(
+        kb_id=kb_id,
+        name=kb_id,
+        description=None,
+        kb_type="milvus",
+        embedding_model_spec=None,
+        llm_model_spec=None,
+        query_params={},
+        additional_params={},
+        share_config={"version": 2, "read_scope": None, "manage_scope": None},
+        created_by=None,
+        created_at=None,
+    )
 
 
 def _load_context_module():
@@ -115,13 +132,17 @@ async def test_resolve_agent_resource_options_empty_fields_loads_nothing(monkeyp
 @pytest.mark.asyncio
 async def test_normalize_agent_context_config_expands_null_and_filters_explicit_lists(monkeypatch):
     async def fake_get_databases_by_user(_user):
-        return {"databases": [{"kb_id": "kb-a"}, {"kb_id": "kb-b"}]}
+        return [_knowledge_summary("kb-a"), _knowledge_summary("kb-b")]
 
     async def fake_get_all_mcp_servers(_db):
         return [
             types.SimpleNamespace(slug="mcp-a", name="MCP A", description="", enabled=True),
             types.SimpleNamespace(slug="mcp-b", name="MCP B", description="", enabled=True),
         ]
+
+    async def fake_get_enabled_mcp_server_slugs(*, db=None):
+        del db
+        return ["mcp-a"]
 
     async def fake_list_skills(_db, _user):
         return [
@@ -146,7 +167,7 @@ async def test_normalize_agent_context_config_expands_null_and_filters_explicit_
         types.SimpleNamespace(
             get_tool_metadata=lambda category=None: [
                 {"slug": "ask_user_question", "name": "Ask User", "description": ""},
-                {"slug": "tavily_search", "name": "Tavily", "description": ""},
+                {"slug": "web_search", "name": "Web Search", "description": ""},
             ]
         ),
     )
@@ -158,7 +179,10 @@ async def test_normalize_agent_context_config_expands_null_and_filters_explicit_
     monkeypatch.setitem(
         sys.modules,
         "yuxi.agents.mcp.service",
-        types.SimpleNamespace(get_all_mcp_servers=fake_get_all_mcp_servers),
+        types.SimpleNamespace(
+            get_all_mcp_servers=fake_get_all_mcp_servers,
+            get_enabled_mcp_server_slugs=fake_get_enabled_mcp_server_slugs,
+        ),
     )
     monkeypatch.setitem(
         sys.modules,
@@ -189,9 +213,9 @@ async def test_normalize_agent_context_config_expands_null_and_filters_explicit_
         context_schema=ChatBotContext,
     )
 
-    assert normalized["tools"] == ["ask_user_question", "tavily_search"]
+    assert normalized["tools"] == ["ask_user_question", "web_search"]
     assert normalized["knowledges"] == ["kb-b"]
-    assert normalized["mcps"] == ["mcp-a", "mcp-b"]
+    assert normalized["mcps"] == ["mcp-a"]
     assert normalized["skills"] == []
     assert normalized["subagents"] == ["research-agent"]
     assert "summary_threshold" not in normalized
@@ -213,10 +237,14 @@ async def test_normalize_agent_context_config_expands_null_and_filters_explicit_
 @pytest.mark.asyncio
 async def test_prepare_agent_runtime_context_filters_resources_and_derives_runtime_scope(monkeypatch):
     async def fake_get_databases_by_user(_user):
-        return {"databases": [{"kb_id": "kb-a"}, {"kb_id": "kb-b"}]}
+        return [_knowledge_summary("kb-a"), _knowledge_summary("kb-b")]
 
     async def fake_get_all_mcp_servers(_db):
         return [types.SimpleNamespace(slug="mcp-a", name="MCP A", description="", enabled=True)]
+
+    async def fake_get_enabled_mcp_server_slugs(*, db=None):
+        del db
+        return ["mcp-a"]
 
     async def fake_list_skills(_db, _user):
         return [
@@ -298,7 +326,10 @@ async def test_prepare_agent_runtime_context_filters_resources_and_derives_runti
     monkeypatch.setitem(
         sys.modules,
         "yuxi.agents.mcp.service",
-        types.SimpleNamespace(get_all_mcp_servers=fake_get_all_mcp_servers),
+        types.SimpleNamespace(
+            get_all_mcp_servers=fake_get_all_mcp_servers,
+            get_enabled_mcp_server_slugs=fake_get_enabled_mcp_server_slugs,
+        ),
     )
     monkeypatch.setitem(
         sys.modules,

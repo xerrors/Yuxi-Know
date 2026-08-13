@@ -81,5 +81,5 @@ docs/vibe
 /models
 
 .taskr/
+.workbuddy/
 web/src/utils/__tests__/
-web/test/

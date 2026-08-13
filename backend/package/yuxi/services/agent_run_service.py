@@ -297,7 +297,11 @@ def _compact_run_event_envelope(envelope: dict) -> dict | None:
     event_type = str(envelope.get("event") or "")
     payload = envelope.get("payload")
     if event_type == "metadata":
-        return None
+        compact = {key: envelope[key] for key in ("run_id", "thread_id") if key in envelope}
+        compact["payload"] = {
+            key: payload[key] for key in ("run_type", "source") if isinstance(payload, dict) and key in payload
+        }
+        return compact
     if event_type == "custom" and isinstance(payload, dict) and payload.get("name") == "yuxi.agent_state":
         state = payload.get("agent_state")
         chunk = payload.get("chunk") if isinstance(payload.get("chunk"), dict) else {}
@@ -400,6 +404,10 @@ async def create_agent_run_view(
     tool_approval_mode: str | None = None,
     resume: object | None = None,
     created_by_run_id: str | None = None,
+    source: str | None = None,
+    channel: str | None = None,
+    external_id: str | None = None,
+    origin_metadata: dict[str, Any] | None = None,
 ) -> dict:
     """创建 chat/resume run 的 HTTP 入口，输入正文由 Message 承载，run 只登记运行元数据。"""
     meta = meta or {}
@@ -463,6 +471,18 @@ async def create_agent_run_view(
         "model_spec": resolved_model_spec,
         "tool_approval_mode": resolved_tool_approval_mode,
     }
+    if run_type == "resume" and scope.parent_run is not None:
+        if source is None:
+            source = getattr(scope.parent_run, "source", None) or "chat"
+        if channel is None:
+            channel = getattr(scope.parent_run, "channel", None) or "web"
+        if external_id is None:
+            external_id = getattr(scope.parent_run, "external_id", None)
+        if origin_metadata is None:
+            origin_metadata = getattr(scope.parent_run, "origin_metadata", None) or {}
+    else:
+        source = source or "chat"
+        channel = channel or "web"
 
     run, created = await persist_agent_run_record(
         agent_slug=agent_slug,
@@ -475,6 +495,10 @@ async def create_agent_run_view(
         input_payload=input_payload,
         persisted_input_message=persisted_input_message,
         created_by_run_id=run_created_by_id,
+        source=source,
+        channel=channel,
+        external_id=external_id,
+        origin_metadata=origin_metadata,
     )
     if created:
         await _commit_and_enqueue(db, run.id)
@@ -601,6 +625,10 @@ async def persist_agent_run_record(
     persisted_input_message: Message,
     created_by_run_id: str | None = None,
     subagent_thread_relation_id: int | None = None,
+    source: str = "chat",
+    channel: str = "web",
+    external_id: str | None = None,
+    origin_metadata: dict[str, Any] | None = None,
 ) -> tuple[Any, bool]:
     """登记一条 AgentRun 并绑定已创建的输入消息，返回是否为本次新建。"""
     run_id = str(uuid.uuid4())
@@ -613,6 +641,10 @@ async def persist_agent_run_record(
                 uid=str(current_uid),
                 request_id=request_id,
                 input_payload=input_payload,
+                source=source,
+                channel=channel,
+                external_id=external_id,
+                origin_metadata=origin_metadata,
                 conversation_id=conversation_id,
                 created_by_run_id=created_by_run_id,
                 subagent_thread_relation_id=subagent_thread_relation_id,

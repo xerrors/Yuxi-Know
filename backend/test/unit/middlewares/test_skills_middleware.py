@@ -36,6 +36,8 @@ async def test_resolve_runtime_skills_derives_prompt_and_readable_closure(monkey
                 slug="alpha",
                 name="Alpha",
                 description="alpha desc",
+                source_scope="shared",
+                source_dir="/tmp/shared/alpha",
                 tool_dependencies=[],
                 mcp_dependencies=[],
                 skill_dependencies=["beta"],
@@ -44,6 +46,8 @@ async def test_resolve_runtime_skills_derives_prompt_and_readable_closure(monkey
                 slug="beta",
                 name="Beta",
                 description="beta desc",
+                source_scope="personal",
+                source_dir="/tmp/personal/beta",
                 tool_dependencies=[],
                 mcp_dependencies=[],
                 skill_dependencies=[],
@@ -60,6 +64,11 @@ async def test_resolve_runtime_skills_derives_prompt_and_readable_closure(monkey
     assert scope["prompt_skills"] == ["alpha", "beta"]
     assert scope["readable_skills"] == ["alpha", "beta"]
     assert set(scope["runtime_skill_metadata"]) == {"alpha", "beta"}
+    assert scope["runtime_skill_metadata"]["alpha"]["path"] == "/home/gem/skills/alpha/SKILL.md"
+    assert (
+        scope["runtime_skill_metadata"]["beta"]["path"] == "/home/gem/user-data/workspace/agents/skills/beta/SKILL.md"
+    )
+    assert scope["runtime_skill_sources"] == {"alpha": "/tmp/shared/alpha"}
     assert scope["runtime_skill_dependency_map"]["alpha"]["skills"] == ["beta"]
 
 
@@ -295,6 +304,23 @@ def test_read_file_activates_only_readable_skill() -> None:
     request = SimpleNamespace(
         runtime=SimpleNamespace(context=SimpleNamespace(_readable_skills=["alpha"])),
         tool_call={"name": "read_file", "args": {"file_path": "/home/gem/skills/alpha/SKILL.md"}},
+    )
+
+    updated = middleware._process_tool_call_result(result, request)
+
+    assert isinstance(updated, Command)
+    assert updated.update["activated_skills"] == ["alpha"]
+
+
+def test_read_personal_skill_file_activates_readable_skill() -> None:
+    middleware = SkillsMiddleware()
+    result = ToolMessage(content="ok", tool_call_id="tool-1", name="read_file")
+    request = SimpleNamespace(
+        runtime=SimpleNamespace(context=SimpleNamespace(_readable_skills=["alpha"])),
+        tool_call={
+            "name": "read_file",
+            "args": {"file_path": "/home/gem/user-data/workspace/agents/skills/alpha/SKILL.md"},
+        },
     )
 
     updated = middleware._process_tool_call_result(result, request)

@@ -150,13 +150,13 @@ Yuxi 不会把整个容器文件系统都开放给 Agent 或 viewer。当前 vie
 
 `/home/gem/user-data` 是主要工作区。它允许模型和工具写入，但推荐语义并不相同。内置 prompt 中已经明确说明，`workspace` 应当放中间文件，`outputs` 应当放最终产物，`uploads` 是用户上传文件的位置。对于普通对话 Agent，文案甚至提示“非必要不要写 workspace，而优先写 outputs”。
 
-`/home/gem/skills` 是只读目录。它不是简单地把 `saves/skills` 整个暴露进去，而是先根据当前运行时的 `_readable_skills`，把这些技能从全局 skills 根目录同步复制到 `saves/threads/<skills_thread_id>/skills`，再把这个 skills 线程目录只读挂进沙盒。这样做的结果是，不同主/子 Agent 看到的 skill 集可能不同，而且模型永远不能在运行时修改 skills 内容。
+`/home/gem/skills` 是共享与内置 Skill 的只读目录。它不是简单地把 `saves/skills` 整个暴露进去，而是按当前运行时最终生效的共享与内置 Skill，将来源同步到 `saves/threads/<skills_thread_id>/skills`，再把线程目录只读挂进沙盒。个人 Skill 不进入这层投影，Agent 直接读取已经挂载的 `/home/gem/user-data/workspace/agents/skills/<slug>`。
 
 知识库访问不属于沙盒文件系统暴露规则。当前 Agent 可见知识库仍由用户权限和 Agent 配置共同决定，但只通过 `query_kb`、`open_kb_document` 等工具访问，不提供沙盒目录投影。
 
 ## 十、skills、知识库、附件是怎么和沙盒结合的
 
-skills 的结合方式分成两层。第一层是提示词层，`prepare_agent_runtime_context` 会先根据当前 Agent 配置的 `context.skills` 展开依赖闭包，`SkillsMiddleware` 再把 `_prompt_skills` 注入到系统提示里，让模型知道哪些 skill 存在、它们的入口文件一般在 `/home/gem/skills/<slug>/SKILL.md`。第二层是文件系统层，运行时会调用 `sync_thread_readable_skills`，把 `_readable_skills` 对应的 skill 目录复制到当前 `skills_thread_id` 的 `saves/threads/<skills_thread_id>/skills` 下，再由沙盒只读挂载到 `/home/gem/skills`。也就是说，skill 既是 prompt 中的能力说明，也是文件系统中的只读知识目录。
+skills 的结合方式分成两层。第一层是提示词层，`prepare_agent_runtime_context` 会先根据当前 Agent 配置的 `context.skills` 展开依赖闭包，`SkillsMiddleware` 再把 `_prompt_skills` 注入到系统提示里，并给出每个 Skill 的真实运行入口。第二层是文件系统层：共享与内置 Skill 由 `sync_thread_readable_skills` 同步到当前 `skills_thread_id` 的线程目录，并只读挂载到 `/home/gem/skills`；个人 Skill 直接使用用户工作区中的 `workspace/agents/skills`，不再生成线程副本。
 
 附件的结合方式更偏向“先落盘，再把路径告诉模型”。用户上传文件后，系统会先把原始文件写入 `saves/threads/<file_thread_id>/user-data/uploads`。如果该文件可以被解析，系统还会额外生成一个 Markdown 副本，写到 `saves/threads/<file_thread_id>/user-data/uploads/attachments/<name>.md`。普通 Agent 的文件线程就是当前对话线程；子智能体沿用父对话文件线程，所以能访问父对话附件。随后，LangGraph state 中会维护一份 `uploads` 列表，`AttachmentMiddleware` 会把这些可读路径注入系统提示，告诉模型优先用 `read_file` 去读取这些路径。因此，附件并不是“作为消息大段内联塞给模型”，而是被转换成沙盒文件系统中的路径对象。
 
@@ -286,6 +286,8 @@ CHECK_YUXI_SANDBOX_ENV_EXISTS=True
 ```
 
 如果需要给所有沙盒容器注入额外的环境变量（如代理配置、认证信息等），可以添加到 `sandbox.env` 文件中。
+
+远程 Skill 拉取使用专门的一次性 Sandbox，不继承这里的全局环境变量或用户级 Agent 环境变量，避免不可信仓库通过复制文件带出凭据。Kubernetes 创建的 Sandbox 同时会禁用 ServiceAccount token 自动挂载。
 
 ### 配置方式汇总
 

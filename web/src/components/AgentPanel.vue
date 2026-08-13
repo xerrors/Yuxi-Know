@@ -52,7 +52,7 @@
           aria-label="关闭文件面板"
           @click="emitClose"
         >
-          <PanelRightClose :size="15" />
+          <PanelRight :size="15" />
         </button>
       </div>
     </div>
@@ -137,7 +137,7 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Download, Folders, PanelRightClose, RefreshCw, Trash2, X } from 'lucide-vue-next'
+import { Download, Folders, PanelRight, RefreshCw, Trash2, X } from 'lucide-vue-next'
 import { Modal, message } from 'ant-design-vue'
 import FileTreeComponent from '@/components/FileTreeComponent.vue'
 import AgentFilePreview from '@/components/AgentFilePreview.vue'
@@ -166,6 +166,10 @@ const props = defineProps({
   previewTabs: {
     type: Array,
     default: () => []
+  },
+  previewCache: {
+    type: Object,
+    default: () => new Map()
   },
   activePreviewPath: {
     type: String,
@@ -400,13 +404,27 @@ const revokeCurrentPreviewUrl = () => {
   }
 }
 
+const previewCacheKey = (filePath) => `${props.threadId}:${filePath}`
+
+const prunePreviewCache = (activeKey) => {
+  const readyEntries = [...props.previewCache.entries()]
+    .filter(([, entry]) => entry.status === 'ready')
+    .sort(([, left], [, right]) => (left.lastAccessed || 0) - (right.lastAccessed || 0))
+
+  while (readyEntries.length > 12) {
+    const [key, entry] = readyEntries.shift()
+    if (key === activeKey) continue
+    if (entry.file?.previewUrl) window.URL.revokeObjectURL(entry.file.previewUrl)
+    props.previewCache.delete(key)
+  }
+}
+
 const loadActivePreview = async () => {
   const filePath = props.activePreviewPath
   const requestSeq = ++previewRequestSeq
 
-  revokeCurrentPreviewUrl()
-
   if (!filePath || !props.threadId) {
+    revokeCurrentPreviewUrl()
     currentFile.value = null
     currentFilePath.value = ''
     return
@@ -429,19 +447,47 @@ const loadActivePreview = async () => {
     previewUrl: ''
   }
 
-  try {
-    const res = await getViewerFileContent(props.threadId, filePath)
-    if (requestSeq !== previewRequestSeq) return
+  const cacheKey = previewCacheKey(filePath)
+  const cachedEntry = props.previewCache.get(cacheKey)
+  if (cachedEntry?.status === 'ready') {
+    cachedEntry.lastAccessed = Date.now()
+    currentFile.value = cachedEntry.file
+    return
+  }
 
-    const nextFile = await normalizePreviewResponse(res, baseFile)
-
-    if (requestSeq !== previewRequestSeq) {
-      if (nextFile.previewUrl) window.URL.revokeObjectURL(nextFile.previewUrl)
-      return
+  if (cachedEntry?.status === 'loading') {
+    try {
+      const cachedFile = await cachedEntry.promise
+      if (requestSeq === previewRequestSeq) currentFile.value = cachedFile
+    } catch {
+      props.previewCache.delete(cacheKey)
+      if (requestSeq === previewRequestSeq) {
+        currentFile.value = {
+          ...baseFile,
+          content: '文件预览失败',
+          supported: false,
+          previewType: 'unsupported',
+          message: '文件预览失败',
+          previewUrl: ''
+        }
+      }
     }
+    return
+  }
 
-    currentFile.value = nextFile
+  const loadPromise = (async () => {
+    const res = await getViewerFileContent(props.threadId, filePath)
+    return normalizePreviewResponse(res, baseFile)
+  })()
+  props.previewCache.set(cacheKey, { status: 'loading', promise: loadPromise })
+
+  try {
+    const nextFile = await loadPromise
+    props.previewCache.set(cacheKey, { status: 'ready', file: nextFile, lastAccessed: Date.now() })
+    prunePreviewCache(cacheKey)
+    if (requestSeq === previewRequestSeq) currentFile.value = nextFile
   } catch (error) {
+    props.previewCache.delete(cacheKey)
     if (requestSeq !== previewRequestSeq) return
 
     currentFile.value = {
@@ -533,6 +579,12 @@ const downloadFile = async (fileItem) => {
 }
 
 const emitRefresh = () => {
+  for (const [key, entry] of props.previewCache) {
+    if (key.startsWith(`${props.threadId}:`) && entry.file?.previewUrl) {
+      window.URL.revokeObjectURL(entry.file.previewUrl)
+    }
+    if (key.startsWith(`${props.threadId}:`)) props.previewCache.delete(key)
+  }
   refreshFileSystem()
   emit('refresh', props.threadId)
 }
@@ -615,7 +667,6 @@ onUnmounted(() => {
   window.removeEventListener('pointercancel', stopResize)
   document.body.style.cursor = ''
   document.body.style.userSelect = ''
-  revokeCurrentPreviewUrl()
 })
 
 watch(
@@ -848,21 +899,38 @@ watch(
 }
 
 .preview-tab-close {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  margin-right: 3px;
   border: none;
+  border-radius: 6px;
   background: transparent;
   color: var(--gray-500);
   cursor: pointer;
   padding: 0;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease,
+    transform 160ms ease;
 
   &:hover {
     color: var(--gray-900);
     background: var(--gray-100);
+    transform: scale(1.04);
+  }
+
+  &:active {
+    background: var(--gray-150);
+    transform: scale(0.96);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--main-400);
+    outline-offset: 1px;
   }
 }
 

@@ -34,6 +34,29 @@ def test_kb_upload_help_is_registered():
     assert "1-300" in output
 
 
+def test_chat_command_starts_web_chat(tmp_path, monkeypatch):
+    store = ConfigStore(tmp_path / "config.toml")
+    config = store.load()
+    config.get_remote("local").api_key = "yxkey_test"
+    store.save(config)
+    calls = []
+
+    def fake_run_web_chat(store_arg, remote, agent_slug, console, *, no_open):
+        calls.append((store_arg, remote, agent_slug, console, no_open))
+
+    monkeypatch.setattr("yuxi_cli.main._store", lambda: store)
+    monkeypatch.setattr("yuxi_cli.main.run_web_chat", fake_run_web_chat)
+
+    result = CliRunner().invoke(
+        app, ["chat", "--agent-slug", "debug-agent", "--no-open"]
+    )
+
+    assert result.exit_code == 0
+    assert calls[0][0] is store
+    assert calls[0][1:3] == (None, "debug-agent")
+    assert calls[0][4] is True
+
+
 def test_remote_command_prints_version_and_remote_context_first(tmp_path, monkeypatch):
     store = ConfigStore(tmp_path / "config.toml")
     config = store.load()

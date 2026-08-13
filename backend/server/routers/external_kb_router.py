@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from yuxi.knowledge.runtime import knowledge_base
 from yuxi.knowledge.base import KBNotFoundError
+from yuxi.knowledge.read_models import KnowledgeBaseSummary
 from yuxi.storage.postgres.models_business import User
 from yuxi.utils import logger
 
@@ -29,13 +30,13 @@ async def list_external_databases(current_user: User = Depends(get_required_user
     """列出当前登录用户可见的知识库，供 CLI 选择与展示。"""
     databases = await knowledge_base.get_databases_by_uid(current_user.uid)
     items = []
-    for db in databases.get("databases", []):
-        kb_type = (db.get("kb_type") or "milvus").lower()
+    for db in databases:
+        kb_type = db.kb_type.lower()
         items.append(
             {
-                "kb_id": db.get("kb_id"),
-                "name": db.get("name") or db.get("database_name") or "",
-                "description": db.get("description", ""),
+                "kb_id": db.kb_id,
+                "name": db.name,
+                "description": db.description or "",
                 "kb_type": kb_type,
                 "supports_documents": knowledge_base.database_type_supports_documents(kb_type),
             }
@@ -56,13 +57,13 @@ async def list_external_files(
     database = await knowledge_base.get_accessible_database_info_by_uid(current_user.uid, kb_id)
     if not database:
         raise HTTPException(status_code=404, detail=f"知识库 {kb_id} 不存在或无权访问")
-    if not knowledge_base.database_type_supports_documents(database.get("kb_type")):
+    if not knowledge_base.database_type_supports_documents(database.kb_type):
         raise HTTPException(
             status_code=400,
-            detail=f"{database.get('name') or database.get('kb_type')} 只支持检索，不支持文档查看",
+            detail=f"{database.name or database.kb_type} 只支持检索，不支持文档查看",
         )
     return await knowledge_base.search_document_files(
-        [database],
+        [{"kb_id": database.kb_id, "name": database.name}],
         query=query,
         offset=offset,
         limit=limit,
@@ -147,12 +148,12 @@ async def _require_accessible_kb(
     *,
     require_documents: bool = False,
     operation: str = "文档查看",
-) -> dict:
+) -> KnowledgeBaseSummary:
     """校验知识库对 uid 可见，必要时同时校验文档能力。"""
     database = await knowledge_base.get_accessible_database_info_by_uid(uid, str(kb_id or "").strip())
     if not database:
         raise HTTPException(status_code=404, detail=f"知识库 {kb_id} 不存在或无权访问")
-    if require_documents and not knowledge_base.database_type_supports_documents(database.get("kb_type")):
-        kb_type = (database.get("kb_type") or "").lower()
-        raise HTTPException(status_code=400, detail=f"{database.get('name') or kb_type} 只支持检索，不支持{operation}")
+    if require_documents and not knowledge_base.database_type_supports_documents(database.kb_type):
+        kb_type = database.kb_type.lower()
+        raise HTTPException(status_code=400, detail=f"{database.name or kb_type} 只支持检索，不支持{operation}")
     return database

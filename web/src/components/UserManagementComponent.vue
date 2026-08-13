@@ -227,15 +227,7 @@
           </a-form-item>
         </template>
 
-        <a-form-item
-          v-if="userManagement.editMode && userManagement.form.role === 'superadmin'"
-          label="角色"
-          class="form-item"
-        >
-          <a-input value="超级管理员" disabled />
-          <div class="help-text">超级管理员账户无法修改角色</div>
-        </a-form-item>
-        <a-form-item v-else label="角色" class="form-item">
+        <a-form-item v-if="!userManagement.editMode" label="角色" class="form-item">
           <a-select v-model:value="userManagement.form.role">
             <a-select-option value="user">普通用户</a-select-option>
             <a-select-option value="admin" v-if="userStore.isSuperAdmin">管理员</a-select-option>
@@ -529,7 +521,6 @@ const showEditUserModal = (user) => {
     phoneNumber: user.phone_number || '',
     password: '',
     confirmPassword: '',
-    role: user.role,
     departmentId: user.department_id || null,
     usernameError: '',
     phoneError: ''
@@ -585,8 +576,7 @@ const handleUserFormSubmit = async () => {
     if (userManagement.editMode) {
       // 创建更新数据对象
       const updateData = {
-        username: userManagement.form.username.trim(),
-        role: userManagement.form.role
+        username: userManagement.form.username.trim()
       }
 
       // 添加手机号字段

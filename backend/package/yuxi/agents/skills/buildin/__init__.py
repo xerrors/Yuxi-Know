@@ -38,8 +38,8 @@ BUILTIN_SKILLS: list[BuiltinSkillSpec] = [
         slug="deep-research",
         source_dir=_SKILLS_ROOT / "deep-research",
         description="深度研究编排方法论：澄清范围、拆解规划、并行调度子智能体调研、对抗式核验、综合成带引用的结构化报告。",
-        version="2026.06.05",
-        tool_dependencies=("tavily_search",),
+        version="2026.07.29",
+        tool_dependencies=("web_search",),
         skill_dependencies=("html-preview",),
     ),
     BuiltinSkillSpec(

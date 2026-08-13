@@ -386,7 +386,11 @@ const createForm = reactive({ path: '', isDir: false, content: '' })
 const allowedSkillAccessLevels = ref(['user'])
 const enabledForm = ref(true)
 const shareConfigFormRef = ref(null)
-const shareConfigForm = ref({ access_level: 'user', department_ids: [], user_uids: [] })
+const shareConfigForm = ref({
+  version: 2,
+  read_scope: { access_level: 'user', department_ids: [], user_uids: [] },
+  manage_scope: null
+})
 const dependencyOptions = reactive({ tools: [], mcps: [], skills: [] })
 const dependencyForm = reactive({
   tool_dependencies: [],
@@ -517,9 +521,29 @@ const goBack = () => {
 }
 
 const cloneShareConfig = (config) => ({
-  access_level: config?.access_level || 'user',
-  department_ids: [...(config?.department_ids || [])],
-  user_uids: [...(config?.user_uids || [])]
+  version: 2,
+  read_scope:
+    config?.version === 2
+      ? config.read_scope
+        ? {
+            access_level: config.read_scope.access_level || 'global',
+            department_ids: [...(config.read_scope.department_ids || [])],
+            user_uids: [...(config.read_scope.user_uids || [])]
+          }
+        : null
+      : {
+          access_level: config?.access_level || 'user',
+          department_ids: [...(config?.department_ids || [])],
+          user_uids: [...(config?.user_uids || [])]
+        },
+  manage_scope:
+    config?.version === 2 && config.manage_scope
+      ? {
+          access_level: config.manage_scope.access_level || 'global',
+          department_ids: [...(config.manage_scope.department_ids || [])],
+          user_uids: [...(config.manage_scope.user_uids || [])]
+        }
+      : null
 })
 
 const syncShareConfigFromSkill = (skillRecord) => {

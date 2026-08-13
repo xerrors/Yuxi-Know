@@ -39,6 +39,16 @@ class UserRepository:
         result = await db.execute(select(User).where(User.uid == uid))
         return result.scalar_one_or_none()
 
+    async def list_by_uids(self, uids: list[str]) -> list[User]:
+        """批量获取指定 uid 的用户。"""
+        normalized_uids = sorted({str(uid).strip() for uid in uids if str(uid).strip()})
+        if not normalized_uids:
+            return []
+
+        async with pg_manager.get_async_session_context() as session:
+            result = await session.execute(select(User).where(User.uid.in_(normalized_uids)))
+            return list(result.scalars().all())
+
     async def get_by_phone(self, phone: str) -> User | None:
         """根据手机号获取用户"""
         async with pg_manager.get_async_session_context() as session:

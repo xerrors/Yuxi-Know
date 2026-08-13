@@ -581,6 +581,8 @@ async def test_subagent_run_service_create_run_record_persists_subagent_context(
     assert db.added[0].extra_metadata["raw_message"]["type"] == "human"
     assert db.added[0].extra_metadata["raw_message"]["content"] == "delegate this"
     assert db.created_run_kwargs["run_type"] == "subagent"
+    assert db.created_run_kwargs["source"] == "subagent"
+    assert db.created_run_kwargs["channel"] == "internal"
     assert db.created_run_kwargs["created_by_run_id"] == "parent-run"
     assert db.created_run_kwargs["subagent_thread_relation_id"] == 77
     assert db.created_run_kwargs["conversation_thread_id"] == "child-thread"

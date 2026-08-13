@@ -127,12 +127,27 @@ if (Test-Path ".env") {
         }
     } while ([string]::IsNullOrEmpty($apiKey))
 
-    # Get TAVILY_API_KEY (optional)
+    # Get Web Search Provider and API Key (optional)
     Write-Host ""
-    Write-Host "🔍 Tavily API Key (optional) - for search service" -ForegroundColor Yellow
-    Write-Host "Get your API key from: https://app.tavily.com/" -ForegroundColor Blue
+    Write-Host "🔍 Web Search Provider (optional)" -ForegroundColor Yellow
+    Write-Host "1) doubao (Doubao Custom Search)" -ForegroundColor Blue
+    Write-Host "2) tavily (Tavily Search)" -ForegroundColor Blue
 
-    $TAVILY_API_KEY = Read-Host "Please enter your TAVILY_API_KEY (press Enter to skip)"
+    $SEARCH_CHOICE = Read-Host "Please select web search provider (1 for doubao, 2 for tavily, press Enter to skip)"
+
+    $WEB_SEARCH_PROVIDER = ""
+    $DOUBAO_SEARCH_API_KEY = ""
+    $TAVILY_API_KEY = ""
+
+    if ($SEARCH_CHOICE -eq "1" -or $SEARCH_CHOICE -eq "doubao") {
+        $WEB_SEARCH_PROVIDER = "doubao"
+        Write-Host "Get your Doubao API Key from Volcengine Console" -ForegroundColor Blue
+        $DOUBAO_SEARCH_API_KEY = Read-Host "Please enter your DOUBAO_SEARCH_API_KEY"
+    } elseif ($SEARCH_CHOICE -eq "2" -or $SEARCH_CHOICE -eq "tavily") {
+        $WEB_SEARCH_PROVIDER = "tavily"
+        Write-Host "Get your Tavily API key from: https://app.tavily.com/" -ForegroundColor Blue
+        $TAVILY_API_KEY = Read-Host "Please enter your TAVILY_API_KEY"
+    }
 
     Write-Host ""
     Write-Host "JWT security settings" -ForegroundColor Yellow
@@ -159,9 +174,15 @@ if (Test-Path ".env") {
 # SiliconFlow API Key (required)
 SILICONFLOW_API_KEY=$apiKey
 
-# Tavily API Key (optional - for search service)
+# Web Search Provider settings
 "@
 
+    if (-not [string]::IsNullOrEmpty($WEB_SEARCH_PROVIDER)) {
+        $envContent += "`nWEB_SEARCH_PROVIDER=$WEB_SEARCH_PROVIDER"
+    }
+    if (-not [string]::IsNullOrEmpty($DOUBAO_SEARCH_API_KEY)) {
+        $envContent += "`nDOUBAO_SEARCH_API_KEY=$DOUBAO_SEARCH_API_KEY"
+    }
     if (-not [string]::IsNullOrEmpty($TAVILY_API_KEY)) {
         $envContent += "`nTAVILY_API_KEY=$TAVILY_API_KEY"
     }
@@ -179,6 +200,8 @@ SANDBOX_PROVISIONER_TOKEN=$SANDBOX_PROVISIONER_TOKEN
 
     # Clear the variables from memory
     Remove-Variable -Name "apiKey" -ErrorAction SilentlyContinue
+    Remove-Variable -Name "WEB_SEARCH_PROVIDER" -ErrorAction SilentlyContinue
+    Remove-Variable -Name "DOUBAO_SEARCH_API_KEY" -ErrorAction SilentlyContinue
     Remove-Variable -Name "TAVILY_API_KEY" -ErrorAction SilentlyContinue
     Remove-Variable -Name "JWT_SECRET_KEY" -ErrorAction SilentlyContinue
     Remove-Variable -Name "YUXI_INSTANCE_ID" -ErrorAction SilentlyContinue

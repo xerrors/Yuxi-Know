@@ -141,6 +141,48 @@ async def test_process_agent_run_restores_invocation_meta(monkeypatch: pytest.Mo
 
 
 @pytest.mark.asyncio
+async def test_process_agent_run_publishes_interrupt_after_final_state(monkeypatch: pytest.MonkeyPatch):
+    """审批中断必须在最终状态落流后结束，避免前端过早刷新历史。"""
+    run_obj = _build_run()
+    _patch_common(monkeypatch, run_obj)
+
+    events: list[dict] = []
+    terminal_statuses: list[str] = []
+
+    async def fake_append_event(run_id: str, event_type: str, payload: dict, **kwargs):
+        del run_id, kwargs
+        events.append({"event_type": event_type, "payload": payload})
+
+    async def fake_mark_terminal(run_id: str, status: str, error_type=None, error_message=None):
+        del run_id, error_type, error_message
+        terminal_statuses.append(status)
+        return run_worker.TerminalTransition(status=status, changed=True)
+
+    def fake_stream_agent_chat(**kwargs):
+        del kwargs
+        return _BytesAsyncIter(
+            [
+                (
+                    b'{"status":"human_approval_required","thread_id":"thread-1","approval":'
+                    b'{"action_requests":[{"name":"execute","args":{"command":"python app.py"}}],'
+                    b'"review_configs":[{"action_name":"execute",'
+                    b'"allowed_decisions":["approve","reject"]}]}}\n'
+                ),
+                b'{"status":"agent_state","thread_id":"thread-1","agent_state":{"artifacts":["/home/gem/user-data/outputs/app.py"]}}\n',
+            ]
+        )
+
+    monkeypatch.setattr(run_worker, "append_run_event", fake_append_event)
+    monkeypatch.setattr(run_worker, "mark_run_terminal", fake_mark_terminal)
+    monkeypatch.setattr(run_worker, "stream_agent_chat", fake_stream_agent_chat)
+
+    await run_worker.process_agent_run({"job_try": 1}, "run-1")
+
+    assert [event["event_type"] for event in events] == ["metadata", "custom", "interrupt", "end"]
+    assert terminal_statuses == ["interrupted"]
+
+
+@pytest.mark.asyncio
 async def test_process_agent_run_non_retryable_error_marks_failed(monkeypatch: pytest.MonkeyPatch):
     run_obj = _build_run()
     _patch_common(monkeypatch, run_obj)

@@ -354,6 +354,15 @@ class ConversationRepository:
 
         return pinned_conversations + non_pinned_conversations
 
+    async def list_active_conversations_for_user(self, uid: str) -> list[Conversation]:
+        """返回用户全部 active 对话，按最近更新时间排序。"""
+        result = await self.db.execute(
+            select(Conversation)
+            .where(Conversation.uid == str(uid), Conversation.status == "active")
+            .order_by(Conversation.updated_at.desc())
+        )
+        return list(result.scalars().all())
+
     async def search_conversations_by_message_content(
         self,
         *,

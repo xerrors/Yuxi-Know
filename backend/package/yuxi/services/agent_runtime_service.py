@@ -7,7 +7,7 @@ thread-specific runtime state.
 
 It does not create ``AgentRun`` records, enqueue workers, read run results or
 format external invocation responses. Those responsibilities stay in
-``agent_run_service`` and ``agent_invocation_service`` so context resolution can
+``agent_run_service`` and the Invocation HTTP adapters so context resolution can
 remain reusable by chat state queries, file views and other runtime helpers.
 """
 

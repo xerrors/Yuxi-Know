@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from server.utils.auth_middleware import get_admin_user
+from server.utils.knowledge_permissions import require_knowledge_base_read
+from server.utils.knowledge_response import serialize_knowledge_base
 from yuxi.knowledge.graphs.milvus_graph_service import MilvusGraphService
 from yuxi.knowledge.runtime import knowledge_base
 from yuxi.storage.postgres.models_business import User
@@ -14,7 +16,7 @@ async def _get_graph_service(kb_id: str) -> MilvusGraphService:
     if not db_info:
         raise HTTPException(status_code=404, detail="Knowledge base not found")
 
-    kb_type = (db_info.get("kb_type") or "").lower()
+    kb_type = db_info.kb_type.lower()
     if kb_type != "milvus":
         raise HTTPException(status_code=404, detail="Graph API only supports Milvus knowledge bases")
 
@@ -25,20 +27,21 @@ async def _get_graph_service(kb_id: str) -> MilvusGraphService:
 async def get_graphs(current_user: User = Depends(get_admin_user)):
     """获取支持图谱能力的 Milvus 知识库列表"""
     try:
-        databases = (await knowledge_base.get_databases_by_uid(current_user.uid)).get("databases", [])
+        databases = await knowledge_base.get_databases_by_uid(current_user.uid)
         graphs = []
         for db in databases:
-            if (db.get("kb_type") or "").lower() != "milvus":
+            if db.kb_type.lower() != "milvus":
                 continue
+            serialized = serialize_knowledge_base(db)
             graphs.append(
                 {
-                    "id": db.get("kb_id"),
-                    "name": db.get("name"),
+                    "id": db.kb_id,
+                    "name": db.name,
                     "type": "milvus",
-                    "description": db.get("description"),
-                    "status": db.get("status", "active"),
-                    "created_at": db.get("created_at"),
-                    "metadata": db,
+                    "description": db.description,
+                    "status": "已连接",
+                    "created_at": serialized["created_at"],
+                    "metadata": serialized,
                 }
             )
         return {"success": True, "data": graphs}
@@ -54,7 +57,7 @@ async def get_subgraph(
     max_depth: int = Query(2, description="最大深度", ge=1, le=5),
     max_nodes: int = Query(100, description="最大节点数", ge=1, le=1000),
     exclude_chunk: bool = Query(False, description="是否排除 Chunk 节点"),
-    current_user: User = Depends(get_admin_user),
+    current_user: User = Depends(require_knowledge_base_read),
 ):
     """查询 Milvus 知识库图谱子图"""
     try:
@@ -77,7 +80,7 @@ async def get_subgraph(
 @graph.get("/labels")
 async def get_graph_labels(
     kb_id: str = Query(..., description="Milvus 知识库ID"),
-    current_user: User = Depends(get_admin_user),
+    current_user: User = Depends(require_knowledge_base_read),
 ):
     """获取 Milvus 知识库图谱的所有标签"""
     try:
@@ -94,7 +97,7 @@ async def get_graph_labels(
 @graph.get("/stats")
 async def get_graph_stats(
     kb_id: str = Query(..., description="Milvus 知识库ID"),
-    current_user: User = Depends(get_admin_user),
+    current_user: User = Depends(require_knowledge_base_read),
 ):
     """获取 Milvus 知识库图谱统计信息"""
     try:

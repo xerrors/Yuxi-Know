@@ -107,19 +107,35 @@
             </a-menu-item-group>
           </template>
         </a-menu>
-        <div v-if="userStore.isAdmin || hasModelMetadata" class="model-metadata-source">
-          <template v-if="userStore.isAdmin">
-            没有合适的模型？
-            <RouterLink :to="{ path: '/agent-manage', query: { tab: 'providers' } }" @click.stop>
-              配置模型
-            </RouterLink>
-          </template>
-          <template v-if="hasModelMetadata">
-            <span v-if="userStore.isAdmin">。 </span>
-            部分信息（价格、能力等）来自
-            <a href="https://models.dev" target="_blank" rel="noreferrer" @click.stop>models.dev</a>
-            填补。仅供参考，可能和官网有偏差。
-          </template>
+        <div
+          v-if="!modelMetadataNoticeDismissed && (userStore.isAdmin || hasModelMetadata)"
+          class="model-metadata-source"
+        >
+          <div class="model-metadata-source-content">
+            <template v-if="userStore.isAdmin">
+              没有合适的模型？
+              <RouterLink :to="{ path: '/agent-manage', query: { tab: 'providers' } }" @click.stop>
+                配置模型
+              </RouterLink>
+            </template>
+            <template v-if="hasModelMetadata">
+              <span v-if="userStore.isAdmin">。 </span>
+              部分信息（价格、能力等）来自
+              <a href="https://models.dev" target="_blank" rel="noreferrer" @click.stop
+                >models.dev</a
+              >
+              填补。仅供参考，可能和官网有偏差。
+            </template>
+          </div>
+          <button
+            type="button"
+            class="model-metadata-source-close"
+            title="不再显示"
+            aria-label="关闭模型信息提示"
+            @click.stop="dismissModelMetadataNotice"
+          >
+            <X :size="13" />
+          </button>
         </div>
       </div>
     </template>
@@ -166,6 +182,7 @@ const props = defineProps({
 
 const emit = defineEmits(['select-model'])
 const userStore = useUserStore()
+const MODEL_METADATA_NOTICE_DISMISSED_KEY = 'yuxi_model_metadata_notice_dismissed'
 
 // v2 模型数据：每次展开下拉时实时从后端拉取
 const v2Models = ref({})
@@ -173,7 +190,15 @@ const loadingV2Models = ref(false)
 const dropdownOpen = ref(false)
 const modelSearchKeyword = ref('')
 const modelMetadataBySpec = ref({})
+const modelMetadataNoticeDismissed = ref(
+  localStorage.getItem(MODEL_METADATA_NOTICE_DISMISSED_KEY) === 'true'
+)
 let fetchV2ModelsPromise = null
+
+const dismissModelMetadataNotice = () => {
+  modelMetadataNoticeDismissed.value = true
+  localStorage.setItem(MODEL_METADATA_NOTICE_DISMISSED_KEY, 'true')
+}
 
 const filteredV2Models = computed(() => {
   const keyword = modelSearchKeyword.value.trim().toLowerCase()
@@ -422,7 +447,13 @@ const handleClear = () => {
   background-color: transparent;
   border: none;
   outline: none;
+  color: var(--gray-400);
   cursor: pointer;
+  transition: color 0.15s ease;
+
+  &:hover:not(:disabled) {
+    color: var(--gray-600);
+  }
 }
 
 .model-select--nano {
@@ -477,15 +508,24 @@ const handleClear = () => {
 
 .model-dropdown {
   width: min(360px, calc(100vw - 24px));
+  padding: 8px 0;
   overflow: hidden;
   background: var(--gray-0);
   border-radius: 8px;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 0 18px rgba(0, 0, 0, 0.1);
 }
 
 .model-search {
   padding: 8px;
-  border-bottom: 1px solid var(--gray-100);
+}
+
+.model-search :deep(.ant-input-affix-wrapper) {
+  border-color: var(--gray-0);
+  background: var(--gray-25);
+}
+
+.model-search :deep(.ant-input) {
+  background: transparent;
 }
 
 :deep(.ant-dropdown-menu) {
@@ -493,6 +533,10 @@ const handleClear = () => {
     max-height: 260px;
     overflow-y: auto;
     box-shadow: none;
+  }
+
+  .ant-dropdown-menu-item-group-list {
+    margin: 0;
   }
 
   .ant-dropdown-menu-item,
@@ -512,11 +556,6 @@ const handleClear = () => {
   .ant-dropdown-menu-item-selected.ant-dropdown-menu-item-active {
     color: var(--gray-1000);
     background: var(--main-50);
-  }
-
-  .ant-dropdown-menu-item {
-    padding-top: 7px;
-    padding-bottom: 7px;
   }
 }
 
@@ -563,6 +602,9 @@ const handleClear = () => {
 }
 
 .model-metadata-source {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
   padding: 7px 10px;
   border-top: 1px solid var(--gray-100);
   color: var(--gray-500);
@@ -572,6 +614,41 @@ const handleClear = () => {
 
   a {
     color: var(--main-600);
+  }
+}
+
+.model-metadata-source-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.model-metadata-source-close {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin: -2px -3px 0 0;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  color: var(--gray-500);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease;
+
+  &:hover {
+    color: var(--gray-800);
+    background: var(--gray-100);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--main-400);
+    outline-offset: 1px;
   }
 }
 </style>

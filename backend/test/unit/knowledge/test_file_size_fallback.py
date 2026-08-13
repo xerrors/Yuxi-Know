@@ -1,4 +1,3 @@
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -67,7 +66,7 @@ class TestAddFileRecordSizeFallback:
             def kb_type(self):
                 return "test"
 
-            async def _create_kb_instance(self, kb_id, config):
+            async def _create_kb_instance(self, kb_id, embedding_model_spec: str | None):
                 pass
 
             async def _initialize_kb_instance(self, instance):
@@ -75,15 +74,6 @@ class TestAddFileRecordSizeFallback:
 
             async def _persist_file_meta(self, file_id, meta):
                 pass
-
-            async def _persist_kb(self, kb_id):
-                pass
-
-            async def _save_metadata(self):
-                pass
-
-            async def refresh_database_stats(self, kb_id):
-                return {}
 
             async def index_file(self, kb_id, file_id, operator_id=None):
                 return {}
@@ -110,7 +100,6 @@ class TestAddFileRecordSizeFallback:
                 return {"type": "test", "options": []}
 
         kb = TestKB(work_dir=work_dir)
-        kb.databases_meta["db1"] = {"metadata": {}}
         return kb
 
     @pytest.mark.asyncio
@@ -127,7 +116,12 @@ class TestAddFileRecordSizeFallback:
         mock_minio.astat_file.return_value = 9999
 
         with patch("yuxi.storage.minio.get_minio_client", return_value=mock_minio):
-            metadata = await kb.add_file_record("db1", item, params=params)
+            metadata = await kb.add_file_record(
+                "db1",
+                item,
+                params=params,
+                additional_params={},
+            )
 
             assert metadata["size"] == 9999
             mock_minio.astat_file.assert_called_once()
@@ -146,7 +140,12 @@ class TestAddFileRecordSizeFallback:
         mock_minio = AsyncMock()
 
         with patch("yuxi.storage.minio.get_minio_client", return_value=mock_minio):
-            metadata = await kb.add_file_record("db1", item, params=params)
+            metadata = await kb.add_file_record(
+                "db1",
+                item,
+                params=params,
+                additional_params={},
+            )
 
             assert metadata["size"] == 5555
             mock_minio.astat_file.assert_not_called()
@@ -165,80 +164,11 @@ class TestAddFileRecordSizeFallback:
         mock_minio.astat_file.side_effect = Exception("MinIO connection error")
 
         with patch("yuxi.storage.minio.get_minio_client", return_value=mock_minio):
-            metadata = await kb.add_file_record("db1", item, params=params)
+            metadata = await kb.add_file_record(
+                "db1",
+                item,
+                params=params,
+                additional_params={},
+            )
 
             assert metadata.get("size") is None
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_save_metadata_does_not_overwrite_existing_kb_config():
-    from yuxi.knowledge.base import KnowledgeBase
-
-    class TestKB(KnowledgeBase):
-        @property
-        def kb_type(self):
-            return "test"
-
-        async def _create_kb_instance(self, kb_id, config):
-            pass
-
-        async def _initialize_kb_instance(self, instance):
-            pass
-
-        async def index_file(self, kb_id, file_id, operator_id=None):
-            return {}
-
-        async def update_content(self, kb_id, file_ids, params=None):
-            return []
-
-        async def aquery(self, query_text, kb_id, **kwargs):
-            return []
-
-        def get_query_params_config(self, kb_id, **kwargs):
-            return {"type": "test", "options": []}
-
-        async def delete_file(self, kb_id, file_id):
-            pass
-
-        async def get_file_basic_info(self, kb_id, file_id):
-            return {}
-
-        async def get_file_content(self, kb_id, file_id):
-            return {}
-
-        async def get_file_info(self, kb_id, file_id):
-            return {}
-
-    class ExistingKbRepo:
-        def __init__(self):
-            self.created = []
-            self.updated = []
-
-        async def get_by_kb_id(self, kb_id):
-            return SimpleNamespace(kb_id=kb_id)
-
-        async def create(self, payload):
-            self.created.append(payload)
-
-        async def update(self, kb_id, data):
-            self.updated.append((kb_id, data))
-
-    kb_repo = ExistingKbRepo()
-    kb = TestKB(work_dir="/tmp/test_kb")
-    kb.databases_meta["db1"] = {
-        "name": "Runtime name",
-        "description": "Runtime description",
-        "kb_type": "test",
-        "metadata": {"graph_build_config": {"extractor_options": {"concurrency_count": 5}}},
-    }
-
-    with (
-        patch("yuxi.repositories.knowledge_base_repository.KnowledgeBaseRepository", return_value=kb_repo),
-        patch("yuxi.repositories.knowledge_file_repository.KnowledgeFileRepository", return_value=SimpleNamespace()),
-        patch("yuxi.repositories.evaluation_repository.EvaluationRepository", return_value=SimpleNamespace()),
-    ):
-        await kb._save_metadata()
-
-    assert kb_repo.created == []
-    assert kb_repo.updated == []

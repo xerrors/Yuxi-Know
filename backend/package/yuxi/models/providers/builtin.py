@@ -176,6 +176,12 @@ BUILTIN_PROVIDERS: list[dict[str, Any]] = [
         "models_endpoint": "https://opencode.ai/zen/v1/models",
     },
     {
+        "provider_id": "opencode-go",
+        "display_name": "OpenCode Go",
+        "base_url": "https://opencode.ai/zen/go/v1",
+        "models_endpoint": "https://opencode.ai/zen/go/v1/models",
+    },
+    {
         "provider_id": "siliconflow-cn",
         "display_name": "SiliconFlow",
         "base_url": "https://api.siliconflow.cn/v1",

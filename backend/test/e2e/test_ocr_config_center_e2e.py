@@ -7,6 +7,7 @@ import httpx
 import pytest
 from PIL import Image, ImageDraw, ImageFont
 
+from test.live_api_cleanup import remove_e2e_thread_storage
 from yuxi.storage.minio.client import get_minio_client
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.e2e]
@@ -47,7 +48,7 @@ async def test_admin_ocr_config_drives_real_tmp_attachment_parse(
             json={
                 "agent_id": e2e_agent_context["agent_slug"],
                 "title": f"ocr-config-e2e-{uuid.uuid4().hex[:8]}",
-                "metadata": {},
+                "metadata": {"_yuxi_e2e": True, "test": "ocr-config-e2e"},
             },
             headers=e2e_headers,
         )
@@ -166,3 +167,4 @@ async def _cleanup_created_resources(
     if thread_id:
         response = await e2e_client.delete(f"/api/chat/thread/{thread_id}", headers=e2e_headers)
         assert response.status_code == 200, response.text
+        remove_e2e_thread_storage(thread_id)

@@ -5,11 +5,18 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from server.utils.auth_middleware import get_admin_user
+from server.utils.knowledge_permissions import (
+    ensure_knowledge_base_permission,
+    require_knowledge_base_manage,
+    require_knowledge_base_read,
+)
 from yuxi.knowledge.eval.benchmark_generation import (
     DEFAULT_BENCHMARK_GENERATION_CONCURRENCY,
     MAX_BENCHMARK_GENERATION_CONCURRENCY,
 )
 from yuxi.knowledge.eval.service import EvaluationService
+from yuxi.permissions import ResourcePermission
+from yuxi.repositories.evaluation_repository import EvaluationRepository
 from yuxi.storage.postgres.models_business import User
 from yuxi.utils import logger
 
@@ -38,13 +45,44 @@ class RunEvaluationRequest(BaseModel):
     retrieval_config: dict[str, Any] = Field(default_factory=dict, alias="model_config")
 
 
+async def _get_evaluation_dataset_or_raise(dataset_id: str) -> Any:
+    """加载评估数据集，不存在时返回统一的 404。"""
+
+    dataset = await EvaluationRepository().get_dataset(dataset_id)
+    if dataset is None:
+        raise HTTPException(status_code=404, detail="评估数据集不存在")
+    return dataset
+
+
+async def require_evaluation_dataset_read(
+    dataset_id: str,
+    current_user: User = Depends(get_admin_user),
+) -> User:
+    """校验管理员对评估数据集所属知识库的读取权限。"""
+
+    dataset = await _get_evaluation_dataset_or_raise(dataset_id)
+    await ensure_knowledge_base_permission(str(dataset.kb_id), current_user, ResourcePermission.READ)
+    return current_user
+
+
+async def require_evaluation_dataset_manage(
+    dataset_id: str,
+    current_user: User = Depends(get_admin_user),
+) -> User:
+    """校验管理员对评估数据集所属知识库的管理权限。"""
+
+    dataset = await _get_evaluation_dataset_or_raise(dataset_id)
+    await ensure_knowledge_base_permission(str(dataset.kb_id), current_user, ResourcePermission.MANAGE)
+    return current_user
+
+
 @evaluation.post("/databases/{kb_id}/datasets/upload")
 async def upload_evaluation_dataset(
     kb_id: str,
     file: UploadFile = File(...),
     name: str = Form(...),
     description: str = Form(""),
-    current_user: User = Depends(get_admin_user),
+    current_user: User = Depends(require_knowledge_base_manage),
 ):
     """上传评估数据集"""
     try:
@@ -69,7 +107,10 @@ async def upload_evaluation_dataset(
 
 
 @evaluation.get("/databases/{kb_id}/datasets")
-async def list_evaluation_datasets(kb_id: str, current_user: User = Depends(get_admin_user)):
+async def list_evaluation_datasets(
+    kb_id: str,
+    current_user: User = Depends(require_knowledge_base_read),
+):
     """获取知识库的评估数据集列表"""
     try:
         service = EvaluationService()
@@ -82,7 +123,11 @@ async def list_evaluation_datasets(kb_id: str, current_user: User = Depends(get_
 
 @evaluation.get("/databases/{kb_id}/datasets/{dataset_id}")
 async def get_evaluation_dataset(
-    kb_id: str, dataset_id: str, page: int = 1, page_size: int = 10, current_user: User = Depends(get_admin_user)
+    kb_id: str,
+    dataset_id: str,
+    page: int = 1,
+    page_size: int = 10,
+    current_user: User = Depends(require_knowledge_base_read),
 ):
     """获取评估数据集详情"""
     try:
@@ -106,7 +151,10 @@ async def get_evaluation_dataset(
 
 
 @evaluation.get("/datasets/{dataset_id}/download")
-async def download_evaluation_dataset(dataset_id: str, current_user: User = Depends(get_admin_user)):
+async def download_evaluation_dataset(
+    dataset_id: str,
+    current_user: User = Depends(require_evaluation_dataset_read),
+):
     """导出评估数据集 JSONL"""
     try:
         service = EvaluationService()
@@ -127,7 +175,10 @@ async def download_evaluation_dataset(dataset_id: str, current_user: User = Depe
 
 
 @evaluation.delete("/datasets/{dataset_id}")
-async def delete_evaluation_dataset(dataset_id: str, current_user: User = Depends(get_admin_user)):
+async def delete_evaluation_dataset(
+    dataset_id: str,
+    current_user: User = Depends(require_evaluation_dataset_manage),
+):
     """删除评估数据集"""
     try:
         service = EvaluationService()
@@ -144,7 +195,9 @@ async def delete_evaluation_dataset(dataset_id: str, current_user: User = Depend
 
 @evaluation.post("/databases/{kb_id}/datasets/generate")
 async def generate_evaluation_dataset(
-    kb_id: str, request: GenerateDatasetRequest, current_user: User = Depends(get_admin_user)
+    kb_id: str,
+    request: GenerateDatasetRequest,
+    current_user: User = Depends(require_knowledge_base_manage),
 ):
     """自动生成评估数据集"""
     try:
@@ -171,7 +224,9 @@ async def generate_evaluation_dataset(
 
 @evaluation.post("/databases/{kb_id}/datasets/{dataset_id}/resume")
 async def resume_evaluation_dataset(
-    kb_id: str, dataset_id: str, current_user: User = Depends(get_admin_user)
+    kb_id: str,
+    dataset_id: str,
+    current_user: User = Depends(require_knowledge_base_manage),
 ):
     """恢复自动生成评估数据集"""
     try:
@@ -188,7 +243,11 @@ async def resume_evaluation_dataset(
 
 
 @evaluation.post("/databases/{kb_id}/runs")
-async def run_evaluation(kb_id: str, request: RunEvaluationRequest, current_user: User = Depends(get_admin_user)):
+async def run_evaluation(
+    kb_id: str,
+    request: RunEvaluationRequest,
+    current_user: User = Depends(require_knowledge_base_manage),
+):
     """运行RAG评估"""
     try:
         service = EvaluationService()
@@ -210,7 +269,10 @@ async def run_evaluation(kb_id: str, request: RunEvaluationRequest, current_user
 
 
 @evaluation.get("/databases/{kb_id}/runs")
-async def list_evaluation_runs(kb_id: str, current_user: User = Depends(get_admin_user)):
+async def list_evaluation_runs(
+    kb_id: str,
+    current_user: User = Depends(require_knowledge_base_read),
+):
     """获取知识库评估运行历史"""
     try:
         service = EvaluationService()
@@ -228,7 +290,7 @@ async def get_evaluation_run_results(
     page: int = 1,
     page_size: int = 20,
     error_only: bool = False,
-    current_user: User = Depends(get_admin_user),
+    current_user: User = Depends(require_knowledge_base_read),
 ):
     """获取评估运行结果"""
     try:
@@ -252,7 +314,11 @@ async def get_evaluation_run_results(
 
 
 @evaluation.delete("/databases/{kb_id}/runs/{run_id}")
-async def delete_evaluation_run(kb_id: str, run_id: str, current_user: User = Depends(get_admin_user)):
+async def delete_evaluation_run(
+    kb_id: str,
+    run_id: str,
+    current_user: User = Depends(require_knowledge_base_manage),
+):
     """删除评估运行"""
     try:
         service = EvaluationService()

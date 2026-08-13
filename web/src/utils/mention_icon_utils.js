@@ -1,4 +1,5 @@
 import { BookOpen, Bot, Plug, WandSparkles } from 'lucide-vue-next'
+import { getSkillIcon } from './skill_icon_utils.js'
 
 export const MENTION_ICON_SIZE = 15
 export const MENTION_ICON_STROKE_WIDTH = 2.2
@@ -11,6 +12,7 @@ const MENTION_TYPE_ICON_COMPONENTS = {
   subagent: Bot
 }
 
-export const getMentionIconComponent = (type) => MENTION_TYPE_ICON_COMPONENTS[type] || Plug
+export const getMentionIconComponent = (type, value) =>
+  type === 'skill' ? getSkillIcon(value) : MENTION_TYPE_ICON_COMPONENTS[type] || Plug
 
 export const getMentionIconStyle = () => null

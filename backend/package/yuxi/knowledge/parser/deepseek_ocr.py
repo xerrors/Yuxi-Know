@@ -5,13 +5,14 @@ Uses DeepSeek-OCR via SiliconFlow API for document parsing and OCR.
 """
 
 import base64
+import io
 import os
 import re
 import time
 from pathlib import Path
 from typing import Any
 
-import fitz  # PyMuPDF
+import pypdfium2 as pdfium
 import requests
 
 from yuxi.knowledge.parser.base import BaseDocumentProcessor, DocumentParserException
@@ -115,24 +116,29 @@ class DeepSeekOCRParser(BaseDocumentProcessor):
 
     def _process_pdf(self, file_path: str, params: dict[str, Any]) -> str:
         """Process PDF by converting pages to images"""
-        doc = fitz.open(file_path)
+        pdf = pdfium.PdfDocument(file_path)
         try:
             full_text = []
 
-            total_pages = len(doc)
+            total_pages = len(pdf)
             logger.info(f"Processing PDF with {total_pages} pages")
 
-            for i, page in enumerate(doc):
+            # pypdfium2 的 scale 是 72dpi 的倍数，200dpi 对应 scale=200/72
+            scale = int(params.get("pdf_dpi", 200)) / 72
+
+            for i in range(total_pages):
                 logger.debug(f"Processing page {i + 1}/{total_pages}")
-                pix = page.get_pixmap(dpi=int(params.get("pdf_dpi", 200)))
-                img_bytes = pix.tobytes("png")
+                bitmap = pdf[i].render(scale=scale).to_pil()
+                buf = io.BytesIO()
+                bitmap.save(buf, format="PNG")
+                img_bytes = buf.getvalue()
 
                 page_text = self._call_api(img_bytes, "image/png", params)
                 full_text.append(page_text)
 
             return "\n\n".join(full_text)
         finally:
-            doc.close()
+            pdf.close()
 
     def _process_image(self, file_path: str, params: dict[str, Any]) -> str:
         """Process single image file"""

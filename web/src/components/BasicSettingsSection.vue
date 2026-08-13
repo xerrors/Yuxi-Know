@@ -84,6 +84,8 @@
           </div>
         </div>
       </template>
+
+      <SkillSettingsSection :class="{ 'first-section': !userStore.isSuperAdmin }" />
     </template>
 
     <!-- 服务链接部分 -->
@@ -165,6 +167,7 @@ import { Globe } from 'lucide-vue-next'
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue'
 import EmbeddingModelSelector from '@/components/EmbeddingModelSelector.vue'
 import RerankModelSelector from '@/components/RerankModelSelector.vue'
+import SkillSettingsSection from '@/components/SkillSettingsSection.vue'
 
 const configStore = useConfigStore()
 const userStore = useUserStore()
