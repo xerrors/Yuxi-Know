@@ -26,7 +26,7 @@ class ModelInfo:
 
     provider_id: str
     model_id: str
-    model_type: str  # chat / embedding / rerank
+    model_type: str  # chat / embedding / rerank / image
     display_name: str
 
     # 运行时配置

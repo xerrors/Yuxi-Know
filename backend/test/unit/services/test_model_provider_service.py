@@ -352,3 +352,40 @@ def test_normalize_payload_allows_model_type_within_capabilities():
     sources = [model["source"] for model in payload["enabled_models"]]
     assert types == ["chat", "embedding"]
     assert sources == ["manual", "manual"]
+
+
+def test_normalize_payload_accepts_image_model_type():
+    """image 是正式模型类型，provider 声明该能力后可写入图像生成模型。"""
+    payload = _normalize_payload(
+        {
+            "provider_id": "image-provider",
+            "display_name": "Image Provider",
+            "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "capabilities": ["chat", "image"],
+            "enabled_models": [{"id": "qwen-image-3.0", "type": "image", "source": "manual"}],
+        }
+    )
+
+    assert payload["enabled_models"][0]["type"] == "image"
+
+
+def test_normalize_payload_rejects_image_model_without_capability():
+    """provider 未声明 image 能力时，拒绝写入 image 类型模型。"""
+    with pytest.raises(ValueError, match="不在 provider 能力"):
+        _normalize_payload(
+            {
+                "provider_id": "chat-only",
+                "display_name": "Chat Only",
+                "base_url": "https://example.com/v1",
+                "capabilities": ["chat"],
+                "enabled_models": [{"id": "qwen-image-3.0", "type": "image"}],
+            }
+        )
+
+
+def test_normalize_remote_model_preserves_image_type():
+    """远端模型清单返回 image 类型时，归一化保留 image 而非兜底成 chat。"""
+    model = _normalize_remote_model({"id": "qwen-image-3.0", "type": "image", "name": "Qwen Image"})
+
+    assert model["id"] == "qwen-image-3.0"
+    assert model["type"] == "image"
