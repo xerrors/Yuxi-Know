@@ -71,9 +71,7 @@ class _InvalidToolCallFilterMixin:
     """在消息发送前清空 invalid_tool_calls，规避 DeepSeek 等接口不支持该变体。"""
 
     def _generate(self, messages, stop=None, run_manager=None, **kwargs):
-        return super()._generate(
-            _sanitize_invalid_tool_calls(messages), stop=stop, run_manager=run_manager, **kwargs
-        )
+        return super()._generate(_sanitize_invalid_tool_calls(messages), stop=stop, run_manager=run_manager, **kwargs)
 
     async def _agenerate(self, messages, stop=None, run_manager=None, **kwargs):
         return await super()._agenerate(
@@ -81,9 +79,7 @@ class _InvalidToolCallFilterMixin:
         )
 
     def _stream(self, messages, stop=None, run_manager=None, **kwargs):
-        return super()._stream(
-            _sanitize_invalid_tool_calls(messages), stop=stop, run_manager=run_manager, **kwargs
-        )
+        return super()._stream(_sanitize_invalid_tool_calls(messages), stop=stop, run_manager=run_manager, **kwargs)
 
     async def _astream(self, messages, stop=None, run_manager=None, **kwargs):
         async for chunk in super()._astream(
