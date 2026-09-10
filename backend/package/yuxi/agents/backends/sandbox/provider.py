@@ -112,6 +112,17 @@ class ProvisionerSandboxProvider:
         self._connections: dict[str, SandboxConnection] = {}
         self._last_touch_at: dict[str, float] = {}
         self._touch_interval_seconds = int(os.getenv("SANDBOX_KEEPALIVE_INTERVAL_SECONDS") or 30)
+        # 主动 keepalive：编排型主智能体可能长时间不执行沙盒命令，惰性 touch 会导致
+        # 沙盒 idle 超时被 provisioner 清理，随后 create_if_missing=False 无法重建。
+        self._stop_event = threading.Event()
+        self._keepalive_thread: threading.Thread | None = None
+        if self._touch_interval_seconds > 0:
+            self._keepalive_thread = threading.Thread(
+                target=self._keepalive_loop,
+                name="sandbox-keepalive",
+                daemon=True,
+            )
+            self._keepalive_thread.start()
 
     def _thread_lock(self, cache_key: str) -> threading.Lock:
         with self._lock:
@@ -164,6 +175,40 @@ class ProvisionerSandboxProvider:
         connection.sandbox_url = record.sandbox_url
         connection.generation = record.generation
         return True
+
+    def _keepalive_touch(self, connection: SandboxConnection) -> bool:
+        """仅续命：刷新 provisioner 的活动时间戳，返回沙盒是否仍存活。"""
+        is_alive = self._client.touch(connection.sandbox_id)
+        self._last_touch_at[connection.cache_key] = time.time()
+        return is_alive
+
+    def _keepalive_tick(self) -> None:
+        """单次续命：touch 所有到期活跃沙盒，移除已清理的连接。"""
+        with self._lock:
+            cache_keys = list(self._connections.keys())
+        for cache_key in cache_keys:
+            connection = self._connections.get(cache_key)
+            if connection is None or not self._should_touch(cache_key):
+                continue
+            lock = self._thread_lock(cache_key)
+            with lock:
+                current = self._connections.get(cache_key)
+                if current is None:
+                    continue
+                try:
+                    if not self._keepalive_touch(current):
+                        with self._lock:
+                            self._connections.pop(cache_key, None)
+                            self._last_touch_at.pop(cache_key, None)
+                except Exception:  # noqa: BLE001
+                    # touch 网络抖动保守保留连接，下次 get() 再收敛。
+                    pass
+
+    def _keepalive_loop(self) -> None:
+        """后台线程：定期续命活跃沙盒，避免主智能体编排期(长时间不执行命令)触发 idle 回收。"""
+        while not self._stop_event.wait(self._touch_interval_seconds):
+            self._keepalive_tick()
+
 
     def get(
         self,
@@ -259,6 +304,7 @@ class ProvisionerSandboxProvider:
             self._last_touch_at.pop(cache_key, None)
 
     def shutdown(self) -> None:
+        self._stop_event.set()
         with self._lock:
             connections = list(self._connections.values())
             self._connections.clear()

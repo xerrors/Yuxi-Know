@@ -1689,3 +1689,53 @@ def test_workdir_paths_are_workspace_relative_and_reject_symlinks(monkeypatch, t
     (projects / file_id).write_text("file", encoding="utf-8")
     with pytest.raises(ValueError, match="符号链接或非目录组件"):
         paths.user_workdir_host_dir("user-1", f"projects/{file_id}")
+
+
+def test_sandbox_provider_keepalive_touch_reports_liveness_and_updates_timestamp():
+    touched: list[str] = []
+    provider = _make_provider(SimpleNamespace(touch=lambda sandbox_id: touched.append(sandbox_id) or True))
+    cache_key = "user-1::thread-1"
+    connection = SimpleNamespace(sandbox_id="sandbox-1", cache_key=cache_key)
+    provider._connections[cache_key] = connection
+    provider._last_touch_at[cache_key] = 0.0
+
+    assert provider._keepalive_touch(connection) is True
+
+    assert touched == ["sandbox-1"]
+    assert provider._last_touch_at[cache_key] > 0.0
+
+
+def test_sandbox_provider_keepalive_tick_removes_dead_sandbox():
+    provider = _make_provider(SimpleNamespace(touch=lambda _sandbox_id: False))
+    cache_key = "user-1::thread-1"
+    provider._connections[cache_key] = SimpleNamespace(sandbox_id="sandbox-1", cache_key=cache_key)
+    provider._last_touch_at[cache_key] = 0.0
+
+    provider._keepalive_tick()
+
+    assert cache_key not in provider._connections
+    assert cache_key not in provider._last_touch_at
+
+
+def test_sandbox_provider_keepalive_tick_keeps_alive_sandbox():
+    provider = _make_provider(SimpleNamespace(touch=lambda _sandbox_id: True))
+    cache_key = "user-1::thread-1"
+    connection = SimpleNamespace(sandbox_id="sandbox-1", cache_key=cache_key)
+    provider._connections[cache_key] = connection
+    provider._last_touch_at[cache_key] = 0.0
+
+    provider._keepalive_tick()
+
+    assert provider._connections[cache_key] is connection
+    assert provider._last_touch_at[cache_key] > 0.0
+
+
+def test_sandbox_provider_keepalive_tick_skips_fresh_sandbox():
+    provider = _make_provider(SimpleNamespace(touch=lambda _sandbox_id: pytest.fail("fresh sandbox must not be touched")))
+    cache_key = "user-1::thread-1"
+    provider._connections[cache_key] = SimpleNamespace(sandbox_id="sandbox-1", cache_key=cache_key)
+    provider._last_touch_at[cache_key] = 10**12  # 远晚于当前时刻，_should_touch 应返回 False
+
+    provider._keepalive_tick()
+
+    assert cache_key in provider._connections
