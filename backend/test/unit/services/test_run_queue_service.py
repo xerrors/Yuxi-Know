@@ -67,6 +67,18 @@ class _FakeStreamRedis:
         rows = list(reversed(self.streams.get(key, [])))
         return rows[:count]
 
+    async def xread(self, streams: dict, block: int, count: int):
+        del block
+        result = []
+        for key, start in streams.items():
+            rows = list(self.streams.get(key, []))
+            if start not in ("0-0", ""):
+                rows = [(event_id, fields) for event_id, fields in rows if event_id > start]
+            rows = rows[:count]
+            if rows:
+                result.append([key, rows])
+        return result
+
 
 @pytest.mark.asyncio
 async def test_run_stream_event_roundtrip(monkeypatch: pytest.MonkeyPatch):
@@ -140,6 +152,42 @@ async def test_run_stream_event_decoder_keeps_legacy_payload_shape(monkeypatch: 
             "ts": 1700000000000,
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_blocking_read_run_stream_events_reads_after_cursor(monkeypatch: pytest.MonkeyPatch):
+    fake_redis = _FakeStreamRedis()
+
+    async def fake_get_async_redis_client():
+        return fake_redis
+
+    monkeypatch.setattr(run_queue_service, "get_async_redis_client", fake_get_async_redis_client)
+
+    run_id = "run-1"
+    seq1 = await run_queue_service.append_run_stream_event(run_id, "loading", {"items": [1]})
+    seq2 = await run_queue_service.append_run_stream_event(run_id, "finished", {"chunk": {}})
+
+    events = await run_queue_service.blocking_read_run_stream_events(run_id, after_seq="0-0", block_ms=100)
+    assert [item["event_type"] for item in events] == ["loading", "finished"]
+
+    tail = await run_queue_service.blocking_read_run_stream_events(run_id, after_seq=seq1, block_ms=100)
+    assert [item["seq"] for item in tail] == [seq2]
+
+
+@pytest.mark.asyncio
+async def test_blocking_read_run_stream_events_empty_when_no_new_events(monkeypatch: pytest.MonkeyPatch):
+    fake_redis = _FakeStreamRedis()
+
+    async def fake_get_async_redis_client():
+        return fake_redis
+
+    monkeypatch.setattr(run_queue_service, "get_async_redis_client", fake_get_async_redis_client)
+
+    run_id = "run-1"
+    seq = await run_queue_service.append_run_stream_event(run_id, "loading", {"items": [1]})
+
+    events = await run_queue_service.blocking_read_run_stream_events(run_id, after_seq=seq, block_ms=100)
+    assert events == []
 
 
 def test_normalize_after_seq_stream_id_only():

@@ -11,7 +11,7 @@ contention on the same row.
 
 from __future__ import annotations
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.storage.postgres.models_business import AgentRunRequest
@@ -108,6 +108,42 @@ class AgentRunRequestRepository:
             )
         )
         return result.scalar_one_or_none()
+
+    async def list_pending_guided(
+        self,
+        *,
+        uid: str,
+        agent_slug: str,
+        conversation_thread_id: str,
+    ) -> list[AgentRunRequest]:
+        """读取线程内待注入的 guided 请求（FIFO，允许多条同时等待）。"""
+        result = await self.db.execute(
+            select(AgentRunRequest)
+            .where(
+                AgentRunRequest.uid == str(uid),
+                AgentRunRequest.agent_slug == agent_slug,
+                AgentRunRequest.conversation_thread_id == conversation_thread_id,
+                AgentRunRequest.queue_policy == "guided",
+                AgentRunRequest.status == "queued",
+            )
+            .order_by(AgentRunRequest.created_at.asc(), AgentRunRequest.id.asc())
+        )
+        return list(result.scalars().all())
+
+    async def mark_guided_injected(self, request_ids: list[str]) -> int:
+        """把已注入当前 Run 的 guided 请求收敛为 injected 终态；返回实际更新数。"""
+        if not request_ids:
+            return 0
+        result = await self.db.execute(
+            update(AgentRunRequest)
+            .where(
+                AgentRunRequest.request_id.in_(request_ids),
+                AgentRunRequest.queue_policy == "guided",
+                AgentRunRequest.status == "queued",
+            )
+            .values(status="injected", updated_at=utc_now_naive())
+        )
+        return int(result.rowcount or 0)
 
     async def get_queue_head(
         self,
