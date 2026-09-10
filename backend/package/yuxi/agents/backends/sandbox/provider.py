@@ -209,7 +209,6 @@ class ProvisionerSandboxProvider:
         while not self._stop_event.wait(self._touch_interval_seconds):
             self._keepalive_tick()
 
-
     def get(
         self,
         thread_id: str,
