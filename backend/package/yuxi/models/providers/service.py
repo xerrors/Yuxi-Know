@@ -503,7 +503,12 @@ async def _test_image_generation_model(spec: str, info) -> dict:
         resp = await client.post(url, json=payload, headers={"Authorization": f"Bearer {api_key}"})
     if resp.status_code != 200:
         detail = resp.text[:200]
-        return {"spec": spec, "status": "unavailable", "message": f"HTTP {resp.status_code}: {detail}", "model_type": "image"}
+        return {
+            "spec": spec,
+            "status": "unavailable",
+            "message": f"HTTP {resp.status_code}: {detail}",
+            "model_type": "image",
+        }
 
     data = resp.json()
     choices = (data.get("output") or {}).get("choices") or []
