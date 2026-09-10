@@ -19,6 +19,7 @@ from yuxi.services.agent_request_queue_service import (
     cancel_queued_request,
     finalize_dispatch,
     finalize_intake,
+    guided_queued_request,
     intake_request,
     steer_queued_request,
     validate_queue_policy,
@@ -1498,3 +1499,156 @@ async def test_enqueue_after_empty_failed_queue_dispatches_new_request(session, 
 
     assert result.status == "dispatched"
     assert result.run_id is not None
+
+
+# ── guided: 注入当前 Run 而非排队等待 ──
+
+
+@pytest.mark.asyncio
+async def test_queued_request_can_be_upgraded_to_guided(session):
+    await _seed_thread(session)
+    await _seed_active_run(session)
+    await _create_request(session, request_id="request-guide")
+
+    result = await guided_queued_request(request_id="request-guide", current_uid="user-1", db=session)
+
+    request = await session.scalar(
+        select(AgentRunRequest).where(AgentRunRequest.request_id == "request-guide")
+    )
+    assert result.status == "queued"
+    assert result.queue_policy == "guided"
+    assert request.queue_policy == "guided"
+    assert request.status == "queued"
+
+
+@pytest.mark.asyncio
+async def test_guided_upgrade_requires_running_main_chat(session):
+    from fastapi import HTTPException
+
+    await _seed_thread(session)
+    await _create_request(session, request_id="request-guide")
+
+    with pytest.raises(HTTPException) as exc_info:
+        await guided_queued_request(request_id="request-guide", current_uid="user-1", db=session)
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail["code"] == "run_not_steerable"
+
+
+@pytest.mark.asyncio
+async def test_multiple_pending_guided_requests_are_allowed(session):
+    await _seed_thread(session)
+    await _seed_active_run(session)
+    session.add(Message(id=200, conversation_id=10, role="user", content="first"))
+    session.add(Message(id=201, conversation_id=10, role="user", content="second"))
+    await session.commit()
+    await _create_request(session, request_id="guided-1", msg_id=200, queue_policy="guided")
+    await _create_request(session, request_id="guided-2", msg_id=201, queue_policy="guided")
+
+    from yuxi.repositories.agent_run_request_repository import AgentRunRequestRepository
+
+    pending = await AgentRunRequestRepository(session).list_pending_guided(
+        uid="user-1", agent_slug="main", conversation_thread_id="t1"
+    )
+
+    # guided 与 steer 不同：允许多条同时等待，逐条注入。
+    assert [item.request_id for item in pending] == ["guided-1", "guided-2"]
+
+
+@pytest.mark.asyncio
+async def test_guided_is_supported_queue_policy():
+    assert validate_queue_policy("guided") == "guided"
+    assert "guided" not in NOT_IMPLEMENTED_QUEUE_POLICIES
+
+
+@pytest.mark.asyncio
+async def test_take_pending_guided_messages_restores_langchain_messages(session, monkeypatch):
+    import yuxi.services.agent_request_queue_service as queue_service
+    from langchain.messages import HumanMessage
+
+    await _seed_thread(session)
+    await _seed_active_run(session)
+    session.add(
+        Message(
+            id=300,
+            conversation_id=10,
+            role="user",
+            content="补充：只关注 2024 年之后的数据",
+            extra_metadata={
+                "request_id": "guided-1",
+                "raw_message": HumanMessage(
+                    content="补充：只关注 2024 年之后的数据", id="langchain-msg-300"
+                ).model_dump(),
+            },
+        )
+    )
+    await session.commit()
+    await _create_request(session, request_id="guided-1", msg_id=300, queue_policy="guided")
+
+    published: list[tuple[str, str]] = []
+
+    @asynccontextmanager
+    async def fake_session_ctx():
+        yield session
+
+    async def fake_append_event(run_id, event_type, payload, *, thread_id=None):
+        published.append((run_id, event_type))
+
+    monkeypatch.setattr(queue_service.pg_manager, "get_async_session_context", fake_session_ctx)
+    monkeypatch.setattr(queue_service, "append_run_stream_event", fake_append_event)
+
+    injected = await queue_service.take_pending_guided_messages("active-run")
+
+    assert len(injected) == 1
+    assert injected[0].content == "补充：只关注 2024 年之后的数据"
+    assert injected[0].id == "langchain-msg-300"
+    request = await session.scalar(
+        select(AgentRunRequest).where(AgentRunRequest.request_id == "guided-1")
+    )
+    assert request.status == "injected"
+    assert published == [("active-run", "guided_injected")]
+
+
+@pytest.mark.asyncio
+async def test_take_pending_guided_messages_returns_empty_without_active_run(session, monkeypatch):
+    import yuxi.services.agent_request_queue_service as queue_service
+
+    await _seed_thread(session)
+    await _create_request(session, request_id="guided-1", queue_policy="guided")
+
+    @asynccontextmanager
+    async def fake_session_ctx():
+        yield session
+
+    monkeypatch.setattr(queue_service.pg_manager, "get_async_session_context", fake_session_ctx)
+
+    assert await queue_service.take_pending_guided_messages("missing-run") == []
+
+
+@pytest.mark.asyncio
+async def test_injected_guided_request_leaves_queue(session, monkeypatch):
+    import yuxi.services.agent_request_queue_service as queue_service
+    from yuxi.repositories.agent_run_request_repository import AgentRunRequestRepository
+
+    await _seed_thread(session)
+    await _seed_active_run(session)
+    session.add(Message(id=310, conversation_id=10, role="user", content="补充"))
+    await session.commit()
+    await _create_request(session, request_id="guided-1", msg_id=310, queue_policy="guided")
+
+    @asynccontextmanager
+    async def fake_session_ctx():
+        yield session
+
+    async def fake_append_event(run_id, event_type, payload, *, thread_id=None):
+        del run_id, event_type, payload, thread_id
+
+    monkeypatch.setattr(queue_service.pg_manager, "get_async_session_context", fake_session_ctx)
+    monkeypatch.setattr(queue_service, "append_run_stream_event", fake_append_event)
+
+    await queue_service.take_pending_guided_messages("active-run")
+
+    queued = await AgentRunRequestRepository(session).list_queued(
+        uid="user-1", agent_slug="main", conversation_thread_id="t1"
+    )
+    assert all(item.request_id != "guided-1" for item in queued)

@@ -224,6 +224,31 @@ async def list_run_stream_events(
     return events
 
 
+async def blocking_read_run_stream_events(
+    run_id: str,
+    *,
+    after_seq: str = "0-0",
+    block_ms: int = 1000,
+    limit: int = 200,
+) -> list[dict]:
+    """阻塞读取 run 事件流：有事件立即返回，无事件挂起最多 block_ms。
+
+    用于 SSE 实时流：替代「非阻塞读 + sleep 轮询」，把流式延迟从轮询间隔
+    降到毫秒级，同时保留 Stream 的游标续读能力（after_seq 语义同 xrange）。
+    """
+    redis = await get_redis_client()
+    key = _event_stream_key(run_id)
+    start = "0-0" if after_seq in {"0-0", ""} else after_seq
+    result = await redis.xread(streams={key: start}, block=block_ms, count=limit)
+    if not result:
+        return []
+    events: list[dict] = []
+    for _stream_key, rows in result:
+        for event_id, fields in rows:
+            events.append(_decode_run_stream_row(run_id, str(event_id), fields))
+    return events
+
+
 async def list_recent_run_stream_events(run_id: str, *, limit: int = 100) -> list[dict]:
     """从 Redis Stream 反向读取最近的 run events，返回顺序为新到旧。"""
     redis = await get_redis_client()

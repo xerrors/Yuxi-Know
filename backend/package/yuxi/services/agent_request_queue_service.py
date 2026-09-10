@@ -26,6 +26,7 @@ from yuxi.services.agent_run_service import (
     resolve_agent_run_config,
 )
 from yuxi.services.input_message_service import AgentRunInputMessage
+from yuxi.services.run_queue_service import append_run_stream_event
 from yuxi.services.workdir_service import (
     WorkdirBinding,
     resolve_conversation_workdir_binding,
@@ -43,8 +44,8 @@ from yuxi.utils.sse_utils import (
 )
 from yuxi.workspace.paths import ensure_bound_user_workdir
 
-SUPPORTED_QUEUE_POLICIES = ("enqueue", "reject", "steer")
-NOT_IMPLEMENTED_QUEUE_POLICIES = ("guided", "bridge")
+SUPPORTED_QUEUE_POLICIES = ("enqueue", "reject", "steer", "guided")
+NOT_IMPLEMENTED_QUEUE_POLICIES = ("bridge",)
 
 # Request lifecycle states.
 REQUEST_STATUS_QUEUED = "queued"
@@ -52,7 +53,11 @@ REQUEST_STATUS_DISPATCHED = "dispatched"
 REQUEST_STATUS_CANCELLED = "cancelled"
 REQUEST_STATUS_REJECTED = "rejected"
 REQUEST_STATUS_FAILED = "failed"
-REQUEST_TERMINAL_STATUSES = frozenset({REQUEST_STATUS_CANCELLED, REQUEST_STATUS_REJECTED, REQUEST_STATUS_FAILED})
+# guided 请求已注入当前活跃 Run；不再参与队列派发。
+REQUEST_STATUS_INJECTED = "injected"
+REQUEST_TERMINAL_STATUSES = frozenset(
+    {REQUEST_STATUS_CANCELLED, REQUEST_STATUS_REJECTED, REQUEST_STATUS_FAILED, REQUEST_STATUS_INJECTED}
+)
 
 # Message delivery states aligned with messages.delivery_status.
 DELIVERY_STATUS_QUEUED = "queued"
@@ -122,8 +127,8 @@ async def intake_request(
     返回 IntakeResult：dispatched 时含 run_id（调用方需 commit 后 enqueue ARQ）。
     """
     policy = validate_queue_policy(queue_policy)
-    if policy == "steer" and source not in {"chat", "channel"}:
-        raise HTTPException(status_code=422, detail="queue_policy 'steer' 仅支持主会话 Chat/Channel")
+    if policy in {"steer", "guided"} and source not in {"chat", "channel"}:
+        raise HTTPException(status_code=422, detail=f"queue_policy '{policy}' 仅支持主会话 Chat/Channel")
     meta = meta or {}
     uid_str = str(uid)
     repo = AgentRunRequestRepository(db)
@@ -191,8 +196,13 @@ async def intake_request(
     )
     if latest_run is not None and latest_run.status == "interrupted":
         raise _queue_conflict("run_interrupted", "线程正在等待用户回答或审批")
-    if policy == "steer" and active_run is not None and not await _is_steerable_message_run(db=db, run=active_run):
+    if (
+        policy in {"steer", "guided"}
+        and active_run is not None
+        and not await _is_steerable_message_run(db=db, run=active_run)
+    ):
         raise _queue_conflict("run_not_steerable", "当前运行不支持引导")
+    # guided 与 steer 的差别：guided 允许多条同时等待(逐条注入)；steer 只允许一条。
     if policy == "steer" and await repo.get_pending_steer(
         uid=uid_str,
         agent_slug=agent_slug,
@@ -405,6 +415,127 @@ async def should_end_run_for_steer(run_id: str) -> bool:
             conversation_thread_id=run.conversation_thread_id,
         )
         return request is not None
+
+
+async def take_pending_guided_messages(run_id: str) -> list:
+    """收割并标记属于当前 Run 的 guided 消息，返回可注入 state 的 HumanMessage 列表。
+
+    仅在模型调用前（middleware before_model）调用；run 由 worker lease 保证单写者，
+    读取-标记在同一事务内完成。消息从 Message.extra_metadata.raw_message 恢复，
+    保留原始 LangChain id，使 run 结束保存时与既有 Message 行按 id 去重。
+    """
+    from langchain.messages import HumanMessage
+
+    injected: list = []
+    injected_summaries: list[dict] = []
+    async with pg_manager.get_async_session_context() as db:
+        run = await AgentRunRepository(db).get_run(run_id)
+        if run is None or not await _is_steerable_message_run(db=db, run=run):
+            return []
+        repo = AgentRunRequestRepository(db)
+        requests = await repo.list_pending_guided(
+            uid=run.uid,
+            agent_slug=run.agent_slug,
+            conversation_thread_id=run.conversation_thread_id,
+        )
+        for request in requests:
+            message = (
+                await db.execute(select(Message).where(Message.id == request.input_message_id))
+            ).scalar_one_or_none()
+            if message is None:
+                logger.warning(f"guided 请求 {request.request_id} 缺少输入消息，跳过")
+                continue
+            raw = (
+                (message.extra_metadata or {}).get("raw_message") if isinstance(message.extra_metadata, dict) else None
+            )
+            if isinstance(raw, dict):
+                try:
+                    injected.append(HumanMessage(**{k: v for k, v in raw.items() if k in ("content", "id", "name")}))
+                except Exception:
+                    injected.append(HumanMessage(content=message.content))
+            else:
+                injected.append(HumanMessage(content=message.content))
+            injected_summaries.append(
+                {
+                    "request_id": request.request_id,
+                    "content": message.content,
+                    "thread_id": request.conversation_thread_id,
+                }
+            )
+        if injected_summaries:
+            await repo.mark_guided_injected([item["request_id"] for item in injected_summaries])
+            await db.commit()
+
+    # 注入事件 best-effort：前端据此把排队消息转入对话流。
+    for item in injected_summaries:
+        try:
+            await append_run_stream_event(
+                run_id,
+                "guided_injected",
+                {"chunk": {"status": "guided_injected", **item}},
+                thread_id=item["thread_id"],
+            )
+        except Exception:
+            logger.warning(f"Failed to publish guided_injected event for run {run_id}", exc_info=True)
+    return injected
+
+
+async def guided_queued_request(
+    *,
+    request_id: str,
+    current_uid: str,
+    db: AsyncSession,
+) -> IntakeResult:
+    """把普通 Chat 排队请求升级为 guided（注入当前 Run 而非等待队列）。"""
+    repo = AgentRunRequestRepository(db)
+    existing = await repo.get_by_request_id(request_id)
+    if existing is None or existing.uid != str(current_uid):
+        raise HTTPException(status_code=404, detail={"code": "request_not_found", "message": "请求不存在"})
+
+    await _get_thread_conversation(
+        db=db,
+        uid=existing.uid,
+        agent_slug=existing.agent_slug,
+        thread_id=existing.conversation_thread_id,
+        lock=True,
+    )
+    request = await repo.lock_by_request_id(request_id)
+    if request is None or request.uid != str(current_uid):
+        raise HTTPException(status_code=404, detail={"code": "request_not_found", "message": "请求不存在"})
+    if request.queue_policy == "guided" and request.status == REQUEST_STATUS_QUEUED:
+        return await _build_existing_intake_result(
+            repo=repo,
+            request=request,
+            uid=request.uid,
+            agent_slug=request.agent_slug,
+            thread_id=request.conversation_thread_id,
+            source=request.source,
+            channel=request.channel,
+            external_id=request.external_id,
+            queue_policy="guided",
+        )
+    if request.status != REQUEST_STATUS_QUEUED or request.queue_policy != "enqueue" or request.source != "chat":
+        raise _queue_conflict("request_not_queued", "只有普通 Chat 排队请求可以升级为注入")
+
+    active_run = await AgentRunRepository(db).get_active_run_by_thread_for_user(
+        uid=request.uid,
+        agent_slug=request.agent_slug,
+        conversation_thread_id=request.conversation_thread_id,
+    )
+    if active_run is None or not await _is_steerable_message_run(db=db, run=active_run):
+        raise _queue_conflict("run_not_steerable", "当前没有可注入的运行")
+
+    request.queue_policy = "guided"
+    request.updated_at = utc_now_naive()
+    await db.flush()
+    return IntakeResult(
+        request_id=request.request_id,
+        status=request.status,
+        queue_policy=request.queue_policy,
+        message_id=request.input_message_id,
+        thread_id=request.conversation_thread_id,
+        queue_position=await repo.get_queue_position(request_id),
+    )
 
 
 async def finalize_intake(

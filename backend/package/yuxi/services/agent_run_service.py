@@ -19,7 +19,6 @@ import json
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from random import uniform
 from time import monotonic
 from typing import Any, Literal
 
@@ -41,11 +40,11 @@ from yuxi.services.input_message_service import (
 )
 from yuxi.services.langfuse_service import get_trace_url_by_id_async
 from yuxi.services.run_queue_service import (
+    blocking_read_run_stream_events,
     build_run_event_envelope,
     get_arq_pool,
     get_last_run_stream_seq,
     list_recent_run_stream_events,
-    list_run_stream_events,
     normalize_after_seq,
     publish_cancel_signals,
 )
@@ -57,6 +56,7 @@ from yuxi.utils.logging_config import logger
 from yuxi.utils.sse_utils import (
     SSE_HEARTBEAT_SECONDS,
     SSE_MAX_CONNECTION_MINUTES,
+    SSE_STREAM_BLOCK_MS,
     format_heartbeat,
     format_sse,
 )
@@ -64,12 +64,7 @@ from yuxi.utils.sse_utils import (
 RUN_PROGRESS_RECENT_EVENT_SCAN_LIMIT = 100
 RUN_PROGRESS_MESSAGE_LIMIT = 3
 RUN_PROGRESS_CONTENT_MAX_CHARS = 800
-RUN_SSE_ACTIVE_POLL_SECONDS = 0.1
-RUN_SSE_SHORT_IDLE_MAX_POLL_SECONDS = 1.0
-RUN_SSE_LONG_IDLE_AFTER_SECONDS = 120.0
-RUN_SSE_LONG_IDLE_MAX_POLL_SECONDS = 4.0
 RUN_SSE_STATUS_POLL_SECONDS = 5.0
-RUN_SSE_POLL_JITTER_RATIO = 0.2
 
 
 def _resolve_agent_run_request_id(
@@ -949,22 +944,6 @@ async def _load_stream_run(run_id: str):
         return await AgentRunRepository(db).get_run(run_id)
 
 
-def _next_run_sse_poll_interval(current_interval: float, idle_seconds: float) -> float:
-    """按空闲时长扩大 Run 事件轮询间隔。"""
-    max_interval = (
-        RUN_SSE_LONG_IDLE_MAX_POLL_SECONDS
-        if idle_seconds >= RUN_SSE_LONG_IDLE_AFTER_SECONDS
-        else RUN_SSE_SHORT_IDLE_MAX_POLL_SECONDS
-    )
-    return min(max(current_interval * 2, RUN_SSE_ACTIVE_POLL_SECONDS), max_interval)
-
-
-def _jitter_run_sse_poll_interval(interval: float) -> float:
-    """为轮询间隔增加有限抖动，分散并发连接尖峰。"""
-    multiplier = uniform(1 - RUN_SSE_POLL_JITTER_RATIO, 1 + RUN_SSE_POLL_JITTER_RATIO)
-    return interval * multiplier
-
-
 async def stream_agent_run_events(
     *,
     run_id: str,
@@ -977,9 +956,7 @@ async def stream_agent_run_events(
     last_heartbeat_ts = started_at
     last_seq = normalize_after_seq(after_seq)
     started_monotonic = monotonic()
-    last_event_at = started_monotonic
     next_status_check_at = started_monotonic + RUN_SSE_STATUS_POLL_SECONDS
-    poll_interval = RUN_SSE_ACTIVE_POLL_SECONDS
 
     try:
         try:
@@ -1003,7 +980,12 @@ async def stream_agent_run_events(
 
         while True:
             try:
-                events = await list_run_stream_events(run_id, after_seq=last_seq, limit=200)
+                events = await blocking_read_run_stream_events(
+                    run_id,
+                    after_seq=last_seq,
+                    block_ms=SSE_STREAM_BLOCK_MS,
+                    limit=200,
+                )
             except Exception as e:
                 logger.warning(f"Run SSE redis error for run {run_id}: {e}")
                 yield format_sse(
@@ -1015,10 +997,6 @@ async def stream_agent_run_events(
                     event="error",
                 )
                 return
-
-            if events:
-                last_event_at = monotonic()
-                poll_interval = RUN_SSE_ACTIVE_POLL_SECONDS
 
             emitted_terminal = False
             for event in events:
@@ -1037,8 +1015,9 @@ async def stream_agent_run_events(
             if emitted_terminal:
                 return
 
+            # 阻塞读超时(无新事件)且到达状态检查节流点时才查库，确认 run 状态并检测终止态。
             now_monotonic = monotonic()
-            if now_monotonic >= next_status_check_at:
+            if not events and now_monotonic >= next_status_check_at:
                 try:
                     run = await _load_stream_run(run_id)
                     if not run:
@@ -1059,31 +1038,27 @@ async def stream_agent_run_events(
                     return
                 next_status_check_at = monotonic() + RUN_SSE_STATUS_POLL_SECONDS
 
-            if (
-                run.status in TERMINAL_RUN_STATUSES
-                and not bool(getattr(run, "runtime_cleanup_pending", False))
-                and not events
-            ):
-                terminal_seq = last_seq
-                if terminal_seq in {"", "0-0"}:
-                    terminal_seq = await get_last_run_stream_seq(run_id)
-                if terminal_seq in {"", "0-0"}:
-                    terminal_seq = None
-                terminal_envelope = build_run_event_envelope(
-                    run_id=run_id,
-                    thread_id=run.conversation_thread_id,
-                    event_type="end",
-                    payload={"status": run.status, "request_id": run.request_id},
-                    created_at=utc_now_naive().isoformat(),
-                )
-                if not verbose:
-                    terminal_envelope = _compact_run_event_envelope(terminal_envelope)
-                yield format_sse(
-                    terminal_envelope,
-                    event="end",
-                    event_id=terminal_seq,
-                )
-                return
+                if run.status in TERMINAL_RUN_STATUSES and not bool(getattr(run, "runtime_cleanup_pending", False)):
+                    terminal_seq = last_seq
+                    if terminal_seq in {"", "0-0"}:
+                        terminal_seq = await get_last_run_stream_seq(run_id)
+                    if terminal_seq in {"", "0-0"}:
+                        terminal_seq = None
+                    terminal_envelope = build_run_event_envelope(
+                        run_id=run_id,
+                        thread_id=run.conversation_thread_id,
+                        event_type="end",
+                        payload={"status": run.status, "request_id": run.request_id},
+                        created_at=utc_now_naive().isoformat(),
+                    )
+                    if not verbose:
+                        terminal_envelope = _compact_run_event_envelope(terminal_envelope)
+                    yield format_sse(
+                        terminal_envelope,
+                        event="end",
+                        event_id=terminal_seq,
+                    )
+                    return
 
             now = utc_now_naive()
             elapsed_seconds = (now - started_at).total_seconds()
@@ -1094,13 +1069,6 @@ async def stream_agent_run_events(
 
             if elapsed_seconds >= SSE_MAX_CONNECTION_MINUTES * 60:
                 return
-
-            status_check_delay = max(0.0, next_status_check_at - monotonic())
-            sleep_seconds = min(_jitter_run_sse_poll_interval(poll_interval), status_check_delay)
-            await asyncio.sleep(sleep_seconds)
-            if not events:
-                idle_seconds = monotonic() - last_event_at
-                poll_interval = _next_run_sse_poll_interval(poll_interval, idle_seconds)
     except asyncio.CancelledError:
         return
 
