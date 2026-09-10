@@ -72,8 +72,10 @@ class NetworkRetryMiddleware(AgentMiddleware[Any, ContextT, ResponseT]):
         max_delay: float = 30.0,
     ) -> None:
         super().__init__()
-        self._budget = budget_seconds if budget_seconds is not None else float(
-            os.getenv("YUXI_NETWORK_RETRY_BUDGET_SECONDS", "600")
+        self._budget = (
+            budget_seconds
+            if budget_seconds is not None
+            else float(os.getenv("YUXI_NETWORK_RETRY_BUDGET_SECONDS", "600"))
         )
         self._initial_delay = initial_delay
         self._max_delay = max_delay
