@@ -1038,9 +1038,7 @@ async def stream_agent_run_events(
                     return
                 next_status_check_at = monotonic() + RUN_SSE_STATUS_POLL_SECONDS
 
-                if run.status in TERMINAL_RUN_STATUSES and not bool(
-                    getattr(run, "runtime_cleanup_pending", False)
-                ):
+                if run.status in TERMINAL_RUN_STATUSES and not bool(getattr(run, "runtime_cleanup_pending", False)):
                     terminal_seq = last_seq
                     if terminal_seq in {"", "0-0"}:
                         terminal_seq = await get_last_run_stream_seq(run_id)

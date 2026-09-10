@@ -445,7 +445,9 @@ async def take_pending_guided_messages(run_id: str) -> list:
             if message is None:
                 logger.warning(f"guided 请求 {request.request_id} 缺少输入消息，跳过")
                 continue
-            raw = (message.extra_metadata or {}).get("raw_message") if isinstance(message.extra_metadata, dict) else None
+            raw = (
+                (message.extra_metadata or {}).get("raw_message") if isinstance(message.extra_metadata, dict) else None
+            )
             if isinstance(raw, dict):
                 try:
                     injected.append(HumanMessage(**{k: v for k, v in raw.items() if k in ("content", "id", "name")}))
