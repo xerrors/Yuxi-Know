@@ -3,7 +3,7 @@
 from uuid import uuid4
 
 from langchain.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, AIMessageChunk, convert_to_messages
+from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, ToolMessage, convert_to_messages
 from langchain_openai import ChatOpenAI
 from pydantic import Field, SecretStr
 
@@ -22,6 +22,79 @@ def resolve_chat_model_spec(model_spec: str | None, *, fallback: str | None = No
         if isinstance(candidate, str) and candidate.strip():
             return candidate.strip()
     raise ValueError("model spec 不能为空")
+
+
+def _sanitize_invalid_tool_calls(messages: list[BaseMessage]) -> list[BaseMessage]:
+    """净化消息里的 invalid_tool_call，规避 DeepSeek 等接口的两类报错：
+
+    1. unknown variant invalid_tool_call —— LLM 生成无效工具调用（JSON 参数截断/格式
+       错误）时，LangChain 记录 invalid_tool_call，序列化后以该变体发往模型。
+    2. role='tool' must be a response to a preceding message with 'tool_calls' ——
+       孤儿 ToolMessage（tool_call_id 已无对应 tool_calls）。
+
+    处理：invalid_tool_calls 属性清空、content 数组里的 invalid_tool_call block 转
+    text、孤儿 ToolMessage 删除。
+    """
+    valid_ids: set[str] = set()
+    for message in messages:
+        if not isinstance(message, AIMessage):
+            continue
+        invalid_calls = getattr(message, "invalid_tool_calls", None)
+        if invalid_calls:
+            logger.warning(f"[invalid_tool_call 过滤] 清空 {len(invalid_calls)} 条 invalid_tool_calls")
+            message.invalid_tool_calls = []
+        for tc in message.tool_calls or []:
+            if tc.get("id"):
+                valid_ids.add(tc["id"])
+        if isinstance(message.content, list):
+            new_content = []
+            for block in message.content:
+                if isinstance(block, dict) and block.get("type") == "invalid_tool_call":
+                    name = block.get("name") or "unknown"
+                    error = block.get("error") or "arguments malformed or truncated"
+                    logger.warning(f"[invalid_tool_call 过滤] content 里的 block 转 text: {name}: {error}")
+                    new_content.append({"type": "text", "text": f"[工具调用失败] {name}: {error}"})
+                else:
+                    new_content.append(block)
+            message.content = new_content
+
+    filtered: list[BaseMessage] = []
+    for message in messages:
+        if isinstance(message, ToolMessage) and message.tool_call_id not in valid_ids:
+            logger.warning(f"[invalid_tool_call 过滤] 删除孤儿 ToolMessage: {message.tool_call_id}")
+            continue
+        filtered.append(message)
+    return filtered
+
+
+class _InvalidToolCallFilterMixin:
+    """在消息发送前清空 invalid_tool_calls，规避 DeepSeek 等接口不支持该变体。"""
+
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+        return super()._generate(
+            _sanitize_invalid_tool_calls(messages), stop=stop, run_manager=run_manager, **kwargs
+        )
+
+    async def _agenerate(self, messages, stop=None, run_manager=None, **kwargs):
+        return await super()._agenerate(
+            _sanitize_invalid_tool_calls(messages), stop=stop, run_manager=run_manager, **kwargs
+        )
+
+    def _stream(self, messages, stop=None, run_manager=None, **kwargs):
+        return super()._stream(
+            _sanitize_invalid_tool_calls(messages), stop=stop, run_manager=run_manager, **kwargs
+        )
+
+    async def _astream(self, messages, stop=None, run_manager=None, **kwargs):
+        async for chunk in super()._astream(
+            _sanitize_invalid_tool_calls(messages), stop=stop, run_manager=run_manager, **kwargs
+        ):
+            yield chunk
+
+
+def _wrap_model(cls: type) -> type:
+    """动态创建带 invalid_tool_call 过滤的模型子类。"""
+    return type(f"Filtered{cls.__name__}", (_InvalidToolCallFilterMixin, cls), {})
 
 
 def load_chat_model(fully_specified_name: str | None, *, session_id: str | None = None, **kwargs) -> BaseChatModel:
@@ -69,7 +142,7 @@ def load_chat_model(fully_specified_name: str | None, *, session_id: str | None 
     if info.provider_type == "anthropic":
         from langchain_anthropic import ChatAnthropic
 
-        return ChatAnthropic(
+        return _wrap_model(ChatAnthropic)(
             model=info.model_id,
             api_key=SecretStr(api_key),
             base_url=base_url,
@@ -78,13 +151,13 @@ def load_chat_model(fully_specified_name: str | None, *, session_id: str | None 
     if info.provider_type == "gemini":
         from langchain_google_genai import ChatGoogleGenerativeAI
 
-        return ChatGoogleGenerativeAI(
+        return _wrap_model(ChatGoogleGenerativeAI)(
             model=info.model_id,
             google_api_key=SecretStr(api_key),
             **kwargs,
         )
 
-    return ChatCompletionsAdapter(
+    return _wrap_model(ChatCompletionsAdapter)(
         model=info.model_id,
         api_key=SecretStr(api_key),
         base_url=base_url,
