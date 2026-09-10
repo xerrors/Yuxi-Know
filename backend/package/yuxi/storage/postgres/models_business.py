@@ -813,7 +813,7 @@ class ModelProvider(Base):
     api_key_env = Column(String(128), nullable=True, comment="API Key 环境变量名")
     api_key = Column(String(500), nullable=True, comment="直接配置的 API Key")
 
-    capabilities = Column(JSON, nullable=False, default=list, comment="支持能力：chat/embedding/rerank")
+    capabilities = Column(JSON, nullable=False, default=list, comment="支持能力：chat/embedding/rerank/image")
     enabled_models = Column(JSON, nullable=False, default=list, comment="已启用模型配置对象")
     headers_json = Column(JSON, nullable=True, comment="额外请求头")
     extra_json = Column(JSON, nullable=True, comment="扩展配置")

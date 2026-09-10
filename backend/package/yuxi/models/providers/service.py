@@ -19,7 +19,7 @@ from yuxi.models.providers.repository import (
 )
 from yuxi.storage.postgres.models_business import ModelProvider
 
-VALID_MODEL_TYPES = {"chat", "embedding", "rerank"}
+VALID_MODEL_TYPES = {"chat", "embedding", "rerank", "image"}
 VALID_MODEL_SOURCES = {"manual", "remote"}
 VALID_PROVIDER_TYPES = {"openai", "anthropic", "gemini", "openrouter"}
 OPENAI_COMPATIBLE_REQUEST_BODY_PROVIDER_TYPES = {"openai", "openrouter"}
@@ -54,7 +54,7 @@ def _normalize_model_item(model: dict[str, Any]) -> dict[str, Any]:
 
     model_type = str(model.get("type") or "unknown").strip()
     if model_type not in VALID_MODEL_TYPES:
-        raise ValueError(f"启用模型 {model_id} 的 type 必须是 chat、embedding 或 rerank")
+        raise ValueError(f"启用模型 {model_id} 的 type 必须是 chat、embedding、rerank 或 image")
 
     # source 区分手动添加 vs 远端拉取，用于跳过远端清单存在性的视觉警告。
     source = str(model.get("source") or "remote").strip()
@@ -457,6 +457,11 @@ async def test_model_status_by_spec(spec: str) -> dict:
                 "model_type": "rerank",
             }
 
+        # 图像生成模型不支持 OpenAI 兼容 chat 接口, 走 DashScope 原生
+        # multimodal-generation 接口测试。
+        if info.model_type == "image":
+            return await _test_image_generation_model(spec, info)
+
         from yuxi.models.chat import select_model
 
         model = select_model(model_spec=spec)
@@ -467,3 +472,48 @@ async def test_model_status_by_spec(spec: str) -> dict:
         return {"spec": spec, "status": "unavailable", "message": "响应无效", "model_type": "chat"}
     except Exception as e:
         return {"spec": spec, "status": "error", "message": str(e), "model_type": info.model_type}
+
+
+async def _test_image_generation_model(spec: str, info) -> dict:
+    """用 DashScope 原生 multimodal-generation 接口测试图像生成模型。
+
+    官方文档: qwen-image 系列不支持 compatible-mode, content 必须是
+    ``[{"text": ...}]`` 数组, 图片在 ``output.choices[0].message.content[0].image``。
+    """
+    import httpx
+
+    api_key = getattr(info, "api_key", "") or ""
+    if not api_key:
+        return {"spec": spec, "status": "error", "message": "供应商未配置 API Key", "model_type": "image"}
+
+    base = (getattr(info, "base_url", "") or "").rstrip("/")
+    # DashScope 兼容模式域名换原生 API 域名(同主机, 不同路径前缀)。
+    if "compatible-mode" in base:
+        base = base.split("/compatible-mode")[0]
+    if not base:
+        base = "https://dashscope.aliyuncs.com"
+    url = f"{base}/api/v1/services/aigc/multimodal-generation/generation"
+
+    payload = {
+        "model": info.model_id,
+        "input": {"messages": [{"role": "user", "content": [{"text": "a red circle"}]}]},
+        "parameters": {"size": "512*512", "prompt_extend": False, "watermark": False, "n": 1},
+    }
+    async with httpx.AsyncClient(timeout=120) as client:
+        resp = await client.post(url, json=payload, headers={"Authorization": f"Bearer {api_key}"})
+    if resp.status_code != 200:
+        detail = resp.text[:200]
+        return {
+            "spec": spec,
+            "status": "unavailable",
+            "message": f"HTTP {resp.status_code}: {detail}",
+            "model_type": "image",
+        }
+
+    data = resp.json()
+    choices = (data.get("output") or {}).get("choices") or []
+    content = (choices[0].get("message") or {}).get("content") if choices else None
+    image_url = next((c.get("image") for c in content or [] if isinstance(c, dict) and c.get("image")), None)
+    if image_url:
+        return {"spec": spec, "status": "available", "message": "连接正常（已生成测试图片）", "model_type": "image"}
+    return {"spec": spec, "status": "unavailable", "message": f"响应缺少图片: {str(data)[:150]}", "model_type": "image"}

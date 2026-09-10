@@ -54,6 +54,12 @@ const MODALITY_DISPLAY = {
   pdf: { icon: FileText, label: 'PDF 文档输入' }
 }
 const REQUEST_BODY_OVERRIDES_PLACEHOLDER = '{\n  "enable_thinking": false\n}'
+const MODEL_TYPE_LABELS = {
+  chat: '对话',
+  embedding: '向量',
+  rerank: '重排',
+  image: '图像生成'
+}
 
 // Provider form state
 const showProviderModal = ref(false)
@@ -259,9 +265,10 @@ const remoteModelTypeOptions = computed(() => {
   }, {})
   return [
     { label: `全部 ${models.length}`, value: 'all' },
-    { label: `对话 ${counts.chat || 0}`, value: 'chat' },
-    { label: `向量 ${counts.embedding || 0}`, value: 'embedding' },
-    { label: `重排 ${counts.rerank || 0}`, value: 'rerank' }
+    { label: `${MODEL_TYPE_LABELS.chat} ${counts.chat || 0}`, value: 'chat' },
+    { label: `${MODEL_TYPE_LABELS.embedding} ${counts.embedding || 0}`, value: 'embedding' },
+    { label: `${MODEL_TYPE_LABELS.rerank} ${counts.rerank || 0}`, value: 'rerank' },
+    { label: `${MODEL_TYPE_LABELS.image} ${counts.image || 0}`, value: 'image' }
   ]
 })
 
@@ -269,8 +276,8 @@ const remoteModelTypeOptions = computed(() => {
 // 旧数据 capabilities 为空时回退到全集，保持现状
 const editingModelTypeOptions = computed(() => {
   const caps = currentProviderForModels.value?.capabilities
-  const types = Array.isArray(caps) && caps.length ? caps : ['chat', 'embedding', 'rerank']
-  return types.map((c) => ({ value: c, label: c }))
+  const types = Array.isArray(caps) && caps.length ? caps : ['chat', 'embedding', 'rerank', 'image']
+  return types.map((c) => ({ value: c, label: MODEL_TYPE_LABELS[c] || c }))
 })
 
 const parseJsonObject = (text, label) => {
@@ -963,6 +970,7 @@ defineExpose({
             <a-select-option value="chat">chat</a-select-option>
             <a-select-option value="embedding">embedding</a-select-option>
             <a-select-option value="rerank">rerank</a-select-option>
+            <a-select-option value="image">image</a-select-option>
           </a-select>
         </label>
 
