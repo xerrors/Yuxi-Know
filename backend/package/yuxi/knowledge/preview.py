@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
+
 from yuxi.knowledge.utils.kb_utils import is_minio_url, parse_minio_url
 from yuxi.repositories.knowledge_file_repository import KnowledgeFileRepository
 from yuxi.storage.minio import get_minio_client
@@ -15,7 +17,13 @@ from yuxi.utils.filepreview import (
 )
 
 
-async def read_knowledge_file_preview(kb_id: str, file_id: str) -> dict:
+async def read_knowledge_file_preview(
+    kb_id: str,
+    file_id: str,
+    *,
+    prepare_office: bool = True,
+    before_cache_write: Callable[[], Awaitable[None]] | None = None,
+) -> dict:
     """从 Knowledge metadata 与 MinIO 对象生成只读文件预览。"""
     file_record = await KnowledgeFileRepository().get_by_file_id(file_id)
     if file_record is None or file_record.kb_id != kb_id:
@@ -48,7 +56,23 @@ async def read_knowledge_file_preview(kb_id: str, file_id: str) -> dict:
         return {**response, **preview_too_large().payload()}
 
     if is_office_pdf_preview_file(filename):
-        pdf_content = await _read_office_pdf_preview(kb_id, file_id, filename, original_path)
+        pdf_content = await _read_office_pdf_preview(
+            kb_id,
+            file_id,
+            filename,
+            original_path,
+            prepare_office=prepare_office,
+            before_cache_write=before_cache_write,
+        )
+        if pdf_content is None:
+            return {
+                **response,
+                "content": None,
+                "preview_type": "office",
+                "supported": True,
+                "status": "loading",
+                "message": "正在生成预览，完成后将自动显示...",
+            }
         return {
             **response,
             "content": pdf_content,
@@ -82,10 +106,15 @@ async def _read_office_pdf_preview(
     file_id: str,
     filename: str,
     original_path: str,
-) -> bytes:
+    *,
+    prepare_office: bool = True,
+    before_cache_write: Callable[[], Awaitable[None]] | None = None,
+) -> bytes | None:
     minio_client = get_minio_client()
     bucket_name = minio_client.KB_BUCKETS["parsed"]
     object_name = f"{kb_id}/preview/{file_id}.pdf"
+    if not prepare_office:
+        return await minio_client.adownload_file(bucket_name, object_name, missing_ok=True)
     if await minio_client.astat_file(bucket_name, object_name) is not None:
         return await minio_client.adownload_file(bucket_name, object_name)
 
@@ -94,6 +123,8 @@ async def _read_office_pdf_preview(
         pdf_content = await convert_office_to_pdf(filename, raw_content)
     except OfficePreviewConversionError as exc:
         raise ValueError(str(exc)) from exc
+    if before_cache_write is not None:
+        await before_cache_write()
     await minio_client.aupload_file(
         bucket_name=bucket_name,
         object_name=object_name,

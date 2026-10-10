@@ -12,7 +12,7 @@ const IMAGE_EXTENSIONS = new Set([
 ])
 const PDF_EXTENSIONS = new Set(['.pdf'])
 const HTML_EXTENSIONS = new Set(['.html', '.htm'])
-const OFFICE_EXTENSIONS = new Set(['.docx', '.pptx'])
+const OFFICE_EXTENSIONS = new Set(['.docx', '.pptx', '.xlsx', '.xls'])
 const TEXT_EXTENSIONS = new Set([
   '.txt',
   '.text',
@@ -170,7 +170,9 @@ export const normalizePreviewResponse = async (response, baseFile = {}) => {
       ...baseFile,
       ...payload,
       content: payload.content ?? '',
-      loading: false,
+      loading: payload.status === 'loading',
+      loadingMessage: payload.status === 'loading' ? payload.message || '正在生成预览...' : '',
+      errorMessage: payload.status === 'error' ? payload.message || '文件预览失败' : '',
       status: payload.status || (payload.supported === false ? 'unsupported' : 'ready'),
       previewType,
       supported: payload.supported !== false,

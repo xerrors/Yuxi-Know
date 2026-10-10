@@ -4,8 +4,7 @@ from io import BytesIO
 import pytest
 from minio.error import S3Error
 from urllib3 import HTTPResponse
-
-from yuxi.storage.minio.client import MinIOClient, normalize_public_minio_url
+from yuxi.storage.minio.client import MinIOClient, StorageError, normalize_public_minio_url
 
 
 class FakeMinio:
@@ -134,3 +133,26 @@ async def test_delete_prefix_is_idempotent_when_bucket_does_not_exist():
     client._client = MissingBucketClient()
 
     assert await client.adelete_objects_by_prefix("kb-images", "kb-1/") == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("code", ["NoSuchKey", "AccessDenied"])
+async def test_optional_cache_download_only_allows_missing_object(code):
+    """仅对象缺失可以返回空结果，权限等存储故障保持失败。"""
+    client = MinIOClient()
+
+    class FailingObject:
+        """提供真实 SDK 错误码。"""
+
+        def get_object(self, bucket_name, object_name):
+            """模拟真实存储读取失败。"""
+            raise S3Error(None, code, "test error", object_name, "test", "test")
+
+    client._client = FailingObject()
+    if code == "NoSuchKey":
+        assert await client.adownload_file("bucket", "object", missing_ok=True) is None
+    else:
+        with pytest.raises(StorageError):
+            await client.adownload_file("bucket", "object", missing_ok=True)
+    with pytest.raises(StorageError):
+        await client.adownload_file("bucket", "object")

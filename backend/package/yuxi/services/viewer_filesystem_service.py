@@ -10,7 +10,7 @@ from pathlib import Path, PurePosixPath
 from urllib.parse import quote
 
 from fastapi import HTTPException, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response
 from starlette.background import BackgroundTask
 from yuxi.agents.backends.paths import is_runtime_path, runtime_path_for_workdir_scope
 from yuxi.services.file_preview import render_file_preview
@@ -123,7 +123,7 @@ async def _download_to_temp(workdir, path: str, max_bytes: int) -> str:
     return temp_path
 
 
-async def read_viewer_file_content(*, thread_id: str, path: str, current_user, db) -> dict | StreamingResponse:
+async def read_viewer_file_content(*, thread_id: str, path: str, current_user, db) -> dict | Response:
     """从实时 Workdir 读取预览，不经过 MinIO revision。"""
     access = await _viewer_state(thread_id=thread_id, current_user=current_user, db=db)
     _validate_viewer_path(access, path)

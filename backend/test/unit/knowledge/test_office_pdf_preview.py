@@ -110,9 +110,11 @@ def test_office_file_entry_exposes_logical_file_availability(tmp_path) -> None:
     assert "default_preview_mode" not in entry
 
 
+@pytest.mark.parametrize("filename", ["demo.docx", "demo.pptx", "表格.xlsx", "表格.xls"])
 @pytest.mark.asyncio
-async def test_read_office_pdf_preview_converts_and_caches_pdf(monkeypatch: pytest.MonkeyPatch) -> None:
-    stub_file_record(monkeypatch, make_file_record())
+async def test_read_office_pdf_preview_converts_and_caches_pdf(monkeypatch: pytest.MonkeyPatch, filename: str) -> None:
+    """各类 Office 文件复用 PDF 缓存并保留原件。"""
+    stub_file_record(monkeypatch, make_file_record(filename=filename))
     minio_client = FakeMinioClient()
     minio_client.objects[("knowledgebases", "db1/upload/demo.docx")] = b"office"
     convert_calls = 0
@@ -120,7 +122,7 @@ async def test_read_office_pdf_preview_converts_and_caches_pdf(monkeypatch: pyte
     async def fake_convert(filename: str, content: bytes) -> bytes:
         nonlocal convert_calls
         convert_calls += 1
-        assert filename == "demo.docx"
+        assert filename.endswith((".docx", ".pptx", ".xlsx", ".xls"))
         assert content == b"office"
         return b"%PDF-1.4\nconverted"
 
@@ -138,11 +140,12 @@ async def test_read_office_pdf_preview_converts_and_caches_pdf(monkeypatch: pyte
     assert cached_response["content"] == b"%PDF-1.4\nconverted"
     assert minio_client.objects[("knowledgebases", "db1/preview/file1.pdf")] == b"%PDF-1.4\nconverted"
     assert convert_calls == 1
+    assert minio_client.objects[("knowledgebases", "db1/upload/demo.docx")] == b"office"
 
 
 @pytest.mark.asyncio
-async def test_non_docx_pptx_office_files_do_not_get_pdf_preview(monkeypatch: pytest.MonkeyPatch) -> None:
-    stub_file_record(monkeypatch, make_file_record(filename="demo.xlsx"))
+async def test_macro_enabled_spreadsheet_does_not_get_pdf_preview(monkeypatch: pytest.MonkeyPatch) -> None:
+    stub_file_record(monkeypatch, make_file_record(filename="demo.xlsm"))
     minio_client = FakeMinioClient()
     minio_client.objects[("knowledgebases", "db1/upload/demo.docx")] = b"PK\x03\x04excel"
     monkeypatch.setattr(preview, "get_minio_client", lambda: minio_client)

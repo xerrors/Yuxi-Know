@@ -4,10 +4,9 @@ import io
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from server.utils.auth_middleware import get_db, get_required_user
 from yuxi.services.workspace_service import (
     create_workspace_directory,
     delete_workspace_path,
@@ -19,6 +18,8 @@ from yuxi.services.workspace_service import (
     write_workspace_file_content,
 )
 from yuxi.storage.postgres.models_business import User
+
+from server.utils.auth_middleware import get_db, get_required_user
 
 workspace = APIRouter(prefix="/workspace", tags=["workspace"])
 workspace_knowledge = APIRouter(prefix="/workspace", tags=["workspace"])
@@ -129,11 +130,11 @@ async def search_workspace_files_route(
     return await search_workspace_files(query=query, current_user=current_user)
 
 
-def _binary_preview_response(data: dict) -> StreamingResponse:
+def _binary_preview_response(data: dict) -> Response:
     filename = data.get("filename") or "preview"
     preview_type = data.get("preview_type") or "unsupported"
-    return StreamingResponse(
-        io.BytesIO(data.get("content") or b""),
+    return Response(
+        data.get("content") or b"",
         media_type=data.get("media_type") or "application/octet-stream",
         headers={
             "Content-Disposition": f"inline; filename*=UTF-8''{quote(filename)}",
@@ -204,9 +205,9 @@ async def get_workspace_knowledge_file(
     await _ensure_knowledge_read_access(current_user, kb_id)
     await _ensure_knowledge_supports_documents(kb_id)
     try:
-        from yuxi.knowledge.preview import read_knowledge_file_preview
+        from yuxi.services.knowledge_preview_service import read_workspace_knowledge_preview
 
-        return _preview_response(await read_knowledge_file_preview(kb_id=kb_id, file_id=file_id))
+        return _preview_response(await read_workspace_knowledge_preview(kb_id=kb_id, file_id=file_id))
     except ValueError as error:
         _raise_knowledge_read_error(error)
 

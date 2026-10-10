@@ -231,8 +231,8 @@ class MinIOClient:
                 raise StorageError(f"对象 '{object_name}' 在存储桶 '{bucket_name}' 中不存在")
             raise StorageError(f"下载文件失败: {e}")
 
-    async def adownload_file(self, bucket_name: str, object_name: str) -> bytes:
-        """异步下载文件"""
+    async def adownload_file(self, bucket_name: str, object_name: str, *, missing_ok: bool = False) -> bytes | None:
+        """异步下载文件，派生缓存可显式允许对象缺失。"""
         response = None
         try:
             response = await asyncio.to_thread(self.client.get_object, bucket_name=bucket_name, object_name=object_name)
@@ -242,6 +242,8 @@ class MinIOClient:
 
         except S3Error as e:
             if e.code == "NoSuchKey":
+                if missing_ok:
+                    return None
                 raise StorageError(f"对象 '{object_name}' 在存储桶 '{bucket_name}' 中不存在")
             raise StorageError(f"下载文件失败: {e}")
         finally:

@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from yuxi.knowledge.read_models import KnowledgeBaseDetail
+from yuxi.services import knowledge_preview_service as preview
+from yuxi.storage.postgres.models_business import User
 
 from server.routers import workspace_router
 from server.routers.workspace_router import workspace_knowledge
 from server.utils.auth_middleware import get_required_user
-from yuxi.knowledge import preview
-from yuxi.knowledge.read_models import KnowledgeBaseDetail
-from yuxi.storage.postgres.models_business import User
 
 
 class FakeKnowledgeBase:
@@ -135,7 +135,7 @@ def test_workspace_knowledge_tree_rejects_non_document_kb(monkeypatch):
     assert "不支持文件浏览" in response.json()["detail"]
 
 
-def test_workspace_knowledge_file_calls_knowledge_preview_directly(monkeypatch):
+def test_workspace_knowledge_file_calls_preview_usecase(monkeypatch):
     client = _build_client(monkeypatch, FakeKnowledgeBase())
     calls = []
 
@@ -150,7 +150,7 @@ def test_workspace_knowledge_file_calls_knowledge_preview_directly(monkeypatch):
             "supported": True,
         }
 
-    monkeypatch.setattr(preview, "read_knowledge_file_preview", read_preview)
+    monkeypatch.setattr(preview, "read_workspace_knowledge_preview", read_preview)
 
     response = client.get(
         "/api/workspace/knowledge/file",

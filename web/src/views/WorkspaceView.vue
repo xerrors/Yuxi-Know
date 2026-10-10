@@ -210,7 +210,7 @@
 </template>
 
 <script setup>
-import { computed, onActivated, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import { ChevronLeft, ChevronRight, CircleHelp, LibraryBig, Search } from '@lucide/vue'
@@ -453,10 +453,14 @@ const loadKnowledgePreview = async (
 ) => {
   const requestId = startPreviewRequest(entry, baseFile)
   try {
-    const response = await getWorkspaceKnowledgeFileContent(entry.kb_id, entry.file_id)
-    if (!isCurrentPreviewEntry(requestId, entry)) return
-    const file = await normalizePreviewFile(entry, response)
-    applyPreviewFile(requestId, entry, file)
+    while (isCurrentPreviewEntry(requestId, entry)) {
+      const response = await getWorkspaceKnowledgeFileContent(entry.kb_id, entry.file_id)
+      if (!isCurrentPreviewEntry(requestId, entry)) return
+      const file = await normalizePreviewFile(entry, response)
+      applyPreviewFile(requestId, entry, file)
+      if (file.status !== 'loading') return
+      await new Promise((resolve) => window.setTimeout(resolve, 2000))
+    }
   } catch (error) {
     showPreviewError(requestId, entry, error, messages.log, messages.resolveUserMessage(error))
   } finally {
@@ -951,11 +955,17 @@ watch(
   }
 )
 
+onDeactivated(() => {
+  closePreview()
+  handlePreviewAfterLeave()
+})
+
 onUnmounted(() => {
   workspaceResizeObserver?.disconnect()
   workspaceResizeObserver = null
   stopPreviewResize()
-  revokePreviewObjectUrl()
+  closePreview()
+  handlePreviewAfterLeave()
 })
 
 watch(useInlinePreview, (isInline, wasInline) => {

@@ -7,6 +7,7 @@ from yuxi.knowledge.runtime import knowledge_base
 from yuxi.knowledge.utils import params_for_uploaded_document
 from yuxi.repositories.knowledge_file_repository import KnowledgeFileRepository
 from yuxi.services.knowledge_folder_service import knowledge_folder_service
+from yuxi.services.knowledge_preview_service import register_knowledge_file
 from yuxi.services.task_service import TaskContext
 from yuxi.utils.logging_config import logger
 
@@ -60,7 +61,7 @@ async def run_knowledge_ingest(context: TaskContext) -> dict:
             await context.raise_if_cancelled()
             await context.set_progress(5.0 + (index / total) * 25.0, f"[1/3] 添加记录 {index}/{total}")
             try:
-                file_meta = await knowledge_base.add_file_record(
+                file_meta = await register_knowledge_file(
                     kb_id,
                     item,
                     params=params_for_uploaded_document(item, params),

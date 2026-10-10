@@ -191,6 +191,7 @@ const STATUS_CONFIG = {
 }
 const TASK_TYPE_LABELS = {
   knowledge_ingest: '知识库导入',
+  knowledge_preview: '文件预览',
   knowledge_parse: '文档解析',
   knowledge_index: '文档入库',
   knowledge_graph_index: '图谱构建',

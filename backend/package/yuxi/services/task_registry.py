@@ -51,6 +51,11 @@ _TASK_DEFINITIONS = {
             failure_function="fail_knowledge_file_task",
         ),
         TaskDefinition(
+            "knowledge_preview",
+            "yuxi.services.knowledge_preview_service",
+            "run_knowledge_preview",
+        ),
+        TaskDefinition(
             "knowledge_parse",
             "yuxi.services.knowledge_task_service",
             "run_knowledge_parse",

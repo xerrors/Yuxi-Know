@@ -8,7 +8,7 @@ from pathlib import Path, PurePosixPath
 from urllib.parse import quote
 
 from fastapi import HTTPException, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response
 from starlette.background import BackgroundTask
 from yuxi.agents.backends.paths import runtime_user_data_path
 from yuxi.repositories.project_repository import ProjectRepository
@@ -141,7 +141,7 @@ async def read_workspace_file_bytes(*, path: str, current_user: User) -> tuple[s
     return PurePosixPath(workspace_path).name, content
 
 
-async def read_workspace_file_content(*, path: str, current_user: User) -> dict | StreamingResponse:
+async def read_workspace_file_content(*, path: str, current_user: User) -> dict | Response:
     backend = _workspace_backend(current_user)
     workspace_path = _workspace_path(path)
     try:

@@ -9,13 +9,14 @@ from urllib.parse import quote, unquote
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
 from yuxi.config.options import system_options
 from yuxi.knowledge.base import KBNameConflictError, KBNotFoundError
 from yuxi.knowledge.chunking.ragflow_like.presets import get_chunk_preset_options
 from yuxi.knowledge.graphs.milvus_graph_service import GRAPH_TASK_TYPE, MilvusGraphService
-from yuxi.knowledge.read_models import KnowledgeBaseDetail
 from yuxi.knowledge.parser.capabilities import SUPPORTED_FILE_EXTENSIONS, is_supported_file_extension
+from yuxi.knowledge.read_models import KnowledgeBaseDetail
 from yuxi.knowledge.runtime import knowledge_base
 from yuxi.knowledge.utils import calculate_content_hash, is_minio_url, params_for_uploaded_document, parse_minio_url
 from yuxi.knowledge.utils.mindmap_utils import (
@@ -37,6 +38,7 @@ from yuxi.permissions import (
     resolve_knowledge_base_permission,
 )
 from yuxi.services.knowledge_folder_service import knowledge_folder_service
+from yuxi.services.knowledge_preview_service import register_knowledge_file
 from yuxi.services.ocr_service import parse_document
 from yuxi.services.task_service import tasker
 from yuxi.services.workspace_service import read_workspace_file_bytes
@@ -46,13 +48,14 @@ from yuxi.utils import logger
 from yuxi.utils.upload_utils import MAX_UPLOAD_SIZE_BYTES, read_upload_with_limit, write_upload_to_path
 
 from server.utils.auth_middleware import get_admin_user, get_db, get_required_user
-from sqlalchemy.ext.asyncio import AsyncSession
-from server.utils.knowledge_response import serialize_knowledge_base, serialize_knowledge_base_list
 from server.utils.knowledge_permissions import (
     ensure_knowledge_base_permission as _ensure_database_permission,
+)
+from server.utils.knowledge_permissions import (
     require_knowledge_base_manage,
     require_knowledge_base_read,
 )
+from server.utils.knowledge_response import serialize_knowledge_base, serialize_knowledge_base_list
 
 knowledge = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
@@ -780,7 +783,7 @@ async def add_uploaded_documents(
     failed_items: list[dict] = []
     for index, item in enumerate(payload.items):
         try:
-            file_meta = await knowledge_base.add_file_record(
+            file_meta = await register_knowledge_file(
                 kb_id,
                 item,
                 params=params_for_uploaded_document(item, params),

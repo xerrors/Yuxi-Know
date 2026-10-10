@@ -64,7 +64,6 @@
           :file="sourcePreviewFile"
           :file-path="file?.filename || ''"
           :status="sourcePreview.loading ? 'loading' : ''"
-          loading-message="正在加载文件内容..."
           :show-header="false"
           :show-download="false"
           :show-inline-html-controls="true"
@@ -118,7 +117,7 @@
 </template>
 
 <script setup>
-import { computed, h, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, h, onActivated, onBeforeUnmount, onDeactivated, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { documentApi } from '@/apis/knowledge_api'
 import { getWorkspaceKnowledgeFileContent } from '@/apis/workspace_api'
@@ -153,8 +152,9 @@ const props = defineProps({
 
 const emit = defineEmits(['update:open', 'closed'])
 
+const componentActive = ref(true)
 const visible = computed({
-  get: () => props.open,
+  get: () => props.open && componentActive.value,
   set: (value) => emit('update:open', value)
 })
 
@@ -281,7 +281,7 @@ const sourcePreviewFile = computed(() => {
           ? 'unsupported'
           : 'ready',
     errorMessage: sourcePreview.value.message,
-    loadingMessage: '正在加载文件内容...',
+    loadingMessage: sourcePreview.value.message || '正在加载文件内容...',
     message: sourcePreview.value.message
   }
 })
@@ -435,7 +435,7 @@ watch(
   [visible, file, viewMode],
   async ([open, currentFile, currentViewMode]) => {
     if (!open || !currentFile || !hasSourcePreview.value || currentViewMode !== 'source') {
-      if (!open || !hasSourcePreview.value) {
+      if (!open || !hasSourcePreview.value || sourcePreview.value.loading) {
         resetSourcePreview()
       }
       return
@@ -488,26 +488,31 @@ const afterOpenChange = (open) => {
 }
 
 const loadSourcePreview = async () => {
-  if (!file.value?.file_id || !props.kbId || !props.fileId || !hasSourcePreview.value) return
+  if (!props.open || viewMode.value !== 'source' || !hasSourcePreview.value) return
+  if (!file.value?.file_id || !props.kbId || !props.fileId || sourcePreview.value.loading) return
   if (sourcePreview.value.url || sourcePreview.value.content || sourcePreview.value.message) return
 
   const requestId = ++sourceRequestSeq
   sourcePreview.value.loading = true
   try {
-    const response = await getWorkspaceKnowledgeFileContent(props.kbId, props.fileId)
-    const preview = await normalizePreviewResponse(response)
-    if (requestId !== sourceRequestSeq) {
-      if (preview.previewUrl) {
-        window.URL.revokeObjectURL(preview.previewUrl)
+    while (requestId === sourceRequestSeq) {
+      const response = await getWorkspaceKnowledgeFileContent(props.kbId, props.fileId)
+      const preview = await normalizePreviewResponse(response)
+      if (requestId !== sourceRequestSeq) {
+        if (preview.previewUrl) {
+          window.URL.revokeObjectURL(preview.previewUrl)
+        }
+        return
       }
-      return
+      revokeSourcePreviewUrl()
+      sourcePreview.value.type = preview.previewType || sourcePreviewCandidateType.value
+      sourcePreview.value.message = preview.message || ''
+      sourcePreview.value.supported = preview.supported !== false
+      sourcePreview.value.url = preview.previewUrl || ''
+      sourcePreview.value.content = preview.content || ''
+      if (preview.status !== 'loading') return
+      await new Promise((resolve) => window.setTimeout(resolve, 2000))
     }
-    revokeSourcePreviewUrl()
-    sourcePreview.value.type = preview.previewType || sourcePreviewCandidateType.value
-    sourcePreview.value.message = preview.message || ''
-    sourcePreview.value.supported = preview.supported !== false
-    sourcePreview.value.url = preview.previewUrl || ''
-    sourcePreview.value.content = preview.content || ''
   } catch (error) {
     if (requestId !== sourceRequestSeq) return
     console.error('加载源文件预览失败:', error)
@@ -606,6 +611,16 @@ const handleDownloadMarkdown = () => {
   }
 }
 
+onActivated(() => {
+  componentActive.value = true
+})
+
+onDeactivated(() => {
+  // 缓存页面不会立即回传关闭 prop，直接关闭本地可见状态。
+  componentActive.value = false
+  visible.value = false
+  resetLocalState()
+})
 onBeforeUnmount(resetLocalState)
 </script>
 

@@ -7,11 +7,10 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from fastapi import HTTPException, UploadFile
-
 import yuxi.workspace.preview as file_preview
-from yuxi.workspace import paths as workspace_paths
+from fastapi import HTTPException, UploadFile
 from yuxi.services import workspace_service as svc
+from yuxi.workspace import paths as workspace_paths
 
 
 def _user() -> SimpleNamespace:
@@ -99,7 +98,7 @@ def test_workspace_root_rejects_symlink_root(tmp_path: Path, monkeypatch) -> Non
     ("filename", "content"),
     [
         ("bad.txt", b"\xff\xfe\x00"),
-        ("sheet.xlsx", b"PK\x03\x04excel"),
+        ("sheet.xlsm", b"PK\x03\x04excel"),
     ],
 )
 @pytest.mark.asyncio
@@ -122,29 +121,31 @@ async def test_read_workspace_file_content_returns_unsupported_for_unreadable_fi
     assert result["supported"] is False
 
 
+@pytest.mark.parametrize("filename", ["demo.docx", "slides.pptx", "sheet.xlsx", "sheet.xls"])
 @pytest.mark.asyncio
 async def test_read_workspace_file_content_returns_pdf_preview_for_office_file(
     tmp_path: Path,
     monkeypatch,
+    filename: str,
 ) -> None:
+    """Office 与 Excel 文件返回可展示的 PDF 响应。"""
     monkeypatch.setenv("YUXI_USER_DATA_DIR", str(tmp_path / "threads"))
     user = _user()
     root = _workspace_root(user)
-    target = root / "demo.docx"
+    target = root / filename
     target.write_bytes(b"office")
 
-    async def fake_convert(filename: str, content: bytes) -> bytes:
-        assert filename == "demo.docx"
+    async def fake_convert(name: str, content: bytes) -> bytes:
+        assert name == filename
         assert content == b"office"
         return b"%PDF-1.4\npreview"
 
     monkeypatch.setenv("YUXI_RUNTIME_DIR", str(tmp_path / "runtime"))
     monkeypatch.setattr(file_preview, "convert_office_to_pdf", fake_convert)
 
-    result = await svc.read_workspace_file_content(path="/demo.docx", current_user=user)
-    body = b""
-    async for chunk in result.body_iterator:
-        body += chunk
+    result = await svc.read_workspace_file_content(path=f"/{filename}", current_user=user)
+    body = result.body
+    assert result.headers["content-length"] == str(len(body))
 
     assert result.media_type == "application/pdf"
     assert result.headers["x-yuxi-preview-type"] == "pdf"
@@ -152,7 +153,7 @@ async def test_read_workspace_file_content_returns_pdf_preview_for_office_file(
 
 
 @pytest.mark.asyncio
-async def test_read_workspace_file_content_rejects_xlsx_preview(
+async def test_read_workspace_file_content_reports_excel_conversion_failure(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -162,11 +163,19 @@ async def test_read_workspace_file_content_rejects_xlsx_preview(
     target = root / "sheet.xlsx"
     target.write_bytes(b"PK\x03\x04excel")
 
-    result = await svc.read_workspace_file_content(path="/sheet.xlsx", current_user=user)
+    async def fail_convert(filename: str, content: bytes) -> bytes:
+        """模拟转换器明确拒绝损坏表格。"""
+        from yuxi.utils.filepreview import OfficePreviewConversionError
 
-    assert result["content"] is None
-    assert result["preview_type"] == "unsupported"
-    assert result["supported"] is False
+        raise OfficePreviewConversionError("表格已损坏")
+
+    monkeypatch.setenv("YUXI_RUNTIME_DIR", str(tmp_path / "runtime"))
+    monkeypatch.setattr(file_preview, "convert_office_to_pdf", fail_convert)
+    with pytest.raises(HTTPException) as exc_info:
+        await svc.read_workspace_file_content(path="/sheet.xlsx", current_user=user)
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "表格已损坏"
 
 
 @pytest.mark.parametrize(
@@ -174,6 +183,8 @@ async def test_read_workspace_file_content_rejects_xlsx_preview(
     [
         ("demo.docx", b"office"),
         ("slides.pptx", b"presentation"),
+        ("sheet.xlsx", b"spreadsheet"),
+        ("sheet.xls", b"legacy spreadsheet"),
     ],
 )
 @pytest.mark.asyncio
@@ -206,10 +217,8 @@ async def test_preview_workspace_file_caches_office_pdf_conversion(
         response = await svc.read_workspace_file_content(path=f"/{filename}", current_user=user)
         assert response.media_type == "application/pdf"
         assert response.headers["x-yuxi-preview-type"] == "pdf"
-        body = b""
-        async for chunk in response.body_iterator:
-            body += chunk
-        return body
+        assert response.headers["content-length"] == str(len(response.body))
+        return response.body
 
     assert await read_pdf() == b"%PDF-1.4\npreview"
     assert await read_pdf() == b"%PDF-1.4\npreview"

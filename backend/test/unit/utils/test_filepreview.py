@@ -71,9 +71,12 @@ def test_render_preview_keeps_unsupported_binary_content_hidden():
     assert result.supported is False
 
 
-def test_office_pdf_preview_scope_only_includes_docx_and_pptx():
+def test_office_pdf_preview_scope_includes_spreadsheets():
     assert is_office_pdf_preview_file("demo.docx") is True
     assert is_office_pdf_preview_file("demo.pptx") is True
-    assert is_office_pdf_preview_file("demo.xlsx") is False
+    assert is_office_pdf_preview_file("demo.xlsx") is True
+    assert is_office_pdf_preview_file("表格.XLS") is True
+    assert is_office_pdf_preview_file("表格.XLSX") is True
+    assert is_office_pdf_preview_file("demo.xlsm") is False
     assert is_office_pdf_preview_file("demo.doc") is False
     assert is_office_pdf_preview_file("demo.ppt") is False
