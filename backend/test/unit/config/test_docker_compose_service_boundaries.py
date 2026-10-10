@@ -67,7 +67,7 @@ def _project_root() -> Path:
 
 
 def _load_compose(filename: str) -> dict:
-    return yaml.safe_load((_project_root() / filename).read_text())
+    return yaml.safe_load((_project_root() / filename).read_text(encoding="utf-8"))
 
 
 def _volume_target(volume: object) -> str:
@@ -87,6 +87,19 @@ def _volume_is_read_only(volume: object) -> bool:
     if isinstance(volume, dict):
         return bool(volume.get("read_only"))
     return isinstance(volume, str) and len(volume.split(":")) >= 3 and volume.split(":")[-1] == "ro"
+
+
+def _long_bind_missing_create_host_path(compose: dict) -> set[tuple[str, str]]:
+    """识别未显式开启 create_host_path 的长格式 bind，避免缺失宿主目录时启动失败。"""
+    violations: set[tuple[str, str]] = set()
+    for service_name, service in compose.get("services", {}).items():
+        for volume in service.get("volumes") or []:
+            if not isinstance(volume, dict) or volume.get("type") != "bind":
+                continue
+            if (volume.get("bind") or {}).get("create_host_path") is True:
+                continue
+            violations.add((service_name, str(volume.get("source") or volume.get("target") or "")))
+    return violations
 
 
 def _forbidden_api_worker_mounts(compose: dict) -> set[tuple[str, str]]:
@@ -129,6 +142,24 @@ def _forbidden_direct_docker_access(source: str) -> set[str]:
 def _legacy_workspace_permission_markers(source: str) -> set[str]:
     """识别已由统一运行身份取代的权限补丁。"""
     return {marker for marker in LEGACY_WORKSPACE_PERMISSION_MARKERS if marker in source}
+
+
+def test_dev_compose_long_binds_set_create_host_path() -> None:
+    """开发 Compose 长格式 bind 必须在缺失宿主目录时自动创建路径。"""
+    assert _long_bind_missing_create_host_path(_load_compose("docker-compose.yml")) == set()
+
+
+def test_dev_compose_create_host_path_guard_detects_omitted_bind_option() -> None:
+    """负控证明去掉 create_host_path 后契约检查会失败。"""
+    compose = deepcopy(_load_compose("docker-compose.yml"))
+    volume = next(
+        volume
+        for volume in compose["services"]["api"]["volumes"]
+        if isinstance(volume, dict) and volume.get("target") == "/app/skill-sources"
+    )
+    volume.pop("bind", None)
+
+    assert ("api", volume["source"]) in _long_bind_missing_create_host_path(compose)
 
 
 @pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])

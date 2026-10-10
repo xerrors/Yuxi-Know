@@ -59,12 +59,18 @@ services:
       - type: bind
         source: ${YUXI_STATE_DIR:-./docker/volumes}/yuxi/threads
         target: /app/user-data
+        bind:
+          create_host_path: true
       - type: bind
         source: ${YUXI_STATE_DIR:-./docker/volumes}/yuxi/skill-sources
         target: /app/skill-sources
+        bind:
+          create_host_path: true
       - type: bind
         source: ${YUXI_STATE_DIR:-./docker/volumes}/yuxi/skill-projections
         target: /app/skill-projections
+        bind:
+          create_host_path: true
       - ./backend/test:/app/test
       - ./backend/scripts:/app/scripts
       - ./docker/sandbox_provisioner:/app/docker/sandbox_provisioner:ro
@@ -121,12 +127,18 @@ services:
       - type: bind
         source: ${YUXI_STATE_DIR:-./docker/volumes}/yuxi/threads
         target: /app/user-data
+        bind:
+          create_host_path: true
       - type: bind
         source: ${YUXI_STATE_DIR:-./docker/volumes}/yuxi/skill-sources
         target: /app/skill-sources
+        bind:
+          create_host_path: true
       - type: bind
         source: ${YUXI_STATE_DIR:-./docker/volumes}/yuxi/skill-projections
         target: /app/skill-projections
+        bind:
+          create_host_path: true
       - ./backend/test:/app/test
       - ./backend/scripts:/app/scripts
       - ./docker/sandbox_provisioner:/app/docker/sandbox_provisioner:ro
@@ -181,15 +193,23 @@ services:
       - type: bind
         source: ${YUXI_STATE_DIR:-./docker/volumes}/yuxi
         target: /app/legacy-saves
+        bind:
+          create_host_path: true
       - type: bind
         source: ${YUXI_STATE_DIR:-./docker/volumes}/yuxi/threads
         target: /app/user-data
+        bind:
+          create_host_path: true
       - type: bind
         source: ${YUXI_STATE_DIR:-./docker/volumes}/yuxi/skill-sources
         target: /app/skill-sources
+        bind:
+          create_host_path: true
       - type: bind
         source: ${YUXI_STATE_DIR:-./docker/volumes}/yuxi/skill-projections
         target: /app/skill-projections
+        bind:
+          create_host_path: true
     networks:
       - app-network
     env_file:
@@ -214,9 +234,13 @@ services:
       - type: bind
         source: ${YUXI_STATE_DIR:-./docker/volumes}/yuxi/threads
         target: /app/user-data
+        bind:
+          create_host_path: true
       - type: bind
         source: ${YUXI_STATE_DIR:-./docker/volumes}/yuxi/skill-projections
         target: /app/skill-projections
+        bind:
+          create_host_path: true
       - ./docker/sandbox_provisioner/app.py:/app/app.py:ro
       - ${SANDBOX_ENV_FILE:-./docker/sandbox_provisioner/sandbox.env}:/app/sandbox.env:ro
       - /var/run/docker.sock:/var/run/docker.sock
@@ -312,9 +336,13 @@ services:
       - type: bind
         source: ${YUXI_STATE_DIR:-./docker/volumes}/neo4j/data
         target: /data
+        bind:
+          create_host_path: true
       - type: bind
         source: ${YUXI_STATE_DIR:-./docker/volumes}/neo4j/logs
         target: /logs
+        bind:
+          create_host_path: true
     healthcheck:
       test: ["CMD-SHELL", "cypher-shell -a bolt://localhost:7687 -u ${NEO4J_USERNAME:-neo4j} -p ${NEO4J_PASSWORD:-0123456789} 'RETURN 1;' >/dev/null || exit 1"]
       interval: 20s
@@ -343,6 +371,8 @@ services:
       - type: bind
         source: ${YUXI_STATE_DIR:-./docker/volumes}/milvus/etcd
         target: /etcd
+        bind:
+          create_host_path: true
     command: etcd -advertise-client-urls=http://etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
     healthcheck:
       test: ["CMD", "etcdctl", "endpoint", "health"]
@@ -366,9 +396,13 @@ services:
       - type: bind
         source: ${YUXI_STATE_DIR:-./docker/volumes}/milvus/minio
         target: /data
+        bind:
+          create_host_path: true
       - type: bind
         source: ${YUXI_STATE_DIR:-./docker/volumes}/milvus/minio_config
         target: /root/.minio
+        bind:
+          create_host_path: true
     command: minio server /data --address 0.0.0.0:9000 --console-address 0.0.0.0:9001
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
@@ -403,9 +437,13 @@ services:
       - type: bind
         source: ${YUXI_STATE_DIR:-./docker/volumes}/milvus/milvus
         target: /var/lib/milvus
+        bind:
+          create_host_path: true
       - type: bind
         source: ${YUXI_STATE_DIR:-./docker/volumes}/milvus/logs
         target: /var/lib/milvus/logs
+        bind:
+          create_host_path: true
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
       interval: 60s
@@ -436,6 +474,8 @@ services:
       - type: bind
         source: ${YUXI_STATE_DIR:-./docker/volumes}/postgresql
         target: /var/lib/postgresql/data
+        bind:
+          create_host_path: true
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-yuxi} || exit 1"]
       interval: 5s
@@ -459,6 +499,8 @@ services:
       - type: bind
         source: ${YUXI_STATE_DIR:-./docker/volumes}/redis
         target: /data
+        bind:
+          create_host_path: true
     networks:
       - app-network
     restart: unless-stopped
@@ -513,6 +555,8 @@ services:
       - type: bind
         source: ${YUXI_STATE_DIR:-./docker/volumes}/paddlex
         target: /paddlex
+        bind:
+          create_host_path: true
     ports:
       - "127.0.0.1:${YUXI_PADDLEX_PORT:-8080}:8080"
     healthcheck:
