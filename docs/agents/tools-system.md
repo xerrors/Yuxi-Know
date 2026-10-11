@@ -111,7 +111,7 @@ WEB_SEARCH_PROVIDER=doubao
 DOUBAO_SEARCH_API_KEY=<your-doubao-key>
 ```
 
-或 `WEB_SEARCH_PROVIDER=tavily` 加 `TAVILY_API_KEY=<your-tavily-key>`。`WEB_SEARCH_PROVIDER` 只接受这两个值；留空时按已配置的 API Key 自动选择，两个 Key 都配置时优先豆包，没有有效 Key 时不会注册该工具。密钥只放在受保护的环境变量或密钥管理器中，不要写进 Skill、Agent 用户环境、代码或日志。
+或 `WEB_SEARCH_PROVIDER=tavily` 加 `TAVILY_API_KEY=<your-tavily-key>`。`WEB_SEARCH_PROVIDER` 只接受这两个值；留空时按已配置的 API Key 自动选择，两个 Key 都配置时优先豆包，没有有效 Key 时不会注册该工具，并记录 `component=web_search`、缺失凭据或供应商不可用原因及 `available=false`。密钥只放在受保护的环境变量或密钥管理器中，不要写进 Skill、Agent 用户环境、代码或日志。
 
 工具在 API 和 worker 进程加载时注册，修改环境变量后需要 `docker compose up -d --force-recreate api worker`。验证方式：在智能体详情确认工具列表出现「网页搜索」，用一个需要最新信息的问题发起真实对话，并检查工具调用返回的 URL、标题和摘要。没有该工具时检查 `WEB_SEARCH_PROVIDER` 拼写、对应 Key 是否存在以及容器是否已重建。
 

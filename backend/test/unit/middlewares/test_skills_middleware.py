@@ -679,3 +679,21 @@ def test_read_file_denies_skill_outside_readable_scope() -> None:
     updated = middleware._process_tool_call_result(result, request)
 
     assert updated is result
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("source", ["configured", "skill"])
+async def test_mcp_failure_reaches_runtime_instead_of_removing_tools(monkeypatch, source):
+    """显式 MCP 与 Skill MCP 加载失败都保留运行失败，不变成无工具成功。"""
+    failure = RuntimeError("MCP 服务 demo 工具加载失败")
+    loader = AsyncMock(side_effect=failure)
+    monkeypatch.setattr("yuxi.modules.extensions.mcp.service.get_enabled_mcp_tools", loader)
+    monkeypatch.setattr(skills_middleware, "get_enabled_mcp_tools", loader)
+    context = SimpleNamespace(tools=[], mcps=["demo"] if source == "configured" else [])
+    with pytest.raises(RuntimeError, match="MCP 服务 demo") as caught:
+        if source == "configured":
+            await resolve_configured_runtime_tools(context)
+        else:
+            await SkillsMiddleware()._get_mcp_tools_from_context(context, extra_mcps=["demo"])
+    assert caught.value is failure
+    assert context._mcp_tool_servers == {}

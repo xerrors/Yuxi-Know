@@ -250,3 +250,22 @@ def test_empty_read_scope_rejects_nonempty_management():
 
     with pytest.raises(ValueError, match="管理范围"):
         normalize_permission_config({"version": 2, "read_scope": None, "manage_scope": {"access_level": "global"}}, strict=True)
+
+
+@pytest.mark.parametrize(
+    "role,deleted,expected",
+    [("admin", 0, ResourcePermission.READ), ("superadmin", 0, ResourcePermission.MANAGE), ("superadmin", 1, ResourcePermission.NONE)],
+)
+def test_builtin_skill_permission_respects_role_ceiling_and_deleted_identity(role, deleted, expected):
+    """内置管理权限遵循统一角色上限，已删除超级管理员不能绕过身份边界。"""
+    from yuxi.modules.extensions.skills.shared import user_can_manage_skill
+
+    user = _user(role=role)
+    user.is_deleted = deleted
+    resource = _resource(
+        created_by=user.uid,
+        share_config={"version": 2, "read_scope": {"access_level": "global"}, "manage_scope": {"access_level": "global"}},
+    )
+    resource.source_type = "builtin"
+    assert resolve_skill_permission(user, resource) == expected
+    assert user_can_manage_skill(user, resource) == (expected == ResourcePermission.MANAGE)

@@ -75,11 +75,11 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
 docker compose --env-file .env.prod -f docker-compose.prod.yml --profile all up -d --build
 ```
 
-`schema-init` 是唯一修改 Schema 的进程：空库建立 business 9 与 knowledge 3，当前版本直接校验，business 8 在同一 PostgreSQL 事务中升级到 9，新增反馈表并保留原有数据。其他旧版本或未版本化的旧表使启动失败；失败不会清库，升级中断回滚后可重跑。初始化成功后进程以退出码 0 结束，API、worker 和 provisioner 才会启动。
+`schema-init` 是唯一修改 Schema 的进程：空库建立 business 9 与 knowledge 4，当前版本直接校验。business 8→9 原子新增反馈表；knowledge 3→4 原子新增未删除知识库的名称唯一索引，名称不区分大小写，已删除名称可复用。两个域分别提交升级事务；任一域失败时保留该域原版本和数据，重跑继续未完成的升级。其他旧版本或未版本化的旧表使启动失败，进程不会清库。初始化成功后进程以退出码 0 结束，API、worker 和 provisioner 才会启动。
 
 ## 3. 数据库与文件目录
 
-新部署应使用空 PostgreSQL 数据库和独立的 Yuxi 文件目录。Schema 初始化进程负责建立当前表结构、版本标记和 LangGraph checkpoint 表。已有当前版本数据库可以直接重启同版本服务。升级 business 8 前备份数据库并停止旧版 API 与 worker，再启动新版本的 schema-init 完成原子升级；其余旧版本与未版本化旧表需使用对应旧版部署处理数据，再规划独立的数据导入。
+新部署应使用空 PostgreSQL 数据库和独立的 Yuxi 文件目录。Schema 初始化进程负责建立当前表结构、版本标记和 LangGraph checkpoint 表。已有当前版本数据库可以直接重启同版本服务。升级 business 8 或 knowledge 3 前备份数据库并停止旧版 API 与 worker，再启动新版本的 schema-init。知识域存在未删除的大小写同名记录时，初始化明确报出重名组数并拒绝升级；维护者修正冲突名称后重新执行，初始化器不自动重命名或删除用户数据。其余旧版本与未版本化旧表需使用对应旧版部署处理数据，再规划独立的数据导入。
 
 应用不再写入身份操作日志，新库不创建 `operation_logs` 表。已有数据库中的历史表可在备份并停止旧版服务后执行 `DROP TABLE IF EXISTS operation_logs;` 清理；此操作永久删除历史记录，Schema 初始化进程不会自动执行。
 

@@ -509,3 +509,28 @@ async def test_inspection_rejects_unmigrated_stdio_before_connecting(monkeypatch
     monkeypatch.setattr(mcp_service, "MultiServerMCPClient", client)
     with pytest.raises(ValueError, match="stdio"):
         await mcp_service.inspect_mcp_server_tools(MCPServer(slug="fixture-stdio", transport="stdio", enabled=0))
+
+
+@pytest.mark.parametrize("phase", ["client", "tools", "group"])
+async def test_runtime_connection_failure_is_explicit_and_not_cached(monkeypatch, phase):
+    """配置的 MCP 建连或工具加载失败不能被当作合法空列表。"""
+    mcp_runtime.clear_mcp_cache()
+    failure = RuntimeError("remote unavailable")
+    if phase == "group":
+        failure = ExceptionGroup("remote unavailable", [failure])
+
+    def client(_configs):
+        """分别在建连或工具读取阶段注入远程故障。"""
+        if phase == "client":
+            raise failure
+        return SimpleNamespace(get_tools=AsyncMock(side_effect=failure))
+
+    monkeypatch.setattr(mcp_runtime, "MultiServerMCPClient", client)
+    with pytest.raises(RuntimeError, match="MCP.*demo.*失败") as caught:
+        await mcp_runtime.get_mcp_tools("demo", {"transport": "streamable_http", "url": "https://example.com/mcp"})
+    assert caught.value.__cause__ is failure
+    assert mcp_runtime._mcp_tools_cache == {}
+    assert mcp_runtime.get_mcp_tools_stats("demo") is None
+    monkeypatch.setattr(mcp_runtime, "MultiServerMCPClient", lambda _: _FakeClient([]))
+    assert await mcp_runtime.get_mcp_tools("demo", {"transport": "streamable_http", "url": "https://example.com/mcp"}) == []
+    mcp_runtime.clear_mcp_cache()

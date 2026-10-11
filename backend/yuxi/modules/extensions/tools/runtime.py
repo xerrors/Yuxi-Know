@@ -43,17 +43,14 @@ async def resolve_configured_runtime_tools(context) -> list[Any]:
     import asyncio
 
     async def _load_one(name: str):
-        try:
-            return name, await get_enabled_mcp_tools(name)
-        except Exception as e:
-            logger.warning(f"Failed to load configured MCP tools '{name}': {e}")
-            return name, None
+        """加载已配置服务，建连故障保留为运行失败。"""
+        return name, await get_enabled_mcp_tools(name)
 
     loaded = await asyncio.gather(*(_load_one(n) for n in server_names))
 
     for server_name, mcp_tools in loaded:
         if not mcp_tools:
-            logger.warning(f"Configured MCP unavailable, skip: {server_name}")
+            logger.info(f"Configured MCP returned no enabled tools: {server_name}")
             continue
         for tool in mcp_tools:
             if tool.name in selected_tool_names:

@@ -489,8 +489,6 @@ def user_can_access_skill(user: User, skill: Skill) -> bool:
 
 def user_can_manage_skill(user: User, skill: Skill) -> bool:
     """检查用户是否可管理共享 Skill。"""
-    if is_builtin_skill(skill):
-        return user.role == "superadmin"
     return resolve_skill_permission(user, skill) == ResourcePermission.MANAGE
 
 

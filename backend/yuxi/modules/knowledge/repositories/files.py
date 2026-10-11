@@ -792,7 +792,20 @@ class KnowledgeFileRepository:
 
     @staticmethod
     async def fail_job_processing_in_session(session, *, job_id: str, error: str) -> int:
-        """仅收敛仍由指定 后台作业 拥有的文件中间态。"""
+        """同事务收敛指定作业拥有的文件中间态与知识库统计。"""
+        owned_files = select(KnowledgeFile.kb_id).where(
+            KnowledgeFile.processing_job_id == job_id,
+            KnowledgeFile.status.in_(["parsing", "indexing"]),
+        )
+        # 与文件写入保持 KB → File 锁序，统计在持有 KB 行锁后重新聚合。
+        kb_result = await session.scalars(
+            select(KnowledgeBase)
+            .where(KnowledgeBase.kb_id.in_(owned_files))
+            .order_by(KnowledgeBase.kb_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        knowledge_bases = list(kb_result.all())
         result = await session.execute(
             update(KnowledgeFile)
             .where(
@@ -811,8 +824,16 @@ class KnowledgeFileRepository:
                 projection_error=error,
                 updated_at=func.now(),
             )
+            .returning(KnowledgeFile.kb_id)
         )
-        return int(result.rowcount or 0)
+        affected = list(result.scalars().all())
+        affected_kb_ids = set(affected)
+        for kb in knowledge_bases:
+            if kb.kb_id in affected_kb_ids:
+                stats = await KnowledgeFileRepository().query_kb_file_stats(kb.kb_id, session=session)
+                kb.additional_params = {**(kb.additional_params or {}), "stats": stats}
+        await session.flush()
+        return len(affected)
 
     async def mark_deleted(self, *, kb_id: str, file_id: str) -> str | None:
         """先提交 PostgreSQL 删除事实，再由投影任务清理外部索引。"""

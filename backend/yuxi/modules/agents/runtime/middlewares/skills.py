@@ -171,15 +171,11 @@ class SkillsMiddleware(AgentMiddleware):
         unique_mcp_names = list(dict.fromkeys(all_mcp_names))
 
         async def load_mcp_tools(server_name: str) -> list:
-            """加载单个 MCP 服务器的工具"""
-            try:
-                mcp_tools = await get_enabled_mcp_tools(server_name)
-                if not mcp_tools:
-                    logger.warning(f"SkillsMiddleware: mcp dependency unavailable, skip: {server_name}")
-                return mcp_tools
-            except Exception as e:
-                logger.warning(f"SkillsMiddleware: failed to load mcp dependency '{server_name}': {e}")
-                return []
+            """加载单个依赖，建连故障保留为运行失败。"""
+            mcp_tools = await get_enabled_mcp_tools(server_name)
+            if not mcp_tools:
+                logger.info(f"SkillsMiddleware: mcp dependency has no enabled tools: {server_name}")
+            return mcp_tools
 
         # 并行加载所有 MCP 工具
         results = await asyncio.gather(*[load_mcp_tools(name) for name in unique_mcp_names])

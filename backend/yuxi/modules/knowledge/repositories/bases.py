@@ -3,10 +3,12 @@ from __future__ import annotations
 from typing import Any
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.identity.services.resource_grants import validate_shared_grants
 from yuxi.modules.knowledge.cache import cache_kb_config, delete_cached_kb_config, kb_config_cache_lock
+from yuxi.modules.knowledge.base import KBNameConflictError
 from yuxi.modules.knowledge.models import KnowledgeBase
 
 
@@ -32,9 +34,14 @@ class KnowledgeBaseRepository:
 
     async def create(self, data: dict[str, Any]) -> KnowledgeBase:
         kb = KnowledgeBase(**data)
-        async with pg_manager.get_async_session_context() as session:
-            kb.share_config = await validate_shared_grants(session, kb.share_config)
-            session.add(kb)
+        try:
+            async with pg_manager.get_async_session_context() as session:
+                kb.share_config = await validate_shared_grants(session, kb.share_config)
+                session.add(kb)
+        except IntegrityError as error:
+            if getattr(error.orig.__cause__, "constraint_name", None) != "uq_knowledge_bases_active_name":
+                raise
+            raise KBNameConflictError(f"知识库名称 '{kb.name}' 已存在，请使用其他名称") from error
         await cache_kb_config(kb)
         return kb
 
@@ -42,15 +49,20 @@ class KnowledgeBaseRepository:
         async with kb_config_cache_lock(kb_id):
             # 先可靠清除旧值；失败时不进入数据库事务。
             await delete_cached_kb_config(kb_id)
-            async with pg_manager.get_async_session_context() as session:
-                result = await session.execute(select(KnowledgeBase).where(KnowledgeBase.kb_id == kb_id))
-                kb = result.scalar_one_or_none()
-                if kb is None:
-                    return None
-                if "share_config" in data:
-                    data = {**data, "share_config": await validate_shared_grants(session, data["share_config"])}
-                for key, value in data.items():
-                    setattr(kb, key, value)
+            try:
+                async with pg_manager.get_async_session_context() as session:
+                    result = await session.execute(select(KnowledgeBase).where(KnowledgeBase.kb_id == kb_id))
+                    kb = result.scalar_one_or_none()
+                    if kb is None:
+                        return None
+                    if "share_config" in data:
+                        data = {**data, "share_config": await validate_shared_grants(session, data["share_config"])}
+                    for key, value in data.items():
+                        setattr(kb, key, value)
+            except IntegrityError as error:
+                if getattr(error.orig.__cause__, "constraint_name", None) != "uq_knowledge_bases_active_name":
+                    raise
+                raise KBNameConflictError(f"知识库名称 '{data.get('name')}' 已存在，请使用其他名称") from error
             return kb
 
     async def merge_query_params_options(self, kb_id: str, params: dict[str, Any]) -> KnowledgeBase | None:

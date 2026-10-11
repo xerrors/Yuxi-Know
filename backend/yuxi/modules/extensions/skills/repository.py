@@ -30,8 +30,7 @@ class SkillRepository:
         visible = []
         for item in await self.list_all():
             permission = resolve_skill_permission(user, item)
-            can_manage_builtin = item.source_type == "builtin" and user.role in {"admin", "superadmin"}
-            if permission == ResourcePermission.MANAGE or can_manage_builtin or (item.enabled and permission != ResourcePermission.NONE):
+            if permission == ResourcePermission.MANAGE or (item.enabled and permission != ResourcePermission.NONE):
                 visible.append(item)
         return visible
 

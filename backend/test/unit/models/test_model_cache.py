@@ -142,3 +142,37 @@ def test_model_cache_defaults_include_user_uid_to_false(monkeypatch: pytest.Monk
 
     info = ModelCache().get_model_info("provider:chat")
     assert info.include_user_uid is False
+
+
+@pytest.mark.parametrize("failure", [ConnectionError("redis down"), ValueError("invalid cache payload")])
+def test_model_cache_failure_is_not_reported_as_missing_model(monkeypatch, failure):
+    """基础设施与缓存载荷失败必须保留明确故障语义。"""
+    redis = _FakeRedis()
+    _patch_redis(monkeypatch, redis)
+    monkeypatch.setattr(redis, "get", lambda _key: (_ for _ in ()).throw(failure))
+    cache = ModelCache()
+    with pytest.raises(RuntimeError, match="模型缓存不可用") as caught:
+        cache.get_model_info("provider:chat")
+    assert caught.value.__cause__ is failure
+    assert cache._local_cache is None
+
+
+def test_model_cache_recovers_after_failure_and_accepts_explicit_empty_config(monkeypatch):
+    """读取失败不缓存空配置，Redis 恢复后可以重新读取。"""
+    redis = _FakeRedis()
+    _patch_redis(monkeypatch, redis)
+    original_get = redis.get
+    monkeypatch.setattr(redis, "get", lambda _key: (_ for _ in ()).throw(ConnectionError("redis down")))
+    cache = ModelCache()
+    with pytest.raises(RuntimeError, match="模型缓存不可用"):
+        cache.get_all_specs()
+    monkeypatch.setattr(redis, "get", original_get)
+    redis.data[REDIS_CACHE_KEY] = "{}"
+    assert cache.get_all_specs() == []
+
+
+def test_model_cache_missing_snapshot_requires_initialization(monkeypatch):
+    """缺少缓存快照不等同于已配置零个模型。"""
+    _patch_redis(monkeypatch, _FakeRedis())
+    with pytest.raises(RuntimeError, match="模型缓存不可用"):
+        ModelCache().get_all_specs()

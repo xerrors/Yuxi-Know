@@ -325,6 +325,8 @@ async def update_knowledge_base_info(
             operator_department_id=current_user.department_id,
         )
         return {"message": "更新成功", "knowledge_base": serialize_knowledge_base(knowledge_base)}
+    except KBNameConflictError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
     except HTTPException:
         raise
     except Exception as e:
