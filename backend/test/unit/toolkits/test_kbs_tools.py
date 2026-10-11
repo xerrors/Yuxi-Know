@@ -10,7 +10,6 @@ from yuxi.modules.extensions.tools.knowledge import tools
 from yuxi.modules.knowledge.base import KnowledgeBase
 from yuxi.modules.knowledge.manager import KnowledgeBaseManager
 from yuxi.modules.knowledge.read_models import KnowledgeBaseDetail
-from yuxi.modules.knowledge.repositories.bases import KnowledgeBaseRepository
 
 
 def _tool_callable(tool):
@@ -25,35 +24,12 @@ def _tool_callable(tool):
     raise AssertionError(f"{tool.name} tool has no callable entry")
 
 
-def _query_kb_callable():
-    return _tool_callable(tools.query_kb)
-
-
-def _find_kb_document_callable():
-    return _tool_callable(tools.find_kb_document)
-
-
-def _open_kb_document_callable():
-    return _tool_callable(tools.open_kb_document)
-
-
-async def _run_tool(callback, **kwargs):
-    result = callback(**kwargs)
+async def _call_tool(tool, **kwargs):
+    """解析并执行工具的同步或异步入口。"""
+    result = _tool_callable(tool)(**kwargs)
     if inspect.isawaitable(result):
         return await result
     return result
-
-
-async def _run_query_kb(**kwargs):
-    return await _run_tool(_query_kb_callable(), **kwargs)
-
-
-async def _run_find_kb_document(**kwargs):
-    return await _run_tool(_find_kb_document_callable(), **kwargs)
-
-
-async def _run_open_kb_document(**kwargs):
-    return await _run_tool(_open_kb_document_callable(), **kwargs)
 
 
 def _build_test_window(content: str, offset: int = 0, limit: int = 1800) -> dict:
@@ -128,6 +104,18 @@ async def _fake_visible_kbs(runtime):
     return [{"kb_id": "db-1", "name": "FAQ", "kb_type": "milvus"}]
 
 
+def _tool_runtime(monkeypatch, *, visible_kbs=_fake_visible_kbs, context=None):
+    """绑定工具可见知识库并创建最小 runtime。"""
+    monkeypatch.setattr(tools, "_resolve_visible_knowledge_bases_for_query", visible_kbs)
+    return SimpleNamespace(context=context if context is not None else SimpleNamespace())
+
+
+def _patch_tool_runtime(monkeypatch, *, kb_type: str = "milvus", retriever=None, context=None):
+    """为需要真实文档能力检查的工具构造知识库和 runtime。"""
+    _patch_retrievers(monkeypatch, kb_type=kb_type, retriever=retriever)
+    return _tool_runtime(monkeypatch, context=context)
+
+
 @pytest.mark.asyncio
 async def test_tool_rechecks_permissions_instead_of_context_snapshot(monkeypatch):
     """撤权后工具不复用准备阶段的可读快照。"""
@@ -176,11 +164,8 @@ async def test_query_kb_returns_search_schema_without_sandbox_paths(monkeypatch)
             ],
         )
 
-    _patch_retrievers(monkeypatch, retriever=_fake_retriever)
-    monkeypatch.setattr(tools, "_resolve_visible_knowledge_bases_for_query", _fake_visible_kbs)
-
-    runtime = SimpleNamespace(context=SimpleNamespace())
-    result = await _run_query_kb(kb_id="db-1", query_text="auth", runtime=runtime)
+    runtime = _patch_tool_runtime(monkeypatch, retriever=_fake_retriever, context=SimpleNamespace())
+    result = await _call_tool(tools.query_kb, kb_id="db-1", query_text="auth", runtime=runtime)
 
     assert result["kb_id"] == "db-1"
     assert result["results"][0]["id"] == "file-1:1"
@@ -211,11 +196,8 @@ async def test_query_kb_allows_dify_knowledge_base(monkeypatch) -> None:
             ],
         )
 
-    _patch_retrievers(monkeypatch, kb_type="dify", retriever=_fake_retriever)
-    monkeypatch.setattr(tools, "_resolve_visible_knowledge_bases_for_query", _fake_visible_kbs)
-
-    runtime = SimpleNamespace(context=SimpleNamespace())
-    result = await _run_query_kb(kb_id="db-1", query_text="auth", runtime=runtime)
+    runtime = _patch_tool_runtime(monkeypatch, kb_type="dify", retriever=_fake_retriever, context=SimpleNamespace())
+    result = await _call_tool(tools.query_kb, kb_id="db-1", query_text="auth", runtime=runtime)
 
     assert result == {
         "kb_id": "db-1",
@@ -242,11 +224,8 @@ async def test_query_kb_returns_plain_result_without_path_injection(monkeypatch)
         assert query_text == "auth"
         return "Milvus context"
 
-    _patch_retrievers(monkeypatch, retriever=_fake_retriever)
-    monkeypatch.setattr(tools, "_resolve_visible_knowledge_bases_for_query", _fake_visible_kbs)
-
-    runtime = SimpleNamespace(context=SimpleNamespace())
-    result = await _run_query_kb(kb_id="db-1", query_text="auth", runtime=runtime)
+    runtime = _patch_tool_runtime(monkeypatch, retriever=_fake_retriever, context=SimpleNamespace())
+    result = await _call_tool(tools.query_kb, kb_id="db-1", query_text="auth", runtime=runtime)
 
     assert result == "Milvus context"
 
@@ -267,11 +246,8 @@ async def test_query_kb_maps_full_doc_id_and_chunk_metadata(monkeypatch) -> None
             ],
         )
 
-    _patch_retrievers(monkeypatch, retriever=_fake_retriever)
-    monkeypatch.setattr(tools, "_resolve_visible_knowledge_bases_for_query", _fake_visible_kbs)
-
-    runtime = SimpleNamespace(context=SimpleNamespace())
-    result = await _run_query_kb(kb_id="db-1", query_text="auth", runtime=runtime)
+    runtime = _patch_tool_runtime(monkeypatch, retriever=_fake_retriever, context=SimpleNamespace())
+    result = await _call_tool(tools.query_kb, kb_id="db-1", query_text="auth", runtime=runtime)
 
     assert result["results"][0] == {
         "id": "chunk-1",
@@ -284,8 +260,7 @@ async def test_query_kb_maps_full_doc_id_and_chunk_metadata(monkeypatch) -> None
 
 @pytest.mark.asyncio
 async def test_find_kb_document_returns_context_windows(monkeypatch) -> None:
-    _patch_retrievers(monkeypatch)
-    monkeypatch.setattr(tools, "_resolve_visible_knowledge_bases_for_query", _fake_visible_kbs)
+    runtime = _patch_tool_runtime(monkeypatch)
 
     async def _fake_find_file_content(
         kb_id: str,
@@ -320,8 +295,8 @@ async def test_find_kb_document_returns_context_windows(monkeypatch) -> None:
 
     monkeypatch.setattr(tools.knowledge_base, "find_file_content", _fake_find_file_content)
 
-    runtime = SimpleNamespace(context=SimpleNamespace())
-    result = await _run_find_kb_document(
+    result = await _call_tool(
+        tools.find_kb_document,
         kb_id="db-1",
         file_id="file-1",
         patterns=["token"],
@@ -347,11 +322,9 @@ async def test_find_kb_document_returns_context_windows(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_find_kb_document_rejects_dify(monkeypatch) -> None:
-    _patch_retrievers(monkeypatch, kb_type="dify")
-    monkeypatch.setattr(tools, "_resolve_visible_knowledge_bases_for_query", _fake_visible_kbs)
-
-    runtime = SimpleNamespace(context=SimpleNamespace())
-    result = await _run_find_kb_document(
+    runtime = _patch_tool_runtime(monkeypatch, kb_type="dify", context=SimpleNamespace())
+    result = await _call_tool(
+        tools.find_kb_document,
         kb_id="db-1",
         file_id="file-1",
         patterns=["token"],
@@ -365,8 +338,7 @@ async def test_find_kb_document_rejects_dify(monkeypatch) -> None:
 async def test_open_kb_document_reads_markdown_content_by_default_window(monkeypatch) -> None:
     lines = [f"line {index}" for index in range(1, 2001)]
 
-    _patch_retrievers(monkeypatch)
-    monkeypatch.setattr(tools, "_resolve_visible_knowledge_bases_for_query", _fake_visible_kbs)
+    runtime = _patch_tool_runtime(monkeypatch)
 
     async def _fake_open_file_content(kb_id: str, file_id: str, offset: int = 0, limit: int = 1800):
         assert kb_id == "db-1"
@@ -375,8 +347,7 @@ async def test_open_kb_document_reads_markdown_content_by_default_window(monkeyp
 
     monkeypatch.setattr(tools.knowledge_base, "open_file_content", _fake_open_file_content)
 
-    runtime = SimpleNamespace(context=SimpleNamespace())
-    result = await _run_open_kb_document(kb_id="db-1", file_id="file-1", runtime=runtime)
+    result = await _call_tool(tools.open_kb_document, kb_id="db-1", file_id="file-1", runtime=runtime)
 
     assert result["kb_id"] == "db-1"
     assert result["file_id"] == "file-1"
@@ -395,8 +366,7 @@ async def test_open_kb_document_reads_markdown_content_by_default_window(monkeyp
 async def test_open_kb_document_prefers_line_over_offset(monkeypatch) -> None:
     lines = [f"line {index}" for index in range(1, 1001)]
 
-    _patch_retrievers(monkeypatch)
-    monkeypatch.setattr(tools, "_resolve_visible_knowledge_bases_for_query", _fake_visible_kbs)
+    runtime = _patch_tool_runtime(monkeypatch)
 
     async def _fake_open_file_content(kb_id: str, file_id: str, offset: int = 0, limit: int = 1800):
         assert kb_id == "db-1"
@@ -405,8 +375,8 @@ async def test_open_kb_document_prefers_line_over_offset(monkeypatch) -> None:
 
     monkeypatch.setattr(tools.knowledge_base, "open_file_content", _fake_open_file_content)
 
-    runtime = SimpleNamespace(context=SimpleNamespace())
-    result = await _run_open_kb_document(
+    result = await _call_tool(
+        tools.open_kb_document,
         kb_id="db-1",
         file_id="file-1",
         line=801,
@@ -430,18 +400,15 @@ async def test_open_kb_document_rejects_invisible_resource(monkeypatch) -> None:
         del runtime
         return [{"kb_id": "db-2", "name": "FAQ"}]
 
-    monkeypatch.setattr(tools, "_resolve_visible_knowledge_bases_for_query", _fake_visible_kbs)
-
-    runtime = SimpleNamespace(context=SimpleNamespace())
-    result = await _run_open_kb_document(kb_id="db-1", file_id="file-1", runtime=runtime)
+    runtime = _tool_runtime(monkeypatch, visible_kbs=_fake_visible_kbs)
+    result = await _call_tool(tools.open_kb_document, kb_id="db-1", file_id="file-1", runtime=runtime)
 
     assert "不存在或当前会话未启用" in result
 
 
 @pytest.mark.asyncio
 async def test_open_kb_document_requires_markdown_content(monkeypatch) -> None:
-    _patch_retrievers(monkeypatch)
-    monkeypatch.setattr(tools, "_resolve_visible_knowledge_bases_for_query", _fake_visible_kbs)
+    runtime = _patch_tool_runtime(monkeypatch)
 
     async def _fake_open_file_content(kb_id: str, file_id: str, offset: int = 0, limit: int = 1800):
         del kb_id, file_id, offset, limit
@@ -449,26 +416,15 @@ async def test_open_kb_document_requires_markdown_content(monkeypatch) -> None:
 
     monkeypatch.setattr(tools.knowledge_base, "open_file_content", _fake_open_file_content)
 
-    runtime = SimpleNamespace(context=SimpleNamespace())
-    result = await _run_open_kb_document(kb_id="db-1", file_id="file-1", runtime=runtime)
+    result = await _call_tool(tools.open_kb_document, kb_id="db-1", file_id="file-1", runtime=runtime)
 
     assert "没有解析后的 Markdown 内容" in result
 
 
-def _search_file_callable():
-    return _tool_callable(tools.search_file)
-
-
-async def _run_search_file(**kwargs):
-    return await _run_tool(_search_file_callable(), **kwargs)
-
-
 @pytest.mark.asyncio
 async def test_search_file_requires_kb_name_or_query(monkeypatch) -> None:
-    monkeypatch.setattr(tools, "_resolve_visible_knowledge_bases_for_query", _fake_visible_kbs)
-
-    runtime = SimpleNamespace(context=SimpleNamespace())
-    result = await _run_search_file(runtime=runtime)
+    runtime = _tool_runtime(monkeypatch, visible_kbs=_fake_visible_kbs)
+    result = await _call_tool(tools.search_file, runtime=runtime)
 
     assert "不能同时为空" in result
 
@@ -539,7 +495,7 @@ async def test_search_file_requires_kb_name_or_query(monkeypatch) -> None:
 async def test_search_file_returns_files(monkeypatch, kwargs: dict, fake_files, expected_filenames: list[str]) -> None:
     from yuxi.modules.knowledge.repositories.files import KnowledgeFileRepository
 
-    monkeypatch.setattr(tools, "_resolve_visible_knowledge_bases_for_query", _fake_visible_kbs)
+    runtime = _tool_runtime(monkeypatch)
 
     async def _fake_search_files(
         self,
@@ -557,8 +513,7 @@ async def test_search_file_returns_files(monkeypatch, kwargs: dict, fake_files, 
 
     monkeypatch.setattr(KnowledgeFileRepository, "search_files", _fake_search_files)
 
-    runtime = SimpleNamespace(context=SimpleNamespace())
-    result = await _run_search_file(runtime=runtime, **kwargs)
+    result = await _call_tool(tools.search_file, runtime=runtime, **kwargs)
 
     assert result["total"] == len(expected_filenames)
     assert [file["filename"] for file in result["files"]] == expected_filenames
@@ -566,7 +521,7 @@ async def test_search_file_returns_files(monkeypatch, kwargs: dict, fake_files, 
 
 @pytest.mark.asyncio
 async def test_search_file_pagination(monkeypatch) -> None:
-    monkeypatch.setattr(tools, "_resolve_visible_knowledge_bases_for_query", _fake_visible_kbs)
+    runtime = _tool_runtime(monkeypatch)
 
     from types import SimpleNamespace as SN
 
@@ -600,8 +555,7 @@ async def test_search_file_pagination(monkeypatch) -> None:
 
     monkeypatch.setattr(KnowledgeFileRepository, "search_files", _fake_search_files)
 
-    runtime = SimpleNamespace(context=SimpleNamespace())
-    result = await _run_search_file(kb_name="FAQ", offset=2, limit=3, runtime=runtime)
+    result = await _call_tool(tools.search_file, kb_name="FAQ", offset=2, limit=3, runtime=runtime)
 
     assert result["total"] == 10
     assert len(result["files"]) == 3
@@ -616,10 +570,8 @@ async def test_search_file_rejects_invisible_kb(monkeypatch) -> None:
         del runtime
         return [{"kb_id": "db-2", "name": "Other"}]
 
-    monkeypatch.setattr(tools, "_resolve_visible_knowledge_bases_for_query", _fake_visible_kbs)
-
-    runtime = SimpleNamespace(context=SimpleNamespace())
-    result = await _run_search_file(kb_name="FAQ", query="test", runtime=runtime)
+    runtime = _tool_runtime(monkeypatch, visible_kbs=_fake_visible_kbs)
+    result = await _call_tool(tools.search_file, kb_name="FAQ", query="test", runtime=runtime)
 
     assert "不存在或当前会话未启用" in result
 
@@ -630,10 +582,8 @@ async def test_search_file_skips_read_only_kbs(monkeypatch) -> None:
         del runtime
         return [{"kb_id": "dify-1", "name": "Dify", "kb_type": "dify"}]
 
-    monkeypatch.setattr(tools, "_resolve_visible_knowledge_bases_for_query", _fake_visible_read_only_kbs)
-
-    runtime = SimpleNamespace(context=SimpleNamespace())
-    result = await _run_search_file(query="report", runtime=runtime)
+    runtime = _tool_runtime(monkeypatch, visible_kbs=_fake_visible_read_only_kbs)
+    result = await _call_tool(tools.search_file, query="report", runtime=runtime)
 
     assert "只支持检索，不支持文件搜索" in result
 
@@ -641,7 +591,7 @@ async def test_search_file_skips_read_only_kbs(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_search_file_total_reflects_full_set_not_page(monkeypatch) -> None:
     """total/has_more 必须基于全量文件，而非按 limit/offset 截断的窗口。"""
-    monkeypatch.setattr(tools, "_resolve_visible_knowledge_bases_for_query", _fake_visible_kbs)
+    runtime = _tool_runtime(monkeypatch)
 
     from types import SimpleNamespace as SN
 
@@ -675,8 +625,7 @@ async def test_search_file_total_reflects_full_set_not_page(monkeypatch) -> None
 
     monkeypatch.setattr(KnowledgeFileRepository, "search_files", _fake_search_files)
 
-    runtime = SimpleNamespace(context=SimpleNamespace())
-    result = await _run_search_file(kb_name="FAQ", offset=0, limit=10, runtime=runtime)
+    result = await _call_tool(tools.search_file, kb_name="FAQ", offset=0, limit=10, runtime=runtime)
 
     assert result["total"] == 50
     assert len(result["files"]) == 10
@@ -701,14 +650,6 @@ def _patch_download_manager(monkeypatch, *, kb_type: str = "milvus", file_downlo
     return manager
 
 
-def _download_kb_file_callable():
-    return _tool_callable(tools.download_kb_file)
-
-
-async def _run_download_kb_file(**kwargs):
-    return await _run_tool(_download_kb_file_callable(), **kwargs)
-
-
 def _patch_output_backend(monkeypatch: pytest.MonkeyPatch):
     state = SimpleNamespace(files={}, scopes=[])
 
@@ -727,26 +668,25 @@ def _patch_output_backend(monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.mark.asyncio
-async def test_download_kb_file_writes_original_to_outputs_and_returns_virtual_path(monkeypatch, tmp_path) -> None:
-    del tmp_path
+async def test_download_kb_file_writes_original_to_outputs_and_returns_virtual_path(monkeypatch) -> None:
     sandbox = _patch_output_backend(monkeypatch)
 
-    monkeypatch.setattr(tools, "_resolve_visible_knowledge_bases_for_query", _fake_visible_kbs)
-    _patch_download_manager(
+    runtime = _tool_runtime(
         monkeypatch,
-        file_download=_async_get_file_download(b"%PDF-1.4 bytes", "report.pdf"),
-    )
-
-    runtime = SimpleNamespace(
         context=SimpleNamespace(
             thread_id="child-thread",
             runtime_scope_id="thread-1",
             workdir_relative_path="projects/11111111-1111-4111-8111-111111111111",
             workdir_path="/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111",
             uid="user-1",
-        )
+        ),
     )
-    result = await _run_download_kb_file(kb_id="db-1", file_id="file-1", runtime=runtime)
+    _patch_download_manager(
+        monkeypatch,
+        file_download=_async_get_file_download(b"%PDF-1.4 bytes", "report.pdf"),
+    )
+
+    result = await _call_tool(tools.download_kb_file, kb_id="db-1", file_id="file-1", runtime=runtime)
 
     assert sandbox.files["/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/outputs/report.pdf"] == b"%PDF-1.4 bytes"
     assert sandbox.scopes == [
@@ -767,26 +707,25 @@ async def test_download_kb_file_writes_original_to_outputs_and_returns_virtual_p
 
 
 @pytest.mark.asyncio
-async def test_download_kb_file_passes_save_as_argument(monkeypatch, tmp_path) -> None:
-    del tmp_path
+async def test_download_kb_file_passes_save_as_argument(monkeypatch) -> None:
     sandbox = _patch_output_backend(monkeypatch)
 
-    monkeypatch.setattr(tools, "_resolve_visible_knowledge_bases_for_query", _fake_visible_kbs)
-    _patch_download_manager(
+    runtime = _tool_runtime(
         monkeypatch,
-        file_download=_async_get_file_download(b"xlsx bytes", "origin.xlsx"),
-    )
-
-    runtime = SimpleNamespace(
         context=SimpleNamespace(
             thread_id="thread-1",
             runtime_scope_id="thread-1",
             workdir_relative_path="projects/11111111-1111-4111-8111-111111111111",
             workdir_path="/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111",
             uid="user-1",
-        )
+        ),
     )
-    result = await _run_download_kb_file(kb_id="db-1", file_id="file-1", save_as="renamed.xlsx", runtime=runtime)
+    _patch_download_manager(
+        monkeypatch,
+        file_download=_async_get_file_download(b"xlsx bytes", "origin.xlsx"),
+    )
+
+    result = await _call_tool(tools.download_kb_file, kb_id="db-1", file_id="file-1", save_as="renamed.xlsx", runtime=runtime)
 
     assert sandbox.files["/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/outputs/renamed.xlsx"] == b"xlsx bytes"
     assert result["saved_as"] == "renamed.xlsx"
@@ -798,10 +737,8 @@ async def test_download_kb_file_rejects_invisible_resource(monkeypatch) -> None:
         del runtime
         return [{"kb_id": "db-2", "name": "Other"}]
 
-    monkeypatch.setattr(tools, "_resolve_visible_knowledge_bases_for_query", _visible_kbs)
-
-    runtime = SimpleNamespace(context=SimpleNamespace())
-    result = await _run_download_kb_file(kb_id="db-1", file_id="file-1", runtime=runtime)
+    runtime = _tool_runtime(monkeypatch, visible_kbs=_visible_kbs)
+    result = await _call_tool(tools.download_kb_file, kb_id="db-1", file_id="file-1", runtime=runtime)
 
     assert "不存在或当前会话未启用" in result
 
@@ -810,7 +747,7 @@ async def test_download_kb_file_rejects_invisible_resource(monkeypatch) -> None:
 async def test_download_kb_file_rejects_readonly_knowledge_base(monkeypatch) -> None:
     """dify 等只读源不支持下载原文件，manager.get_file_download 内部应在校验阶段
     抛 ValueError，使底层下载方法不被调用，工具层转换为清晰提示。"""
-    monkeypatch.setattr(tools, "_resolve_visible_knowledge_bases_for_query", _fake_visible_kbs)
+    runtime = _tool_runtime(monkeypatch, context=SimpleNamespace(thread_id="thread-1", uid="user-1"))
 
     not_called = {"flag": False}
 
@@ -820,8 +757,7 @@ async def test_download_kb_file_rejects_readonly_knowledge_base(monkeypatch) -> 
 
     _patch_download_manager(monkeypatch, kb_type="dify", file_download=_must_not_download)
 
-    runtime = SimpleNamespace(context=SimpleNamespace(thread_id="thread-1", uid="user-1"))
-    result = await _run_download_kb_file(kb_id="db-1", file_id="file-1", runtime=runtime)
+    result = await _call_tool(tools.download_kb_file, kb_id="db-1", file_id="file-1", runtime=runtime)
 
     assert not_called["flag"] is False
     assert "只支持检索" in result
@@ -829,23 +765,21 @@ async def test_download_kb_file_rejects_readonly_knowledge_base(monkeypatch) -> 
 
 @pytest.mark.asyncio
 async def test_download_kb_file_requires_kb_and_file_id(monkeypatch) -> None:
-    monkeypatch.setattr(tools, "_resolve_visible_knowledge_bases_for_query", _fake_visible_kbs)
-    runtime = SimpleNamespace(context=SimpleNamespace())
+    runtime = _tool_runtime(monkeypatch)
 
-    assert "请提供 kb_id" in await _run_download_kb_file(kb_id="", file_id="file-1", runtime=runtime)
-    assert "请提供 file_id" in await _run_download_kb_file(kb_id="db-1", file_id="", runtime=runtime)
+    assert "请提供 kb_id" in await _call_tool(tools.download_kb_file, kb_id="", file_id="file-1", runtime=runtime)
+    assert "请提供 file_id" in await _call_tool(tools.download_kb_file, kb_id="db-1", file_id="", runtime=runtime)
 
 
 @pytest.mark.asyncio
-async def test_download_kb_file_missing_sandbox_context_returns_error(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr(tools, "_resolve_visible_knowledge_bases_for_query", _fake_visible_kbs)
+async def test_download_kb_file_missing_sandbox_context_returns_error(monkeypatch) -> None:
+    runtime = _tool_runtime(monkeypatch)
     _patch_download_manager(
         monkeypatch,
         file_download=_async_get_file_download(b"bytes", "report.pdf"),
     )
 
-    runtime = SimpleNamespace(context=SimpleNamespace())
-    result = await _run_download_kb_file(kb_id="db-1", file_id="file-1", runtime=runtime)
+    result = await _call_tool(tools.download_kb_file, kb_id="db-1", file_id="file-1", runtime=runtime)
 
     assert "沙盒上下文" in result
 
@@ -900,6 +834,6 @@ def _async_get_file_download(content: bytes, filename: str):
 @pytest.mark.parametrize("kwargs", [{"kb_id": "db-2"}, {"kb_id": "db-1", "kb_name": "Other"}])
 async def test_search_file_id_cannot_bypass_visible_scope_or_name(monkeypatch, kwargs):
     """ID 与名称必须落在同一可见知识库内。"""
-    monkeypatch.setattr(tools, "_resolve_visible_knowledge_bases_for_query", _fake_visible_kbs)
-    result = await _run_search_file(runtime=SimpleNamespace(context=SimpleNamespace()), **kwargs)
+    runtime = _tool_runtime(monkeypatch)
+    result = await _call_tool(tools.search_file, runtime=runtime, **kwargs)
     assert "不存在或当前会话未启用" in result

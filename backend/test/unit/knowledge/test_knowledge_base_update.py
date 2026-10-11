@@ -1,48 +1,10 @@
 import types
 from unittest.mock import AsyncMock
 
-import pytest
 
-from yuxi.modules.knowledge.base import KnowledgeBase
 from yuxi.modules.knowledge.manager import KnowledgeBaseManager
 from yuxi.modules.knowledge.read_models import KnowledgeBaseDetail
-
-
-class FakeKnowledgeBase(KnowledgeBase):
-    @property
-    def kb_type(self) -> str:
-        return "fake"
-
-    async def _create_kb_instance(self, slug: str, embedding_model_spec: str | None):
-        return None
-
-    async def _initialize_kb_instance(self, instance) -> None:
-        pass
-
-    async def index_file(self, slug: str, file_id: str, operator_id: str | None = None) -> dict:
-        return {}
-
-    async def aquery(self, query_text: str, slug: str, **kwargs) -> list[dict]:
-        return []
-
-    def get_query_params_config(self, slug: str, **kwargs) -> dict:
-        return {"options": []}
-
-    async def delete_file(self, slug: str, file_id: str) -> None:
-        pass
-
-    async def get_file_basic_info(self, slug: str, file_id: str) -> dict:
-        return {}
-
-    async def get_file_content(self, slug: str, file_id: str) -> dict:
-        return {}
-
-    async def get_file_info(self, slug: str, file_id: str) -> dict:
-        return {}
-
-
-def make_kb(tmp_path):
-    return FakeKnowledgeBase(str(tmp_path))
+from test.unit.support.knowledge import FakeKnowledgeBase, make_knowledge_file_record
 
 
 class FakeKnowledgeBaseRepository:
@@ -64,7 +26,7 @@ class FakeKnowledgeBaseRepository:
 
 
 def make_file_record(file_id: str, meta: dict):
-    return types.SimpleNamespace(
+    return make_knowledge_file_record(
         file_id=file_id,
         kb_id=meta.get("kb_id"),
         parent_id=meta.get("parent_id"),
@@ -218,8 +180,6 @@ async def test_create_knowledge_base_persists_allowed_record_fields(tmp_path, mo
     assert "share_config" not in payload["additional_params"]
     assert "created_by" not in payload["additional_params"]
     assert result.kb_id.startswith("kb_")
-    assert not hasattr(kb, "_runtime_configs")
-
 
 async def test_manager_refresh_knowledge_base_stats_persists_metadata(tmp_path, monkeypatch):
     manager = KnowledgeBaseManager(str(tmp_path))

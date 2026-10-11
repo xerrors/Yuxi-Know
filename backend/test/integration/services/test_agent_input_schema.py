@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-import os
-import uuid
-
 import pytest
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from yuxi.infrastructure.postgres.manager import PostgresManager
-from yuxi.migrations.schema import create_business_tables
+from test.integration.services.agent_input_fixtures import (
+    create_input_schema as _create_schema,
+    drop_input_schema as _drop_schema,
+)
 from yuxi.modules.agents.models.inputs import AgentInput, AgentInputReceipt
 from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.agents.services.input_messages import build_chat_input_message, serialize_input_message
@@ -22,72 +21,7 @@ from yuxi.modules.agents.repositories.input_receipt import AgentInputReceiptRepo
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
-
-
-@pytest.fixture(scope="session", autouse=True)
-def ensure_live_api_schema():
-    """本文件只在隔离 PostgreSQL Schema 中运行。"""
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_knowledge_resources():
-    """隔离 Schema 测试不创建知识库资源。"""
-    yield
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_sandboxes():
-    """隔离 Schema 测试不创建沙盒资源。"""
-    yield
-
-
-async def _create_schema():
-    """建立新模型专用 Schema，并返回清理句柄。"""
-    schema = f"pytest_agent_input_{uuid.uuid4().hex[:16]}"
-    admin_engine = create_async_engine(os.environ["POSTGRES_URL"], pool_pre_ping=True)
-    async with admin_engine.begin() as connection:
-        await connection.execute(text(f'CREATE SCHEMA "{schema}"'))
-    engine = create_async_engine(
-        os.environ["POSTGRES_URL"],
-        pool_pre_ping=True,
-        connect_args={"server_settings": {"search_path": schema}},
-    )
-    manager = object.__new__(PostgresManager)
-    PostgresManager.__init__(manager)
-    manager.async_engine = engine
-    manager._initialized = True
-    await create_business_tables(manager)
-    async with engine.begin() as connection:
-        await connection.execute(
-            text(
-                "INSERT INTO users (username, uid, password_hash, role, login_failed_count, is_deleted) VALUES "
-                "('input-user', 'input-user', 'hash', 'user', 0, 0)"
-            )
-        )
-        await connection.execute(
-            text(
-                "INSERT INTO projects (id, uid, selection_status, workdir_path, directory_mode) "
-                "VALUES ('input-project', 'input-user', 'implicit', 'projects/input-project', 'managed')"
-            )
-        )
-        await connection.execute(
-            text(
-                "INSERT INTO sessions "
-                "(thread_id, tree_root_thread_id, uid, agent_id, project_id, is_pinned, status, config_snapshot) "
-                "VALUES ('input-thread', 'input-thread', 'input-user', 'main', 'input-project', false, 'active', "
-                '\'{"model":"test:chat","tool_approval_mode":"default"}\')'
-            )
-        )
-    return schema, admin_engine, engine
-
-
-async def _drop_schema(schema: str, admin_engine, engine) -> None:
-    """删除本测试创建的独立 Schema。"""
-    await engine.dispose()
-    async with admin_engine.begin() as connection:
-        await connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
-    await admin_engine.dispose()
+pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
 
 async def test_follow_up_claim_fixes_order_and_turn_only_once() -> None:
@@ -557,26 +491,3 @@ async def test_reused_tool_call_id_never_reuses_another_message_declaration():
             await db.commit()
     finally:
         await _drop_schema(schema, admin_engine, engine)
-
-
-async def test_old_schema_is_rejected_without_changing_data():
-    """旧版本只读拒绝；版本号和原始内容保持不变。"""
-    from yuxi.infrastructure.postgres.schema import require_current_schema
-    from yuxi.migrations.schema import create_schema_version_table, record_schema_version
-
-    schema, admin, engine = await _create_schema()
-    manager = object.__new__(PostgresManager)
-    PostgresManager.__init__(manager)
-    manager.async_engine = engine
-    manager._initialized = True
-    try:
-        await create_schema_version_table(manager)
-        await record_schema_version(manager, "business", 7)
-        await record_schema_version(manager, "knowledge", 3)
-        with pytest.raises(RuntimeError, match="incompatible"):
-            await require_current_schema(manager)
-        async with engine.connect() as connection:
-            assert await connection.scalar(text("SELECT version FROM yuxi_schema_migrations WHERE domain='business'")) == 7
-            assert await connection.scalar(text("SELECT count(*) FROM sessions")) == 1
-    finally:
-        await _drop_schema(schema, admin, engine)

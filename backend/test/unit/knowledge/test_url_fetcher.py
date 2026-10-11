@@ -113,90 +113,68 @@ def test_assert_no_blocked_address_reports_offender():
         assert_no_blocked_address([ipaddress.ip_address("93.184.216.34"), ipaddress.ip_address("10.0.0.5")])
 
 
-async def test_backend_connects_to_resolved_public_ip(monkeypatch, recording_backend):
-    _patch_getaddrinfo(monkeypatch, _addr_infos("93.184.216.34"))
-    backend = SSRFGuardBackend(default_backend=recording_backend)
-
-    await backend.connect_tcp("example.com", 443)
-
-    # 连接目标必须是校验过的 IP，而不是再解析一次 hostname
-    assert recording_backend.calls == [("93.184.216.34", 443, None)]
-
-
-async def test_backend_blocks_private_resolution_without_connecting(monkeypatch, recording_backend):
-    _patch_getaddrinfo(monkeypatch, _addr_infos("10.0.0.5"))
-    backend = SSRFGuardBackend(default_backend=recording_backend)
-
-    with pytest.raises(ValueError, match="private IP"):
-        await backend.connect_tcp("internal.example.com", 443)
-
-    assert recording_backend.calls == []
-
-
-async def test_backend_fails_closed_when_resolution_fails(monkeypatch, recording_backend):
-    _patch_getaddrinfo(monkeypatch, socket.gaierror("boom"))
-    backend = SSRFGuardBackend(default_backend=recording_backend)
-
-    with pytest.raises(ValueError, match="DNS resolution failed"):
-        await backend.connect_tcp("example.com", 443)
-
-    assert recording_backend.calls == []
-
-
-async def test_backend_blocks_metadata_address(monkeypatch, recording_backend):
-    _patch_getaddrinfo(monkeypatch, _addr_infos("169.254.169.254"))
-    backend = SSRFGuardBackend(default_backend=recording_backend)
-
-    with pytest.raises(ValueError, match="private IP"):
-        await backend.connect_tcp("metadata.example.com", 80)
-
-    assert recording_backend.calls == []
-
-
-async def test_backend_falls_back_to_next_validated_address(monkeypatch, recording_backend):
-    """首个已校验地址不可达时，依次回退到下一个已校验地址。"""
-    _patch_getaddrinfo(monkeypatch, _addr_infos("93.184.216.34", "8.8.8.8"))
-    recording_backend.fail_hosts = {"93.184.216.34"}
-    backend = SSRFGuardBackend(default_backend=recording_backend)
-
-    await backend.connect_tcp("example.com", 443)
-
-    assert [host for host, _, _ in recording_backend.calls] == ["93.184.216.34", "8.8.8.8"]
-
-
-async def test_backend_never_falls_back_to_unvalidated_address(monkeypatch, recording_backend):
-    """回退只能在已通过校验的地址集合内进行。"""
-    _patch_getaddrinfo(monkeypatch, _addr_infos("93.184.216.34"))
-    recording_backend.fail_hosts = {"93.184.216.34"}
-    backend = SSRFGuardBackend(default_backend=recording_backend)
-
-    with pytest.raises(ConnectionError):
-        await backend.connect_tcp("example.com", 443)
-
-    assert [host for host, _, _ in recording_backend.calls] == ["93.184.216.34"]
-
-
-async def test_backend_splits_timeout_budget_across_addresses(monkeypatch):
-    """超时预算按地址数量均分到每次尝试。"""
-    _patch_getaddrinfo(monkeypatch, _addr_infos("93.184.216.34", "8.8.8.8"))
-    recording = RecordingBackend(fail_hosts={"93.184.216.34"})
+@pytest.mark.parametrize(
+    ("resolution", "fail_hosts", "timeout", "expected_error", "expected_calls"),
+    [
+        pytest.param(_addr_infos("93.184.216.34"), set(), None, None, [("93.184.216.34", 443, None)], id="validated-address"),
+        pytest.param(_addr_infos("10.0.0.5"), set(), None, (ValueError, "private IP"), [], id="private-address"),
+        pytest.param(socket.gaierror("boom"), set(), None, (ValueError, "DNS resolution failed"), [], id="dns-error"),
+        pytest.param(_addr_infos("169.254.169.254"), set(), None, (ValueError, "private IP"), [], id="metadata-address"),
+        pytest.param(
+            _addr_infos("93.184.216.34", "8.8.8.8"),
+            {"93.184.216.34"},
+            None,
+            None,
+            [("93.184.216.34", 443, None), ("8.8.8.8", 443, None)],
+            id="next-validated-address",
+        ),
+        pytest.param(
+            _addr_infos("93.184.216.34"),
+            {"93.184.216.34"},
+            None,
+            (ConnectionError, None),
+            [("93.184.216.34", 443, None)],
+            id="no-unvalidated-fallback",
+        ),
+        pytest.param(
+            _addr_infos("93.184.216.34", "8.8.8.8"),
+            {"93.184.216.34"},
+            2.0,
+            None,
+            [("93.184.216.34", 443, 1.0), ("8.8.8.8", 443, 1.0)],
+            id="split-timeout-budget",
+        ),
+        pytest.param(
+            _addr_infos("8.8.4.4"),
+            {"8.8.4.4"},
+            None,
+            (ConnectionError, None),
+            [("8.8.4.4", 443, None)],
+            id="single-address-unreachable",
+        ),
+    ],
+)
+async def test_backend_connects_only_to_validated_resolution(
+    monkeypatch,
+    resolution,
+    fail_hosts,
+    timeout,
+    expected_error,
+    expected_calls,
+):
+    """地址校验、连接回退和超时预算按同一建连协议验证。"""
+    _patch_getaddrinfo(monkeypatch, resolution)
+    recording = RecordingBackend(fail_hosts=fail_hosts)
     backend = SSRFGuardBackend(default_backend=recording)
 
-    await backend.connect_tcp("example.com", 443, timeout=2.0)
+    if expected_error:
+        error_type, error_message = expected_error
+        with pytest.raises(error_type, match=error_message):
+            await backend.connect_tcp("example.com", 443, timeout=timeout)
+    else:
+        await backend.connect_tcp("example.com", 443, timeout=timeout)
 
-    assert recording.calls == [("93.184.216.34", 443, 1.0), ("8.8.8.8", 443, 1.0)]
-
-
-async def test_backend_rejects_without_connecting_when_single_address_unreachable(monkeypatch, recording_backend):
-    """单地址且不可达时抛出最后一次连接错误。"""
-    _patch_getaddrinfo(monkeypatch, _addr_infos("8.8.4.4"))
-    recording_backend.fail_hosts = {"8.8.4.4"}
-    backend = SSRFGuardBackend(default_backend=recording_backend)
-
-    with pytest.raises(ConnectionError):
-        await backend.connect_tcp("example.com", 443)
-
-    assert recording_backend.calls == [("8.8.4.4", 443, None)]
+    assert recording.calls == expected_calls
 
 
 async def test_transport_wires_ssrf_backend_into_pool(monkeypatch):

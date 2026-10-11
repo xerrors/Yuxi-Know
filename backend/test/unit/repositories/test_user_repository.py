@@ -6,8 +6,9 @@ from datetime import timedelta
 
 import pytest
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from test.support.sqlite import create_utc_sqlite_engine
 from yuxi.modules.identity.repositories.users import UserRepository
 from yuxi.modules.identity.models import APIKey, Department, User
 from yuxi.infrastructure.postgres.base import Base
@@ -21,7 +22,7 @@ pytestmark = [pytest.mark.asyncio, pytest.mark.unit]
 async def user_session():
     """创建带活动 Key 与历史 tombstone 的 SQLite 会话。"""
 
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    engine = create_utc_sqlite_engine()
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)

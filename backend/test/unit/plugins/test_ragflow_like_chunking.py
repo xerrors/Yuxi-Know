@@ -10,16 +10,17 @@ from yuxi.modules.knowledge.chunking.ragflow_like.presets import (
     CHUNK_ENGINE_VERSION,
     CHUNK_PRESET_IDS,
     CHUNK_PRESETS,
+    ensure_chunk_defaults_in_additional_params,
     get_chunk_preset_options,
     get_default_chunk_parser_config,
     map_to_internal_parser_id,
+    normalize_chunk_preset_id,
     resolve_chunk_processing_params,
 )
 from yuxi.modules.knowledge.chunking.ragflow_like.utils.semantic_utils import (
     split_mixed_sentences,
     split_sentences_chinese,
 )
-from yuxi.modules.knowledge.utils.kb_utils import resolve_processing_params, sanitize_processing_params
 
 
 def test_general_maps_to_naive() -> None:
@@ -62,6 +63,40 @@ def test_resolve_chunk_processing_params_returns_only_nested_keys() -> None:
     assert resolved["chunk_preset_id"] == "general"
     assert resolved["chunk_engine_version"] == CHUNK_ENGINE_VERSION
     assert len(resolved) == 3
+
+
+@pytest.mark.parametrize("value", ["qa_typo", 123, False, 0, [], {}])
+@pytest.mark.parametrize("source", ["knowledge_base", "file", "request"])
+def test_invalid_preset_rejected_in_every_source(value, source):
+    """错误配置不能因优先级或 falsy 值变成成功默认。"""
+    sources = [{}, {}, {}]
+    sources[(["knowledge_base", "file", "request"]).index(source)] = {"chunk_preset_id": value}
+    with pytest.raises(ValueError, match="chunk_preset_id"):
+        resolve_chunk_processing_params(*sources)
+
+
+@pytest.mark.parametrize("value", [None, "", "general", "naive", " NAIVE "])
+def test_default_and_internal_alias_remain_general(value):
+    """缺省和已有内部别名继续映射通用策略。"""
+    assert normalize_chunk_preset_id(value) == "general"
+
+
+def test_optional_file_and_request_values_inherit_knowledge_base():
+    """空选择继承知识库，None 配置不覆盖有效对象。"""
+    result = resolve_chunk_processing_params(
+        {"chunk_preset_id": "book", "chunk_parser_config": {"chunk_token_num": 256}},
+        {"chunk_preset_id": "", "chunk_parser_config": None},
+        {"chunk_preset_id": None},
+    )
+    assert result["chunk_preset_id"] == "book"
+    assert result["chunk_parser_config"] == {"chunk_token_num": 256}
+    assert ensure_chunk_defaults_in_additional_params({"chunk_parser_config": None})["chunk_parser_config"] == {}
+
+
+def test_request_preset_overrides_invalid_file_preset():
+    """请求级有效选择可覆盖历史文件坏值。"""
+    result = resolve_chunk_processing_params({}, {"chunk_preset_id": "typo"}, {"chunk_preset_id": "qa"})
+    assert result["chunk_preset_id"] == "qa"
 
 
 def test_qa_chunking_from_markdown_headings() -> None:
@@ -288,82 +323,3 @@ def test_laws_markdown_articles_should_not_collapse_into_chapter_chunk() -> None
     # 条级切分时，第一条与第二条不应被合并到同一块。
     assert all("第二条" not in chunk for chunk in first_article_chunks)
     assert max(count_tokens(ck["content"]) for ck in chunks) <= 120
-
-
-def test_sanitize_processing_params_should_drop_non_persistent_fields() -> None:
-    sanitized = sanitize_processing_params(
-        {
-            "chunk_preset_id": "general",
-            "chunk_parser_config": {"chunk_token_num": 300},
-            "ocr_engine": "mineru_ocr",
-            "ocr_engine_config": {},
-            "auto_index": True,
-            "content_hashes": {"a.md": "hash-a"},
-            "enable_ocr": "mineru_ocr",
-            "_preprocessed_map": {"a.md": {"path": "/tmp/a.md"}},
-        }
-    )
-
-    assert sanitized == {
-        "chunk_preset_id": "general",
-        "chunk_parser_config": {"chunk_token_num": 300},
-        "ocr_engine": "mineru_ocr",
-    }
-
-
-def test_resolve_processing_params_keeps_ocr_fields_and_chunk_params() -> None:
-    resolved = resolve_processing_params(
-        kb_additional_params={
-            "chunk_preset_id": "book",
-            "chunk_parser_config": {"delimiter": "\n", "chunk_token_num": 300},
-        },
-        file_processing_params={
-            "ocr_engine": "mineru_ocr",
-            "ocr_engine_config": {"backend": "pipeline"},
-            "chunk_preset_id": "qa",
-            "chunk_parser_config": {"overlapped_percent": 10},
-            "content_hashes": {"a.md": "hash-a"},
-        },
-        request_params={
-            "auto_index": True,
-            "chunk_preset_id": "laws",
-            "chunk_parser_config": {"chunk_token_num": 666},
-        },
-    )
-
-    assert resolved["ocr_engine"] == "mineru_ocr"
-    assert "ocr_engine_config" not in resolved
-    assert resolved["chunk_preset_id"] == "laws"
-    assert resolved["chunk_parser_config"] == {
-        "delimiter": "\n",
-        "chunk_token_num": 666,
-        "overlapped_percent": 10,
-    }
-    assert "content_hashes" not in resolved
-    assert "enable_ocr" not in resolved
-    assert "auto_index" not in resolved
-
-
-def test_resolve_processing_params_does_not_inject_runtime_defaults() -> None:
-    resolved = resolve_processing_params(
-        kb_additional_params={},
-        file_processing_params={"ocr_engine_config": "invalid", "enable_ocr": "mineru_ocr"},
-    )
-
-    assert "ocr_engine" not in resolved
-    assert "ocr_engine_config" not in resolved
-    assert "enable_ocr" not in resolved
-
-
-def test_resolve_processing_params_drops_file_and_request_ocr_config() -> None:
-    resolved = resolve_processing_params(
-        kb_additional_params={},
-        file_processing_params={
-            "ocr_engine": "rapid_ocr",
-            "ocr_engine_config": {"det_box_thresh": 0.4, "zoom_x": 3.0},
-        },
-        request_params={"ocr_engine_config": {"det_box_thresh": 0.6}},
-    )
-
-    assert resolved["ocr_engine"] == "rapid_ocr"
-    assert "ocr_engine_config" not in resolved

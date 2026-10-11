@@ -3,193 +3,20 @@
 import asyncio
 import json
 import os
-import socket
-from datetime import datetime
 import uuid
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from threading import Event, Thread
+from datetime import datetime
 
 import pytest
-import uvicorn
-from mcp.server.fastmcp import FastMCP
 from langchain_core.messages import ToolMessage
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
-from test.e2e.test_agent_lifecycle_e2e import _message, _provider
+from test.e2e.e2e_helpers import public_message as _message, register_replay_provider as _provider
 from test.e2e.e2e_helpers import wait_for_consumed_input
-from test.integration.api.test_permission_convergence import actors as actor_fixture, create_agent, SHARED
+from test.support.permission_convergence import SHARED, create_agent
 from yuxi.modules.agents.runtime.sandbox.paths import VIRTUAL_PATH_PREFIX
 from yuxi.modules.workspace.paths import user_workspace_dir
 
-actors = actor_fixture
-
 pytestmark = [pytest.mark.asyncio, pytest.mark.e2e, pytest.mark.slow, pytest.mark.timeout(120)]
-
-
-@pytest.fixture
-def remote_tool(tmp_path):
-    """真实 MCP 工具产生可独立回读的文件副作用。"""
-    effect = tmp_path / "remote-effect.txt"
-    mcp = FastMCP("permission-test", stateless_http=True)
-    mcp.settings.transport_security.enable_dns_rebinding_protection = False
-
-    @mcp.tool()
-    def effect_probe() -> str:
-        """记录真实外部工具调用。"""
-        effect.write_text("EXECUTED")
-        return "EXECUTED"
-
-    listener = socket.socket()
-    listener.bind(("0.0.0.0", 0))
-    server = uvicorn.Server(uvicorn.Config(mcp.streamable_http_app(), log_level="error"))
-    thread = Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
-    thread.start()
-    try:
-        yield {"url": f"http://api:{listener.getsockname()[1]}/mcp", "effect": effect}
-    finally:
-        server.should_exit = True
-        thread.join(timeout=5)
-        listener.close()
-
-
-@pytest.fixture
-def test_client(e2e_client):
-    """复用真实 HTTP 客户端。"""
-    return e2e_client
-
-
-@pytest.fixture
-def admin_headers(e2e_headers):
-    """复用系统管理员身份准备独立的测试成员。"""
-    return e2e_headers
-
-
-@pytest.fixture
-def replay():
-    """在模型给出工具调用前提供可观测的真实 HTTP 阻塞点。"""
-    entered, release = Event(), Event()
-    observations = []
-    action = {}
-
-    class Handler(BaseHTTPRequestHandler):
-        """返回一次工具调用，再根据真实工具结果返回文本。"""
-
-        def do_POST(self):  # noqa: N802
-            """按 OpenAI SSE 协议提供确定性模型响应。"""
-            request = json.loads(self.rfile.read(int(self.headers["content-length"])))
-            observations.append(request)
-            assert self.headers["authorization"] == "Bearer ci-replay-key"
-            assert request["model"] == "deterministic-chat"
-            failure = action.get("failure")
-            if failure and len(observations) == 1:
-                entered.set()
-                assert release.wait(60)
-                self.send_response(503 if failure == "network" else 400)
-                self.send_header("Content-Type", "application/json")
-                self.end_headers()
-                self.wfile.write(
-                    json.dumps(
-                        {
-                            "error": {
-                                "message": "service unavailable" if failure == "network" else "context length exceeded",
-                                "type": "server_error" if failure == "network" else "invalid_request_error",
-                                "code": "service_unavailable" if failure == "network" else "context_length_exceeded",
-                            }
-                        }
-                    ).encode()
-                )
-                self.wfile.flush()
-                return
-            if action.get("plain") and not request.get("stream"):
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self.end_headers()
-                self.wfile.write(
-                    json.dumps(
-                        {
-                            "id": "chatcmpl-summary",
-                            "object": "chat.completion",
-                            "created": 1,
-                            "model": "deterministic-chat",
-                            "choices": [
-                                {
-                                    "index": 0,
-                                    "message": {"role": "assistant", "content": "Summary"},
-                                    "finish_reason": "stop",
-                                }
-                            ],
-                            "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
-                        }
-                    ).encode()
-                )
-                self.wfile.flush()
-                return
-            has_result = any(message["role"] == "tool" for message in request["messages"])
-            if action.get("plain"):
-                delta = {"role": "assistant", "content": "PERMISSION_CHECK_COMPLETE"}
-            elif not has_result:
-                assert action["name"] in {tool["function"]["name"] for tool in request["tools"]}
-                entered.set()
-                assert release.wait(60)
-                delta = {
-                    "role": "assistant",
-                    "tool_calls": [
-                        {
-                            "index": 0,
-                            "id": "call-permission",
-                            "type": "function",
-                            "function": {"name": action["name"], "arguments": json.dumps(action["arguments"])},
-                        }
-                    ],
-                }
-            else:
-                delta = {"role": "assistant", "content": "PERMISSION_CHECK_COMPLETE"}
-            self.send_response(200)
-            self.send_header("Content-Type", "text/event-stream")
-            self.end_headers()
-            common = {
-                "id": "chatcmpl-permission",
-                "object": "chat.completion.chunk",
-                "created": 1,
-                "model": "deterministic-chat",
-            }
-            for payload in [
-                {**common, "choices": [{"index": 0, "delta": delta, "finish_reason": None}]},
-                {
-                    **common,
-                    "choices": [
-                        {
-                            "index": 0,
-                            "delta": {},
-                            "finish_reason": "stop" if has_result or action.get("plain") else "tool_calls",
-                        }
-                    ],
-                    "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
-                },
-            ]:
-                self.wfile.write(f"data: {json.dumps(payload)}\n\n".encode())
-            self.wfile.write(b"data: [DONE]\n\n")
-            self.wfile.flush()
-
-        def log_message(self, *args):
-            """测试不输出请求日志。"""
-
-    server = ThreadingHTTPServer(("0.0.0.0", 0), Handler)
-    thread = Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        yield {
-            "url": f"http://api:{server.server_port}/v1",
-            "entered": entered,
-            "release": release,
-            "requests": observations,
-            "action": action,
-        }
-    finally:
-        release.set()
-        server.shutdown()
-        thread.join()
-        server.server_close()
 
 
 @pytest.mark.parametrize("revocation", ["agent", "account", "skill", "mcp"])
@@ -675,13 +502,13 @@ async def test_failed_model_response_cannot_start_retry_or_summary_after_revocat
                         {
                             "type": "agent.session.input.message",
                             "input": [_message("Trigger overflow")],
-                            "yuxi": {"mode": "follow_up", "model_spec": model},
+                            "yuxi": {"mode": "follow_up", "model": model},
                         }
                     ]
                 },
             )
             assert response.status_code == 202, response.text
-            accepted.update(response.json())
+            accepted = await wait_for_consumed_input(client, user["headers"], response.json())
         for _ in range(200):
             if replay["entered"].is_set():
                 break

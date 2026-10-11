@@ -6,8 +6,9 @@ from datetime import datetime, timedelta
 import pytest
 import pytest_asyncio
 from sqlalchemy import event
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from test.support.sqlite import create_utc_sqlite_engine
 from yuxi.modules.system.dashboard import DashboardService
 from yuxi.modules.agents.models.definitions import Agent
 from yuxi.infrastructure.postgres.base import Base
@@ -21,7 +22,7 @@ pytestmark = [pytest.mark.asyncio, pytest.mark.unit]
 
 @pytest_asyncio.fixture()
 async def dashboard_db():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    engine = create_utc_sqlite_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)

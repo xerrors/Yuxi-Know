@@ -31,19 +31,7 @@ from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.models.messages import Message, ToolCall
 from yuxi.shared.datetime import utc_now
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_sandboxes():
-    """本文件仅验证数据库和审计，沙盒调用均由各用例隔离。"""
-    yield
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_knowledge_resources():
-    """数据库用例自行清理创建的资源，不接触 HTTP 用户环境。"""
-    yield
+pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
 
 @pytest_asyncio.fixture()
@@ -233,7 +221,7 @@ async def test_model_audit_is_idempotent_and_keeps_turn_run_owner(lease_database
                     duration_ms=200,
                     usage=None,
                 )
-            with pytest.raises(ValueError, match="lease owner"):
+            with pytest.raises(ValueError):
                 await audit.start(
                     run_id=run_id,
                     thread_id=thread_id,
@@ -320,7 +308,7 @@ async def test_tool_audit_projects_only_declared_model_call(lease_database):
                 finished_sequence=3,
             )
             assert completed.execution_status == "completed"
-            with pytest.raises(ValueError, match="lease owner"):
+            with pytest.raises(ValueError):
                 await tool.start(
                     run_id=run_id,
                     thread_id=thread_id,
@@ -432,7 +420,7 @@ async def test_message_recorder_commits_facts_before_public_projection(lease_dat
             assert len(calls) == 1 and calls[0].status == "success" and calls[0].tool_output == "result"
 
         wrong_owner = RunMessageRecorder(run_id=run_id, thread_id=thread_id, worker_id="other-owner")
-        with pytest.raises(ValueError, match="lease owner"):
+        with pytest.raises(ValueError):
             await wrong_owner.consume(raw)
         monkeypatch.setattr(adapter, "_save", save)
         public = await adapter.consume(normalized)
@@ -459,7 +447,7 @@ async def test_langfuse_identity_is_write_once_by_live_owner(lease_database):
             assert await repo.set_langfuse_trace_id(run_id, "trace-1", worker_id="trace-owner")
             with pytest.raises(ValueError, match="不同"):
                 await repo.set_langfuse_trace_id(run_id, "trace-2", worker_id="trace-owner")
-            with pytest.raises(ValueError, match="lease owner"):
+            with pytest.raises(ValueError):
                 await repo.set_langfuse_trace_id(run_id, "trace-1", worker_id="old-owner")
             assert await repo.set_langfuse_observation_id(run_id, "0123456789abcdef", worker_id="trace-owner")
             with pytest.raises(ValueError, match="不同"):

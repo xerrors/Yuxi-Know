@@ -29,6 +29,22 @@ from yuxi.modules.agents.runtime.sandbox.paths import workdir_runtime_paths
 WORKDIR_RELATIVE_PATH = "projects/11111111-1111-4111-8111-111111111111"
 WORKDIR_PATH = "/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111"
 VIRTUAL_PATH_LARGE_TOOL_RESULTS, VIRTUAL_PATH_CONVERSATION_HISTORY = workdir_runtime_paths(WORKDIR_PATH)
+_UNSUPPORTED_READ_ERROR = (
+    "read_file only supports UTF-8 text and image files. "
+    "This file type is not supported."
+)
+_UNSUPPORTED_DOCUMENT_ERROR = (
+    "read_file does not support PDF or Office documents. "
+    "Use ocr_parse_file to convert the file to Markdown first."
+)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _stub_sandbox_provider_factory():
+    """默认隔离 provider 装配；需要验证身份的测试自行注入真实假对象。"""
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(sandbox_backend_module, "get_sandbox_provider", lambda: object())
+        yield
 
 
 class _OwnedAsyncHttpClient:
@@ -94,9 +110,7 @@ def _make_provider(client) -> ProvisionerSandboxProvider:
     return provider
 
 
-def test_create_agent_composite_backend_uses_sandbox_filesystem(monkeypatch):
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
-
+def test_create_agent_composite_backend_uses_sandbox_filesystem():
     backend = create_agent_composite_backend(_runtime().context)
 
     assert isinstance(backend.default, ProvisionerSandboxBackend)
@@ -105,8 +119,7 @@ def test_create_agent_composite_backend_uses_sandbox_filesystem(monkeypatch):
     assert backend.artifacts_root == f"{WORKDIR_PATH}/outputs"
 
 
-def test_create_agent_composite_backend_derives_virtual_workdir_from_relative_path(monkeypatch):
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
+def test_create_agent_composite_backend_derives_virtual_workdir_from_relative_path():
     context = _runtime().context
     context.workdir_path = "/home/gem/user-data/projects/stale"
 
@@ -116,9 +129,8 @@ def test_create_agent_composite_backend_derives_virtual_workdir_from_relative_pa
 
 
 @pytest.mark.parametrize("workdir_relative_path", [None, ""])
-def test_create_agent_composite_backend_requires_workdir(monkeypatch, workdir_relative_path):
+def test_create_agent_composite_backend_requires_workdir(workdir_relative_path):
     """缺失持久化 Workdir 时拒绝装配到默认目录。"""
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
     context = _runtime().context
     context.workdir_relative_path = workdir_relative_path
 
@@ -289,9 +301,8 @@ async def test_sync_agent_context_skills_projects_all_user_authorized_skills(mon
 
 
 @pytest.mark.parametrize("runtime_scope_id", [None, "", "   "])
-def test_create_agent_composite_backend_requires_explicit_runtime_scope(monkeypatch, runtime_scope_id):
+def test_create_agent_composite_backend_requires_explicit_runtime_scope(runtime_scope_id):
     """子线程存在时仍拒绝缺失 scope，禁止悄悄创建独立沙盒。"""
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
     context = _runtime(thread_id="child-thread").context
     context.runtime_scope_id = runtime_scope_id
 
@@ -299,8 +310,7 @@ def test_create_agent_composite_backend_requires_explicit_runtime_scope(monkeypa
         create_agent_composite_backend(context)
 
 
-def test_create_agent_filesystem_middleware_uses_context_scope(monkeypatch):
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
+def test_create_agent_filesystem_middleware_uses_context_scope():
     context = SimpleNamespace(
         thread_id="child-thread",
         runtime_scope_id="parent-thread",
@@ -318,7 +328,6 @@ def test_context_backend_construction_does_not_sync_skill_projection(monkeypatch
     """每轮模型调用重建 backend 时不得扫描或复制 Skill。"""
     from yuxi.modules.extensions.skills import projection as projection_service
 
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
     monkeypatch.setenv("YUXI_USER_DATA_DIR", str(tmp_path / "threads"))
     monkeypatch.setenv("YUXI_SKILL_PROJECTION_DIR", str(tmp_path / "skill-projections"))
     source_dir = tmp_path / "source" / "shared-skill"
@@ -865,8 +874,7 @@ def test_provisioner_uses_runtime_scope_directly(monkeypatch) -> None:
     ]
 
 
-def test_provisioner_denies_reads_outside_allowed_roots(monkeypatch) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
+def test_provisioner_denies_reads_outside_allowed_roots() -> None:
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1", workdir_path="projects/11111111-1111-4111-8111-111111111111")
 
     result = backend.read("/etc/passwd")
@@ -874,8 +882,7 @@ def test_provisioner_denies_reads_outside_allowed_roots(monkeypatch) -> None:
     assert result.error == "permission denied for read on '/etc/passwd'"
 
 
-def test_provisioner_rejects_skill_projection_writes(monkeypatch) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
+def test_provisioner_rejects_skill_projection_writes() -> None:
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
     skill_path = "/home/gem/skills/demo/SKILL.md"
 
@@ -885,7 +892,6 @@ def test_provisioner_rejects_skill_projection_writes(monkeypatch) -> None:
 
 
 def test_provisioner_allows_project_upload_writes(monkeypatch) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1", workdir_path="projects/11111111-1111-4111-8111-111111111111")
     written: list[str] = []
 
@@ -911,7 +917,6 @@ def test_provisioner_allows_project_upload_writes(monkeypatch) -> None:
 
 
 def test_provisioner_creates_write_parent_without_following_symlinks(monkeypatch) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
     commands: list[str] = []
 
@@ -930,7 +935,6 @@ def test_provisioner_creates_write_parent_without_following_symlinks(monkeypatch
 
 
 def test_provisioner_rejects_parent_directory_symlink_failure(monkeypatch) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
     monkeypatch.setattr(
         backend,
@@ -943,7 +947,6 @@ def test_provisioner_rejects_parent_directory_symlink_failure(monkeypatch) -> No
 
 
 def test_provisioner_allows_outputs_writes(monkeypatch) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
 
     def _missing_file(path, offset=0, limit=None):
@@ -968,8 +971,7 @@ def test_provisioner_allows_outputs_writes(monkeypatch) -> None:
     assert calls[0]["file"] == "/home/gem/user-data/outputs/report.md"
 
 
-def test_provisioner_glob_root_searches_readable_roots(monkeypatch) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
+def test_provisioner_glob_root_searches_readable_roots() -> None:
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
     calls = []
 
@@ -996,8 +998,7 @@ def test_provisioner_glob_root_searches_readable_roots(monkeypatch) -> None:
         ("base64", b"Hello"),
     ],
 )
-def test_provisioner_read_binary_preserves_or_decodes_base64_content(monkeypatch, encoding, expected) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
+def test_provisioner_read_binary_preserves_or_decodes_base64_content(encoding, expected) -> None:
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
 
     fake_client = SimpleNamespace(
@@ -1008,8 +1009,7 @@ def test_provisioner_read_binary_preserves_or_decodes_base64_content(monkeypatch
     assert backend._read_binary("/home/gem/user-data/outputs/file.bin") == expected
 
 
-def test_provisioner_read_file_base64_reads_temp_file_not_shell_output(monkeypatch) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
+def test_provisioner_read_file_base64_reads_temp_file_not_shell_output() -> None:
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
     expected = base64.b64encode(b"\x89PNG\r\n\x1a\nimage-bytes").decode("ascii")
     shell_calls = []
@@ -1049,7 +1049,6 @@ def test_provisioner_read_file_base64_reads_temp_file_not_shell_output(monkeypat
     ],
 )
 def test_provisioner_read_treats_image_files_as_base64(monkeypatch, path, base64_content) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
     monkeypatch.setattr(backend, "_file_size_bytes", lambda _path: 6)
     monkeypatch.setattr(backend, "_read_binary", lambda path, offset=0, limit=None: pytest.fail("file API used"))
@@ -1061,7 +1060,6 @@ def test_provisioner_read_treats_image_files_as_base64(monkeypatch, path, base64
 
 
 def test_provisioner_read_rejects_large_known_binary_before_read(monkeypatch) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
     read_calls: list[tuple[str, int, int | None]] = []
     monkeypatch.setattr(backend, "_file_size_bytes", lambda _path: MAX_BINARY_BYTES + 1)
@@ -1080,42 +1078,92 @@ def test_provisioner_read_rejects_large_known_binary_before_read(monkeypatch) ->
     assert read_calls == []
 
 
-def test_provisioner_read_rejects_unknown_binary(monkeypatch) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("entry_point", "case", "path", "expected_error"),
+    [
+        ("sync", "binary-bytes", "/home/gem/user-data/large.unknown", _UNSUPPORTED_READ_ERROR),
+        ("sync", "decode-error", "/home/gem/user-data/uploaded.bin", _UNSUPPORTED_READ_ERROR),
+        ("sync", "known-binary", "/home/gem/user-data/uploads/audio.mp3", _UNSUPPORTED_READ_ERROR),
+        ("async", "binary-bytes", "/home/gem/user-data/large.unknown", _UNSUPPORTED_READ_ERROR),
+        ("async", "decode-error", "/home/gem/user-data/uploads/data.unknown", _UNSUPPORTED_READ_ERROR),
+        ("async", "known-binary", "/home/gem/user-data/uploads/audio.mp3", _UNSUPPORTED_READ_ERROR),
+        ("async", "document", "/home/gem/user-data/uploads/document.pdf", _UNSUPPORTED_DOCUMENT_ERROR),
+    ],
+    ids=["sync-binary", "sync-decode", "sync-known-type", "async-binary", "async-decode", "async-known-type", "async-document"],
+)
+async def test_provisioner_read_error_matrix_keeps_sync_and_async_contracts(
+    monkeypatch,
+    entry_point,
+    case,
+    path,
+    expected_error,
+) -> None:
+    """同步与异步入口对相同文件错误返回一致的协议错误。"""
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
-    read_calls: list[tuple[str, int, int | None]] = []
+    read_calls = []
+    download_calls = []
+    size_calls = []
 
-    def _read_binary(path, offset=0, limit=None):
-        read_calls.append((path, offset, limit))
-        return b"\x00binary prefix"
+    if entry_point == "sync":
+        if case == "binary-bytes":
+            def read_binary(file_path, offset=0, limit=None):
+                """返回无法按文本读取的二进制前缀。"""
+                read_calls.append(file_path)
+                return b"\x00binary prefix"
 
-    monkeypatch.setattr(backend, "_read_binary", _read_binary)
+            monkeypatch.setattr(backend, "_read_binary", read_binary)
+        elif case == "decode-error":
+            def read_binary(file_path, offset=0, limit=None):
+                """模拟 sandbox 文本端点返回的 UTF-8 解码错误。"""
+                read_calls.append(file_path)
+                raise RuntimeError("'utf-8' codec can't decode byte 0x89 in position 0")
 
-    result = backend.read("/home/gem/user-data/large.unknown")
+            monkeypatch.setattr(backend, "_read_binary", read_binary)
+        else:
+            monkeypatch.setattr(backend, "_file_size_bytes", lambda file_path: size_calls.append(file_path) or 8)
+            monkeypatch.setattr(backend, "_read_binary", lambda *_args, **_kwargs: pytest.fail("binary file was read"))
+
+        result = backend.read(path)
+        if case == "known-binary":
+            assert size_calls == [path]
+            assert read_calls == []
+        else:
+            assert read_calls == [path]
+            assert size_calls == []
+    else:
+        async def download_file(*, path, **_kwargs):
+            """模拟原生下载端点确认受支持的文件对象存在。"""
+            download_calls.append(path)
+            yield b"content"
+
+        async def read_file(**_kwargs):
+            """模拟读取文本端点的二进制或解码响应。"""
+            read_calls.append(path)
+            if case == "decode-error":
+                raise RuntimeError("'utf-8' codec can't decode byte 0x89 in position 0")
+            return SimpleNamespace(data=SimpleNamespace(content=b"\x00binary prefix"))
+
+        http_client = _install_async_file_client(
+            monkeypatch,
+            backend,
+            SimpleNamespace(download_file=download_file, read_file=read_file),
+        )
+        result = await backend.aread(path)
+        assert http_client.closed is True
+        if case in {"known-binary", "document"}:
+            assert download_calls == [path]
+            assert read_calls == []
+        else:
+            assert read_calls == [path]
+            assert download_calls == []
 
     assert result.file_data is None
-    assert result.error == "read_file only supports UTF-8 text and image files. This file type is not supported."
-    assert read_calls == [("/home/gem/user-data/large.unknown", 0, 2000)]
-
-
-def test_provisioner_read_rejects_unknown_file_on_sandbox_utf8_decode_failure(monkeypatch) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
-    backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
-
-    def _read_binary_raises(path, offset=0, limit=None):
-        raise RuntimeError("'utf-8' codec can't decode byte 0x89 in position 0")
-
-    monkeypatch.setattr(backend, "_read_binary", _read_binary_raises)
-
-    result = backend.read("/home/gem/user-data/uploaded.bin")
-
-    assert result.file_data is None
-    assert result.error == "read_file only supports UTF-8 text and image files. This file type is not supported."
+    assert result.error == expected_error
 
 
 @pytest.mark.parametrize("extension", ["pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx"])
 def test_provisioner_read_routes_documents_to_ocr(monkeypatch, extension: str) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
     monkeypatch.setattr(backend, "_file_size_bytes", lambda _path: 8)
     monkeypatch.setattr(backend, "_read_binary", lambda *_args, **_kwargs: pytest.fail("document was read"))
@@ -1128,7 +1176,6 @@ def test_provisioner_read_routes_documents_to_ocr(monkeypatch, extension: str) -
 
 @pytest.mark.parametrize("extension", ["mp3", "mp4", "wav"])
 def test_provisioner_read_rejects_other_known_modalities(monkeypatch, extension: str) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
     monkeypatch.setattr(backend, "_file_size_bytes", lambda _path: 8)
     monkeypatch.setattr(backend, "_read_file_base64", lambda _path: pytest.fail("binary file was read"))
@@ -1168,8 +1215,7 @@ def test_read_file_tool_returns_multimodal_block_for_small_binary() -> None:
     }
 
 
-def test_provisioner_read_reports_invalid_path(monkeypatch) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
+def test_provisioner_read_reports_invalid_path() -> None:
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
 
     result = backend.read("secret.txt")
@@ -1177,8 +1223,7 @@ def test_provisioner_read_reports_invalid_path(monkeypatch) -> None:
     assert result.error == "Invalid path 'secret.txt': path must start with /"
 
 
-def test_provisioner_read_reports_path_traversal(monkeypatch) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
+def test_provisioner_read_reports_path_traversal() -> None:
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
 
     result = backend.read("/home/gem/user-data/../secret.txt")
@@ -1187,7 +1232,6 @@ def test_provisioner_read_reports_path_traversal(monkeypatch) -> None:
 
 
 def test_provisioner_read_returns_pagination_window(monkeypatch) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
     lines = [f"line-{index}" for index in range(10)]
     read_calls: list[tuple[int, int | None]] = []
@@ -1210,7 +1254,6 @@ def test_provisioner_read_returns_pagination_window(monkeypatch) -> None:
 
 
 def test_provisioner_read_non_positive_limit_reports_no_lines_requested(monkeypatch) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
     monkeypatch.setattr(backend, "_read_binary", lambda *_args, **_kwargs: pytest.fail("file was inspected"))
 
@@ -1221,7 +1264,6 @@ def test_provisioner_read_non_positive_limit_reports_no_lines_requested(monkeypa
 
 
 def test_provisioner_read_negative_offset_clamps_to_first_line(monkeypatch) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
     read_calls: list[tuple[int, int | None]] = []
 
@@ -1241,7 +1283,6 @@ def test_provisioner_read_negative_offset_clamps_to_first_line(monkeypatch) -> N
 
 @pytest.mark.asyncio
 async def test_provisioner_aread_rejects_outside_path_before_async_client(monkeypatch) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
     monkeypatch.setattr(
         sandbox_backend_module.httpx,
@@ -1256,7 +1297,6 @@ async def test_provisioner_aread_rejects_outside_path_before_async_client(monkey
 
 @pytest.mark.asyncio
 async def test_provisioner_aread_returns_pagination_and_closes_http_client(monkeypatch) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
     read_calls: list[dict] = []
 
@@ -1288,7 +1328,6 @@ async def test_provisioner_aread_returns_pagination_and_closes_http_client(monke
 
 @pytest.mark.asyncio
 async def test_provisioner_aread_image_streams_native_download_without_shell(monkeypatch) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
     download_calls: list[dict] = []
 
@@ -1315,7 +1354,6 @@ async def test_provisioner_aread_image_streams_native_download_without_shell(mon
 
 @pytest.mark.asyncio
 async def test_provisioner_aread_image_rejects_stream_over_limit(monkeypatch) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
     monkeypatch.setattr(sandbox_backend_module, "MAX_BINARY_BYTES", 5)
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
 
@@ -1331,53 +1369,7 @@ async def test_provisioner_aread_image_rejects_stream_over_limit(monkeypatch) ->
     assert result.error == f"Binary file exceeds maximum preview size of {MAX_BINARY_BYTES} bytes"
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("path", "expected_error"),
-    [
-        (
-            "/home/gem/user-data/uploads/document.pdf",
-            "read_file does not support PDF or Office documents. Use ocr_parse_file to convert the file to Markdown first.",
-        ),
-        (
-            "/home/gem/user-data/uploads/audio.mp3",
-            "read_file only supports UTF-8 text and image files. This file type is not supported.",
-        ),
-    ],
-)
-async def test_provisioner_aread_preserves_known_binary_type_errors(monkeypatch, path, expected_error) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
-    backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
-
-    async def download_file(**_kwargs):
-        yield b"content"
-
-    _install_async_file_client(monkeypatch, backend, SimpleNamespace(download_file=download_file))
-
-    result = await backend.aread(path)
-
-    assert result.file_data is None
-    assert result.error == expected_error
-
-
-@pytest.mark.asyncio
-async def test_provisioner_aread_rejects_unknown_binary_decode_failure(monkeypatch) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
-    backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
-
-    async def read_file(**_kwargs):
-        raise RuntimeError("'utf-8' codec can't decode byte 0x89 in position 0")
-
-    _install_async_file_client(monkeypatch, backend, SimpleNamespace(read_file=read_file))
-
-    result = await backend.aread("/home/gem/user-data/uploads/data.unknown")
-
-    assert result.file_data is None
-    assert result.error == "read_file only supports UTF-8 text and image files. This file type is not supported."
-
-
 def test_provisioner_grep_applies_global_max_count_across_roots(monkeypatch) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
     grep_calls: list[dict] = []
 
@@ -1403,7 +1395,6 @@ def test_provisioner_grep_applies_global_max_count_across_roots(monkeypatch) -> 
 @pytest.fixture
 def native_grep_backend(monkeypatch):
     """装配只替换 HTTP 传输的原生搜索后端。"""
-    monkeypatch.setattr(sandbox_backend_module, "get_sandbox_provider", lambda: object())
     monkeypatch.setattr(sandbox_backend_module, "sandbox_provisioner_token", lambda: "test-token")
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
     monkeypatch.setattr(backend, "_get_connection", lambda: SimpleNamespace(sandbox_url="http://sandbox.test"))
@@ -1490,7 +1481,6 @@ def test_provisioner_grep_handles_native_failures(monkeypatch, native_grep_backe
 @pytest.mark.parametrize(("path", "glob"), [("/etc", None), ("/home/gem/user-data", "../private/*")])
 def test_provisioner_grep_rejects_outside_requests_before_native_call(monkeypatch, path, glob) -> None:
     """非法请求必须在调用搜索服务前被拒绝。"""
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
 
     def unexpected_client():
@@ -1505,7 +1495,6 @@ def test_provisioner_grep_rejects_outside_requests_before_native_call(monkeypatc
 @pytest.mark.asyncio
 async def test_provisioner_agrep_preserves_timeout(monkeypatch) -> None:
     """异步搜索停滞时恢复 DeepAgents 的有界工具响应。"""
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
     monkeypatch.setattr(sandbox_backend_module, "ASYNC_GREP_TIMEOUT", 0.01)
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
     release = threading.Event()
@@ -1523,8 +1512,7 @@ async def test_provisioner_agrep_preserves_timeout(monkeypatch) -> None:
         release.set()
 
 
-def test_provisioner_download_files_distinguishes_invalid_path_from_read_failure(monkeypatch) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
+def test_provisioner_download_files_distinguishes_invalid_path_from_read_failure() -> None:
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
 
     def download_file(**_kwargs):
@@ -1541,8 +1529,7 @@ def test_provisioner_download_files_distinguishes_invalid_path_from_read_failure
     assert responses[1].error.startswith("read_failed")
 
 
-def test_provisioner_download_files_treats_sandbox_404_as_missing(monkeypatch) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
+def test_provisioner_download_files_treats_sandbox_404_as_missing() -> None:
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
 
     def download_file(**_kwargs):
@@ -1558,8 +1545,7 @@ def test_provisioner_download_files_treats_sandbox_404_as_missing(monkeypatch) -
     assert responses[0].error == "file_not_found"
 
 
-def test_provisioner_execute_returns_error_response_on_client_failure(monkeypatch) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
+def test_provisioner_execute_returns_error_response_on_client_failure() -> None:
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
 
     class _FakeClient:
@@ -1575,8 +1561,7 @@ def test_provisioner_execute_returns_error_response_on_client_failure(monkeypatc
     assert "Error:" in result.output
 
 
-def test_provisioner_execute_applies_timeout_to_command_and_http_request(monkeypatch) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
+def test_provisioner_execute_applies_timeout_to_command_and_http_request() -> None:
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
     calls: list[dict] = []
 
@@ -1600,8 +1585,7 @@ def test_provisioner_execute_applies_timeout_to_command_and_http_request(monkeyp
     ]
 
 
-def test_provisioner_download_files_streams_binary_bytes(monkeypatch) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
+def test_provisioner_download_files_streams_binary_bytes() -> None:
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
     calls: list[dict] = []
 
@@ -1625,8 +1609,7 @@ def test_provisioner_download_files_streams_binary_bytes(monkeypatch) -> None:
     ]
 
 
-def test_authorized_download_enforces_limit_during_actual_transfer(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
+def test_authorized_download_enforces_limit_during_actual_transfer(tmp_path) -> None:
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1", workdir_path="projects/11111111-1111-4111-8111-111111111111")
     content = b"12345678"
     execute_calls = 0
@@ -1667,8 +1650,7 @@ def test_authorized_download_maps_sandbox_overflow_to_stable_limit_error() -> No
         )
 
 
-def test_authorized_snapshot_attempts_cleanup_after_snapshot_command_failure(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
+def test_authorized_snapshot_attempts_cleanup_after_snapshot_command_failure(tmp_path) -> None:
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1", workdir_path="projects/11111111-1111-4111-8111-111111111111")
     execute_results = iter(
         [
@@ -1689,8 +1671,7 @@ def test_authorized_snapshot_attempts_cleanup_after_snapshot_command_failure(mon
         next(execute_results)
 
 
-def test_authorized_download_preserves_missing_and_symlink_boundary_errors(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
+def test_authorized_download_preserves_missing_and_symlink_boundary_errors(tmp_path) -> None:
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1", workdir_path="projects/11111111-1111-4111-8111-111111111111")
 
     for output, expected_error in (
@@ -1713,8 +1694,7 @@ def test_authorized_download_preserves_missing_and_symlink_boundary_errors(monke
             )
 
 
-def test_authorized_download_recovers_snapshot_metadata_when_first_stdout_is_missing(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
+def test_authorized_download_recovers_snapshot_metadata_when_first_stdout_is_missing(tmp_path) -> None:
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1", workdir_path="projects/11111111-1111-4111-8111-111111111111")
     content = b"live bytes"
     marker = f"YUXI_FILE_SNAPSHOT {len(content)} {hashlib.sha256(content).hexdigest()}"
@@ -1742,8 +1722,7 @@ def test_authorized_download_recovers_snapshot_metadata_when_first_stdout_is_mis
     assert target.read_bytes() == content
 
 
-def test_authorized_upload_rejects_symlink_parent_as_permission_error(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
+def test_authorized_upload_rejects_symlink_parent_as_permission_error(tmp_path) -> None:
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1", workdir_path="projects/11111111-1111-4111-8111-111111111111")
     backend._get_client = MethodType(
         lambda self: SimpleNamespace(file=SimpleNamespace(upload_file=lambda **_kwargs: SimpleNamespace(success=True, message=""))),
@@ -1764,8 +1743,7 @@ def test_authorized_upload_rejects_symlink_parent_as_permission_error(monkeypatc
         )
 
 
-def test_authorized_snapshot_cleanup_failure_blocks_download(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: object())
+def test_authorized_snapshot_cleanup_failure_blocks_download(tmp_path) -> None:
     backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1", workdir_path="projects/11111111-1111-4111-8111-111111111111")
     content = b"report"
     execute_results = iter(

@@ -9,7 +9,7 @@ import pytest
 from fastapi import HTTPException
 from sqlalchemy import func, select
 
-from test.integration.services.test_thread_priority_inputs import SCOPE, _start, sessions  # noqa: F401
+from test.integration.services.agent_input_fixtures import SCOPE, send_input as _send, start_input_run as _start
 from yuxi.infrastructure.minio import get_minio_client
 from yuxi.modules.agents.models.attachments import AgentAttachment
 from yuxi.modules.agents.models.inputs import AgentInput, AgentInputReceipt
@@ -27,24 +27,8 @@ from yuxi.modules.workspace.services.bindings import resolve_session_workdir_bin
 from yuxi.modules.workspace.workdir import Workdir
 from yuxi.shared.datetime import utc_now
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
-
-
-@pytest.fixture(scope="session", autouse=True)
-def ensure_live_api_schema():
-    """测试拥有独立 PG Schema。"""
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_knowledge_resources():
-    """本文件不创建知识库资源。"""
-    yield
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_sandboxes():
-    """本文件不创建沙盒。"""
-    yield
+pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
+pytest_plugins = ["test.integration.services.agent_input_fixtures"]
 
 
 @pytest.fixture
@@ -174,8 +158,6 @@ async def test_unready_steer_head_blocks_later_ready_inputs(files_env, monkeypat
 
     monkeypatch.setattr(attachments, "_write_workdir_file", fail)
     head = await submit(file, "blocked-head", mode="steer")
-    from test.integration.services.test_thread_priority_inputs import _send
-
     later = await _send(factory, "ready-later")
     await _send(factory, "ordinary", "follow_up")
     async with factory() as db:

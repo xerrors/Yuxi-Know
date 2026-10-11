@@ -9,7 +9,7 @@ import asyncpg
 import httpx
 import pytest
 
-from test.e2e.test_agent_lifecycle_e2e import output_text
+from test.e2e.e2e_helpers import output_text
 
 from e2e_helpers import (
     RUN_TIMEOUT_SECONDS,

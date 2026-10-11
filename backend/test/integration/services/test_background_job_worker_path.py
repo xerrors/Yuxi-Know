@@ -17,7 +17,7 @@ from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.background_jobs.models import BackgroundJobRecord
 from yuxi.modules.knowledge.models import KnowledgeBase
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
+pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -26,21 +26,6 @@ async def close_test_postgres_pool():
 
     yield
     await pg_manager.close()
-
-
-@pytest.fixture(scope="session", autouse=True)
-def ensure_live_api_schema():
-    """本文件直接使用 shipping PostgreSQL 与 worker，不依赖 HTTP API。"""
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_knowledge_resources():
-    yield
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_sandboxes():
-    yield
 
 
 def _gate_identity(kind: str = "success") -> tuple[str, str]:
@@ -86,7 +71,7 @@ async def test_prepare_job_with_failed_initial_arq_publication(monkeypatch) -> N
 
 
 async def test_shipping_worker_startup_recovers_pending_publication() -> None:
-    """由真实 worker startup publisher 恢复前一进程遗留的 pending intent。"""
+    """消费前测写入的 Job intent；system-tests 按 gate ID 跨 worker 容器重建串联。"""
     kb_id, _dataset_name = _gate_identity()
     datasets = await EvaluationRepository().list_datasets(kb_id)
     assert len(datasets) == 1

@@ -12,8 +12,8 @@ from unittest.mock import AsyncMock
 import pytest
 from langchain.messages import HumanMessage, ToolMessage
 from langgraph.types import Command
-from test.unit.agent_context_fixtures import prepared_execution
-from test.unit.services.test_openai_event_adapter import native
+from test.unit.support.agent_context_fixtures import prepared_execution
+from test.support.agent_stream_fixtures import FinalAnswerModel, native
 from yuxi.modules.agents.runtime.base import BaseAgent, GraphExecutionResult
 from yuxi.modules.agents.runtime.context import BaseContext
 from yuxi.modules.agents.runtime.middlewares.steer import SteerMiddleware
@@ -147,13 +147,12 @@ async def test_cancelled_steer_continues_real_graph_without_replaying_input(monk
     from langchain.tools import tool
     from langchain_core.outputs import ChatGeneration, ChatResult
     from langgraph.checkpoint.memory import InMemorySaver
-    from test.unit.middlewares.test_steer_safety_gate import _FinalAnswerModel
     from yuxi.modules.agents.services import runs
 
     cancelled = False
     tool_calls = 0
 
-    class Model(_FinalAnswerModel):
+    class Model(FinalAnswerModel):
         """工具场景先请求一次工具，然后生成最终回答。"""
 
         def bind_tools(self, tools, **kwargs):

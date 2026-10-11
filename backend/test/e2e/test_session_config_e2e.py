@@ -9,7 +9,14 @@ import httpx
 import pytest
 
 from test.e2e.e2e_helpers import delete_agent, postgres_dsn, wait_for_consumed_input
-from test.e2e.test_agent_lifecycle_e2e import MODEL, OUTPUT, _agent, _message, _provider, _turn
+from test.e2e.e2e_helpers import (
+    DETERMINISTIC_MODEL as MODEL,
+    DETERMINISTIC_OUTPUT as OUTPUT,
+    create_lifecycle_agent as _agent,
+    public_message as _message,
+    register_replay_provider as _provider,
+    wait_for_terminal_turn as _turn,
+)
 from test.live_api_cleanup import make_test_session_title
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.e2e, pytest.mark.slow, pytest.mark.timeout(240)]

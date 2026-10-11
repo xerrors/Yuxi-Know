@@ -1,12 +1,9 @@
 import asyncio
-import os
 from types import SimpleNamespace
 
 import pytest
 
 from conftest import FakeGenerationKnowledgeBase, NoQueryKnowledgeBase, TrackingLlm, make_chunk
-
-os.environ.setdefault("OPENAI_API_KEY", "test-key")
 
 from yuxi.modules.knowledge.evaluation import benchmark_generation
 from yuxi.modules.knowledge.evaluation.benchmark_generation import (
@@ -18,6 +15,8 @@ from yuxi.modules.knowledge.evaluation.benchmark_generation import (
     select_graph_enhanced_chunks,
     select_neighbor_chunks_by_kb_query,
 )
+
+pytestmark = pytest.mark.usefixtures("fake_chunk_repository")
 
 
 class FakeLlm:
@@ -32,21 +31,6 @@ class FakeLlm:
 
 class FakeGraphGenerationKnowledgeBase(FakeGenerationKnowledgeBase):
     pass
-
-
-@pytest.fixture(autouse=True)
-def fake_chunk_repository(monkeypatch):
-    class FakeChunkRepository:
-        chunks = [make_chunk("anchor_chunk")]
-
-        async def list_by_kb_id(self, kb_id):
-            return [chunk for chunk in self.chunks if chunk.kb_id == kb_id]
-
-    monkeypatch.setattr(
-        "yuxi.modules.knowledge.repositories.chunks.KnowledgeChunkRepository",
-        FakeChunkRepository,
-    )
-    return FakeChunkRepository
 
 
 def test_clamp_neighbors_count():

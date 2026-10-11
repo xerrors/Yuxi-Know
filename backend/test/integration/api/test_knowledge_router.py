@@ -11,6 +11,8 @@ import uuid
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
+from test.integration.api.helpers import create_api_user, create_department, delete_department_by_id, delete_user_by_id
+from test.support.knowledge import default_embedding_model_spec
 from yuxi.modules.knowledge.chunking.ragflow_like.presets import CHUNK_PRESET_IDS
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
@@ -27,18 +29,13 @@ def _assert_forbidden_response(response):
 async def _create_test_department(test_client, admin_headers, prefix="pytest_dept"):
     suffix = uuid.uuid4().hex[:8]
     admin_uid = f"deptadmin_{suffix}"
-    response = await test_client.post(
-        "/api/departments",
-        json={
-            "name": f"{prefix}_{suffix}",
-            "description": "pytest department",
-            "admin_uid": admin_uid,
-            "admin_password": f"Pw!{suffix}",
-        },
-        headers=admin_headers,
-    )
-    assert response.status_code == 201, response.text
-    payload = response.json()
+    payload = {
+        "name": f"{prefix}_{suffix}",
+        "description": "pytest department",
+        "admin_uid": admin_uid,
+        "admin_password": f"Pw!{suffix}",
+    }
+    payload = await create_department(test_client, admin_headers, payload)
     payload["admin_uid"] = admin_uid
     return payload
 
@@ -46,18 +43,16 @@ async def _create_test_department(test_client, admin_headers, prefix="pytest_dep
 async def _create_test_user(test_client, admin_headers, department_id):
     suffix = uuid.uuid4().hex[:8]
     password = f"Pw!{suffix}"
-    response = await test_client.post(
-        "/api/auth/users",
-        json={
+    user = await create_api_user(
+        test_client,
+        admin_headers,
+        {
             "username": f"pytest_user_{suffix}",
             "password": password,
             "role": "user",
             "department_id": department_id,
         },
-        headers=admin_headers,
     )
-    assert response.status_code == 200, response.text
-    user = response.json()
 
     login_response = await test_client.post(
         "/api/auth/token",
@@ -65,11 +60,6 @@ async def _create_test_user(test_client, admin_headers, department_id):
     )
     assert login_response.status_code == 200, login_response.text
     return {"user": user, "headers": {"Authorization": f"Bearer {login_response.json()['access_token']}"}}
-
-
-async def _delete_user_by_id(test_client, admin_headers, user_id):
-    response = await test_client.delete(f"/api/auth/users/{user_id}", headers=admin_headers)
-    assert response.status_code in (200, 404), response.text
 
 
 async def _find_user_id_by_uid(test_client, admin_headers, uid):
@@ -84,9 +74,8 @@ async def _find_user_id_by_uid(test_client, admin_headers, uid):
 async def _delete_department_with_admin(test_client, admin_headers, department):
     admin_user_id = await _find_user_id_by_uid(test_client, admin_headers, department["admin_uid"])
     if admin_user_id:
-        await _delete_user_by_id(test_client, admin_headers, admin_user_id)
-    response = await test_client.delete(f"/api/departments/{department['id']}", headers=admin_headers)
-    assert response.status_code in (200, 404), response.text
+        await delete_user_by_id(test_client, admin_headers, admin_user_id)
+    await delete_department_by_id(test_client, admin_headers, department["id"])
 
 
 async def _create_test_knowledge_base(test_client, admin_headers, share_config=None):
@@ -95,7 +84,7 @@ async def _create_test_knowledge_base(test_client, admin_headers, share_config=N
         json={
             "name": f"pytest_acl_{uuid.uuid4().hex[:8]}",
             "description": "Knowledge permission test",
-            "embedding_model_spec": "siliconflow-cn:Pro/BAAI/bge-m3",
+            "embedding_model_spec": default_embedding_model_spec(),
             "kb_type": "milvus",
             "additional_params": {},
             "share_config": share_config,
@@ -156,17 +145,8 @@ async def test_admin_can_manage_knowledge_bases(test_client, admin_headers, know
         await engine.dispose()
 
 
-async def test_knowledge_base_contract_removes_old_paths_and_requires_name(test_client, admin_headers):
-    """真实 HTTP 拒绝旧资源路径和仅包含旧名称字段的创建请求。"""
-    for path in (
-        "/api/knowledge/databases",
-        "/api/knowledge/databases/accessible",
-        "/api/knowledge/databases/kb-missing/documents",
-        "/api/evaluation/databases/kb-missing/datasets",
-    ):
-        response = await test_client.get(path, headers=admin_headers)
-        assert response.status_code == 404, (path, response.text)
-
+async def test_knowledge_base_creation_requires_name(test_client, admin_headers):
+    """仅包含旧名称字段的创建请求因缺少新字段而失败。"""
     response = await test_client.post(
         "/api/knowledge/knowledge-bases",
         json={"database_name": "pytest_old_field", "description": "Missing new name"},
@@ -396,7 +376,7 @@ async def test_create_knowledge_base_with_chunk_preset(test_client, admin_header
     payload = {
         "name": db_name,
         "description": "Chunk preset create test",
-        "embedding_model_spec": "siliconflow-cn:Pro/BAAI/bge-m3",
+        "embedding_model_spec": default_embedding_model_spec(),
         "kb_type": "milvus",
         "additional_params": {"chunk_preset_id": "book"},
     }
@@ -456,35 +436,33 @@ async def test_update_knowledge_base_additional_params_merge_keeps_chunk_preset(
     assert info_response.json()["additional_params"]["chunk_preset_id"] == "qa"
 
 
-async def test_knowledge_routes_enforce_permissions(test_client, standard_user, knowledge_base_resource):
+@pytest.mark.parametrize("route", ["create", "list", "chunk-presets", "get", "exists"])
+async def test_knowledge_routes_enforce_permissions(test_client, standard_user, knowledge_base_resource, route):
     kb_id = knowledge_base_resource["kb_id"]
-
-    forbidden_create = await test_client.post(
-        "/api/knowledge/knowledge-bases",
-        json={
-            "name": "unauthorized_db",
-            "description": "Should not succeed",
-            "embedding_model_spec": "siliconflow-cn:Pro/BAAI/bge-m3",
-        },
-        headers=standard_user["headers"],
-    )
-    _assert_forbidden_response(forbidden_create)
-
-    forbidden_list = await test_client.get("/api/knowledge/knowledge-bases", headers=standard_user["headers"])
-    _assert_forbidden_response(forbidden_list)
-
-    forbidden_chunk_presets = await test_client.get("/api/knowledge/chunk-presets", headers=standard_user["headers"])
-    _assert_forbidden_response(forbidden_chunk_presets)
-
-    forbidden_get = await test_client.get(f"/api/knowledge/knowledge-bases/{kb_id}", headers=standard_user["headers"])
-    _assert_forbidden_response(forbidden_get)
-
-    forbidden_exists = await test_client.get(
-        f"/api/knowledge/knowledge-bases/{kb_id}/documents/exists",
-        params={"filename": "demo.txt"},
-        headers=standard_user["headers"],
-    )
-    _assert_forbidden_response(forbidden_exists)
+    requests = {
+        "create": (
+            "POST",
+            "/api/knowledge/knowledge-bases",
+            {
+                "json": {
+                    "name": f"unauthorized_{uuid.uuid4().hex[:8]}",
+                    "description": "Should not succeed",
+                    "embedding_model_spec": default_embedding_model_spec(),
+                }
+            },
+        ),
+        "list": ("GET", "/api/knowledge/knowledge-bases", {}),
+        "chunk-presets": ("GET", "/api/knowledge/chunk-presets", {}),
+        "get": ("GET", f"/api/knowledge/knowledge-bases/{kb_id}", {}),
+        "exists": (
+            "GET",
+            f"/api/knowledge/knowledge-bases/{kb_id}/documents/exists",
+            {"params": {"filename": "demo.txt"}},
+        ),
+    }
+    method, path, kwargs = requests[route]
+    response = await test_client.request(method, path, headers=standard_user["headers"], **kwargs)
+    _assert_forbidden_response(response)
 
 
 async def test_kb_image_proxy_requires_auth_and_streams_private_image(test_client, admin_headers, knowledge_base_resource):
@@ -557,7 +535,7 @@ async def test_admin_can_create_vector_db_with_reranker(test_client, admin_heade
     payload = {
         "name": db_name,
         "description": "Vector DB with reranker",
-        "embedding_model_spec": "siliconflow-cn:Pro/BAAI/bge-m3",
+        "embedding_model_spec": default_embedding_model_spec(),
         "kb_type": "milvus",
         "additional_params": {},
     }
@@ -654,66 +632,55 @@ async def test_concurrent_query_param_updates_preserve_all_options(test_client, 
     assert saved_options["similarity_threshold"] == 0.42
 
 
-async def test_create_dify_knowledge_base_success(test_client, admin_headers):
-    db_name = f"pytest_dify_{uuid.uuid4().hex[:6]}"
+@pytest.mark.parametrize(
+    ("case", "additional_params", "expected_status", "expected_detail"),
+    [
+        (
+            "valid",
+            {"dify_api_url": "https://api.dify.ai/v1", "dify_token": "test-token", "dify_dataset_id": "dataset-123"},
+            200,
+            None,
+        ),
+        (
+            "missing-credentials",
+            {"dify_api_url": "https://api.dify.ai/v1", "dify_token": "", "dify_dataset_id": ""},
+            400,
+            "Dify 参数缺失",
+        ),
+        (
+            "invalid-api-url",
+            {"dify_api_url": "https://api.dify.ai", "dify_token": "test-token", "dify_dataset_id": "dataset-123"},
+            400,
+            "/v1",
+        ),
+    ],
+    ids=["valid", "missing-credentials", "invalid-api-url"],
+)
+async def test_create_dify_knowledge_base_validates_and_persists(
+    test_client, admin_headers, case, additional_params, expected_status, expected_detail
+):
     payload = {
-        "name": db_name,
-        "description": "Dify KB create test",
+        "name": f"pytest_dify_{case}_{uuid.uuid4().hex[:6]}",
+        "description": f"Dify KB {case}",
         "kb_type": "dify",
-        "additional_params": {
-            "dify_api_url": "https://api.dify.ai/v1",
-            "dify_token": "test-token",
-            "dify_dataset_id": "dataset-123",
-        },
+        "additional_params": additional_params,
     }
+    response = await test_client.post("/api/knowledge/knowledge-bases", json=payload, headers=admin_headers)
+    assert response.status_code == expected_status, response.text
+    if expected_status != 200:
+        assert expected_detail in response.json()["detail"]
+        return
 
-    create_response = await test_client.post("/api/knowledge/knowledge-bases", json=payload, headers=admin_headers)
-    assert create_response.status_code == 200, create_response.text
-    created_payload = create_response.json()
+    created_payload = response.json()
     kb_id = created_payload["kb_id"]
     assert created_payload["embedding_model_spec"] is None
     assert "chunk_preset_id" not in created_payload["metadata"]
-
     info_response = await test_client.get(f"/api/knowledge/knowledge-bases/{kb_id}", headers=admin_headers)
     assert info_response.status_code == 200, info_response.text
-    additional_params = info_response.json()["additional_params"]
-    assert additional_params["dify_api_url"] == "https://api.dify.ai/v1"
-    assert additional_params["dify_token"] == "test-token"
-    assert additional_params["dify_dataset_id"] == "dataset-123"
-
-
-async def test_create_dify_knowledge_base_missing_params_failed(test_client, admin_headers):
-    payload = {
-        "name": f"pytest_dify_missing_{uuid.uuid4().hex[:6]}",
-        "description": "Dify KB missing params",
-        "kb_type": "dify",
-        "additional_params": {
-            "dify_api_url": "https://api.dify.ai/v1",
-            "dify_token": "",
-            "dify_dataset_id": "",
-        },
-    }
-
-    response = await test_client.post("/api/knowledge/knowledge-bases", json=payload, headers=admin_headers)
-    assert response.status_code == 400, response.text
-    assert "Dify 参数缺失" in response.json()["detail"]
-
-
-async def test_create_dify_knowledge_base_invalid_api_url_failed(test_client, admin_headers):
-    payload = {
-        "name": f"pytest_dify_bad_url_{uuid.uuid4().hex[:6]}",
-        "description": "Dify KB invalid api url",
-        "kb_type": "dify",
-        "additional_params": {
-            "dify_api_url": "https://api.dify.ai",
-            "dify_token": "test-token",
-            "dify_dataset_id": "dataset-123",
-        },
-    }
-
-    response = await test_client.post("/api/knowledge/knowledge-bases", json=payload, headers=admin_headers)
-    assert response.status_code == 400, response.text
-    assert "/v1" in response.json()["detail"]
+    persisted_params = info_response.json()["additional_params"]
+    assert persisted_params["dify_api_url"] == additional_params["dify_api_url"]
+    assert persisted_params["dify_token"] == additional_params["dify_token"]
+    assert persisted_params["dify_dataset_id"] == additional_params["dify_dataset_id"]
 
 
 async def test_dify_query_params_and_documents_readonly(test_client, admin_headers):
@@ -831,9 +798,9 @@ async def test_share_config_filters_accessible_knowledge_bases(test_client, admi
         if knowledge_base:
             await test_client.delete(f"/api/knowledge/knowledge-bases/{knowledge_base['kb_id']}", headers=admin_headers)
         if user_a:
-            await _delete_user_by_id(test_client, admin_headers, user_a["user"]["id"])
+            await delete_user_by_id(test_client, admin_headers, user_a["user"]["id"])
         if user_b:
-            await _delete_user_by_id(test_client, admin_headers, user_b["user"]["id"])
+            await delete_user_by_id(test_client, admin_headers, user_b["user"]["id"])
         await _delete_department_with_admin(test_client, admin_headers, department_a)
         await _delete_department_with_admin(test_client, admin_headers, department_b)
 
@@ -886,12 +853,6 @@ async def test_get_supported_file_types(test_client, admin_headers):
     assert isinstance(payload["file_types"], list)
 
 
-async def test_standalone_markdown_conversion_endpoint_is_absent(test_client, admin_headers):
-    """独立转换入口已移除，不能创建无归属的资源。"""
-    response = await test_client.post("/api/knowledge/files/markdown", headers=admin_headers)
-    assert response.status_code == 404, response.text
-
-
 async def test_duplicate_knowledge_base_name(test_client, admin_headers, knowledge_base_resource):
     """测试重复创建同名知识库"""
     db_name = knowledge_base_resource["name"]
@@ -900,7 +861,7 @@ async def test_duplicate_knowledge_base_name(test_client, admin_headers, knowled
         json={
             "name": db_name,
             "description": "Duplicate name test",
-            "embedding_model_spec": "siliconflow-cn:Pro/BAAI/bge-m3",
+            "embedding_model_spec": default_embedding_model_spec(),
             "kb_type": "milvus",
             "additional_params": {},
         },
@@ -917,7 +878,7 @@ async def test_create_lightrag_knowledge_base_is_unsupported(test_client, admin_
         json={
             "name": db_name,
             "description": "Unsupported LightRAG knowledge base",
-            "embedding_model_spec": "siliconflow-cn:Pro/BAAI/bge-m3",
+            "embedding_model_spec": default_embedding_model_spec(),
             "kb_type": "lightrag",
             "additional_params": {},
         },

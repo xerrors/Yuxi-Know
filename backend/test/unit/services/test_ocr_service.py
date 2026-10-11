@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import pytest
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from test.support.sqlite import create_utc_sqlite_engine
 from yuxi.modules.system.options import ensure_options_in_db, update_option_value
 from yuxi.infrastructure.document_parsing.engines import ENGINE_SPECS
 import yuxi.modules.documents.service as ocr_service
@@ -13,7 +14,7 @@ from yuxi.modules.models.tables import ModelProvider
 
 @pytest_asyncio.fixture
 async def db_session():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    engine = create_utc_sqlite_engine()
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
     async with async_sessionmaker(engine, expire_on_commit=False)() as session:

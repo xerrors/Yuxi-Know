@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 from yuxi.modules.extensions.skills import draft as skill_draft
-from yuxi.modules.extensions.skills.package import copy_skill_tree_no_symlinks
+from yuxi.modules.extensions.skills.package import copy_skill_tree_no_symlinks, validated_shared_skill_parts
 from yuxi.modules.identity.models import User
 
 
@@ -152,3 +152,10 @@ async def test_zip_rejects_expanded_size_before_extract(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="展开后"):
         await skill_draft.create_uploaded_skill_draft(filename="skill.zip", file_bytes=data.getvalue(), operator=User(uid="owner"))
     assert not list((tmp_path / "skill_import_drafts").iterdir())
+
+
+@pytest.mark.parametrize("path", ["packages/other/" + "a" * 32, "packages/demo/../escape", "packages/demo/" + "A" * 32, "shared/other"])
+def test_content_reference_cannot_escape_own_skill(path):
+    """异常持久引用在访问文件前拒绝。"""
+    with pytest.raises(ValueError, match="来源目录非法"):
+        validated_shared_skill_parts("demo", path)

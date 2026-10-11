@@ -6,7 +6,9 @@ from yuxi.modules.documents.options import mineru_official_api_opts
 
 import pytest
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker
+
+from test.support.sqlite import create_utc_sqlite_engine
 
 from yuxi.modules.system import options
 from yuxi.infrastructure.postgres.base import Base
@@ -59,7 +61,7 @@ class FakeRedis:
 
 @pytest_asyncio.fixture
 async def db_session():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    engine = create_utc_sqlite_engine()
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
     async with async_sessionmaker(engine, expire_on_commit=False)() as session:

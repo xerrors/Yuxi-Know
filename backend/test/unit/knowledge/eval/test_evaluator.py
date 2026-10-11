@@ -1,8 +1,5 @@
-import os
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
-
-os.environ.setdefault("OPENAI_API_KEY", "test-key")
 
 from yuxi.modules.knowledge.evaluation import evaluator
 from yuxi.modules.knowledge.evaluation.evaluator import (

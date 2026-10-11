@@ -12,7 +12,13 @@ import pytest
 from PIL import Image
 
 from test.e2e.e2e_helpers import archive_public_thread, delete_agent, postgres_dsn
-from test.e2e.test_agent_lifecycle_e2e import OUTPUT, _agent, _message, _provider, output_text
+from test.e2e.e2e_helpers import (
+    DETERMINISTIC_OUTPUT as OUTPUT,
+    create_lifecycle_agent as _agent,
+    output_text,
+    public_message as _message,
+    register_replay_provider as _provider,
+)
 from test.live_api_cleanup import make_test_session_title
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.e2e, pytest.mark.slow, pytest.mark.timeout(180)]

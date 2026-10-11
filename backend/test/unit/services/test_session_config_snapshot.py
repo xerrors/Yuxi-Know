@@ -7,6 +7,7 @@ from fastapi import HTTPException
 
 from yuxi.modules.agents.runtime.agent_backends.chatbot.context import ChatBotContext
 from yuxi.modules.agents.services.input_config import resolve_agent_context_snapshot
+from yuxi.modules.models.providers.cache import model_cache
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
 
@@ -14,7 +15,7 @@ pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
 async def test_snapshot_keeps_defaults_and_resource_intent_without_runtime_identity(monkeypatch):
     """配置里伪造的身份被过滤，列表不会与定义共享可变对象。"""
     monkeypatch.setattr(
-        "yuxi.modules.agents.services.input_config.model_cache.get_model_info",
+        model_cache, "get_model_info",
         lambda spec: SimpleNamespace(model_type="chat"),
     )
     config = {"model": "test:model", "tools": ["read_file"], "skills": "all", "uid": "forged", "run_id": "forged"}
@@ -32,7 +33,7 @@ async def test_snapshot_keeps_defaults_and_resource_intent_without_runtime_ident
 
 async def test_snapshot_requires_resolvable_chat_model(monkeypatch):
     """空会话也在创建边界拒绝不存在的模型。"""
-    monkeypatch.setattr("yuxi.modules.agents.services.input_config.model_cache.get_model_info", lambda spec: None)
+    monkeypatch.setattr(model_cache, "get_model_info", lambda spec: None)
     with pytest.raises(HTTPException) as error:
         await resolve_agent_context_snapshot(
             None,

@@ -9,6 +9,26 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
+import pytest
+
+
+@pytest.fixture
+def fake_chunk_repository(monkeypatch):
+    """替换生成测试使用的知识 chunk 查询。"""
+
+    class FakeChunkRepository:
+        chunks = [make_chunk("anchor_chunk")]
+
+        async def list_by_kb_id(self, kb_id):
+            """按知识库筛选测试 chunk。"""
+            return [chunk for chunk in self.chunks if chunk.kb_id == kb_id]
+
+    monkeypatch.setattr(
+        "yuxi.modules.knowledge.repositories.chunks.KnowledgeChunkRepository",
+        FakeChunkRepository,
+    )
+    return FakeChunkRepository
+
 
 class FakeGenerationKnowledgeBase:
     def __init__(self, query_results=None):

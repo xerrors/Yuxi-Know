@@ -18,6 +18,8 @@ from yuxi.modules.models.providers.cache import model_cache
 
 MODEL_SPECS = [spec.strip() for spec in os.getenv("YUXI_REASONING_PROBE_MODELS", "").split(",") if spec.strip()]
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.mark.parametrize("spec", MODEL_SPECS or [None])
 @pytest.mark.asyncio

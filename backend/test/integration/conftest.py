@@ -40,6 +40,16 @@ SANDBOX_PROVISIONER_URL = os.getenv("SANDBOX_PROVISIONER_URL", "http://sandbox-p
 SANDBOX_PROVISIONER_TOKEN = os.getenv("SANDBOX_PROVISIONER_TOKEN", "")
 
 
+def _has_shared_integration_tests(request: pytest.FixtureRequest) -> bool:
+    """存在非自管测试时才触碰共享服务。"""
+    integration_root = Path(__file__).parent.resolve()
+    return any(
+        item.path.resolve().is_relative_to(integration_root)
+        and item.get_closest_marker("self_managed_resources") is None
+        for item in request.session.items
+    )
+
+
 @pytest.fixture(scope="session", autouse=True)
 def load_orm_models():
     """独立测试进程显式装配全部 ORM，避免依赖其他测试的导入顺序。"""
@@ -49,8 +59,8 @@ def load_orm_models():
 
 
 @pytest.fixture(scope="session", autouse=True)
-def ensure_live_api_schema():
-    if not ADMIN_LOGIN or not ADMIN_PASSWORD:
+def ensure_live_api_schema(request: pytest.FixtureRequest):
+    if not _has_shared_integration_tests(request) or not ADMIN_LOGIN or not ADMIN_PASSWORD:
         return
 
     async def verify_schema_version() -> None:
@@ -122,7 +132,11 @@ def admin_headers(admin_token: str) -> dict[str, str]:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def cleanup_test_knowledge_resources():
+def cleanup_test_knowledge_resources(request: pytest.FixtureRequest):
+    if not _has_shared_integration_tests(request):
+        yield
+        return
+
     async def run_cleanup() -> None:
         global _ADMIN_TOKEN_CACHE
 
@@ -181,10 +195,12 @@ def _cleanup_provisioned_sandboxes() -> None:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def cleanup_test_sandboxes():
-    _cleanup_provisioned_sandboxes()
+def cleanup_test_sandboxes(request: pytest.FixtureRequest):
+    if _has_shared_integration_tests(request):
+        _cleanup_provisioned_sandboxes()
     yield
-    _cleanup_provisioned_sandboxes()
+    if _has_shared_integration_tests(request):
+        _cleanup_provisioned_sandboxes()
 
 
 @pytest_asyncio.fixture(scope="function")
@@ -257,6 +273,7 @@ async def knowledge_base_resource(
     admin_headers: dict[str, str],
 ) -> AsyncGenerator[dict, None]:
     import time
+    from test.support.knowledge import default_embedding_model_spec
 
     unique_id = uuid.uuid4().hex
     timestamp = int(time.time() * 1000000)
@@ -269,7 +286,7 @@ async def knowledge_base_resource(
             json={
                 "name": db_name,
                 "description": "Pytest managed knowledge base",
-                "embedding_model_spec": "siliconflow-cn:Pro/BAAI/bge-m3",
+                "embedding_model_spec": default_embedding_model_spec(),
                 "kb_type": "milvus",
                 "additional_params": {},
             },

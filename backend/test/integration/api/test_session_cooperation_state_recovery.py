@@ -23,7 +23,7 @@ pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
 @pytest.fixture(scope="session", autouse=True)
 def cleanup_test_sandboxes():
-    """本文件只读 HTTP 状态与数据库记录，不创建沙盒。"""
+    """本测试只使用 HTTP 与 PostgreSQL 协作状态，不创建沙盒，跳过全局沙盒清理。"""
     yield
 
 

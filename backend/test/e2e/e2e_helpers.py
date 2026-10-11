@@ -9,12 +9,188 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import uuid
 
 import httpx
 import pytest
+from test.support.postgres import postgres_dsn as postgres_dsn
+from test.support.public_api import delete_agent as delete_agent
+from test.live_api_cleanup import make_test_session_title
 
 RUN_TIMEOUT_SECONDS = int(os.getenv("E2E_RUN_TIMEOUT_SECONDS", "240"))
 QUOTA_EXHAUSTED_MARKERS = ("Error code: 429", "Token Plan 用量上限")
+DETERMINISTIC_OUTPUT = "DETERMINISTIC_AGENT_E2E_OK"
+DETERMINISTIC_MODEL = "ci-replay:deterministic-chat"
+
+
+def output_text(items):
+    """从结果 Run 明确绑定的公开 item 读取正文。"""
+    return "".join(
+        part["text"]
+        for item in items
+        if item["type"] == "message"
+        for part in item["content"]
+        if part["type"] == "output_text"
+    )
+
+
+def public_message(text: str) -> dict:
+    """构建一条 Public 文字消息。"""
+    return {"role": "user", "content": [{"type": "input_text", "text": text}]}
+
+
+async def register_replay_provider(
+    client: httpx.AsyncClient,
+    headers: dict,
+    *,
+    base_url: str = "http://api:8765/v1",
+    provider_id: str = "ci-replay",
+) -> bool:
+    """注册确定性模型重放服务并返回当前测试是否创建了供应商。"""
+    response = await client.post(
+        "/api/system/model-providers",
+        headers=headers,
+        json={
+            "provider_id": provider_id,
+            "display_name": "CI deterministic replay",
+            "provider_type": "openai",
+            "base_url": base_url,
+            "api_key": "ci-replay-key",
+            "capabilities": ["chat"],
+            "enabled_models": [{"id": "deterministic-chat", "display_name": "Deterministic chat", "type": "chat", "source": "manual"}],
+            "is_enabled": True,
+        },
+    )
+    assert response.status_code == 200 or (
+        response.status_code == 400 and response.json().get("detail") == f"供应商 {provider_id} 已存在"
+    ), response.text
+
+    if response.status_code == 200:
+        await wait_model_provider_cache()
+        return True
+    return False
+
+
+async def create_lifecycle_agent(
+    client: httpx.AsyncClient,
+    headers: dict,
+    uid: str,
+    *,
+    tools: list[str] | None = None,
+    system_prompt_suffix: str = "",
+    slug_prefix: str = "ci-lifecycle-",
+    model_spec: str = DETERMINISTIC_MODEL,
+    summary_prompt: str | None = None,
+) -> str:
+    """创建含预加载技能且只向指定用户共享的测试 Agent。"""
+    slug = f"{slug_prefix}{uuid.uuid4().hex[:8]}"
+    response = await client.post(
+        "/api/agent",
+        headers=headers,
+        json={
+            "name": f"Lifecycle {slug[-8:]}",
+            "slug": slug,
+            "backend_id": "ChatbotAgent",
+            "description": "生命周期 E2E",
+            "config_json": {
+                "context": {
+                    "model": model_spec,
+                    "system_prompt": f"不要调用工具，只输出 {DETERMINISTIC_OUTPUT}。{system_prompt_suffix}",
+                    "tools": tools or [],
+                    "knowledges": [],
+                    "mcps": [],
+                    "skills": ["image-gen"],
+                    "preload_skills": ["image-gen"],
+                    **({"summary_prompt": summary_prompt} if summary_prompt else {}),
+                }
+            },
+            "visibility": "shared",
+            "share_config": {
+                "version": 2,
+                "read_scope": {"access_level": "user", "department_ids": [], "user_uids": [uid]},
+                "manage_scope": None,
+            },
+        },
+    )
+    assert response.status_code == 200, response.text
+    return slug
+
+
+async def wait_for_terminal_turn(client: httpx.AsyncClient, headers: dict, thread_id: str, turn_id: str) -> dict:
+    """以 Public 持久 Turn 快照等待终态。"""
+    for _ in range(150):
+        response = await client.get(f"/api/v1/agents/sessions/{thread_id}/turns/{turn_id}", headers=headers)
+        assert response.status_code == 200, response.text
+        turn = response.json()
+        if turn["status"] in {"completed", "failed", "cancelled"}:
+            return turn
+        await asyncio.sleep(0.2)
+    pytest.fail(f"Turn 未在 30 秒内终结: {turn_id}")
+
+
+async def create_public_agent(
+    client: httpx.AsyncClient,
+    headers: dict[str, str],
+    uid: str,
+    *,
+    slug_prefix: str,
+    expected_output: str,
+    name_prefix: str,
+    description: str,
+) -> str:
+    """创建只输出指定标记的临时 Public Agent。"""
+    default_response = await client.get("/api/agent/default", headers=headers)
+    assert default_response.status_code == 200, default_response.text
+    default_context = ((default_response.json().get("agent") or {}).get("config_json") or {}).get("context") or {}
+    slug = f"{slug_prefix}{uuid.uuid4().hex[:8]}"
+    context = {
+        "system_prompt": f"你是端到端测试专用智能体。不要调用任何工具，只输出 {expected_output}。",
+        "tools": [],
+        "knowledges": [],
+        "mcps": [],
+        "skills": [],
+    }
+    if default_context.get("model"):
+        context["model"] = default_context["model"]
+    response = await client.post(
+        "/api/agent",
+        json={
+            "name": f"{name_prefix} {slug[-8:]}",
+            "slug": slug,
+            "backend_id": "ChatbotAgent",
+            "visibility": "shared",
+            "description": description,
+            "config_json": {"context": context},
+            "share_config": {
+                "version": 2,
+                "read_scope": {"access_level": "user", "department_ids": [], "user_uids": [uid]},
+                "manage_scope": None,
+            },
+        },
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    assert (response.json().get("agent") or {}).get("slug") == slug
+    return slug
+
+
+async def create_public_thread(
+    client: httpx.AsyncClient,
+    headers: dict[str, str],
+    agent_slug: str,
+    *,
+    tag: str,
+) -> str:
+    """通过 Public API 创建独立测试 Thread。"""
+    response = await client.post(
+        "/api/v1/agents/sessions",
+        json={"agent_id": agent_slug, "title": make_test_session_title(tag)},
+        headers={**headers, "Idempotency-Key": f"{tag}-{uuid.uuid4().hex}"},
+    )
+    assert response.status_code == 201, response.text
+    thread_id = response.json()["id"]
+    assert thread_id, response.text
+    return str(thread_id)
 
 
 def skip_if_external_quota(payload: object) -> None:
@@ -27,15 +203,25 @@ def skip_if_external_quota(payload: object) -> None:
         pytest.skip(f"外部模型配额/限流（HTTP 429），跳过真实模型断言：{text[:120]}")
 
 
-def postgres_dsn() -> str:
-    return os.getenv("POSTGRES_URL", "postgresql+asyncpg://postgres:postgres@postgres:5432/yuxi").replace("+asyncpg", "")
-
-
 async def wait_model_provider_cache() -> None:
     """等待新测试供应商的跨进程缓存传播；不替代模型执行与持久结果验证。"""
     from yuxi.modules.models.providers.cache import _CACHE_TTL_SECONDS
 
     await asyncio.sleep(_CACHE_TTL_SECONDS + 0.1)
+
+
+async def cleanup_uploaded_chat_attachment(uid: str, file_id: str) -> None:
+    """删除测试上传附件的临时对象与 workspace 副本。"""
+    from yuxi.infrastructure.minio import get_minio_client
+    from yuxi.modules.workspace.filesystem import Workspace
+
+    minio = get_minio_client()
+    prefix = f"tmp/chat_attachments/{uid}/{file_id}"
+    await minio.adelete_objects_by_prefix(minio.KB_BUCKETS["documents"], prefix + "/")
+    try:
+        Workspace(uid).delete_authorized_path("/" + prefix, root="/")
+    except FileNotFoundError:
+        pass
 
 
 async def wait_for_consumed_input(client: httpx.AsyncClient, headers: dict, receipt: dict) -> dict:
@@ -52,17 +238,6 @@ async def wait_for_consumed_input(client: httpx.AsyncClient, headers: dict, rece
                 assert snapshot["run_id"] and snapshot["turn_id"] and snapshot["items"], snapshot
                 return {**snapshot, "session_id": session_id}
             await asyncio.sleep(0.1)
-
-
-async def delete_agent(client: httpx.AsyncClient, headers: dict[str, str], slug: str) -> None:
-    """等待终态 Run 的异步清理完成后删除测试智能体。"""
-    async with asyncio.timeout(30):
-        while True:
-            response = await client.delete(f"/api/agent/{slug}", headers=headers)
-            if response.status_code != 409 or response.json().get("detail") != "智能体仍有活跃执行或待处理输入":
-                assert response.status_code in {200, 404}, response.text
-                return
-            await asyncio.sleep(0.2)
 
 
 async def iter_public_thread_events(client: httpx.AsyncClient, headers: dict[str, str], thread_id: str):

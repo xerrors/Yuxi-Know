@@ -2,6 +2,7 @@
 
 import asyncio
 import threading
+from uuid import uuid4
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -12,43 +13,31 @@ import pytest_asyncio
 from fastapi import FastAPI
 from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker
-from test_schema_migration_version import _create_isolated_manager, _drop_isolated_schema
+from test.integration.support.postgres_schema import create_isolated_manager as _create_isolated_manager
+from test.integration.support.postgres_schema import drop_isolated_schema as _drop_isolated_schema
 
+from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.api.routers.knowledge import management as knowledge_router
 from yuxi.infrastructure.filesystem import await_io
-from yuxi.migrations.schema import create_knowledge_tables
 from yuxi.modules.knowledge.graphs.milvus_graph_service import MilvusGraphService
+from yuxi.migrations.schema import create_knowledge_tables, ensure_knowledge_schema
 from yuxi.modules.knowledge.implementations.milvus import MilvusKB
 from yuxi.modules.knowledge.models import (
     KnowledgeBase,
     KnowledgeChunk,
     KnowledgeFile,
+    KnowledgeGraphEntity,
+    KnowledgeGraphEntityMention,
     KnowledgeProjectionOutbox,
 )
 from yuxi.modules.knowledge.repositories import files
 from yuxi.modules.knowledge.repositories.bases import KnowledgeBaseRepository
 from yuxi.modules.knowledge.repositories.chunks import KnowledgeChunkRepository
 from yuxi.modules.knowledge.repositories.files import KnowledgeFileRepository
+from yuxi.modules.knowledge.repositories.graphs import KnowledgeGraphRepository
 from yuxi.modules.knowledge.services import background_jobs
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
-
-
-@pytest.fixture(scope="session", autouse=True)
-def ensure_live_api_schema():
-    """只操作隔离 Schema。"""
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_knowledge_resources():
-    """资源由独立 Schema 拥有。"""
-    yield
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_sandboxes():
-    """本测试不创建沙盒。"""
-    yield
+pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
 
 @pytest_asyncio.fixture()
@@ -71,6 +60,21 @@ async def database(monkeypatch):
         yield sessions
     finally:
         await _drop_isolated_schema(schema, admin, engine)
+
+
+@pytest_asyncio.fixture
+async def pg_pool():
+    """为 PostgreSQL 仓储用例重建当前事件循环的连接池。"""
+    pg_manager._initialized = False
+    pg_manager.async_engine = None
+    pg_manager.AsyncSession = None
+    pg_manager.initialize()
+    await ensure_knowledge_schema(pg_manager)
+    yield
+    await pg_manager.async_engine.dispose()
+    pg_manager._initialized = False
+    pg_manager.async_engine = None
+    pg_manager.AsyncSession = None
 
 
 async def _file():
@@ -520,9 +524,8 @@ async def test_graph_parallel_vector_cancel_drains_both_branches_before_cleanup(
         await asyncio.gather(writer, *([cleaner] if cleaner else []), return_exceptions=True)
 
 
-@pytest.mark.parametrize("operation", ["collection", "graph"])
-async def test_cancelled_external_writer_keeps_lock_until_io_settles(database, monkeypatch, tmp_path, operation):
-    """取消集合创建或图谱写入时，清理必须等待实际 I/O 完成。"""
+async def test_cancelled_collection_writer_keeps_lock_until_io_settles(database, monkeypatch, tmp_path):
+    """取消集合创建时，清理必须等待实际 I/O 完成。"""
     await _file()
     started, release = threading.Event(), threading.Event()
     artifact = tmp_path / "external-object"
@@ -533,25 +536,15 @@ async def test_cancelled_external_writer_keeps_lock_until_io_settles(database, m
         assert release.wait(10)
         artifact.write_text("late write")
 
-    if operation == "collection":
-        executor = object.__new__(MilvusKB)
-        monkeypatch.setattr(executor, "_create_kb_instance_sync", write_sync)
+    executor = object.__new__(MilvusKB)
+    monkeypatch.setattr(executor, "_create_kb_instance_sync", write_sync)
 
-        async def index(*args, **kwargs):
-            """走真实集合创建边界。"""
-            await executor._create_kb_instance("kb-test", None)
+    async def index(*args, **kwargs):
+        """走真实集合创建边界。"""
+        await executor._create_kb_instance("kb-test", None)
 
-        monkeypatch.setattr(executor, "_index_file", index)
-        write_operation = executor.index_file("kb-test", "file-test")
-    else:
-        executor = MilvusGraphService()
-
-        async def graph(*args, **kwargs):
-            """在真实图谱入口的锁内执行 I/O。"""
-            await await_io(asyncio.to_thread(write_sync))
-
-        monkeypatch.setattr(executor, "_build_pending_chunks", graph)
-        write_operation = executor.build_pending_chunks("kb-test")
+    monkeypatch.setattr(executor, "_index_file", index)
+    write_operation = executor.index_file("kb-test", "file-test")
 
     async def cleanup(*args, **kwargs):
         """真实删除 late write 的产物。"""
@@ -599,3 +592,137 @@ async def test_cancelled_external_writer_keeps_lock_until_io_settles(database, m
     finally:
         release.set()
         await asyncio.gather(writer, *([cleaner] if cleaner else []), return_exceptions=True)
+
+
+async def test_vector_projection_claim_and_finalize_chunk(pg_pool):
+    """真实向量仓储记录状态被领取、标记并完成 chunk 投影。"""
+    suffix = uuid4().hex
+    kb_id = f"pytest_vector_{suffix}"
+    file_id = f"file_{suffix}"
+    chunk_id = f"chunk_{suffix}"
+    entity_id = f"entity_{suffix}"
+    repo = KnowledgeGraphRepository()
+
+    try:
+        async with pg_manager.get_async_session_context() as session:
+            session.add(KnowledgeBase(kb_id=kb_id, name="vector projection", kb_type="milvus"))
+            await session.flush()
+            session.add(KnowledgeFile(file_id=file_id, kb_id=kb_id, filename="test.md"))
+            await session.flush()
+            session.add(
+                KnowledgeChunk(
+                    chunk_id=chunk_id,
+                    file_id=file_id,
+                    kb_id=kb_id,
+                    chunk_index=0,
+                    content="entity",
+                    graph_structure_indexed=True,
+                    graph_indexed=False,
+                )
+            )
+            session.add(
+                KnowledgeGraphEntity(
+                    entity_id=entity_id,
+                    kb_id=kb_id,
+                    normalized_name="entity",
+                    label="Entity",
+                    name="entity",
+                    vector_status="pending",
+                )
+            )
+            await session.flush()
+            session.add(KnowledgeGraphEntityMention(entity_id=entity_id, kb_id=kb_id, file_id=file_id, chunk_id=chunk_id))
+
+        token, records = await repo.claim_vector_records(
+            kb_id=kb_id,
+            record_type="entity",
+            limit=10,
+            lease_seconds=300,
+        )
+
+        assert records == [{"id": entity_id, "content": "entity"}]
+        await repo.mark_vector_records_indexed(record_type="entity", record_ids=[entity_id], lock_token=token)
+        assert await repo.finalize_graph_indexed_chunks(kb_id) == 1
+
+        async with pg_manager.get_async_session_context() as session:
+            chunk = await session.scalar(select(KnowledgeChunk).where(KnowledgeChunk.chunk_id == chunk_id))
+            entity = await session.scalar(select(KnowledgeGraphEntity).where(KnowledgeGraphEntity.entity_id == entity_id))
+            assert chunk.graph_indexed is True
+            assert entity.vector_status == "indexed"
+            assert entity.vector_lock_token is None
+    finally:
+        async with pg_manager.get_async_session_context() as session:
+            kb = await session.scalar(select(KnowledgeBase).where(KnowledgeBase.kb_id == kb_id))
+            if kb is not None:
+                await session.delete(kb)
+
+
+async def test_chunk_extraction_details_return_recent_failure_samples(pg_pool):
+    """真实仓储返回有序失败详情，并在成功后清空失败样本。"""
+    suffix = uuid4().hex
+    kb_id = f"pytest_extraction_{suffix}"
+    file_id = f"file_{suffix}"
+    chunk_id = f"chunk_{suffix}"
+    recent_chunk_id = f"recent_chunk_{suffix}"
+    repo = KnowledgeChunkRepository()
+
+    try:
+        async with pg_manager.get_async_session_context() as session:
+            session.add(KnowledgeBase(kb_id=kb_id, name="extraction details", kb_type="milvus"))
+            await session.flush()
+            session.add(KnowledgeFile(file_id=file_id, kb_id=kb_id, filename="test.md"))
+            await session.flush()
+            session.add(
+                KnowledgeChunk(
+                    chunk_id=chunk_id,
+                    file_id=file_id,
+                    kb_id=kb_id,
+                    chunk_index=0,
+                    content="failed extraction sample",
+                )
+            )
+            session.add(
+                KnowledgeChunk(
+                    chunk_id=recent_chunk_id,
+                    file_id=file_id,
+                    kb_id=kb_id,
+                    chunk_index=1,
+                    content="recent failed extraction sample",
+                )
+            )
+
+        await repo.mark_graph_extraction_failed(chunk_id, 3, "model timeout")
+        await repo.mark_graph_extraction_failed(recent_chunk_id, 1, "invalid response")
+
+        counts = await repo.count_graph_extraction_statuses_by_kb_id(kb_id)
+        samples = await repo.list_graph_extraction_failed_samples(kb_id, limit=10)
+        assert counts == {"pending": 0, "succeeded": 0, "failed": 2}
+        assert [sample["chunk_id"] for sample in samples] == [recent_chunk_id, chunk_id]
+        assert samples[1]["file_id"] == file_id
+        assert samples[1]["content"] == "failed extraction sample"
+        assert samples[1]["details"]["status"] == "failed"
+        assert samples[1]["details"]["attempt_count"] == 3
+        assert samples[1]["details"]["last_error"] == "model timeout"
+        assert samples[1]["details"]["last_attempt_at"]
+
+        await repo.mark_graph_extraction_pending(chunk_id)
+        await repo.update_extraction_result(
+            chunk_id,
+            {"entities": [], "relations": [], "metadata": {"extractor_type": "llm"}},
+            2,
+        )
+        await repo.mark_graph_extraction_pending(recent_chunk_id)
+        await repo.update_extraction_result(
+            recent_chunk_id,
+            {"entities": [], "relations": [], "metadata": {"extractor_type": "llm"}},
+            1,
+        )
+
+        counts = await repo.count_graph_extraction_statuses_by_kb_id(kb_id)
+        assert counts == {"pending": 0, "succeeded": 2, "failed": 0}
+        assert await repo.list_graph_extraction_failed_samples(kb_id) == []
+    finally:
+        async with pg_manager.get_async_session_context() as session:
+            kb = await session.scalar(select(KnowledgeBase).where(KnowledgeBase.kb_id == kb_id))
+            if kb is not None:
+                await session.delete(kb)

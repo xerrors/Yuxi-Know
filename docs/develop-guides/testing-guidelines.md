@@ -48,8 +48,9 @@ test_agent_bubble_sort_run_creates_expected_artifacts
 ## Fixture 和测试数据
 
 - 同一文件内复用的准备逻辑优先写本地 helper；多个文件需要时再放对应层级的 `conftest.py`。
-- `backend/test/conftest.py` 只保留通用 marker，不绑定真实服务。
+- 通用 marker 由 `backend/pyproject.toml` 注册；`backend/test/conftest.py` 只装配测试路径和插件，不绑定真实服务。
 - integration fixture 负责创建 `test_client`、测试用户和测试资源；不要依赖数据库里碰巧存在的 Agent、模型或知识库。
+- integration 默认执行共享 schema 检查和 API/沙盒清理。仅当用例不需要这些共享 session fixture，且自行创建并回收资源时，才可显式声明 `self_managed_resources` 豁免这些依赖；它不承诺独立数据库 schema。混合批次只要包含未标记用例，仍执行共享检查和清理。
 - E2E fixture 负责真实入口、账号和资源清理；测试结束后删除自己创建的对话、文件、Run 和外部对象。
 - 不在测试或文档中写真实账号、密码、Token、用户数据和本地绝对路径。
 
@@ -83,13 +84,14 @@ docker compose ps
 docker compose logs --tail=100 api
 ```
 
-后端：
+后端按 unit、integration/api、其余 integration 子树、E2E 分批运行。各套件的模块和 helper 按当前目录加载；脚本的 `integration` 与 `all` 同样分批执行，保持完整选择范围。
 
 ```bash
 docker compose exec api uv run --group test pytest test/unit -m "not slow"
-docker compose exec api uv run --group test pytest test/integration
+docker compose exec api uv run --group test pytest test/integration/api
+docker compose exec api uv run --group test pytest test/integration --ignore=test/integration/api
 backend/test/run_tests.sh e2e
-docker compose exec api uv run --group test pytest test
+backend/test/run_tests.sh all
 ```
 
 也可以从仓库根目录使用脚本：

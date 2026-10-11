@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from test.unit.support.knowledge import FakeKnowledgeBase
 
 
 @pytest.mark.unit
@@ -55,44 +56,8 @@ class TestAddFileRecordSizeFallback:
     """Test that add_file_record fills size from MinIO when not provided."""
 
     def _make_test_kb(self, work_dir="/tmp/test_kb"):
-        from yuxi.modules.knowledge.base import KnowledgeBase
-
-        class TestKB(KnowledgeBase):
-            @property
-            def kb_type(self):
-                return "test"
-
-            async def _create_kb_instance(self, kb_id, embedding_model_spec: str | None):
-                pass
-
-            async def _initialize_kb_instance(self, instance):
-                pass
-
-            async def _persist_file_meta(self, file_id, meta):
-                pass
-
-            async def index_file(self, kb_id, file_id, operator_id=None):
-                return {}
-
-            async def aquery(self, query_text, kb_id, **kwargs):
-                return []
-
-            async def delete_file(self, kb_id, file_id):
-                pass
-
-            async def get_file_basic_info(self, kb_id, file_id):
-                return {}
-
-            async def get_file_content(self, kb_id, file_id):
-                return {}
-
-            async def get_file_info(self, kb_id, file_id):
-                return {}
-
-            async def get_query_params_config(self, kb_id, **kwargs):
-                return {"type": "test", "options": []}
-
-        kb = TestKB(work_dir=work_dir)
+        kb = FakeKnowledgeBase(work_dir=work_dir)
+        kb._persist_file_meta = AsyncMock()
         return kb
 
     @pytest.mark.asyncio

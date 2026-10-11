@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-import os
 from urllib.parse import unquote
 
 import pytest
 import pytest_asyncio
 from fastapi import HTTPException
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
-os.environ.setdefault("OPENAI_API_KEY", "dummy")
-
+from test.support.sqlite import create_utc_sqlite_engine
 import yuxi.modules.identity.oidc as oidc_service
 from yuxi.api.routers.identity.oidc import oidc_callback_handler
 from yuxi.modules.identity.models import User
@@ -18,9 +16,15 @@ from yuxi.modules.identity.models import User
 pytestmark = [pytest.mark.asyncio, pytest.mark.unit]
 
 
+@pytest.fixture(autouse=True)
+def _isolated_openai_api_key(monkeypatch: pytest.MonkeyPatch):
+    """模型客户端的占位凭据只作用于当前 OIDC 测试。"""
+    monkeypatch.setenv("OPENAI_API_KEY", "dummy")
+
+
 @pytest_asyncio.fixture
 async def oidc_session():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    engine = create_utc_sqlite_engine()
     async with engine.begin() as conn:
         await conn.run_sync(User.__table__.create)
 

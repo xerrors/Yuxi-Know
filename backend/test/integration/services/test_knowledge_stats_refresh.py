@@ -23,24 +23,7 @@ from yuxi.modules.knowledge.models import KnowledgeBase, KnowledgeChunk, Knowled
 from yuxi.infrastructure.redis import close_async_redis_client, get_async_redis_client
 import yuxi.api.routers.knowledge.management as knowledge_router
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
-
-
-@pytest.fixture(scope="session", autouse=True)
-def ensure_live_api_schema():
-    """只使用独立 Schema。"""
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_knowledge_resources():
-    """测试资源由局部 fixture 清理。"""
-    yield
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_sandboxes():
-    """本测试不创建沙盒。"""
-    yield
+pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
 
 @pytest.fixture
@@ -164,44 +147,6 @@ async def test_refresh_queries_after_acquiring_row_lock(stats_store, tmp_path):
     assert result["pending_index_count"] == 0
     row = await KnowledgeBaseRepository().get_by_kb_id(kb_id)
     assert row.additional_params["stats"] == result
-
-
-async def test_retired_stats_repair_route_cannot_mutate_persisted_facts(stats_store):
-    """退役的统计修复入口返回 404，保留知识库事实与读缓存。"""
-    kb_id, sessions, redis = stats_store
-    cached = await KnowledgeFileRepository().get_kb_file_stats(kb_id)
-    await redis.expire(f"yuxi:kb_file_stats:{kb_id}", 300)
-    async with sessions.begin() as session:
-        row = (await session.execute(select(KnowledgeFile))).scalar_one()
-        row.status = "indexed"
-        row.file_size = 5
-        session.add(KnowledgeChunk(kb_id=kb_id, file_id=kb_id, chunk_id=kb_id, chunk_index=0, content="hello"))
-    app = FastAPI()
-    app.include_router(knowledge_router.knowledge, prefix="/api")
-    with socket.socket() as listener:
-        listener.bind(("127.0.0.1", 0))
-        server = uvicorn.Server(uvicorn.Config(app, lifespan="off", log_level="error"))
-        serving = asyncio.create_task(server.serve(sockets=[listener]))
-        try:
-            async with asyncio.timeout(10):
-                while not server.started:
-                    if serving.done():
-                        serving.result()
-                    await asyncio.sleep(0.01)
-            async with httpx.AsyncClient(base_url=f"http://127.0.0.1:{listener.getsockname()[1]}") as client:
-                response = await client.post(f"/api/knowledge/knowledge-bases/{kb_id}/stats/repair")
-            assert response.status_code == 404, response.text
-        finally:
-            server.should_exit = True
-            await asyncio.wait_for(serving, timeout=10)
-    row = await KnowledgeBaseRepository().get_by_kb_id(kb_id)
-    file = await KnowledgeFileRepository().get_by_file_id(kb_id)
-    assert row.additional_params == {"keep": True}
-    assert file.status == "indexed"
-    assert file.file_size == 5
-    assert file.chunk_count == 0
-    assert file.token_count == 0
-    assert await KnowledgeFileRepository().get_kb_file_stats(kb_id) == cached
 
 
 async def test_knowledge_base_list_returns_fresh_persisted_stats(stats_store, tmp_path, monkeypatch):

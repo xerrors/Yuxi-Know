@@ -9,6 +9,8 @@ import uuid
 
 import pytest
 
+from test.support.knowledge import default_embedding_model_spec
+
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
 
@@ -54,7 +56,7 @@ async def test_enqueue_document_creates_job(
         json={
             "name": f"pytest_job_router_{uuid.uuid4().hex[:8]}",
             "description": "Job router integration test",
-            "embedding_model_spec": "siliconflow-cn:Pro/BAAI/bge-m3",
+            "embedding_model_spec": default_embedding_model_spec(),
             "kb_type": "milvus",
             "additional_params": {},
         },
@@ -222,14 +224,3 @@ async def test_job_api_has_no_public_status_reporting(test_client, admin_headers
     for path in ("/api/background-jobs", "/api/background-jobs/job-id/progress", "/api/background-jobs/job-id/finish"):
         response = await test_client.post(path, headers=admin_headers, json={"status": "success", "progress": 100})
         assert response.status_code in {404, 405}, response.text
-
-
-async def test_retired_task_routes_are_not_registered(test_client, admin_headers):
-    """旧任务接口不能继续提供后台作业别名。"""
-    for method, path in (
-        ("GET", "/api/tasks"),
-        ("GET", "/api/tasks/retired-id"),
-        ("POST", "/api/tasks/retired-id/cancel"),
-    ):
-        response = await test_client.request(method, path, headers=admin_headers)
-        assert response.status_code == 404

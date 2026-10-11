@@ -11,10 +11,19 @@ import httpx
 import pytest
 from PIL import Image
 
-from test.e2e.e2e_helpers import archive_public_thread, delete_agent, postgres_dsn
-from test.e2e.test_agent_lifecycle_e2e import OUTPUT, _agent, _message, _provider, _turn, output_text
+from test.e2e.e2e_helpers import (
+    DETERMINISTIC_OUTPUT as OUTPUT,
+    archive_public_thread,
+    cleanup_uploaded_chat_attachment,
+    create_lifecycle_agent as _agent,
+    delete_agent,
+    output_text,
+    postgres_dsn,
+    public_message as _message,
+    register_replay_provider as _provider,
+    wait_for_terminal_turn as _turn,
+)
 from test.live_api_cleanup import make_test_session_title
-from yuxi.infrastructure.minio import get_minio_client
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.e2e, pytest.mark.slow, pytest.mark.timeout(240)]
 
@@ -172,6 +181,5 @@ async def test_draft_initial_send_queue_cancel_and_model_attachment_isolation(e2
                 await archive_public_thread(e2e_client, e2e_headers, second_session)
             await conn.close()
             await delete_agent(e2e_client, e2e_headers, slug)
-            minio = get_minio_client()
             for file in files:
-                await minio.adelete_objects_by_prefix(minio.KB_BUCKETS["documents"], f"tmp/chat_attachments/{uid}/{file['id']}/")
+                await cleanup_uploaded_chat_attachment(uid, file["id"])

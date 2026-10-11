@@ -1,10 +1,8 @@
 from copy import deepcopy
-import os
 import re
-from pathlib import Path
 
 import pytest
-import yaml
+from test.unit.config._shared import load_compose, project_root
 
 
 FORBIDDEN_API_WORKER_TARGETS = frozenset({"/app/checkpoints", "/app/models", "/app/saves", "/var/run/docker.sock"})
@@ -48,22 +46,6 @@ WORKSPACE_PERMISSION_OWNER_PATHS = (
     "docker/sandbox_provisioner/app.py",
 )
 LEGACY_WORKSPACE_PERMISSION_MARKERS = frozenset({"0o777", "0o666", "chmod a+rwx", "_ensure_user_data_writable", "_chmod_writable"})
-
-
-def _project_root() -> Path:
-    """定位包含 Compose 文件的仓库根目录。"""
-    configured = os.environ.get("YUXI_PROJECT_ROOT")
-    if configured:
-        return Path(configured)
-
-    for parent in Path(__file__).resolve().parents:
-        if (parent / "docker-compose.yml").exists():
-            return parent
-    pytest.skip("当前测试环境未挂载仓库根目录")
-
-
-def _load_compose(filename: str) -> dict:
-    return yaml.safe_load((_project_root() / filename).read_text())
 
 
 def _volume_target(volume: object) -> str:
@@ -130,13 +112,13 @@ def _legacy_workspace_permission_markers(source: str) -> set[str]:
 @pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
 def test_api_and_worker_do_not_mount_unused_host_dependencies(filename: str):
     """API/worker 不得重新依赖模型目录或 Docker daemon。"""
-    assert _forbidden_api_worker_mounts(_load_compose(filename)) == set()
+    assert _forbidden_api_worker_mounts(load_compose(filename)) == set()
 
 
 @pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
 def test_api_worker_and_provisioner_use_explicit_storage_domains(filename: str):
     """shipping 服务不得通过广域 saves 重新获得未声明的文件能力。"""
-    compose = _load_compose(filename)
+    compose = load_compose(filename)
     for service_name in ("api", "worker"):
         targets = {_volume_target(volume) for volume in compose["services"][service_name].get("volumes") or []}
         assert REQUIRED_STORAGE_TARGETS[service_name] <= targets
@@ -151,7 +133,7 @@ def test_api_worker_and_provisioner_use_explicit_storage_domains(filename: str):
 @pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
 def test_api_and_worker_use_role_specific_redis_connection_capacity(filename: str) -> None:
     """API 与 worker 独立核算 Redis 客户端连接池。"""
-    services = _load_compose(filename)["services"]
+    services = load_compose(filename)["services"]
 
     for service_name, expected in EXPECTED_REDIS_CONNECTION_CAPACITY.items():
         assert services[service_name]["environment"]["REDIS_MAX_CONNECTIONS"] == expected
@@ -160,7 +142,7 @@ def test_api_and_worker_use_role_specific_redis_connection_capacity(filename: st
 @pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
 def test_default_agent_capacity_supports_one_hundred_concurrent_runs(filename: str) -> None:
     """单 worker 的默认执行槽与相关连接池必须作为一组维护。"""
-    services = _load_compose(filename)["services"]
+    services = load_compose(filename)["services"]
 
     for service_name, expected_environment in EXPECTED_AGENT_CAPACITY.items():
         environment = services[service_name]["environment"]
@@ -177,7 +159,7 @@ def test_default_agent_capacity_supports_one_hundred_concurrent_runs(filename: s
 @pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
 def test_sandbox_provisioner_exposes_resource_limit_environment(filename: str) -> None:
     """单沙盒资源上界必须可由部署覆盖，缺失即回退到无上界创建。"""
-    environment = _load_compose(filename)["services"]["sandbox-provisioner"]["environment"]
+    environment = load_compose(filename)["services"]["sandbox-provisioner"]["environment"]
 
     assert "SANDBOX_MEM_LIMIT=${SANDBOX_MEM_LIMIT:-2g}" in environment
     assert "SANDBOX_CPUS=${SANDBOX_CPUS:-2}" in environment
@@ -187,7 +169,7 @@ def test_sandbox_provisioner_exposes_resource_limit_environment(filename: str) -
 @pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
 def test_milvus_suite_has_log_rotation_and_cpus_bound(filename: str) -> None:
     """milvus/etcd 日志轮转封顶；milvus 只保留 cpus 上界；不保留无效日志级别配置。"""
-    services = _load_compose(filename)["services"]
+    services = load_compose(filename)["services"]
 
     for service_name in ("milvus", "etcd"):
         logging_config = services[service_name]["logging"]
@@ -203,7 +185,7 @@ def test_milvus_suite_has_log_rotation_and_cpus_bound(filename: str) -> None:
 @pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
 def test_worker_user_data_mount_is_writable_for_personal_skill_install(filename: str) -> None:
     """worker 需要在主 Agent 工具调用中原子安装个人 Skill。"""
-    volumes = _load_compose(filename)["services"]["worker"].get("volumes") or []
+    volumes = load_compose(filename)["services"]["worker"].get("volumes") or []
     user_data_mount = next(volume for volume in volumes if _volume_target(volume) == "/app/user-data")
 
     assert _volume_is_read_only(user_data_mount) is False
@@ -212,7 +194,7 @@ def test_worker_user_data_mount_is_writable_for_personal_skill_install(filename:
 @pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
 def test_workspace_consumers_use_fixed_runtime_identity_after_root_migration(filename: str) -> None:
     """文件 consumer 和 Schema 初始化进程均使用镜像的非 root 身份。"""
-    services = _load_compose(filename)["services"]
+    services = load_compose(filename)["services"]
 
     assert services["api"]["user"] == "1000:1000"
     assert services["worker"]["user"] == "1000:1000"
@@ -221,7 +203,7 @@ def test_workspace_consumers_use_fixed_runtime_identity_after_root_migration(fil
 
 def test_api_image_applies_owner_only_umask_before_dropping_to_runtime_identity() -> None:
     """镜像身份与 umask 必须由 shipping 入口显式拥有。"""
-    root = _project_root()
+    root = project_root()
     dockerfile = (root / "docker/api.Dockerfile").read_text()
     entrypoint = (root / "docker/api-entrypoint.sh").read_text()
 
@@ -233,7 +215,7 @@ def test_api_image_applies_owner_only_umask_before_dropping_to_runtime_identity(
 
 def test_workspace_owners_do_not_reintroduce_cross_uid_permission_patches() -> None:
     """运行时 Owner 不得重新承担部署身份兼容。"""
-    source = "\n".join((_project_root() / path).read_text() for path in WORKSPACE_PERMISSION_OWNER_PATHS)
+    source = "\n".join((project_root() / path).read_text() for path in WORKSPACE_PERMISSION_OWNER_PATHS)
 
     assert _legacy_workspace_permission_markers(source) == set()
 
@@ -246,7 +228,7 @@ def test_workspace_permission_guard_detects_reintroduced_world_writable_mode() -
 @pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
 def test_schema_initializer_gates_every_shipping_file_consumer(filename: str) -> None:
     """文件 consumer 只能在 Schema 初始化成功后启动。"""
-    compose = _load_compose(filename)
+    compose = load_compose(filename)
     for service_name in ("api", "worker", "sandbox-provisioner"):
         dependency = compose["services"][service_name]["depends_on"]["schema-init"]
         assert dependency["condition"] == "service_completed_successfully"
@@ -267,7 +249,7 @@ def test_schema_initializer_gates_every_shipping_file_consumer(filename: str) ->
 
 def test_runtime_processes_only_validate_schema_version() -> None:
     """API 与 worker 不得重新取得建表、DDL 收敛或 checkpoint setup ownership。"""
-    root = _project_root()
+    root = project_root()
     migration_source = (root / "backend/yuxi/migrations/main.py").read_text()
     runtime_sources = {
         "api": (root / "backend/yuxi/bootstrap/api.py").read_text(),
@@ -290,13 +272,13 @@ def test_runtime_processes_only_validate_schema_version() -> None:
 @pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
 def test_api_and_worker_do_not_expose_removed_docker_api_configuration(filename: str):
     """API/worker 不得保留已删除 Docker daemon 通道的配置表面。"""
-    assert _forbidden_api_worker_env_keys(_load_compose(filename)) == set()
+    assert _forbidden_api_worker_env_keys(load_compose(filename)) == set()
 
 
 @pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
 def test_api_and_worker_use_distinct_local_runtime_directories(filename: str):
     """日志与无状态缓存必须使用服务独立且位于 saves 外的运行目录。"""
-    compose = _load_compose(filename)
+    compose = load_compose(filename)
 
     assert _runtime_directory_violations(compose) == set()
     assert len(set(EXPECTED_RUNTIME_DIRS.values())) == len(EXPECTED_RUNTIME_DIRS)
@@ -306,7 +288,7 @@ def test_api_and_worker_use_distinct_local_runtime_directories(filename: str):
 @pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
 def test_docker_provisioner_keeps_required_docker_socket(filename: str):
     """Docker provisioner 仍需拥有创建动态 sandbox 的 Docker socket。"""
-    compose = _load_compose(filename)
+    compose = load_compose(filename)
     volumes = compose["services"]["sandbox-provisioner"].get("volumes") or []
 
     assert "/var/run/docker.sock" in {_volume_target(volume) for volume in volumes}
@@ -315,7 +297,7 @@ def test_docker_provisioner_keeps_required_docker_socket(filename: str):
 @pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
 def test_docker_provisioner_exposes_bounded_container_stop_timeout(filename: str):
     """Docker Sandbox 的优雅停止等待必须由 provisioner 部署配置拥有。"""
-    compose = _load_compose(filename)
+    compose = load_compose(filename)
     environment = compose["services"]["sandbox-provisioner"].get("environment") or []
 
     assert f"SANDBOX_CONTAINER_STOP_TIMEOUT_SECONDS={EXPECTED_SANDBOX_STOP_TIMEOUT}" in environment
@@ -323,7 +305,7 @@ def test_docker_provisioner_exposes_bounded_container_stop_timeout(filename: str
 
 def test_integration_cleanup_does_not_bypass_sandbox_provisioner():
     """集成测试清理不得要求 API 容器直接访问 Docker daemon。"""
-    source = "\n".join((_project_root() / path).read_text() for path in SANDBOX_CLEANUP_OWNER_PATHS)
+    source = "\n".join((project_root() / path).read_text() for path in SANDBOX_CLEANUP_OWNER_PATHS)
 
     assert _forbidden_direct_docker_access(source) == set()
 
@@ -342,7 +324,7 @@ def test_mount_guard_detects_reintroduced_api_worker_host_dependencies(
     expected_target: str,
 ):
     """恢复已删除挂载时，边界 guard 必须在正确目标上失败。"""
-    compose = deepcopy(_load_compose("docker-compose.yml"))
+    compose = deepcopy(load_compose("docker-compose.yml"))
     compose["services"][service_name].setdefault("volumes", []).append(mount)
 
     assert _forbidden_api_worker_mounts(compose) == {(service_name, expected_target)}
@@ -350,7 +332,7 @@ def test_mount_guard_detects_reintroduced_api_worker_host_dependencies(
 
 def test_environment_guard_detects_reintroduced_docker_api_configuration():
     """恢复旧 Docker API 环境变量时，边界 guard 必须报告对应服务。"""
-    compose = deepcopy(_load_compose("docker-compose.yml"))
+    compose = deepcopy(load_compose("docker-compose.yml"))
     compose["services"]["api"]["environment"]["YUXI_DOCKER_API_BASE"] = "http://localhost"
 
     assert _forbidden_api_worker_env_keys(compose) == {("api", "YUXI_DOCKER_API_BASE")}
@@ -359,7 +341,7 @@ def test_environment_guard_detects_reintroduced_docker_api_configuration():
 @pytest.mark.parametrize("service_name", ["api", "worker"])
 def test_runtime_directory_guard_detects_shared_save_directory(service_name: str):
     """把运行目录恢复到共享 saves 时，边界 guard 必须报告对应服务。"""
-    compose = deepcopy(_load_compose("docker-compose.yml"))
+    compose = deepcopy(load_compose("docker-compose.yml"))
     compose["services"][service_name]["environment"]["YUXI_RUNTIME_DIR"] = "/app/saves/runtime"
 
     assert _runtime_directory_violations(compose) == {(service_name, "/app/saves/runtime")}
@@ -369,3 +351,20 @@ def test_runtime_directory_guard_detects_shared_save_directory(service_name: str
 def test_cleanup_guard_detects_reintroduced_direct_docker_access(marker: str):
     """恢复 Docker socket 清理路径时，边界 guard 必须报告对应标记。"""
     assert _forbidden_direct_docker_access(f"cleanup command: {marker}") == {marker}
+
+
+def _maps_mjs_to_javascript_mime(source: str) -> bool:
+    """检测 nginx 配置是否为 .mjs 声明 JavaScript MIME。"""
+    return re.search(r"application/javascript\s+mjs\s*;", source) is not None
+
+
+def test_nginx_maps_mjs_to_javascript_mime():
+    """模块 Worker 脚本必须以 JavaScript MIME 提供。"""
+    source = (project_root() / "docker" / "nginx" / "nginx.conf").read_text()
+
+    assert _maps_mjs_to_javascript_mime(source)
+
+
+def test_mime_guard_detects_missing_mjs_mapping():
+    """删除 .mjs 映射后部署契约 guard 必须失败。"""
+    assert _maps_mjs_to_javascript_mime("types { application/javascript js; }") is False

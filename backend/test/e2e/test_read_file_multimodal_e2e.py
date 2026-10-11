@@ -10,8 +10,8 @@ import pytest
 from PIL import Image, ImageDraw, ImageFont
 
 from e2e_helpers import delete_agent
-from test.e2e.test_agent_lifecycle_e2e import output_text
-from test.live_api_cleanup import make_test_session_title
+from test.e2e.e2e_helpers import create_public_thread
+from test.e2e.e2e_helpers import output_text
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.e2e, pytest.mark.slow]
 
@@ -40,7 +40,8 @@ async def _create_agent(
                 "context": {
                     "model": model,
                     "system_prompt": (
-                        "你是 read_file 端到端测试智能体。用户要求读取附件时，必须先调用 read_file，不得根据文件名猜测内容。严格按用户指定格式回答。"
+                        "你是 read_file 端到端测试智能体。用户要求读取附件时，必须先调用 read_file，"
+                        "不得根据文件名猜测内容。严格按用户指定格式回答。"
                     ),
                     "tools": [],
                     "knowledges": [],
@@ -59,20 +60,6 @@ async def _create_agent(
     )
     assert response.status_code == 200, response.text
     return slug
-
-
-async def _create_thread(client: httpx.AsyncClient, headers: dict[str, str], agent_slug: str) -> str:
-    """建立可由 E2E 清理器识别的 Public Thread。"""
-    response = await client.post(
-        "/api/v1/agents/sessions",
-        json={
-            "agent_id": agent_slug,
-            "title": make_test_session_title("read-file-e2e"),
-        },
-        headers={**headers, "Idempotency-Key": f"read-file-create-{uuid.uuid4().hex}"},
-    )
-    assert response.status_code == 201, response.text
-    return str(response.json()["id"])
 
 
 async def _upload(
@@ -191,7 +178,7 @@ async def test_read_file_image_and_document_real_agent_runs(
     try:
         image_path = tmp_path / "shape.png"
         _write_test_image(image_path)
-        image_thread = await _create_thread(e2e_client, e2e_headers, slug)
+        image_thread = await create_public_thread(e2e_client, e2e_headers, slug, tag="read-file-e2e")
         thread_ids.append(image_thread)
         image_file_id = await _upload(e2e_client, e2e_headers, thread_id=image_thread, file_path=image_path)
         image_output = await _run(
@@ -205,7 +192,7 @@ async def test_read_file_image_and_document_real_agent_runs(
 
         document_path = tmp_path / "sample.pdf"
         document_path.write_bytes(b"%PDF-1.4\n% read_file boundary test\n")
-        document_thread = await _create_thread(e2e_client, e2e_headers, slug)
+        document_thread = await create_public_thread(e2e_client, e2e_headers, slug, tag="read-file-e2e")
         thread_ids.append(document_thread)
         document_file_id = await _upload(
             e2e_client,
@@ -247,7 +234,7 @@ async def test_non_vision_model_uses_ocr_fallback(
     try:
         image_path = tmp_path / "ocr-text.png"
         _write_ocr_test_image(image_path)
-        thread_id = await _create_thread(e2e_client, e2e_headers, slug)
+        thread_id = await create_public_thread(e2e_client, e2e_headers, slug, tag="read-file-e2e")
         image_file_id = await _upload(e2e_client, e2e_headers, thread_id=thread_id, file_path=image_path)
         output = await _run(
             e2e_client,

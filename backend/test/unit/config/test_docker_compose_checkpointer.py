@@ -1,46 +1,32 @@
-import os
 from pathlib import Path
 import stat
 import subprocess
 
 import pytest
 import yaml
+from test.unit.config._shared import load_compose, project_root
 
 
-def _project_root() -> Path:
-    """定位包含 Compose 文件的仓库根目录。"""
-    configured = os.environ.get("YUXI_PROJECT_ROOT")
-    if configured:
-        return Path(configured)
-
-    for parent in Path(__file__).resolve().parents:
-        if (parent / "docker-compose.yml").exists():
-            return parent
-    pytest.skip("当前测试环境未挂载仓库根目录")
-
-
-def test_compose_does_not_expose_checkpoint_backend_or_local_storage():
+@pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
+def test_compose_does_not_expose_checkpoint_backend_or_local_storage(filename):
     """LangGraph checkpoint 固定使用 PostgreSQL，不保留本地后端配置面。"""
-    project_root = _project_root()
-    for filename in ("docker-compose.yml", "docker-compose.prod.yml"):
-        compose = yaml.safe_load((project_root / filename).read_text())
-        assert "LANGGRAPH_CHECKPOINTER_BACKEND" not in compose["x-api-worker-env"]
-        assert "YUXI_CHECKPOINT_DIR" not in compose["x-api-worker-env"]
+    compose = load_compose(filename)
+    assert "LANGGRAPH_CHECKPOINTER_BACKEND" not in compose["x-api-worker-env"]
+    assert "YUXI_CHECKPOINT_DIR" not in compose["x-api-worker-env"]
 
 
-def test_api_key_derivation_secret_is_required_for_api_and_worker():
-    project_root = _project_root()
-    for filename in ("docker-compose.yml", "docker-compose.prod.yml"):
-        compose = yaml.safe_load((project_root / filename).read_text())
-        configured = compose["x-api-worker-env"]["API_KEY_DERIVATION_SECRET"]
+@pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
+def test_api_key_derivation_secret_is_required_for_api_and_worker(filename):
+    compose = load_compose(filename)
+    configured = compose["x-api-worker-env"]["API_KEY_DERIVATION_SECRET"]
 
-        assert configured.startswith("${API_KEY_DERIVATION_SECRET:?")
+    assert configured.startswith("${API_KEY_DERIVATION_SECRET:?")
 
 
 def test_initialization_scripts_enforce_security_secret_contract():
-    project_root = _project_root()
-    shell_script = project_root / "scripts/init.sh"
-    powershell_script = (project_root / "scripts/init.ps1").read_text()
+    root = project_root()
+    shell_script = root / "scripts/init.sh"
+    powershell_script = (root / "scripts/init.ps1").read_text()
 
     assert shell_script.stat().st_mode & stat.S_IXUSR
     assert "--validate-security-env" in shell_script.read_text()
@@ -61,7 +47,7 @@ def test_initialization_scripts_enforce_security_secret_contract():
     ],
 )
 def test_shell_initialization_validation_rejects_short_reused_or_padded_secrets(tmp_path: Path, overrides: dict):
-    project_root = _project_root()
+    root = project_root()
     values = {
         "JWT_SECRET_KEY": "jwt-secret-value-that-is-at-least-32-characters",
         "API_KEY_DERIVATION_SECRET": "api-secret-value-that-is-at-least-32-characters",
@@ -71,7 +57,7 @@ def test_shell_initialization_validation_rejects_short_reused_or_padded_secrets(
     (tmp_path / ".env").write_text("".join(f"{name}={value}\n" for name, value in values.items()))
 
     completed = subprocess.run(
-        ["bash", str(project_root / "scripts/init.sh"), "--validate-security-env"],
+        ["bash", str(root / "scripts/init.sh"), "--validate-security-env"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -82,7 +68,7 @@ def test_shell_initialization_validation_rejects_short_reused_or_padded_secrets(
 
 
 def test_shell_initialization_validation_accepts_distinct_strong_secrets(tmp_path: Path):
-    project_root = _project_root()
+    root = project_root()
     (tmp_path / ".env").write_text(
         "JWT_SECRET_KEY=jwt-secret-value-that-is-at-least-32-characters\n"
         "API_KEY_DERIVATION_SECRET=api-secret-value-that-is-at-least-32-characters\n"
@@ -90,7 +76,7 @@ def test_shell_initialization_validation_accepts_distinct_strong_secrets(tmp_pat
     )
 
     completed = subprocess.run(
-        ["bash", str(project_root / "scripts/init.sh"), "--validate-security-env"],
+        ["bash", str(root / "scripts/init.sh"), "--validate-security-env"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -101,8 +87,8 @@ def test_shell_initialization_validation_accepts_distinct_strong_secrets(tmp_pat
 
 
 def test_backend_unit_workflow_runs_for_initialization_contract_changes():
-    project_root = _project_root()
-    workflow = yaml.load((project_root / ".github/workflows/test.yml").read_text(), Loader=yaml.BaseLoader)
+    root = project_root()
+    workflow = yaml.load((root / ".github/workflows/test.yml").read_text(), Loader=yaml.BaseLoader)
 
     for event in ("pull_request", "push"):
         paths = workflow["on"][event]["paths"]
@@ -112,42 +98,39 @@ def test_backend_unit_workflow_runs_for_initialization_contract_changes():
         assert "scripts/test_init_security.ps1" in paths
 
 
-def test_api_healthcheck_uses_readiness_in_development_and_production():
+@pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
+def test_api_healthcheck_uses_readiness_in_development_and_production(filename):
     """Compose 调度只能在核心依赖就绪后把 API 标记为 healthy。"""
-    project_root = _project_root()
-    for filename in ("docker-compose.yml", "docker-compose.prod.yml"):
-        compose = yaml.safe_load((project_root / filename).read_text())
+    compose = load_compose(filename)
 
-        assert compose["services"]["api"]["healthcheck"]["test"] == [
-            "CMD-SHELL",
-            "curl -f http://localhost:5050/api/system/ready || exit 1",
-        ]
+    assert compose["services"]["api"]["healthcheck"]["test"] == [
+        "CMD-SHELL",
+        "curl -f http://localhost:5050/api/system/ready || exit 1",
+    ]
 
 
-def test_worker_healthcheck_uses_arq_health_contract_in_development_and_production():
-    project_root = _project_root()
-    for filename in ("docker-compose.yml", "docker-compose.prod.yml"):
-        compose = yaml.safe_load((project_root / filename).read_text())
+@pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
+def test_worker_healthcheck_uses_arq_health_contract_in_development_and_production(filename):
+    compose = load_compose(filename)
 
-        assert compose["services"]["worker"]["healthcheck"]["test"] == [
-            "CMD",
-            "python",
-            "-m",
-            "yuxi.workers.health",
-        ]
+    assert compose["services"]["worker"]["healthcheck"]["test"] == [
+        "CMD",
+        "python",
+        "-m",
+        "yuxi.workers.health",
+    ]
 
 
-def test_worker_starts_owned_entrypoint_in_development_and_production():
+@pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
+def test_worker_starts_owned_entrypoint_in_development_and_production(filename):
     """正式部署必须进入拥有本地任务过滤的 Worker 入口。"""
-    project_root = _project_root()
-    for filename in ("docker-compose.yml", "docker-compose.prod.yml"):
-        compose = yaml.safe_load((project_root / filename).read_text())
-        assert "python -m yuxi.workers.main" in compose["services"]["worker"]["command"]
+    compose = load_compose(filename)
+    assert "python -m yuxi.workers.main" in compose["services"]["worker"]["command"]
 
 
 def test_arq_dependency_changes_trigger_real_dispatch_regression():
     """单独升级依赖也必须触发拥有 ARQ 适配语义的真实 Redis gate。"""
-    project_root = _project_root()
-    workflow = yaml.load((project_root / ".github/workflows/system-tests.yml").read_text(), Loader=yaml.BaseLoader)
+    root = project_root()
+    workflow = yaml.load((root / ".github/workflows/system-tests.yml").read_text(), Loader=yaml.BaseLoader)
     for event in ("pull_request", "push"):
         assert {"backend/uv.lock", "backend/pyproject.toml"}.issubset(workflow["on"][event]["paths"])

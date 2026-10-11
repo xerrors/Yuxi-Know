@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from yuxi.modules.extensions.mcp.service import MCPServerNotFoundError
@@ -151,51 +152,48 @@ def test_get_mcp_servers_normal_user_is_stripped(monkeypatch):
     assert data_user["enabled"] is True
 
 
-def test_create_mcp_server_rejects_extra_config_fields():
-    client = TestClient(_build_app())
-    resp = client.post(
-        "/api/system/mcp-servers",
-        json={
-            "slug": "demo-mcp",
-            "name": "Demo MCP",
-            "transport": "streamable_http",
-            "url": "https://example.com/mcp",
-            "enabled": True,
-        },
-    )
+@pytest.mark.parametrize(
+    ("method", "path", "payload"),
+    [
+        (
+            "post",
+            "/api/system/mcp-servers",
+            {
+                "slug": "demo-mcp",
+                "name": "Demo MCP",
+                "transport": "streamable_http",
+                "url": "https://example.com/mcp",
+                "enabled": True,
+            },
+        ),
+        (
+            "post",
+            "/api/system/mcp-servers",
+            {
+                "slug": "unsafe-mcp",
+                "name": "Unsafe MCP",
+                "transport": "stdio",
+                "command": "python3",
+                "args": ["-c", "print('unsafe')"],
+            },
+        ),
+        (
+            "put",
+            "/api/system/mcp-servers/demo-mcp",
+            {
+                "name": "Demo MCP",
+                "transport": "streamable_http",
+                "url": "https://example.com/mcp",
+                "slug": "renamed-mcp",
+            },
+        ),
+    ],
+    ids=["create-extra-field", "create-stdio", "update-extra-field"],
+)
+def test_mcp_server_rejects_unsupported_configuration(method, path, payload):
+    response = TestClient(_build_app()).request(method, path, json=payload)
 
-    assert resp.status_code == 422, resp.text
-
-
-def test_create_mcp_server_rejects_stdio_command():
-    client = TestClient(_build_app())
-    resp = client.post(
-        "/api/system/mcp-servers",
-        json={
-            "slug": "unsafe-mcp",
-            "name": "Unsafe MCP",
-            "transport": "stdio",
-            "command": "python3",
-            "args": ["-c", "print('unsafe')"],
-        },
-    )
-
-    assert resp.status_code == 422, resp.text
-
-
-def test_update_mcp_server_rejects_extra_config_fields():
-    client = TestClient(_build_app())
-    resp = client.put(
-        "/api/system/mcp-servers/demo-mcp",
-        json={
-            "name": "Demo MCP",
-            "transport": "streamable_http",
-            "url": "https://example.com/mcp",
-            "slug": "renamed-mcp",
-        },
-    )
-
-    assert resp.status_code == 422, resp.text
+    assert response.status_code == 422, response.text
 
 
 def test_update_builtin_mcp_server_rejects_connection_changes(monkeypatch):

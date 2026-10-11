@@ -17,7 +17,9 @@ import asyncpg
 import pytest
 from PIL import Image
 
+from test.integration.api.helpers import delete_created_threads
 from test.live_api_cleanup import make_test_session_title
+from yuxi.infrastructure.minio import get_minio_client
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
@@ -52,9 +54,22 @@ async def _upload_project_file(
 
 
 async def test_public_thread_endpoints_require_authentication(test_client):
-    assert (await test_client.get("/api/v1/agents/sessions")).status_code == 401
-    assert (await test_client.get(f"/api/v1/agents/sessions/{uuid.uuid4()}/audits")).status_code == 401
-    assert (await test_client.get("/api/agent")).status_code == 401
+    """Legacy 与 Public 会话端点均先执行认证依赖。"""
+    thread_id = str(uuid.uuid4())
+    headers = {"Idempotency-Key": str(uuid.uuid4())}
+    responses = [
+        await test_client.get("/api/v1/agents/sessions"),
+        await test_client.get(f"/api/v1/agents/sessions/{thread_id}/audits"),
+        await test_client.get("/api/agent"),
+        await test_client.post("/api/v1/agents/sessions", json={"agent_id": "default-chatbot"}, headers=headers),
+        await test_client.get(f"/api/v1/agents/sessions/{thread_id}"),
+        await test_client.post(
+            f"/api/v1/agents/sessions/{thread_id}/events",
+            json={"events": [{"type": "agent.session.input.cancel", "yuxi": {"turn_id": str(uuid.uuid4())}}]},
+            headers=headers,
+        ),
+    ]
+    assert [response.status_code for response in responses] == [401] * len(responses)
 
 
 async def test_thread_message_audits_return_persisted_facts_without_leaking_into_history(
@@ -373,16 +388,6 @@ async def test_image_upload_composites_transparent_png_pixels_on_white(test_clie
     assert rgb_image.getpixel((1, 0)) == (50, 87, 244)
 
 
-async def test_legacy_direct_thread_attachment_upload_is_removed(test_client, admin_headers):
-    response = await test_client.post(
-        f"/api/v1/agents/sessions/{uuid.uuid4()}/attachments",
-        headers=admin_headers,
-        files={"file": ("legacy.txt", b"legacy", "text/plain")},
-    )
-
-    assert response.status_code == 405
-
-
 async def test_development_thread_file_browse_routes_are_removed(test_client, admin_headers):
     thread_id = await _create_thread_for_user(test_client, admin_headers)
     path = await _upload_project_file(test_client, admin_headers, thread_id, "removed-route.txt", b"content")
@@ -622,34 +627,27 @@ async def test_turn_pages_include_empty_turns_and_keep_viewed_explicit(test_clie
         await conn.close()
 
 
-async def test_thread_tool_approval_mode_is_saved_in_session_snapshot(test_client, admin_headers):
-    thread_id = await _create_thread_for_user(test_client, admin_headers)
-
-    update_response = await test_client.post(
-        f"/api/v1/agents/sessions/{thread_id}",
-        headers=admin_headers,
-        json={"yuxi": {"tool_approval_mode": "always_trust"}},
-    )
-
-    assert update_response.status_code == 200, update_response.text
-    assert update_response.json()["yuxi"]["tool_approval_mode"] == "always_trust"
-
-    list_response = await test_client.get("/api/v1/agents/sessions", headers=admin_headers)
-    assert list_response.status_code == 200, list_response.text
-    thread = next(item for item in list_response.json()["data"] if item["id"] == thread_id)
-    assert thread["yuxi"]["tool_approval_mode"] == "always_trust"
-
-
-async def test_thread_tool_approval_mode_rejects_unknown_value(test_client, admin_headers):
+@pytest.mark.parametrize(
+    ("mode", "expected_status"),
+    [("always_trust", 200), ("unknown", 422)],
+    ids=["persist-valid-mode", "reject-unknown-mode"],
+)
+async def test_thread_tool_approval_mode_validates_and_persists(test_client, admin_headers, mode, expected_status):
     thread_id = await _create_thread_for_user(test_client, admin_headers)
 
     response = await test_client.post(
         f"/api/v1/agents/sessions/{thread_id}",
         headers=admin_headers,
-        json={"yuxi": {"tool_approval_mode": "unknown"}},
+        json={"yuxi": {"tool_approval_mode": mode}},
     )
 
-    assert response.status_code == 422, response.text
+    assert response.status_code == expected_status, response.text
+    if expected_status == 200:
+        assert response.json()["yuxi"]["tool_approval_mode"] == mode
+        list_response = await test_client.get("/api/v1/agents/sessions", headers=admin_headers)
+        assert list_response.status_code == 200, list_response.text
+        thread = next(item for item in list_response.json()["data"] if item["id"] == thread_id)
+        assert thread["yuxi"]["tool_approval_mode"] == mode
 
 
 async def test_thread_list_exposes_work_status_and_unread(test_client, admin_headers):
@@ -661,21 +659,19 @@ async def test_thread_list_exposes_work_status_and_unread(test_client, admin_hea
     assert thread["status"] == "idle" and thread["yuxi"]["unread"] is False
 
 
-async def test_mark_thread_viewed_returns_work_status_and_unread(test_client, admin_headers):
-    thread_id = await _create_thread_for_user(test_client, admin_headers)
-
+@pytest.mark.parametrize("owner_is_requester", [True, False], ids=["owner", "other-user"])
+async def test_mark_thread_viewed_checks_ownership_and_returns_work_status(
+    test_client, standard_user, admin_headers, owner_is_requester
+):
+    owner_headers = admin_headers if owner_is_requester else standard_user["headers"]
+    thread_id = await _create_thread_for_user(test_client, owner_headers)
     response = await test_client.post(f"/api/v1/agents/sessions/{thread_id}/viewed", headers=admin_headers)
-    assert response.status_code == 200, response.text
-    payload = response.json()
-    assert payload["status"] == "idle" and payload["yuxi"]["unread"] is False
-
-
-async def test_mark_thread_viewed_requires_ownership(test_client, standard_user, admin_headers):
-    headers = standard_user["headers"]
-    thread_id = await _create_thread_for_user(test_client, headers)
-
-    response = await test_client.post(f"/api/v1/agents/sessions/{thread_id}/viewed", headers=admin_headers)
-    assert response.status_code == 404, response.text
+    if owner_is_requester:
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["status"] == "idle" and payload["yuxi"]["unread"] is False
+    else:
+        assert response.status_code == 404, response.text
 
 
 async def test_admin_can_read_default_agent(test_client, admin_headers):
@@ -694,12 +690,10 @@ async def test_agent_detail_filters_configurable_items_by_role(
     agents_response = await test_client.get("/api/agent", headers=standard_user["headers"])
     assert agents_response.status_code == 200, agents_response.text
     agents = agents_response.json().get("agents", [])
-    if not agents:
-        pytest.skip("No agents are registered in the system.")
+    assert agents, "Chat router integration requires at least one visible Agent."
 
     agent_id = agents[0].get("agent_id") or agents[0].get("slug")
-    if not agent_id:
-        pytest.skip("Agent payload missing slug field.")
+    assert agent_id, f"Agent payload missing identifier: {agents[0]}"
 
     user_agent_response = await test_client.get(f"/api/agent/{agent_id}", headers=standard_user["headers"])
     assert user_agent_response.status_code == 200, user_agent_response.text
@@ -725,12 +719,10 @@ async def test_setting_default_agent_requires_admin(test_client, admin_headers, 
     assert agents_response.status_code == 200, agents_response.text
     agents = agents_response.json().get("agents", [])
 
-    if not agents:
-        pytest.skip("No agents are registered in the system.")
+    assert agents, "Setting the default Agent requires at least one registered Agent."
 
     candidate_agent_id = agents[0].get("agent_id") or agents[0].get("slug")
-    if not candidate_agent_id:
-        pytest.skip("Agent payload missing slug field.")
+    assert candidate_agent_id, f"Agent payload missing identifier: {agents[0]}"
 
     forbidden_response = await test_client.post(
         f"/api/agent/{candidate_agent_id}/set_default",
@@ -748,7 +740,12 @@ async def test_setting_default_agent_requires_admin(test_client, admin_headers, 
     assert agent["is_default"] is True
 
 
-async def test_save_thread_artifact_to_workspace_copies_output_file(test_client, standard_user):
+@pytest.mark.parametrize(
+    ("destination_name", "content"),
+    [(None, b"# artifact\n"), ("exports", b"# selected destination\n")],
+    ids=["saved-artifacts", "selected-directory"],
+)
+async def test_save_thread_artifact_copies_output_file(test_client, standard_user, destination_name, content):
     headers = standard_user["headers"]
     thread_id = await _create_thread_for_user(test_client, headers)
     filename = f"artifact-{uuid.uuid4().hex[:8]}.md"
@@ -757,59 +754,36 @@ async def test_save_thread_artifact_to_workspace_copies_output_file(test_client,
         headers,
         thread_id,
         filename,
-        b"# artifact\n",
+        content,
         artifact_path=True,
     )
+    destination_path = "/saved_artifacts"
+    expected_saved_path = f"/home/gem/user-data/saved_artifacts/{filename}"
+    if destination_name:
+        destination_name = f"{destination_name}-{uuid.uuid4().hex[:8]}"
+        directory = await test_client.post(
+            "/api/workspace/directory",
+            json={"parent_path": "/", "name": destination_name},
+            headers=headers,
+        )
+        assert directory.status_code == 200, directory.text
+        destination_path = f"/{destination_name}"
+        expected_saved_path = f"/home/gem/user-data/{destination_name}/{filename}"
 
     response = await test_client.post(
         f"/api/v1/agents/sessions/{thread_id}/artifacts/save",
-        json={"path": source_path, "destination_path": "/saved_artifacts"},
+        json={"path": source_path, "destination_path": destination_path},
         headers=headers,
     )
     assert response.status_code == 200, response.text
-
     payload = response.json()
     assert payload["name"] == filename
     assert payload["source_path"] == source_path
-    assert payload["saved_path"] == f"/home/gem/user-data/saved_artifacts/{filename}"
+    assert payload["saved_path"] == expected_saved_path
 
     download_response = await test_client.get(payload["saved_artifact_url"], headers=headers)
     assert download_response.status_code == 200, download_response.text
-    assert download_response.text == "# artifact\n"
-
-
-async def test_save_thread_artifact_to_selected_workspace_directory(test_client, standard_user):
-    headers = standard_user["headers"]
-    thread_id = await _create_thread_for_user(test_client, headers)
-    filename = f"artifact-{uuid.uuid4().hex[:8]}.md"
-    source_path = await _upload_project_file(
-        test_client,
-        headers,
-        thread_id,
-        filename,
-        b"# selected destination\n",
-        artifact_path=True,
-    )
-    destination_name = f"exports-{uuid.uuid4().hex[:8]}"
-    directory = await test_client.post(
-        "/api/workspace/directory",
-        json={"parent_path": "/", "name": destination_name},
-        headers=headers,
-    )
-    assert directory.status_code == 200, directory.text
-
-    response = await test_client.post(
-        f"/api/v1/agents/sessions/{thread_id}/artifacts/save",
-        json={"path": source_path, "destination_path": f"/{destination_name}"},
-        headers=headers,
-    )
-    assert response.status_code == 200, response.text
-    payload = response.json()
-    assert payload["saved_path"] == f"/home/gem/user-data/{destination_name}/{filename}"
-
-    download_response = await test_client.get(payload["saved_artifact_url"], headers=headers)
-    assert download_response.status_code == 200, download_response.text
-    assert download_response.text == "# selected destination\n"
+    assert download_response.content == content
 
 
 async def test_save_thread_artifact_to_workspace_auto_renames_conflicts(test_client, standard_user):
@@ -897,55 +871,237 @@ async def test_save_thread_artifact_to_workspace_rejects_invalid_paths(test_clie
     assert directory_response.status_code == 400, directory_response.text
 
 
-async def test_standard_user_restores_visible_function_items_without_internal_audit(test_client, admin_headers, standard_user):
-    """真实 worker 生成工具过程；普通用户回读可见 item，同时仍无审计权限。"""
-    from test.e2e.test_agent_lifecycle_extended_e2e import (
-        _agent,
-        _provider,
-        _delete_provider,
-        _terminal_turn,
-        MODEL,
-        OUTPUT,
-        TOOL_RESULT,
+async def test_public_create_rejects_empty_input(test_client, admin_headers):
+    """空输入不能伪装成第一轮工作。"""
+    response = await test_client.post(
+        "/api/v1/agents/sessions",
+        json={"agent_id": "default-chatbot", "input": []},
+        headers={**admin_headers, "Idempotency-Key": str(uuid.uuid4())},
     )
-    from test.e2e.e2e_helpers import archive_public_thread, delete_agent, wait_for_consumed_input
+    assert response.status_code == 422
 
-    headers = standard_user["headers"]
-    uid = str((await test_client.get("/api/auth/me", headers=headers)).json()["uid"])
-    provider = await _provider(test_client, admin_headers)
-    slug = await _agent(test_client, admin_headers, uid)
-    thread_id = turn_id = None
+
+async def test_public_missing_thread_and_turn_return_not_found(test_client, admin_headers):
+    """未知 Thread 与 Turn 不会退回相邻执行结果。"""
+    thread_id = str(uuid.uuid4())
+    turn_id = str(uuid.uuid4())
+    assert (await test_client.get(f"/api/v1/agents/sessions/{thread_id}", headers=admin_headers)).status_code == 404
+    turn = await test_client.get(f"/api/v1/agents/sessions/{thread_id}/turns/{turn_id}", headers=admin_headers)
+    assert turn.status_code == 404
+
+
+@pytest.mark.parametrize("attachment_kind", ["unknown", "bound_elsewhere"])
+async def test_public_input_rejects_unbound_attachment_without_persisting_receipt(test_client, admin_headers, attachment_kind):
+    """显式附件 ID 无法属于本次 Input 时，不能确认接收或投递 Run。"""
+    directory = await test_client.get("/api/v1/agents", headers=admin_headers)
+    assert directory.status_code == 200, directory.text
+    agent = directory.json()["data"][0]
+    slug = agent.get("id") or agent.get("slug") or agent["agent_id"]
+    created = await test_client.post(
+        "/api/v1/agents/sessions",
+        json={"agent_id": slug, "title": make_test_session_title("attachment-input")},
+        headers={**admin_headers, "Idempotency-Key": str(uuid.uuid4())},
+    )
+    assert created.status_code == 201, created.text
+    thread_id = created.json()["id"]
+    file_id = uuid.uuid4().hex
+    accepted = None
+    uploaded = None
+    event_key = str(uuid.uuid4())
+    conn = await asyncpg.connect(os.environ["POSTGRES_URL"].replace("+asyncpg", ""))
+    response = None
     try:
-        created = await test_client.post(
-            "/api/v1/agents/sessions",
-            headers={**headers, "Idempotency-Key": str(uuid.uuid4())},
-            json={
-                "agent_id": slug,
-                "agent": {"model": MODEL},
-                "tool_approval_mode": "always_trust",
-                "title": make_test_session_title("standard-visible-items"),
-                "input": [{"role": "user", "content": [{"type": "input_text", "text": OUTPUT}]}],
-            },
+        await conn.execute("UPDATE sessions SET queue_paused = TRUE WHERE thread_id = $1", thread_id)
+        body = {
+            "events": [
+                {
+                    "type": "agent.session.input.message",
+                    "input": [
+                        {
+                            "role": "user",
+                            "content": [{"type": "input_text", "text": "read attachment"}],
+                        }
+                    ],
+                    "yuxi": {"mode": "follow_up", "attachment_file_ids": [file_id]},
+                }
+            ]
+        }
+        if attachment_kind == "bound_elsewhere":
+            uploaded = await test_client.post(
+                "/api/v1/agents/files", files={"file": ("source.txt", b"original", "text/plain")}, headers=admin_headers
+            )
+            assert uploaded.status_code == 201, uploaded.text
+            file_id = uploaded.json()["id"]
+            body["events"][0]["yuxi"]["attachment_file_ids"] = [file_id]
+            accepted = await test_client.post(
+                f"/api/v1/agents/sessions/{thread_id}/events",
+                json=body,
+                headers={**admin_headers, "Idempotency-Key": str(uuid.uuid4())},
+            )
+            assert accepted.status_code == 202, accepted.text
+
+        response = await test_client.post(
+            f"/api/v1/agents/sessions/{thread_id}/events",
+            json=body,
+            headers={**admin_headers, "Idempotency-Key": event_key},
         )
-        assert created.status_code == 201, created.text
-        consumed = await wait_for_consumed_input(test_client, headers, created.json()["yuxi"]["receipt"])
-        thread_id, turn_id = created.json()["id"], consumed["turn_id"]
-        assert (await _terminal_turn(test_client, headers, thread_id, turn_id))["status"] == "completed"
-        history = await test_client.get(f"/api/v1/agents/sessions/{thread_id}/items?order=asc&limit=100", headers=headers)
-        assert history.status_code == 200, history.text
-        items = history.json()["data"]
-        call = next(item for item in items if item["type"] == "function_call")
-        output = next(item for item in items if item["type"] == "function_call_output")
-        assert call["name"] == "present_artifacts" and call["arguments"] == {"filepaths": []}
-        assert call["status"] == output["status"] == "completed" and call["call_id"] == output["call_id"]
-        assert TOOL_RESULT in output["output"]
-        audits = await test_client.get(f"/api/v1/agents/sessions/{thread_id}/audits", headers=headers)
-        assert audits.status_code == 403
-        assert all(
-            field not in history.text for field in ("system_prompt", "checkpoint", "manifest_fingerprint", "source_model_operation_id")
+        assert response.status_code == (409 if accepted else 404), response.text
+        facts = await conn.fetchrow(
+            "SELECT "
+            "(SELECT COUNT(*) FROM agent_input_receipts WHERE thread_id = $1 "
+            "AND idempotency_key = $2) AS receipts, "
+            "(SELECT COUNT(*) FROM agent_inputs WHERE thread_id = $1) AS inputs, "
+            "(SELECT COUNT(*) FROM agent_runs WHERE thread_id = $1) AS runs, "
+            "(SELECT COUNT(*) FROM messages WHERE session_record_id = "
+            "(SELECT id FROM sessions WHERE thread_id = $1)) AS messages",
+            thread_id,
+            event_key,
         )
+        assert dict(facts) == {
+            "receipts": 0,
+            "inputs": int(accepted is not None),
+            "runs": 0,
+            "messages": 0,
+        }
     finally:
-        if thread_id:
-            await archive_public_thread(test_client, headers, thread_id, turn_id=turn_id)
-        await delete_agent(test_client, admin_headers, slug)
-        await _delete_provider(test_client, admin_headers, provider)
+        if accepted is not None:
+            input_id = accepted.json().get("input_id")
+            if input_id:
+                cancelled = await test_client.post(
+                    f"/api/v1/agents/sessions/{thread_id}/events",
+                    json={"events": [{"type": "yuxi.session.input.cancel_input", "input_id": input_id}]},
+                    headers={**admin_headers, "Idempotency-Key": str(uuid.uuid4())},
+                )
+                assert cancelled.status_code == 202, cancelled.text
+        archived = await test_client.post(f"/api/v1/agents/sessions/{thread_id}/archive", headers=admin_headers)
+        assert archived.status_code == 200, archived.text
+        await conn.close()
+        if uploaded is not None and uploaded.status_code == 201:
+            uid = str((await test_client.get("/api/auth/me", headers=admin_headers)).json()["uid"])
+            minio = get_minio_client()
+            await minio.adelete_objects_by_prefix(minio.KB_BUCKETS["documents"], f"tmp/chat_attachments/{uid}/{file_id}/")
+
+
+async def test_debug_messages_follow_database_sequence_and_include_unassigned_inputs(test_client, admin_headers):
+    """插入顺序与时间冲突时遵循 sequence，未关联输入和系统消息仍可核对。"""
+    created = await test_client.post(
+        "/api/v1/agents/sessions",
+        headers={**admin_headers, "Idempotency-Key": str(uuid.uuid4())},
+        json={"agent_id": "default-chatbot", "title": make_test_session_title("debug-projection")},
+    )
+    assert created.status_code == 201, created.text
+    thread_id = created.json()["id"]
+    conn = await asyncpg.connect(os.environ["POSTGRES_URL"].replace("+asyncpg", ""))
+    try:
+        session = await conn.fetchrow("SELECT id,uid,agent_id FROM sessions WHERE thread_id=$1", thread_id)
+        turn_id, run_id = str(uuid.uuid4()), str(uuid.uuid4())
+        start = datetime(2026, 10, 10, tzinfo=UTC)
+        await conn.execute(
+            "INSERT INTO agent_turns (id,thread_id,uid,status,created_at) VALUES ($1,$2,$3,'completed',$4)",
+            turn_id,
+            thread_id,
+            session["uid"],
+            start,
+        )
+        await conn.execute(
+            "INSERT INTO agent_runs "
+            "(id,thread_id,runtime_scope_id,agent_slug,uid,turn_id,status,session_record_id,"
+            "run_type,source,channel,input_payload,token_usage,origin_metadata,created_at) "
+            "VALUES ($1,$2,$2,$3,$4,$5,'completed',$6,'chat','public_api','api','{}','{}','{}',$7)",
+            run_id,
+            thread_id,
+            session["agent_id"],
+            session["uid"],
+            turn_id,
+            session["id"],
+            start,
+        )
+        input_id = str(uuid.uuid4())
+        await conn.execute(
+            "INSERT INTO agent_inputs "
+            "(id,thread_id,uid,agent_slug,kind,status,turn_id,consumed_run_id,messages,input_payload,"
+            "source,channel,origin_metadata,created_at,consumed_at,attachment_file_ids) "
+            "VALUES ($1,$2,$3,$4,'follow_up','consumed',$5,$6,$7::json,'{}','chat','web','{}',$8,$8,'[]')",
+            input_id,
+            thread_id,
+            session["uid"],
+            session["agent_id"],
+            turn_id,
+            run_id,
+            json.dumps([{"content": [{"type": "text", "text": "持久用户输入"}]}]),
+            start,
+        )
+        ids = {}
+        for role, content, sequence, operation in [
+            ("assistant", "最终模型输出", 9, "model-final"),
+            ("tool", "工具结果", 6, "tool-call"),
+            ("assistant", "第一模型输出", 3, "model-first"),
+            ("user", "持久用户输入", None, None),
+        ]:
+            ids[content] = await conn.fetchval(
+                "INSERT INTO messages "
+                "(session_record_id,role,content,run_id,turn_id,sequence,operation_id,created_at,"
+                "delivery_status,extra_metadata) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'complete',$9::json) RETURNING id",
+                session["id"],
+                role,
+                content,
+                run_id,
+                turn_id,
+                sequence,
+                operation,
+                start + timedelta(seconds=20 - (sequence or 0)),
+                json.dumps({"input_id": "input-test"} if role == "user" else {"tool_name": "search"}),
+            )
+            if role == "user":
+                await conn.execute(
+                    "UPDATE messages SET source_input_id=$2,input_position=0,received_at=$3 WHERE id=$1",
+                    ids[content],
+                    input_id,
+                    start,
+                )
+        for role, content in [("system", "系统记录"), ("user", "未关联输入")]:
+            ids[content] = await conn.fetchval(
+                "INSERT INTO messages (session_record_id,role,content,created_at,delivery_status,extra_metadata) "
+                "VALUES ($1,$2,$3,$4,'queued','{}') RETURNING id",
+                session["id"],
+                role,
+                content,
+                start + timedelta(seconds=30),
+            )
+        error_id = await conn.fetchval(
+            "INSERT INTO messages "
+            "(session_record_id,role,content,run_id,turn_id,created_at,delivery_status,extra_metadata) "
+            "VALUES ($1,'assistant','',$2,$3,$4,'complete',$5::json) RETURNING id",
+            session["id"],
+            run_id,
+            turn_id,
+            start,
+            json.dumps({"error_type": "provider_error", "error_message": "模型服务不可用", "is_error": True}),
+        )
+        response = await test_client.get(f"/api/v1/agents/sessions/{thread_id}/audits", headers=admin_headers)
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        expected = ["持久用户输入", "第一模型输出", "工具结果", "最终模型输出", "系统记录", "未关联输入"]
+        assert [row["id"] for row in payload["audits"]] == [
+            *[ids[content] for content in expected[:4]],
+            error_id,
+            *[ids[content] for content in expected[4:]],
+        ]
+        assert [row["type"] for row in payload["audits"]] == ["human", "ai", "tool", "ai", "ai", "system", "human"]
+        assert payload["audits"][0]["input_id"] == input_id
+        assert payload["audits"][0]["input_position"] == 0
+        assert payload["audits"][4]["error_type"] == "provider_error"
+        assert payload["audits"][4]["error_message"] == "模型服务不可用"
+        assert payload["audits"][4]["execution_status"] is None
+        assert payload["audits"][2]["tool_name"] == "search"
+        assert payload["audits"][-1]["run_id"] is None
+        assert payload["audits"][-1]["delivery_status"] == "queued"
+        assert payload["truncated"] is False
+        rows = await conn.fetch("SELECT id,content,sequence FROM messages WHERE session_record_id=$1", session["id"])
+        persisted = {row["id"]: row for row in rows}
+        for projected in payload["audits"]:
+            assert projected["content"] == persisted[projected["id"]]["content"]
+            assert projected["sequence"] == persisted[projected["id"]]["sequence"]
+    finally:
+        await conn.close()
+        await delete_created_threads(thread_id)

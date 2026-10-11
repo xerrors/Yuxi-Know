@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-import uuid
 from unittest.mock import AsyncMock
 
 import pytest
@@ -22,58 +21,16 @@ from yuxi.migrations.schema import (
     record_schema_version,
 )
 from yuxi.infrastructure.postgres.schema import get_schema_versions, require_current_schema
-from yuxi.infrastructure.postgres.manager import PostgresManager
 from yuxi.modules.knowledge.models import KnowledgeBase
+from test.integration.support.postgres_schema import (
+    create_isolated_manager as _create_isolated_manager,
+    drop_isolated_schema as _drop_isolated_schema,
+    scoped_manager as _scoped_manager,
+)
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
-
-
-@pytest.fixture(scope="session", autouse=True)
-def ensure_live_api_schema():
-    """本文件自行创建隔离 Schema，不依赖运行中的 API。"""
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_knowledge_resources():
-    """隔离 Schema 测试没有 HTTP 资源需要清理。"""
-    yield
+pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
 
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_sandboxes():
-    """隔离 Schema 测试没有 Sandbox 资源需要清理。"""
-    yield
-
-
-def _scoped_manager(engine) -> PostgresManager:
-    """创建不触碰进程单例的隔离 manager。"""
-    manager = object.__new__(PostgresManager)
-    PostgresManager.__init__(manager)
-    manager.async_engine = engine
-    manager._initialized = True
-    return manager
-
-
-async def _create_isolated_manager(prefix: str):
-    """创建位于独立 PostgreSQL Schema 的 manager 与清理句柄。"""
-    schema = f"{prefix}_{uuid.uuid4().hex[:16]}"
-    admin_engine = create_async_engine(os.environ["POSTGRES_URL"], pool_pre_ping=True)
-    async with admin_engine.begin() as connection:
-        await connection.execute(text(f'CREATE SCHEMA "{schema}"'))
-    scoped_engine = create_async_engine(
-        os.environ["POSTGRES_URL"],
-        pool_pre_ping=True,
-        connect_args={"server_settings": {"search_path": schema}},
-    )
-    return schema, admin_engine, scoped_engine, _scoped_manager(scoped_engine)
-
-
-async def _drop_isolated_schema(schema: str, admin_engine, scoped_engine) -> None:
-    """释放隔离 Schema 及其 engine。"""
-    await scoped_engine.dispose()
-    async with admin_engine.begin() as connection:
-        await connection.execute(text(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE'))
-    await admin_engine.dispose()
 
 
 async def test_schema_migration_lock_serializes_real_postgres_sessions() -> None:
@@ -383,19 +340,46 @@ async def test_unversioned_existing_yuxi_table_blocks_fresh_schema_initializatio
 
 
 async def test_schema_version_is_persisted_and_runtime_validation_fails_closed() -> None:
-    """版本表缺失、错误和正确三种状态必须形成精确启动结论。"""
+    """缺失、旧版、未来版本与有效 Schema 都形成精确启动结论。"""
     schema, admin_engine, scoped_engine, manager = await _create_isolated_manager("pytest_schema_version")
 
     try:
         with pytest.raises(RuntimeError, match="business=missing"):
             await require_current_schema(manager)
 
+        await create_business_tables(manager)
+        async with scoped_engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "INSERT INTO users (username,uid,password_hash,role,login_failed_count,is_deleted) "
+                    "VALUES ('legacy-user','legacy-user','hash','user',0,0)"
+                )
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO projects (id,uid,selection_status,workdir_path,directory_mode) "
+                    "VALUES ('legacy-project','legacy-user','implicit','projects/legacy','managed')"
+                )
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO sessions (thread_id,tree_root_thread_id,uid,agent_id,project_id,status,is_pinned) "
+                    "VALUES ('legacy-thread','legacy-thread','legacy-user','main','legacy-project','active',false)"
+                )
+            )
         await create_schema_version_table(manager)
-        for incompatible_version in (7, BUSINESS_SCHEMA_VERSION + 1):
-            await record_schema_version(manager, "business", incompatible_version)
-            with pytest.raises(RuntimeError, match=f"business={incompatible_version}"):
-                await require_current_schema(manager)
-            assert (await get_schema_versions(manager))["business"] == incompatible_version
+        await record_schema_version(manager, "business", 7)
+        with pytest.raises(RuntimeError, match="business=7"):
+            await require_current_schema(manager)
+        assert await get_schema_versions(manager) == {"business": 7}
+        async with scoped_engine.connect() as connection:
+            assert await connection.scalar(text("SELECT count(*) FROM sessions WHERE thread_id='legacy-thread'")) == 1
+
+        incompatible_version = BUSINESS_SCHEMA_VERSION + 1
+        await record_schema_version(manager, "business", incompatible_version)
+        with pytest.raises(RuntimeError, match=f"business={incompatible_version}"):
+            await require_current_schema(manager)
+        assert (await get_schema_versions(manager))["business"] == incompatible_version
 
         await record_schema_version(manager, "business", BUSINESS_SCHEMA_VERSION)
         with pytest.raises(RuntimeError, match="knowledge=missing"):

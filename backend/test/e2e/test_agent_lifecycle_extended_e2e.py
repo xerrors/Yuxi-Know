@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 import shutil
@@ -13,15 +12,21 @@ import httpx
 import pytest
 
 from test.e2e.e2e_helpers import archive_public_thread, delete_agent, postgres_dsn
-from test.e2e.test_agent_lifecycle_e2e import output_text
+from test.e2e.e2e_helpers import wait_for_consumed_input
+from test.e2e.e2e_helpers import (
+    DETERMINISTIC_MODEL as MODEL,
+    DETERMINISTIC_OUTPUT as OUTPUT,
+    create_lifecycle_agent as _agent,
+    output_text,
+    register_replay_provider as _provider,
+    wait_for_terminal_turn as _turn,
+)
 from test.live_api_cleanup import make_test_session_title
 from yuxi.infrastructure.runtime_settings import get_skill_projection_dir
 from yuxi.modules.workspace.paths import workspace_uid_dirname
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.e2e, pytest.mark.slow, pytest.mark.timeout(240)]
 
-OUTPUT = "DETERMINISTIC_AGENT_E2E_OK"
-MODEL = "ci-replay:deterministic-chat"
 TOOL = "present_artifacts"
 TOOL_CALL_ID = "call-preloaded-tool"
 TOOL_RESULT = "已将交付物展示给用户"
@@ -43,7 +48,7 @@ async def test_public_run_persists_preloaded_tool_and_model_audit(e2e_client, e2
 
         created = await _create_thread(e2e_client, e2e_headers, slug, "preloaded-audit")
         thread_id, turn_id, run_id = created["session_id"], created["turn_id"], created["run_id"]
-        turn = await _terminal_turn(e2e_client, e2e_headers, thread_id, turn_id)
+        turn = await _turn(e2e_client, e2e_headers, thread_id, turn_id)
         assert turn["status"] == "completed", turn
         assert turn["yuxi"]["result_run_id"] == run_id
         assert output_text(turn["yuxi"]["output"]) == OUTPUT
@@ -215,7 +220,7 @@ async def test_standard_user_run_uses_admin_execution_limit(e2e_client, e2e_head
             receipt = await _create_thread(e2e_client, user_headers, slug, f"execution-limit-{limit}")
             thread_id, turn_id, run_id = receipt["session_id"], receipt["turn_id"], receipt["run_id"]
             threads.append((thread_id, turn_id))
-            turn = await _terminal_turn(e2e_client, user_headers, thread_id, turn_id)
+            turn = await _turn(e2e_client, user_headers, thread_id, turn_id)
             assert turn["status"] == expected_status, turn
             assert turn["yuxi"]["current_run_id"] == run_id
 
@@ -296,7 +301,7 @@ async def test_scheduled_task_run_now_reaches_exact_thread_and_turn(e2e_client, 
         assert executed.status_code == 200, executed.text
         execution = executed.json()
         thread_id, turn_id, run_id = execution["thread_id"], execution["turn_id"], execution["run_id"]
-        turn = await _terminal_turn(e2e_client, e2e_headers, thread_id, turn_id)
+        turn = await _turn(e2e_client, e2e_headers, thread_id, turn_id)
         assert turn["status"] == "completed", turn
         assert turn["yuxi"]["result_run_id"] == run_id and output_text(turn["yuxi"]["output"]) == OUTPUT
 
@@ -367,10 +372,16 @@ async def test_tool_error_is_persisted_by_tool_message(e2e_client, e2e_headers):
     provider_created = await _provider(e2e_client, e2e_headers)
     slug = thread_id = turn_id = None
     try:
-        slug = await _agent(e2e_client, e2e_headers, str(me.json()["uid"]), suffix=TOOL_ERROR_MARKER)
+        slug = await _agent(
+            e2e_client,
+            e2e_headers,
+            str(me.json()["uid"]),
+            system_prompt_suffix=TOOL_ERROR_MARKER,
+            slug_prefix="ci-lifecycle-ext-",
+        )
         created = await _create_thread(e2e_client, e2e_headers, slug, "tool-error")
         thread_id, turn_id, run_id = created["session_id"], created["turn_id"], created["run_id"]
-        turn = await _terminal_turn(e2e_client, e2e_headers, thread_id, turn_id)
+        turn = await _turn(e2e_client, e2e_headers, thread_id, turn_id)
         assert turn["status"] == "completed", turn
         assert turn["yuxi"]["result_run_id"] == run_id and output_text(turn["yuxi"]["output"]) == OUTPUT
 
@@ -412,70 +423,11 @@ async def test_tool_error_is_persisted_by_tool_message(e2e_client, e2e_headers):
         await _delete_provider(e2e_client, e2e_headers, provider_created)
 
 
-async def _provider(client: httpx.AsyncClient, headers: dict[str, str]) -> bool:
-    """注册本地确定性重放模型，返回本测试是否拥有供应商。"""
-    response = await client.post(
-        "/api/system/model-providers",
-        headers=headers,
-        json={
-            "provider_id": "ci-replay",
-            "display_name": "CI deterministic replay",
-            "provider_type": "openai",
-            "base_url": "http://api:8765/v1",
-            "api_key": "ci-replay-key",
-            "capabilities": ["chat"],
-            "enabled_models": [{"id": "deterministic-chat", "display_name": "Deterministic chat", "type": "chat", "source": "manual"}],
-            "is_enabled": True,
-        },
-    )
-    if response.status_code == 200:
-        from test.e2e.e2e_helpers import wait_model_provider_cache
-
-        await wait_model_provider_cache()
-        return True
-    assert response.status_code == 400 and response.json().get("detail") == "供应商 ci-replay 已存在", response.text
-    return False
-
-
 async def _delete_provider(client: httpx.AsyncClient, headers: dict[str, str], created: bool) -> None:
     """只清理由当前测试创建的模型供应商。"""
     if created:
         response = await client.delete("/api/system/model-providers/ci-replay", headers=headers)
         assert response.status_code in {200, 404}, response.text
-
-
-async def _agent(client: httpx.AsyncClient, headers: dict[str, str], uid: str, *, suffix: str = "") -> str:
-    """创建仅向指定用户共享、预加载 image-gen 的测试 Agent。"""
-    slug = f"ci-lifecycle-ext-{uuid.uuid4().hex[:8]}"
-    response = await client.post(
-        "/api/agent",
-        headers=headers,
-        json={
-            "name": f"Lifecycle extended {slug[-8:]}",
-            "slug": slug,
-            "backend_id": "ChatbotAgent",
-            "visibility": "shared",
-            "description": "扩展生命周期 E2E",
-            "config_json": {
-                "context": {
-                    "model": MODEL,
-                    "system_prompt": f"不要调用工具，只输出 {OUTPUT}。{suffix}",
-                    "tools": [],
-                    "knowledges": [],
-                    "mcps": [],
-                    "skills": ["image-gen"],
-                    "preload_skills": ["image-gen"],
-                }
-            },
-            "share_config": {
-                "version": 2,
-                "read_scope": {"access_level": "user", "department_ids": [], "user_uids": [uid]},
-                "manage_scope": None,
-            },
-        },
-    )
-    assert response.status_code == 200, response.text
-    return slug
 
 
 async def _create_thread(client: httpx.AsyncClient, headers: dict[str, str], slug: str, tag: str) -> dict:
@@ -491,18 +443,69 @@ async def _create_thread(client: httpx.AsyncClient, headers: dict[str, str], slu
         },
     )
     assert response.status_code == 201, response.text
-    from test.e2e.e2e_helpers import wait_for_consumed_input
-
     return await wait_for_consumed_input(client, headers, response.json()["yuxi"]["receipt"])
 
 
-async def _terminal_turn(client: httpx.AsyncClient, headers: dict[str, str], thread_id: str, turn_id: str) -> dict:
-    """从 Public 持久快照等待 Turn 终态。"""
-    for _ in range(150):
-        response = await client.get(f"/api/v1/agents/sessions/{thread_id}/turns/{turn_id}", headers=headers)
-        assert response.status_code == 200, response.text
-        turn = response.json()
-        if turn["status"] in {"completed", "failed", "cancelled"}:
-            return turn
-        await asyncio.sleep(0.2)
-    pytest.fail(f"Turn 未在 30 秒内终结: {turn_id}")
+async def test_standard_user_restores_visible_function_items_without_internal_audit(e2e_client, e2e_headers):
+    """真实 worker 生成工具过程；普通用户回读可见 item，同时仍无审计权限。"""
+    departments = await e2e_client.get("/api/departments", headers=e2e_headers)
+    assert departments.status_code == 200, departments.text
+    password = f"Pw!{uuid.uuid4().hex}"
+    created_user = await e2e_client.post(
+        "/api/auth/users",
+        headers=e2e_headers,
+        json={
+            "username": f"visible_{uuid.uuid4().hex[:8]}",
+            "password": password,
+            "role": "user",
+            "department_id": departments.json()[0]["id"],
+        },
+    )
+    assert created_user.status_code == 200, created_user.text
+    user = created_user.json()
+    user_headers = None
+    provider_created = False
+    slug = thread_id = turn_id = None
+    try:
+        login = await e2e_client.post("/api/auth/token", data={"username": user["uid"], "password": password})
+        assert login.status_code == 200, login.text
+        user_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        provider_created = await _provider(e2e_client, e2e_headers)
+        slug = await _agent(e2e_client, e2e_headers, str(user["uid"]))
+
+        created = await e2e_client.post(
+            "/api/v1/agents/sessions",
+            headers={**user_headers, "Idempotency-Key": str(uuid.uuid4())},
+            json={
+                "agent_id": slug,
+                "agent": {"model": MODEL},
+                "tool_approval_mode": "always_trust",
+                "title": make_test_session_title("standard-visible-items"),
+                "input": [{"role": "user", "content": [{"type": "input_text", "text": OUTPUT}]}],
+            },
+        )
+        assert created.status_code == 201, created.text
+        thread_id = created.json()["id"]
+        consumed = await wait_for_consumed_input(e2e_client, user_headers, created.json()["yuxi"]["receipt"])
+        turn_id = consumed["turn_id"]
+        assert (await _turn(e2e_client, user_headers, thread_id, turn_id))["status"] == "completed"
+        history = await e2e_client.get(f"/api/v1/agents/sessions/{thread_id}/items?order=asc&limit=100", headers=user_headers)
+        assert history.status_code == 200, history.text
+        items = history.json()["data"]
+        call = next(item for item in items if item["type"] == "function_call")
+        output = next(item for item in items if item["type"] == "function_call_output")
+        assert call["name"] == "present_artifacts" and call["arguments"] == {"filepaths": []}
+        assert call["status"] == output["status"] == "completed" and call["call_id"] == output["call_id"]
+        assert TOOL_RESULT in output["output"]
+        audits = await e2e_client.get(f"/api/v1/agents/sessions/{thread_id}/audits", headers=user_headers)
+        assert audits.status_code == 403
+        private_fields = ("system_prompt", "checkpoint", "manifest_fingerprint", "source_model_operation_id")
+        assert all(field not in history.text for field in private_fields)
+    finally:
+        if thread_id and user_headers:
+            await archive_public_thread(e2e_client, user_headers, thread_id, turn_id=turn_id)
+        if slug:
+            await delete_agent(e2e_client, e2e_headers, slug)
+        await _delete_provider(e2e_client, e2e_headers, provider_created)
+        deleted = await e2e_client.delete(f"/api/auth/users/{user['id']}", headers=e2e_headers)
+        assert deleted.status_code in {200, 404}, deleted.text

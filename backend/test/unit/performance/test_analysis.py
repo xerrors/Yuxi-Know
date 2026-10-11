@@ -79,18 +79,6 @@ class StageAnalysisTest(unittest.TestCase):
             self.assertEqual(phases["API 接入至 Worker 开始"], 1.5)
             self.assertEqual(phases["领取、读取输入/用户/工作目录"], 0.5)
 
-    def test_duplicate_groups_preserve_existing_outputs_before_refresh(self):
-        """分组错误在读取容器或覆盖既有派生结果前失败。"""
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "matrix.json"
-            path.write_text(json.dumps({"groups": [{"workers": 1, "concurrency": 10}] * 2}))
-            output = path.with_name("stages.json")
-            output.write_text("previous result\n")
-            with self.assertRaisesRegex(ValueError, "重复"):
-                main(path, True)
-            self.assertEqual(output.read_text(), "previous result\n")
-            self.assertFalse(path.with_name("complete.json").exists())
-
     def test_unknown_greenlet_cpu_stays_unknown(self):
         span = {
             "name": "pool",

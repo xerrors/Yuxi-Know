@@ -247,11 +247,6 @@ async def test_user_delete_oidc_restore_cannot_republish_or_enable_old_api_key(t
         await engine.dispose()
 
 
-async def test_regenerate_api_key_endpoint_is_removed(test_client, admin_headers):
-    response = await test_client.post(f"{API_KEYS_PATH}1/regenerate", headers=admin_headers)
-    assert response.status_code == 404, response.text
-
-
 async def test_api_key_auth_protected_endpoint(test_client, admin_headers):
     """Test that API Key can be used to authenticate to a protected endpoint via Bearer token."""
     # Create an API key

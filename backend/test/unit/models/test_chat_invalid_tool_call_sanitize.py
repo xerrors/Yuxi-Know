@@ -10,18 +10,16 @@ ChatCompletionsAdapter._get_request_payload 里按 id 移除这些截断调用�
 from __future__ import annotations
 
 import json
-import os
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, InvalidToolCall
 from pydantic import SecretStr
 
-os.environ.setdefault("OPENAI_API_KEY", "test-key")
 
-from yuxi.modules.models.chat import ChatCompletionsAdapter, _sanitize_wire_invalid_tool_calls
+def _adapter(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    from yuxi.modules.models.chat import ChatCompletionsAdapter
 
-
-def _adapter() -> ChatCompletionsAdapter:
     return ChatCompletionsAdapter(
         model="deepseek-chat",
         api_key=SecretStr("test-key"),
@@ -43,7 +41,10 @@ def _messages_with_invalid() -> list:
 # ---- 单元：wire 净化函数 ----
 
 
-def test_pure_invalid_call_is_removed_and_feedback_added():
+def test_pure_invalid_call_is_removed_and_feedback_added(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    from yuxi.modules.models.chat import _sanitize_wire_invalid_tool_calls
+
     wire = [
         {"role": "user", "content": "hi"},
         {
@@ -63,7 +64,10 @@ def test_pure_invalid_call_is_removed_and_feedback_added():
     assert wire[1]["content"] == [{"type": "text", "text": "[工具调用失败] kbs_search: Unterminated string"}]
 
 
-def test_mixed_keeps_valid_call_and_adds_feedback():
+def test_mixed_keeps_valid_call_and_adds_feedback(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    from yuxi.modules.models.chat import _sanitize_wire_invalid_tool_calls
+
     wire = [
         {
             "role": "assistant",
@@ -92,7 +96,10 @@ def test_mixed_keeps_valid_call_and_adds_feedback():
     assert wire[0]["content"] == [{"type": "text", "text": "[工具调用失败] kbs_search: Unterminated string"}]
 
 
-def test_no_invalid_call_leaves_wire_unchanged():
+def test_no_invalid_call_leaves_wire_unchanged(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    from yuxi.modules.models.chat import _sanitize_wire_invalid_tool_calls
+
     wire = [
         {
             "role": "assistant",
@@ -141,36 +148,23 @@ def _stream_response() -> str:
     return 'data: {"choices":[{"delta":{"content":"ok"},"index":0}]}\n\ndata: [DONE]\n\n'
 
 
-def test_invoke_sanitizes_request_body(httpx_mock):
-    httpx_mock.add_response(url="http://test.local/v1/chat/completions", json=_ok_response())
-
-    _adapter().invoke(_messages_with_invalid())
-
-    _assert_body_has_no_invalid_tool_call(httpx_mock.get_request())
-
-
 @pytest.mark.asyncio
-async def test_ainvoke_sanitizes_request_body(httpx_mock):
-    httpx_mock.add_response(url="http://test.local/v1/chat/completions", json=_ok_response())
+@pytest.mark.parametrize("entrypoint", ["invoke", "ainvoke", "stream", "astream"])
+async def test_adapter_entrypoints_sanitize_request_body(httpx_mock, monkeypatch, entrypoint):
+    adapter = _adapter(monkeypatch)
+    if entrypoint in {"stream", "astream"}:
+        httpx_mock.add_response(url="http://test.local/v1/chat/completions", text=_stream_response())
+    else:
+        httpx_mock.add_response(url="http://test.local/v1/chat/completions", json=_ok_response())
 
-    await _adapter().ainvoke(_messages_with_invalid())
-
-    _assert_body_has_no_invalid_tool_call(httpx_mock.get_request())
-
-
-def test_stream_sanitizes_request_body(httpx_mock):
-    httpx_mock.add_response(url="http://test.local/v1/chat/completions", text=_stream_response())
-
-    list(_adapter().stream(_messages_with_invalid()))
-
-    _assert_body_has_no_invalid_tool_call(httpx_mock.get_request())
-
-
-@pytest.mark.asyncio
-async def test_astream_sanitizes_request_body(httpx_mock):
-    httpx_mock.add_response(url="http://test.local/v1/chat/completions", text=_stream_response())
-
-    async for _ in _adapter().astream(_messages_with_invalid()):
-        pass
+    if entrypoint == "invoke":
+        adapter.invoke(_messages_with_invalid())
+    elif entrypoint == "ainvoke":
+        await adapter.ainvoke(_messages_with_invalid())
+    elif entrypoint == "stream":
+        list(adapter.stream(_messages_with_invalid()))
+    else:
+        async for _ in adapter.astream(_messages_with_invalid()):
+            pass
 
     _assert_body_has_no_invalid_tool_call(httpx_mock.get_request())

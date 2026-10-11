@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import re
 import shutil
 import uuid
@@ -15,6 +14,7 @@ import httpx
 from yuxi.modules.workspace.paths import normalize_workdir_path, user_workdir_host_dir
 from yuxi.infrastructure.runtime_settings import get_user_data_dir
 from yuxi.modules.agents.models.runs import AGENT_RUN_TERMINAL_STATUSES
+from test.support.postgres import postgres_dsn
 
 TEST_RESOURCE_PREFIX = "YUXI_TEST_"
 TEST_SESSION_TITLE_PREFIX = f"{TEST_RESOURCE_PREFIX}SESSION_"
@@ -134,11 +134,6 @@ async def cleanup_provisioned_sandboxes(
 
     if failures:
         raise RuntimeError("; ".join(failures))
-
-
-def _postgres_dsn() -> str:
-    """返回测试环境 PostgreSQL DSN（去掉 SQLAlchemy 驱动前缀）。"""
-    return os.getenv("POSTGRES_URL", "postgresql+asyncpg://postgres:postgres@postgres:5432/yuxi").replace("+asyncpg", "")
 
 
 def _is_pytest_resource(name: object) -> bool:
@@ -276,7 +271,7 @@ def remove_test_workdir(uid: str, workdir_path: str) -> None:
 async def list_test_session_resources(owner_uid: str) -> dict[str, CleanupSessionResource]:
     """读取当前测试用户的测试 Session、状态和真实 Workdir。"""
 
-    conn = await asyncpg.connect(_postgres_dsn())
+    conn = await asyncpg.connect(postgres_dsn())
     try:
         receipt_rows = await conn.fetch(
             "SELECT DISTINCT thread_id FROM agent_input_receipts WHERE uid = $1 AND (left(idempotency_key, char_length($2)) = $2 OR left(idempotency_key, char_length($3)) = $3)",
@@ -368,7 +363,7 @@ async def validate_test_workdirs_exclusive(
 
     if not workdirs:
         return
-    conn = await asyncpg.connect(_postgres_dsn())
+    conn = await asyncpg.connect(postgres_dsn())
     try:
         await _validate_test_workdirs_exclusive(conn, workdirs, target_project_ids)
     finally:
@@ -421,7 +416,7 @@ async def validate_test_runs_terminal(thread_ids: set[str]) -> None:
 
     if not thread_ids:
         return
-    conn = await asyncpg.connect(_postgres_dsn())
+    conn = await asyncpg.connect(postgres_dsn())
     try:
         deadline = asyncio.get_running_loop().time() + RUN_CLEANUP_WAIT_SECONDS
         target_ids = sorted(thread_ids)
@@ -458,7 +453,7 @@ async def list_test_pending_inputs(thread_ids: set[str]) -> list[tuple[str, str]
 
     if not thread_ids:
         return []
-    conn = await asyncpg.connect(_postgres_dsn())
+    conn = await asyncpg.connect(postgres_dsn())
     try:
         rows = await conn.fetch(
             "SELECT thread_id, id FROM agent_inputs WHERE thread_id = ANY($1::text[]) AND kind = 'follow_up' AND status = 'pending' ORDER BY received_seq",
@@ -475,7 +470,7 @@ async def delete_test_session_rows(thread_ids: set[str]) -> None:
     if not thread_ids:
         return
     thread_ids_list = sorted(thread_ids)
-    conn = await asyncpg.connect(_postgres_dsn())
+    conn = await asyncpg.connect(postgres_dsn())
     try:
         async with conn.transaction():
             await _delete_test_session_rows(conn, thread_ids_list)
@@ -495,7 +490,7 @@ async def delete_test_session_resources(
     if not thread_ids:
         return
     thread_ids_list = sorted(thread_ids)
-    conn = await asyncpg.connect(_postgres_dsn())
+    conn = await asyncpg.connect(postgres_dsn())
     try:
         async with conn.transaction():
             await conn.execute("LOCK TABLE projects IN SHARE MODE")
@@ -586,7 +581,7 @@ async def _delete_test_session_rows(conn: asyncpg.Connection, thread_ids_list: l
 async def delete_orphaned_test_projects(owner_uid: str) -> None:
     """删除当前用户无 Session 引用且显式标记的测试 Project。"""
 
-    conn = await asyncpg.connect(_postgres_dsn())
+    conn = await asyncpg.connect(postgres_dsn())
     try:
         await conn.execute(
             "DELETE FROM projects WHERE uid = $1 AND left(idempotency_key, char_length($2)) = $2 AND NOT EXISTS (SELECT 1 FROM sessions WHERE sessions.project_id = projects.id)",

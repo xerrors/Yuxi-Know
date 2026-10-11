@@ -34,7 +34,8 @@ run_unit_tests() {
 run_integration_tests() {
     echo "运行集成测试..."
     check_server
-    "${PYTEST_CMD[@]}" test/integration
+    "${PYTEST_CMD[@]}" test/integration/api
+    "${PYTEST_CMD[@]}" test/integration --ignore=test/integration/api
 }
 
 run_e2e_tests() {
@@ -52,7 +53,9 @@ run_all_e2e_tests() {
 run_all_tests() {
     echo "运行全部测试..."
     check_server
-    "${PYTEST_CMD[@]}" test/unit test/integration "${LIFECYCLE_E2E_TESTS[@]}"
+    "${PYTEST_CMD[@]}" test/unit
+    run_integration_tests
+    "${PYTEST_CMD[@]}" "${LIFECYCLE_E2E_TESTS[@]}"
 }
 
 show_help() {

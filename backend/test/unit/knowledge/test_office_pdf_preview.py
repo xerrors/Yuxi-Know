@@ -5,42 +5,9 @@ from types import SimpleNamespace
 import pytest
 
 from yuxi.modules.knowledge import preview
-from yuxi.modules.knowledge.base import KnowledgeBase
 from yuxi.shared.files import MAX_FILE_PREVIEW_BYTES
 from yuxi.infrastructure.minio import ObjectSizeLimitError
-
-
-class FakeKnowledgeBase(KnowledgeBase):
-    @property
-    def kb_type(self) -> str:
-        return "fake"
-
-    async def _create_kb_instance(self, kb_id: str, embedding_model_spec: str | None):
-        return None
-
-    async def _initialize_kb_instance(self, instance) -> None:
-        pass
-
-    async def index_file(self, kb_id: str, file_id: str, operator_id: str | None = None) -> dict:
-        return {}
-
-    async def aquery(self, query_text: str, kb_id: str, **kwargs) -> list[dict]:
-        return []
-
-    def get_query_params_config(self, kb_id: str, **kwargs) -> dict:
-        return {"options": []}
-
-    async def delete_file(self, kb_id: str, file_id: str) -> None:
-        pass
-
-    async def get_file_basic_info(self, kb_id: str, file_id: str) -> dict:
-        return {}
-
-    async def get_file_content(self, kb_id: str, file_id: str) -> dict:
-        return {}
-
-    async def get_file_info(self, kb_id: str, file_id: str) -> dict:
-        return {}
+from test.unit.support.knowledge import FakeKnowledgeBase, make_knowledge_file_record
 
 
 class FakeMinioClient:
@@ -76,14 +43,11 @@ def make_file_record(**overrides) -> SimpleNamespace:
         "file_id": "file1",
         "kb_id": "db1",
         "filename": "demo.docx",
-        "original_filename": None,
         "path": "minio://knowledgebases/db1/upload/demo.docx",
-        "minio_url": None,
         "file_size": None,
-        "is_folder": False,
     }
     values.update(overrides)
-    return SimpleNamespace(**values)
+    return make_knowledge_file_record(**values)
 
 
 def stub_file_record(monkeypatch: pytest.MonkeyPatch, record: SimpleNamespace) -> None:

@@ -15,111 +15,40 @@ from yuxi.modules.knowledge.implementations.milvus import (
     CONTENT_SPARSE_FIELD,
     VECTOR_METRIC_TYPE,
     MilvusKB,
+    _retrieval_config_options,
 )
-from yuxi.modules.knowledge.read_models import KnowledgeBaseConfig
+from test.unit.support.knowledge import make_knowledge_file_record
+from test.unit.support.milvus import (
+    EMBEDDING_MODEL_SPEC,
+    FakeCollection,
+    FakeHit,
+    make_kb,
+    make_query_config,
+)
 
-EMBEDDING_MODEL_SPEC = "test-provider:test-embedding"
+def test_milvus_retrieval_config_exposes_graph_and_dependencies():
+    options = _retrieval_config_options()
+    by_key = {option["key"]: option for option in options}
 
-
-def make_query_config() -> KnowledgeBaseConfig:
-    return KnowledgeBaseConfig(
-        kb_id="db",
-        kb_type="milvus",
-        embedding_model_spec=EMBEDDING_MODEL_SPEC,
-    )
-
-
-class FakeHit:
-    def __init__(self, content: str, distance: float, file_id: str = "file-1"):
-        self.distance = distance
-        self.entity = {
-            "content": content,
-            "chunk_id": "chunk-1",
-            "file_id": file_id,
-            "chunk_index": 0,
-        }
-
-
-class FakeCollection:
-    def __init__(self, distance: float = 0.8):
-        self.search_calls = []
-        self.hybrid_calls = []
-        self.insert_calls = []
-        self.upsert_calls = []
-        self.distance = distance
-
-    def search(self, **kwargs):
-        self.search_calls.append(kwargs)
-        return [[FakeHit("BM25 result", self.distance)]]
-
-    def hybrid_search(self, **kwargs):
-        self.hybrid_calls.append(kwargs)
-        return [[FakeHit("Hybrid result", self.distance)]]
-
-    def insert(self, entities):
-        self.insert_calls.append(entities)
-
-    def upsert(self, entities):
-        self.upsert_calls.append(entities)
-
-
-def make_kb(collection: FakeCollection) -> MilvusKB:
-    kb = MilvusKB.__new__(MilvusKB)
-    kb._get_embedding_function = lambda embedding_model_spec, **kwargs: lambda texts: [[0.1, 0.2] for _ in texts]
-
-    async def get_collection(kb_id: str, embedding_model_spec: str | None):
-        del kb_id, embedding_model_spec
-        return collection
-
-    async def hydrate_chunk_sources(kb_id: str, chunks: list[dict]) -> list[dict]:
-        for chunk in chunks:
-            chunk["metadata"]["source"] = "demo.md"
-        return chunks
-
-    async def active_generation_expr(kb_id):
-        """检索通道单测使用固定 PG 可见范围；真实范围由 integration 验证。"""
-        return 'generation == 1 and file_id in ["file-1"]'
-
-    kb._get_or_create_milvus_collection = get_collection
-    kb._get_existing_milvus_collection = AsyncMock(return_value=collection)
-    kb._hydrate_chunk_sources = hydrate_chunk_sources
-    kb._build_active_generation_expr = active_generation_expr
-    return kb
+    assert by_key["use_graph_retrieval"]["default"] is False
+    assert by_key["graph_max_nodes"]["default"] == 10000
+    assert by_key["graph_max_nodes"]["depend_on"] == ("use_graph_retrieval", True)
+    assert by_key["graph_top_k"]["depend_on"] == ("use_graph_retrieval", True)
+    assert by_key["reranker_model"]["depend_on"] == ("use_reranker", True)
 
 
 def make_file_record(**overrides):
-    data = {
-        "file_id": "file-1",
-        "kb_id": "db",
-        "parent_id": None,
-        "filename": "demo.md",
-        "file_type": "md",
+    values = {
         "path": "/tmp/demo.md",
-        "minio_url": None,
         "markdown_file": "minio://parsed/db/file-1.md",
         "status": FileStatus.PARSED,
         "content_hash": None,
         "file_size": 0,
-        "chunk_count": 0,
-        "token_count": 0,
-        "content_type": "file",
         "processing_params": {},
-        "is_folder": False,
-        "error_message": None,
         "created_by": None,
-        "updated_by": None,
-        "created_at": None,
-        "updated_at": None,
-        "original_filename": None,
-        "generation": 1,
-        "active_generation": 1,
-        "building_generation": None,
-        "deleted_at": None,
-        "projection_status": "pending",
-        "projection_error": None,
     }
-    data.update(overrides)
-    return types.SimpleNamespace(**data)
+    values.update(overrides)
+    return make_knowledge_file_record(**values)
 
 
 class FakeKnowledgeFileRepository:
@@ -684,18 +613,39 @@ async def test_insert_chunks_to_stores_writes_pg_first_then_milvus_upsert(monkey
     assert collection.insert_calls == []
 
 
-async def test_insert_chunks_to_stores_retries_milvus_upsert_and_keeps_pg_facts(monkeypatch):
+@pytest.mark.parametrize(
+    ("failure_mode", "expected_error", "expected_attempts"),
+    [
+        pytest.param("transient_milvus", None, 2, id="transient-milvus-retry"),
+        pytest.param(
+            "retry_exhaustion",
+            "milvus boom",
+            milvus_module.MILVUS_CHUNK_UPSERT_ATTEMPTS,
+            id="milvus-retry-exhaustion",
+        ),
+        pytest.param("postgres", "pg boom", 0, id="postgres-write-failure"),
+    ],
+)
+async def test_insert_chunks_to_stores_failure_paths_preserve_pg_facts(
+    monkeypatch,
+    failure_mode,
+    expected_error,
+    expected_attempts,
+):
+    """Milvus 重试成功或耗尽都不回滚 PG；PG 失败则不触碰 Milvus。"""
     monkeypatch.setattr(milvus_module, "MILVUS_CHUNK_UPSERT_RETRY_DELAY_SECONDS", 0)
-    repos = []
+    repositories = []
 
     class FakeChunkRepo:
         def __init__(self):
             self.upsert_calls = []
             self.delete_calls = []
-            repos.append(self)
+            repositories.append(self)
 
         async def batch_upsert(self, chunks):
             self.upsert_calls.append(chunks)
+            if failure_mode == "postgres":
+                raise RuntimeError("pg boom")
             return []
 
         async def delete_by_file_id(self, file_id):
@@ -705,88 +655,51 @@ async def test_insert_chunks_to_stores_retries_milvus_upsert_and_keeps_pg_facts(
     monkeypatch.setattr("yuxi.modules.knowledge.implementations.milvus.KnowledgeChunkRepository", FakeChunkRepo)
     kb = MilvusKB.__new__(MilvusKB)
 
-    class FlakyCollection(FakeCollection):
+    class RetryCollection(FakeCollection):
         def __init__(self):
             super().__init__()
             self.attempts = 0
 
         def upsert(self, entities):
             self.attempts += 1
-            if self.attempts == 1:
+            if failure_mode == "transient_milvus" and self.attempts == 1:
                 raise RuntimeError("milvus transient")
+            if failure_mode == "retry_exhaustion":
+                raise RuntimeError("milvus boom")
             self.upsert_calls.append(entities)
 
-    collection = FlakyCollection()
-    chunks = [make_chunk(index) for index in range(2)]
-    embeddings = [[0.1, 0.2] for _ in chunks]
-
-    await kb._insert_chunks_to_stores("db", "file-1", collection, chunks, embeddings)
-
-    # 重试成功即收敛：PG 事实保留，不触发回滚
-    assert collection.attempts == 2
-    assert len(collection.upsert_calls) == 1
-    assert repos[0].delete_calls == []
-
-
-async def test_insert_chunks_to_stores_raises_after_retry_exhaustion_without_rollback(monkeypatch):
-    monkeypatch.setattr(milvus_module, "MILVUS_CHUNK_UPSERT_RETRY_DELAY_SECONDS", 0)
-    repos = []
-
-    class FakeChunkRepo:
-        def __init__(self):
-            self.upsert_calls = []
-            self.delete_calls = []
-            repos.append(self)
-
-        async def batch_upsert(self, chunks):
-            self.upsert_calls.append(chunks)
-            return []
-
-        async def delete_by_file_id(self, file_id):
-            self.delete_calls.append(file_id)
-            return 0
-
-    monkeypatch.setattr("yuxi.modules.knowledge.implementations.milvus.KnowledgeChunkRepository", FakeChunkRepo)
-    kb = MilvusKB.__new__(MilvusKB)
-
-    class FailingCollection(FakeCollection):
-        def upsert(self, entities):
-            raise RuntimeError("milvus boom")
-
-    collection = FailingCollection()
+    collection = RetryCollection()
     milvus_delete_calls = []
 
     async def delete_file_chunks_from_milvus(collection_arg, file_id):
         milvus_delete_calls.append((collection_arg, file_id))
 
+    kb = MilvusKB.__new__(MilvusKB)
     kb._delete_file_chunks_from_milvus = delete_file_chunks_from_milvus
     chunks = [make_chunk(index) for index in range(2)]
     embeddings = [[0.1, 0.2] for _ in chunks]
 
-    with pytest.raises(RuntimeError, match="milvus boom"):
+    if expected_error is None:
         await kb._insert_chunks_to_stores("db", "file-1", collection, chunks, embeddings)
+    else:
+        with pytest.raises(RuntimeError, match=expected_error):
+            await kb._insert_chunks_to_stores("db", "file-1", collection, chunks, embeddings)
 
-    # 重试耗尽后抛错且不回滚：PG 事实保留，等待重新索引幂等收敛
-    assert repos[0].delete_calls == []
+    assert len(repositories) == 1
+    assert len(repositories[0].upsert_calls) == 1
+    persisted = repositories[0].upsert_calls[0]
+    assert [(row["chunk_id"], row["file_id"], row["content"]) for row in persisted] == [
+        (chunk["chunk_id"], chunk["file_id"], chunk["content"]) for chunk in chunks
+    ]
+    # 无论派生写入成功或失败，都不能撤销已写入的 PG 事实。
+    assert repositories[0].delete_calls == []
+    assert collection.attempts == expected_attempts
+    if failure_mode == "transient_milvus":
+        assert len(collection.upsert_calls) == 1
+        assert collection.upsert_calls[0][5] == embeddings
+    else:
+        assert collection.upsert_calls == []
     assert milvus_delete_calls == []
-
-
-async def test_insert_chunks_to_stores_propagates_pg_failure_without_milvus_write(monkeypatch):
-    class FakeChunkRepo:
-        async def batch_upsert(self, chunks):
-            raise RuntimeError("pg boom")
-
-    monkeypatch.setattr("yuxi.modules.knowledge.implementations.milvus.KnowledgeChunkRepository", FakeChunkRepo)
-    kb = MilvusKB.__new__(MilvusKB)
-    collection = FakeCollection()
-    chunks = [make_chunk(index) for index in range(2)]
-    embeddings = [[0.1, 0.2] for _ in chunks]
-
-    with pytest.raises(RuntimeError, match="pg boom"):
-        await kb._insert_chunks_to_stores("db", "file-1", collection, chunks, embeddings)
-
-    # PG 失败时 Milvus 不应被写入
-    assert collection.upsert_calls == []
 
 
 async def test_keyword_mode_uses_milvus_bm25_search():
@@ -1226,3 +1139,89 @@ async def test_cancelled_old_attempt_cleanup_preserves_published_result(monkeypa
     assert repository.records["file-1"].status == FileStatus.PARSED
     assert repository.records["file-1"].markdown_file == current_url
     assert [call.args[2] for call in cleanup.await_args_list] == ["old-attempt"]
+
+
+def test_rrf_fusion_merges_chunk_and_graph_rankings():
+    kb = object.__new__(MilvusKB)
+    base_chunks = [
+        {"content": "base a", "metadata": {"chunk_id": "a"}, "score": 0.9},
+        {"content": "base b", "metadata": {"chunk_id": "b"}, "score": 0.8},
+    ]
+    graph_chunks = [
+        {"content": "graph b", "metadata": {"chunk_id": "b"}, "score": 0.7, "graph_score": 0.7},
+        {"content": "graph c", "metadata": {"chunk_id": "c"}, "score": 0.6, "graph_score": 0.6},
+    ]
+
+    fused = kb._fuse_chunk_rankings(base_chunks, graph_chunks, graph_weight=1.0)
+
+    assert [chunk["metadata"]["chunk_id"] for chunk in fused] == ["b", "a", "c"]
+    assert fused[0]["graph_score"] == 0.7
+    assert fused[0]["fusion_sources"] == ["chunk", "graph"]
+
+
+async def test_collection_load_failure_is_observable():
+    """加载失败不得被当作可查询的集合。"""
+
+    def fail_load():
+        raise RuntimeError("load unavailable")
+
+    with pytest.raises(RuntimeError, match="load unavailable"):
+        await object.__new__(MilvusKB)._initialize_kb_instance(SimpleNamespace(load=fail_load))
+
+
+@pytest.mark.parametrize("mismatch", ["model", "dimension", "missing_embedding", "text_schema"])
+def test_incompatible_collection_is_rejected_without_deletion(monkeypatch, mismatch):
+    """不匹配的集合显式失败，查询入口不能删除已存在的数据。"""
+    collection = SimpleNamespace(
+        description="Knowledge base collection for db using model",
+        schema=SimpleNamespace(fields=[SimpleNamespace(name="embedding", params={"dim": 4})]),
+    )
+    if mismatch == "model":
+        collection.description = "different model"
+    elif mismatch == "dimension":
+        collection.schema.fields[0].params["dim"] = 8
+    elif mismatch == "missing_embedding":
+        collection.schema.fields = []
+    monkeypatch.setattr(milvus_module.utility, "has_collection", lambda *args, **kwargs: True)
+    monkeypatch.setattr(milvus_module, "Collection", lambda **kwargs: collection)
+    monkeypatch.setattr(
+        milvus_module.model_cache,
+        "get_model_info",
+        lambda spec: SimpleNamespace(
+            model_type="embedding",
+            model_id="model",
+            dimension=4,
+        ),
+    )
+
+    def reject_drop(*args, **kwargs):
+        pytest.fail("collection was deleted")
+
+    monkeypatch.setattr(milvus_module.utility, "drop_collection", reject_drop)
+    kb = object.__new__(MilvusKB)
+    kb.connection_alias = "own"
+    kb._collection_supports_text_retrieval = lambda candidate: mismatch != "text_schema"
+    kb._create_new_collection = reject_drop
+    with pytest.raises(RuntimeError, match="does not match"):
+        kb._create_kb_instance_sync("db", "provider:model")
+
+
+async def test_hybrid_highlighting_preserves_ranking_and_scores():
+    """补取高亮只能附加片段，不能用第二次搜索的分数覆盖融合结果。"""
+    fusion_hits = [FakeHit("first", 0.7), FakeHit("second", 0.5)]
+    highlighted_hits = [FakeHit("second", 1), FakeHit("first", 1)]
+    for hit, chunk_id in zip(fusion_hits, ["a", "b"]):
+        hit.entity["chunk_id"] = chunk_id
+    for hit, chunk_id in zip(highlighted_hits, ["b", "a"]):
+        hit.entity["chunk_id"] = chunk_id
+        hit.highlight = {"content": {"fragments": [f"\ue000{hit.entity.get('content')}\ue001"], "scores": []}}
+    collection = FakeCollection()
+    collection.search = lambda **kwargs: [highlighted_hits]
+    collection.hybrid_search = lambda **kwargs: [fusion_hits]
+
+    chunks = await make_kb(collection).aquery("query", "db", config=make_query_config(), search_mode="hybrid")
+
+    assert [chunk["metadata"]["chunk_id"] for chunk in chunks] == ["a", "b"]
+    assert [chunk["score"] for chunk in chunks] == [0.7, 0.5]
+    assert all(chunk["score_type"] == "hybrid" for chunk in chunks)
+    assert chunks[0]["highlights"] == [[{"text": "first", "matched": True}]]

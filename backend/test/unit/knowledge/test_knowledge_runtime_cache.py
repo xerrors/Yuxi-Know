@@ -93,7 +93,6 @@ async def test_retrieve_uses_cached_config_without_postgres(monkeypatch, tmp_pat
     assert config.embedding_model_spec == "provider:embedding"
     assert config.query_options == {"top_k": 3}
     assert "stats" not in config.additional_params
-    assert not hasattr(fake_kb, "_runtime_configs")
 
 
 @pytest.mark.asyncio

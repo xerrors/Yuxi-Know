@@ -6,7 +6,8 @@ from datetime import datetime
 
 import pytest
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker
+from test.support.sqlite import create_utc_sqlite_engine
 from yuxi.modules.agents.repositories.public_items import PublicItemRepository
 from yuxi.modules.agents.services.public_items import serialize_public_items
 from yuxi.modules.agents.services.input_messages import build_chat_input_message
@@ -24,7 +25,7 @@ STARTED_AT = datetime(2026, 9, 25, 9, 0, 0)
 
 @pytest_asyncio.fixture()
 async def session():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    engine = create_utc_sqlite_engine()
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)

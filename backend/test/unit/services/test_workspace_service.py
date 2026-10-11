@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 import hashlib
+import asyncio
 import os
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
+from threading import Event
 
 import pytest
 from fastapi import HTTPException
 from yuxi.shared.files import FileInput
+from yuxi.modules.workspace import filesystem
+from yuxi.modules.workspace.filesystem import Workspace
+from yuxi.modules.workspace.services.files import _write_workspace_upload
 
 import yuxi.modules.workspace.preview as file_preview
 from yuxi.modules.workspace import paths as workspace_paths
@@ -433,3 +438,44 @@ def test_workspace_entry_preserves_current_virtual_path_contract() -> None:
     assert root["virtual_path"] == "/home/gem/user-data"
     assert directory["path"] == "/notes/"
     assert directory["virtual_path"] == "/home/gem/user-data/notes/"
+
+
+@pytest.mark.asyncio
+async def test_cancelled_upload_waits_for_borrowed_stream_before_returning(tmp_path, monkeypatch):
+    """请求取消不能让输入流在写入线程仍消费时被关闭。"""
+    monkeypatch.setattr(filesystem, "user_workspace_dir", lambda _uid: tmp_path)
+    started = Event()
+    release = Event()
+
+    class BlockingSource(BytesIO):
+        """在首次读取时暂停线程，模拟慢磁盘。"""
+
+        def read(self, size=-1):
+            """让测试在 I/O 中途取消服务调用。"""
+            started.set()
+            assert release.wait(5)
+            assert not self.closed
+            return super().read(size)
+
+    source = BlockingSource(b"content")
+    task = asyncio.create_task(_write_workspace_upload(FileInput("file.txt", source), Workspace("user-1"), "/file.txt"))
+    try:
+        assert await asyncio.to_thread(started.wait, 5)
+        task.cancel()
+        await asyncio.sleep(0)
+        assert not task.done()
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        source.close()
+        assert (tmp_path / "file.txt").read_bytes() == b"content"
+        assert not list(tmp_path.glob(".yuxi-write-*"))
+    finally:
+        release.set()
+        if not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+        source.close()

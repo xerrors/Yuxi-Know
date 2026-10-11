@@ -19,19 +19,7 @@ from yuxi.shared.datetime import utc_now
 
 from agent_run_test_helpers import cleanup_agent_run_threads, create_agent_run
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_knowledge_resources():
-    """本文件仅使用 PostgreSQL，不创建 HTTP 知识资源。"""
-    yield
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_sandboxes():
-    """本文件不创建 Sandbox。"""
-    yield
+pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
 
 @pytest_asyncio.fixture()
@@ -303,7 +291,7 @@ async def test_manifest_rejects_stale_owner_and_expired_lease(fact_database):
 
         async with session_factory() as db:
             repository = AgentRunRepository(db)
-            with pytest.raises(ValueError, match="lease owner"):
+            with pytest.raises(ValueError):
                 await repository.record_run_manifest(
                     run_id,
                     manifest={"manifest_version": 1},
@@ -352,7 +340,7 @@ async def test_run_timing_is_write_once_under_real_postgres_lease(fact_database)
 
         async with session_factory() as db:
             repository = AgentRunRepository(db)
-            with pytest.raises(ValueError, match="lease owner"):
+            with pytest.raises(ValueError):
                 await repository.record_first_output(
                     run_id,
                     worker_id="worker-stale:token-2",

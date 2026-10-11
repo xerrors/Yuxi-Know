@@ -33,19 +33,7 @@ from yuxi.modules.agents.services.scope import ActorScope
 from yuxi.modules.identity.models import User
 from yuxi.shared.datetime import utc_now
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_sandboxes():
-    """本文件只访问 PostgreSQL，不创建沙盒，不触发全局 provisioner 清理。"""
-    yield
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_knowledge_resources():
-    """只操作独立数据库，不清理真实 HTTP 用户资源。"""
-    yield
+pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
 
 @pytest_asyncio.fixture()
@@ -167,7 +155,7 @@ async def test_agent_directory_returns_only_callable_role_metadata(tree):
         assert all(set(role) == {"id", "name", "description"} for role in roles.values())
 
 
-async def test_agent_directory_does_not_turn_private_governance_into_run_permission(tree, admin_headers):
+async def test_agent_directory_does_not_turn_private_governance_into_run_permission(tree):
     """超级管理员可管理别人的私有配置，但协作目录不能宣称可运行。"""
     factory, run_id, _, uid = tree
     hidden = await _define_target_agent(tree, owner="another-user")

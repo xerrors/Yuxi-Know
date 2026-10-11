@@ -7,16 +7,24 @@ import json
 import os
 import uuid
 from datetime import datetime, UTC
-from http.server import ThreadingHTTPServer
-from threading import Thread
 
 import asyncpg
 import httpx
 import pytest
 
-from test.e2e.e2e_helpers import delete_agent, postgres_dsn, wait_for_consumed_input
+from test.e2e.e2e_helpers import (
+    DETERMINISTIC_MODEL as MODEL,
+    DETERMINISTIC_OUTPUT as OUTPUT,
+    create_lifecycle_agent as _agent,
+    delete_agent,
+    output_text,
+    postgres_dsn,
+    public_message as _message,
+    register_replay_provider as _provider,
+    wait_for_consumed_input,
+    wait_for_terminal_turn as _turn,
+)
 from test.live_api_cleanup import make_test_session_title
-from test.support.openai_replay_server import ReplayHandler
 from test.support.public_events import read_events
 from yuxi.modules.agents.runtime.sandbox import ProvisionerSandboxBackend, get_sandbox_provider
 from yuxi.modules.agents.services.transport import get_redis_client
@@ -26,102 +34,26 @@ from yuxi.modules.workspace.paths import user_workspace_dir
 pytestmark = [pytest.mark.asyncio, pytest.mark.e2e, pytest.mark.slow, pytest.mark.timeout(240)]
 
 
-def output_text(items):
-    """从结果 Run 明确绑定的公开 item 读取正文。"""
-    return "".join(part["text"] for item in items if item["type"] == "message" for part in item["content"] if part["type"] == "output_text")
-
-
-OUTPUT = "DETERMINISTIC_AGENT_E2E_OK"
-MODEL = "ci-replay:deterministic-chat"
-
-
-async def _provider(
-    client: httpx.AsyncClient, headers: dict, *, base_url: str = "http://api:8765/v1", provider_id: str = "ci-replay"
-) -> None:
-    """注册不依赖外部密钥的模型重放服务。"""
-    response = await client.post(
-        "/api/system/model-providers",
-        headers=headers,
-        json={
-            "provider_id": provider_id,
-            "display_name": "CI deterministic replay",
-            "provider_type": "openai",
-            "base_url": base_url,
-            "api_key": "ci-replay-key",
-            "capabilities": ["chat"],
-            "enabled_models": [{"id": "deterministic-chat", "display_name": "Deterministic chat", "type": "chat", "source": "manual"}],
-            "is_enabled": True,
-        },
+async def _continue_queued_input(client, headers, thread_id: str, input_id: str, request_tag: str) -> dict:
+    """显式继续暂停队列，等待唯一队头输入完成。"""
+    continued = await client.post(
+        f"/api/v1/agents/sessions/{thread_id}/events",
+        headers={**headers, "Idempotency-Key": f"{request_tag}-{uuid.uuid4().hex}"},
+        json={"events": [{"type": "yuxi.session.input.continue"}]},
     )
-    assert response.status_code == 200 or (
-        response.status_code == 400 and response.json().get("detail") == f"供应商 {provider_id} 已存在"
-    ), response.text
-
-    if response.status_code == 200:
-        from test.e2e.e2e_helpers import wait_model_provider_cache
-
-        await wait_model_provider_cache()
-
-
-async def _agent(
-    client: httpx.AsyncClient,
-    headers: dict,
-    uid: str,
-    *,
-    tools: list[str] | None = None,
-    system_prompt_suffix: str = "",
-    model_spec: str = MODEL,
-    summary_prompt: str | None = None,
-) -> str:
-    """创建含预加载技能但不访问可选外部服务的主 Agent。"""
-    slug = f"ci-lifecycle-{uuid.uuid4().hex[:8]}"
-    response = await client.post(
-        "/api/agent",
-        headers=headers,
-        json={
-            "name": f"Lifecycle {slug[-8:]}",
-            "slug": slug,
-            "backend_id": "ChatbotAgent",
-            "description": "生命周期 E2E",
-            "config_json": {
-                "context": {
-                    "model": model_spec,
-                    "system_prompt": f"不要调用工具，只输出 {OUTPUT}。{system_prompt_suffix}",
-                    "tools": tools or [],
-                    "knowledges": [],
-                    "mcps": [],
-                    "skills": ["image-gen"],
-                    "preload_skills": ["image-gen"],
-                    **({"summary_prompt": summary_prompt} if summary_prompt else {}),
-                }
-            },
-            "visibility": "shared",
-            "share_config": {
-                "version": 2,
-                "read_scope": {"access_level": "user", "department_ids": [], "user_uids": [uid]},
-                "manage_scope": None,
-            },
-        },
-    )
-    assert response.status_code == 200, response.text
-    return slug
-
-
-def _message(text: str) -> dict:
-    """构建一条 Public 文字消息。"""
-    return {"role": "user", "content": [{"type": "input_text", "text": text}]}
-
-
-async def _turn(client: httpx.AsyncClient, headers: dict, thread_id: str, turn_id: str) -> dict:
-    """以持久 Turn 快照等待终态。"""
-    for _ in range(150):
-        response = await client.get(f"/api/v1/agents/sessions/{thread_id}/turns/{turn_id}", headers=headers)
-        assert response.status_code == 200, response.text
-        result = response.json()
-        if result["status"] in {"completed", "failed", "cancelled"}:
-            return result
+    assert continued.status_code == 202, continued.text
+    for _ in range(100):
+        consumed = await client.get(f"/api/v1/agents/sessions/{thread_id}/inputs/{input_id}", headers=headers)
+        assert consumed.status_code == 200, consumed.text
+        if consumed.json()["status"] == "consumed":
+            break
         await asyncio.sleep(0.2)
-    pytest.fail("Turn 未在 30 秒内终结")
+    else:
+        pytest.fail("显式继续后队头未领取")
+    turn = await _turn(client, headers, thread_id, consumed.json()["turn_id"])
+    assert turn["status"] == "completed", turn
+    assert OUTPUT in output_text(turn["yuxi"]["output"])
+    return turn
 
 
 @pytest.mark.parametrize("input_kind,stream", [("text", False), ("text", True), ("long_parts", False)])
@@ -952,27 +884,13 @@ async def test_waiting_turn_requires_complete_answers_and_resumes_same_turn(e2e_
         assert deleted.status_code in {200, 404}, deleted.text
 
 
-@pytest.fixture
-def question_replay_url():
-    """为提问场景启动独占的真实 HTTP replay，不重启共享测试服务。"""
-    server = ThreadingHTTPServer(("0.0.0.0", 0), ReplayHandler)
-    thread = Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        yield f"http://api:{server.server_port}/v1"
-    finally:
-        server.shutdown()
-        thread.join()
-        server.server_close()
-
-
-async def test_invalid_question_parameters_return_tool_error_without_waitpoint(e2e_client, e2e_headers, question_replay_url):
+async def test_invalid_question_parameters_return_tool_error_without_waitpoint(e2e_client, e2e_headers, openai_replay_url):
     """真实工具入口拒绝字符串布尔值，工具错误落库且不产生人工等待。"""
     me = await e2e_client.get("/api/auth/me", headers=e2e_headers)
     assert me.status_code == 200, me.text
     provider_id = f"ci-replay-question-{uuid.uuid4().hex[:8]}"
     model_spec = f"{provider_id}:deterministic-chat"
-    await _provider(e2e_client, e2e_headers, base_url=question_replay_url, provider_id=provider_id)
+    await _provider(e2e_client, e2e_headers, base_url=openai_replay_url, provider_id=provider_id)
     slug = await _agent(e2e_client, e2e_headers, str(me.json()["uid"]), tools=["ask_user_question"], model_spec=model_spec)
     try:
         created = await e2e_client.post(
@@ -1116,23 +1034,7 @@ async def test_cancel_waiting_turn_pauses_queue_until_continue(e2e_client, e2e_h
         )
         assert late.status_code == 409, late.text
 
-        continued = await e2e_client.post(
-            f"/api/v1/agents/sessions/{thread_id}/events",
-            headers={**e2e_headers, "Idempotency-Key": f"cancel-continue-{uuid.uuid4().hex}"},
-            json={"events": [{"type": "yuxi.session.input.continue"}]},
-        )
-        assert continued.status_code == 202, continued.text
-        for _ in range(100):
-            consumed = await e2e_client.get(f"/api/v1/agents/sessions/{thread_id}/inputs/{queued_id}", headers=e2e_headers)
-            assert consumed.status_code == 200, consumed.text
-            if consumed.json()["status"] == "consumed":
-                break
-            await asyncio.sleep(0.2)
-        else:
-            pytest.fail("显式继续后队头未领取")
-        next_turn = await _turn(e2e_client, e2e_headers, thread_id, consumed.json()["turn_id"])
-        assert next_turn["status"] == "completed", next_turn
-        assert OUTPUT in output_text(next_turn["yuxi"]["output"])
+        await _continue_queued_input(e2e_client, e2e_headers, thread_id, queued_id, "cancel-continue")
     finally:
         try:
             async with httpx.AsyncClient(base_url="http://api:8765", timeout=5) as replay_client:
@@ -1402,18 +1304,7 @@ async def test_model_rate_limit_failure_preserves_error_and_queue_can_continue(e
         queue = await e2e_client.get(f"/api/v1/agents/sessions/{thread_id}/queue", headers=e2e_headers)
         assert queue.status_code == 200 and queue.json()["queue_paused"] is True
         assert [item["input_id"] for item in queue.json()["inputs"]] == [queued.json()["input_id"]]
-        continued = await e2e_client.post(
-            f"/api/v1/agents/sessions/{thread_id}/events",
-            headers={**e2e_headers, "Idempotency-Key": f"rate-limit-continue-{uuid.uuid4().hex}"},
-            json={"events": [{"type": "yuxi.session.input.continue"}]},
-        )
-        assert continued.status_code == 202, continued.text
-        next_input = await e2e_client.get(f"/api/v1/agents/sessions/{thread_id}/inputs/{queued.json()['input_id']}", headers=e2e_headers)
-        assert next_input.status_code == 200, next_input.text
-        assert next_input.json()["status"] == "consumed"
-        recovered = await _turn(e2e_client, e2e_headers, thread_id, next_input.json()["turn_id"])
-        assert recovered["status"] == "completed", recovered
-        assert OUTPUT in output_text(recovered["yuxi"]["output"])
+        await _continue_queued_input(e2e_client, e2e_headers, thread_id, queued.json()["input_id"], "rate-limit-continue")
     finally:
         if thread_id and first_turn_id:
             current = await e2e_client.get(f"/api/v1/agents/sessions/{thread_id}/turns/{first_turn_id}", headers=e2e_headers)

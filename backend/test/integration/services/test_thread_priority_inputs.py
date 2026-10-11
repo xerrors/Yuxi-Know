@@ -1,17 +1,19 @@
 """Thread 优先队列在真实 PostgreSQL 上的接收、合批和消费证据。"""
 
 import asyncio
-from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
 import httpx
 import pytest
 from fastapi import FastAPI, HTTPException
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import async_sessionmaker
-
-from test.integration.services.test_agent_input_concurrency import _binding, _queue_inputs
-from test.integration.services.test_agent_input_schema import _create_schema, _drop_schema
+from test.integration.services.agent_input_fixtures import (
+    SCOPE,
+    input_workdir_binding as _binding,
+    queue_inputs as _queue_inputs,
+    send_input as _send,
+    start_input_run as _start,
+)
 from yuxi.api.dependencies.auth import get_db
 from yuxi.api.routers.public_v1.agents.auth import require_public_context
 from yuxi.api.routers.public_v1.agents.events import router
@@ -23,158 +25,14 @@ from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.repositories.input import AgentInputRepository
 from yuxi.modules.agents.repositories.input_receipt import AgentInputReceiptRepository
-from yuxi.modules.agents.repositories.definitions import DEFAULT_SHARE_CONFIG
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.agents.services import input_config, inputs, messages, runs, scheduler, threads, turns
 from yuxi.modules.agents.services.input_messages import build_chat_input_message
 from yuxi.modules.agents.services.scope import ActorScope
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
-SCOPE = ActorScope(uid="input-user", app_id=None)
-
-
-@pytest.mark.parametrize("outcome", ["generated", "timeout", "manual"])
-async def test_auto_title_persists_once_and_preserves_manual_rename(sessions, monkeypatch, outcome):
-    """回读真实数据库验证生成、失败回退及同名手动修改优先。"""
-    from unittest.mock import AsyncMock
-
-    from yuxi.modules.agents.services import titles
-
-    text = "请帮我分析 PostgreSQL 的慢查询并给出索引优化建议"
-    fallback = text[:30]
-    async with sessions() as db:
-        await SessionRepository(db).add_session(
-            uid=SCOPE.uid,
-            agent_id="main",
-            project_id="input-project",
-            thread_id="title-thread",
-            config_snapshot={"model": "test:chat", "tool_approval_mode": "default"},
-        )
-        await db.commit()
-
-    async def invoke(_messages):
-        """模型边界返回固定结果，等待期间通过真实改名用例制造竞争。"""
-        async with sessions() as db:
-            persisted = await SessionRepository(db).get_session_by_thread_id("title-thread")
-            assert persisted.title == fallback
-            if outcome == "manual":
-                await threads.update_thread(db=db, scope=SCOPE, thread_id="title-thread", title=fallback)
-        if outcome == "timeout":
-            raise TimeoutError
-        return SimpleNamespace(text="PostgreSQL 慢查询优化")
-
-    monkeypatch.setattr(titles, "system_options", SimpleNamespace(get=AsyncMock(return_value={"fast_model": "test:fast"})))
-    monkeypatch.setattr(titles, "load_chat_model", lambda *args, **kwargs: SimpleNamespace(ainvoke=invoke))
-    await titles.generate_session_title(thread_id="title-thread", uid=SCOPE.uid, app_id=None, content=text)
-
-    async def unexpected(_messages):
-        """第二次调用不得再生成标题。"""
-        pytest.fail("同一会话重复生成标题")
-
-    monkeypatch.setattr(titles, "load_chat_model", lambda *args, **kwargs: SimpleNamespace(ainvoke=unexpected))
-    await titles.generate_session_title(thread_id="title-thread", uid=SCOPE.uid, app_id=None, content="第二条消息")
-    async with sessions() as db:
-        persisted = await SessionRepository(db).get_session_by_thread_id("title-thread")
-        assert persisted.title == ("PostgreSQL 慢查询优化" if outcome == "generated" else fallback)
-
-
-@pytest.fixture(scope="session", autouse=True)
-def ensure_live_api_schema():
-    """只使用测试拥有的隔离 Schema。"""
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_knowledge_resources():
-    """本文件不创建知识库资源。"""
-    yield
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_sandboxes():
-    """本文件不创建沙盒资源。"""
-    yield
-
-
-@pytest.fixture
-async def sessions(monkeypatch):
-    """创建真实 Agent 与隔离数据库，仅隔离外部模型发现和投递。"""
-    schema, admin_engine, engine = await _create_schema()
-    factory = async_sessionmaker(engine, expire_on_commit=False)
-    async with factory() as db:
-        db.add(
-            Agent(
-                slug="main",
-                backend_id="ChatbotAgent",
-                name="test",
-                created_by=SCOPE.uid,
-                share_config=DEFAULT_SHARE_CONFIG.copy(),
-                config_json={"context": {"model": "test:chat"}},
-            )
-        )
-        agent_session = await SessionRepository(db).get_session_by_thread_id("input-thread")
-        agent_session.queue_paused = True
-        agent_session.config_snapshot = {"model": "test:chat", "tool_approval_mode": "default"}
-        await db.commit()
-
-    async def resolve_binding(**kwargs):
-        """提供已授权的固定 Workdir，避免测试物化宿主目录。"""
-        return _binding()
-
-    async def deliver(dispatch):
-        """替代外部 ARQ，执行状态通过数据库回读核对。"""
-        async with factory() as db:
-            assert (await db.get(AgentRun, dispatch.run_id)).status == "pending"
-
-    @asynccontextmanager
-    async def context():
-        """安全钩子与恢复扫描读取同一个隔离数据库。"""
-        async with factory() as db:
-            yield db
-            await db.commit()
-
-    async def notify(*args, **kwargs):
-        """隔离远端 tracing 与 Redis 取消信号。"""
-
-    monkeypatch.setattr(input_config.model_cache, "get_model_info", lambda spec: SimpleNamespace(model_type="chat"))
-    monkeypatch.setattr(turns, "finish_turn_observation_if_terminal", notify)
-    monkeypatch.setattr(turns, "publish_cancel_signals", notify)
-    monkeypatch.setattr(scheduler, "resolve_session_workdir_binding", resolve_binding)
-    monkeypatch.setattr(threads, "deliver", deliver)
-    monkeypatch.setattr(scheduler, "deliver", deliver)
-    monkeypatch.setattr(scheduler.pg_manager, "get_async_session_context", context)
-    try:
-        yield factory
-    finally:
-        await _drop_schema(schema, admin_engine, engine)
-
-
-async def _send(sessions, content: str, mode: str = "steer") -> dict:
-    """通过接收用例提交独立幂等消息。"""
-    async with sessions() as db:
-        return await inputs.accept_message(
-            db=db,
-            scope=SCOPE,
-            thread_id="input-thread",
-            idempotency_key=content,
-            mode=mode,
-            messages=[build_chat_input_message(content)],
-        )
-
-
-async def _start(sessions, *, running: bool = True):
-    """领取首条消息并取得执行所有权。"""
-    await _queue_inputs(sessions, count=1)
-    async with sessions() as db:
-        agent_session = await SessionRepository(db).lock_session_by_thread_id("input-thread")
-        agent_session.queue_paused = False
-        dispatch = await scheduler.claim_next_input(db=db, agent_session=agent_session, binding=_binding())
-        run = await db.get(AgentRun, dispatch.run_id)
-        if running:
-            run, acquired = await AgentRunRepository(db).mark_running(dispatch.run_id, worker_id="owner", lease_seconds=60)
-            assert acquired
-        await db.commit()
-        return run
+pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
+pytest_plugins = ["test.integration.services.agent_input_fixtures"]
 
 
 async def test_promote_keeps_original_identity_and_priority_while_paused(sessions):
@@ -600,7 +458,7 @@ async def test_cancelled_steer_continuation_preserves_wire_ids_and_audit_order(s
     """图段重置 seq 后，真实投影 ID 唯一且 PG 审计仍按原执行顺序返回。"""
     from langchain.messages import AIMessage
     from unittest.mock import AsyncMock
-    from test.unit.services.test_openai_event_adapter import native
+    from test.support.agent_stream_fixtures import native
     from yuxi.modules.agents.runtime.base import GraphExecutionResult
     from yuxi.modules.agents.runtime.context import BaseContext
     from yuxi.modules.agents.runtime.middlewares.steer import SteerMiddleware

@@ -313,7 +313,7 @@ jobs:
       - name: Verify permission revocation through worker
         run: docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_permission_revocation_e2e.py -q
       - name: Verify Skill content commits and Agent exclusive history HTTP boundaries
-        run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_agent_bound_skill.py test/integration/api/test_agent_bound_skill_versions.py test/integration/api/test_shared_skill_edit_router.py -q
+        run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_agent_bound_skill.py test/integration/api/test_shared_skill_edit_router.py -q
       - name: Verify exclusive Skill preload and restore through worker
         run: docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_agent_bound_skill_e2e.py -q
       - name: Verify atomic Agent creation with Skill and MCP
@@ -327,7 +327,7 @@ jobs:
       - name: Verify knowledge statistics projection
         run: docker compose exec -T api uv run --no-sync --no-dev pytest test/integration/services/test_knowledge_stats_refresh.py -q
       - name: Verify Input FIFO transaction and recovery
-        run: docker compose exec -T api uv run --no-sync --no-dev pytest test/integration/services/test_agent_input_concurrency.py test/integration/services/test_thread_priority_inputs.py test/integration/services/test_input_attachments.py -q
+        run: docker compose exec -T -e TEST_BASE_URL=http://127.0.0.1:1 -e SANDBOX_PROVISIONER_URL=http://127.0.0.1:1 -e SANDBOX_PROVISIONER_TOKEN=fixture-probe-not-used-sandbox-token -e TEST_USERNAME=fixture-probe -e TEST_PASSWORD=fixture-probe api uv run --no-sync --no-dev pytest test/integration/services/test_agent_input_concurrency.py test/integration/services/test_thread_priority_inputs.py test/integration/services/test_input_attachments.py test/integration/services/test_session_title_generation.py -q
       - name: Verify Run lease ownership
         run: docker compose exec -T api uv run --no-sync --no-dev pytest test/integration/services/test_agent_run_lease.py -q
       - name: Verify Turn result causality
@@ -337,7 +337,11 @@ jobs:
         run: |
           docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api \
             uv run --no-sync --no-dev pytest \
-            test/integration/api/test_public_agent_auth.py \
+            test/integration/api/test_chat_router.py::test_public_thread_endpoints_require_authentication \
+            test/integration/api/test_chat_router.py::test_public_create_rejects_empty_input \
+            test/integration/api/test_chat_router.py::test_public_missing_thread_and_turn_return_not_found \
+            test/integration/api/test_chat_router.py::test_public_input_rejects_unbound_attachment_without_persisting_receipt \
+            test/integration/api/test_removed_api_endpoints.py::test_removed_agent_session_entrypoints_are_unreachable \
             test/integration/api/test_public_agents_key_boundary.py \
             test/integration/services/test_agent_input_schema.py \
             test/integration/services/test_project_thread_archive.py \
@@ -346,17 +350,16 @@ jobs:
         run: |
           docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api \
             uv run --no-sync --no-dev pytest \
-            test/integration/api/test_public_knowledge_key_boundary.py::test_knowledge_key_is_limited_to_public_knowledge_api \
-            test/integration/api/test_public_knowledge_key_boundary.py::test_agents_key_cannot_access_public_knowledge_api \
-            test/integration/api/test_public_knowledge_key_boundary.py::test_public_knowledge_does_not_expose_management_routes \
-            test/integration/api/test_public_knowledge_tools.py::test_knowledge_key_tool_route_boundary_without_kb -q
+            test/integration/api/test_public_knowledge_tools.py::test_knowledge_key_tool_route_boundary_without_kb \
+            test/integration/api/test_public_knowledge_tools.py::test_agents_key_cannot_access_public_knowledge_api \
+            test/integration/api/test_removed_api_endpoints.py::test_public_knowledge_does_not_expose_management_routes -q
       - name: Verify Session tree recovery and visibility
         run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_session_cooperation_state_recovery.py -q
       - name: Verify Message audit HTTP contract
         timeout-minutes: 3
-        run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_chat_router.py::test_thread_message_audits_return_persisted_facts_without_leaking_into_history -q --setup-show -o faulthandler_timeout=60
+        run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_chat_router.py::test_thread_message_audits_return_persisted_facts_without_leaking_into_history test/integration/api/test_chat_router.py::test_debug_messages_follow_database_sequence_and_include_unassigned_inputs -q --setup-show -o faulthandler_timeout=60
       - name: Verify visible tools for ordinary users
-        run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_chat_router.py::test_standard_user_restores_visible_function_items_without_internal_audit -q
+        run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/e2e/test_agent_lifecycle_extended_e2e.py::test_standard_user_restores_visible_function_items_without_internal_audit -q
       - name: Verify Session cooperation persistence and capacity
         run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/services/test_session_cooperation.py -q
       - name: Verify attachment HTTP and object contract
@@ -385,7 +388,7 @@ jobs:
       - name: Verify Workdir and Skill authorization
         run: |
           docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest \
-            test/integration/services/test_workdir_user_workspace.py \
+            test/integration/services/test_project_workdir_provisioner.py::test_sessions_share_workdir_only_through_project \
             test/integration/services/test_user_skill_projection.py \
             test/integration/api/test_skill_artifact_authorization.py -q
       - name: Verify real Sandbox storage isolation and shared projections

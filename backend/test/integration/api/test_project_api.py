@@ -12,7 +12,6 @@ import pytest_asyncio
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from test.live_api_cleanup import (
-    make_test_session_metadata,
     make_test_session_title,
     make_test_resource_id,
 )
@@ -105,31 +104,6 @@ async def project_lifecycle_database():
                 await session.commit()
     finally:
         await engine.dispose()
-
-
-async def _create_lifecycle_session(
-    session_factory,
-    *,
-    uid: str,
-    project_id: str,
-    thread_id: str,
-    label: str,
-    status: str,
-) -> int:
-    """创建并提交竞态测试使用的 Session。"""
-    async with session_factory() as session:
-        agent_session = Session(
-            thread_id=thread_id,
-            uid=uid,
-            agent_id="default-chatbot",
-            title=make_test_session_title(label),
-            status=status,
-            project_id=project_id,
-            extra_metadata=make_test_session_metadata(label),
-        )
-        session.add(agent_session)
-        await session.commit()
-        return agent_session.id
 
 
 async def test_default_thread_creates_implicit_project_with_exclusive_binding(test_client, admin_headers):

@@ -108,8 +108,9 @@ markers = [
     "unit: marks tests that run without live services",
     "auth: marks tests that require authentication",
     "slow: marks tests as slow",
-    "integration: marks tests as integration tests",
-    "e2e: marks tests as end-to-end tests"
+    "integration: marks tests that exercise real service boundaries",
+    "self_managed_resources: marks integration tests that manage their own resources without shared live API cleanup",
+    "e2e: marks tests that exercise an end-to-end workflow"
 ]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"

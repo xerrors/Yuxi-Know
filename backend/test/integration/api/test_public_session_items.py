@@ -7,7 +7,7 @@ import uuid
 import asyncpg
 import pytest
 
-from test.integration.api.test_public_agents_key_boundary import delete_created_threads
+from test.integration.api.helpers import delete_created_threads
 from test.live_api_cleanup import make_test_session_title
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
@@ -181,26 +181,22 @@ async def test_items_page_bounds_database_rows_and_splits_one_message(test_clien
         await delete_created_threads(session_id)
 
 
-async def test_receipt_recovery_is_scoped_and_preserves_queued_input(test_client, admin_headers):
+async def test_receipt_recovery_is_scoped_and_preserves_queued_input(test_client, admin_headers, api_key_factory):
     """相同原键找回同一排队 Input；其他 APP 和变更意图不能冒用回执。"""
-    keys, sessions, headers = [], [], []
+    sessions, headers = [], []
     conn = await asyncpg.connect(os.environ["POSTGRES_URL"].replace("+asyncpg", ""))
     original_key = f"retry/with spaces-{uuid.uuid4()}"
     try:
         for _ in range(2):
-            issued = await test_client.post(
-                "/api/user/apikey/",
-                headers=admin_headers,
-                json={
+            issued = await api_key_factory(
+                {
                     "request_id": str(uuid.uuid4()),
                     "name": "Receipt recovery test",
                     "access_level": "agents",
                     "app_id": f"receipt-{uuid.uuid4()}",
-                },
+                }
             )
-            assert issued.status_code == 200, issued.text
-            keys.append(issued.json()["api_key"]["id"])
-            headers.append({"Authorization": f"Bearer {issued.json()['secret']}"})
+            headers.append(issued.headers)
             created = await test_client.post(
                 "/api/v1/agents/sessions",
                 headers={**headers[-1], "Idempotency-Key": original_key},
@@ -290,5 +286,3 @@ async def test_receipt_recovery_is_scoped_and_preserves_queued_input(test_client
     finally:
         await conn.close()
         await delete_created_threads(*sessions)
-        for key_id in keys:
-            await test_client.delete(f"/api/user/apikey/{key_id}", headers=admin_headers)

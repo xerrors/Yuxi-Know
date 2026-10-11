@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 
 import pytest
 import pytest_asyncio
 from fastapi import HTTPException
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from test.support.sqlite import create_utc_sqlite_engine
 from yuxi.modules.agents.repositories.sessions import SessionRepository, UNVIEWED_RUN_MARKER
 from yuxi.modules.agents.services.scope import ActorScope
 from yuxi.modules.agents.services.threads import (
@@ -22,6 +24,7 @@ from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.infrastructure.postgres.base import Base
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.workspace.models import Project
+import yuxi.modules.agents.services.threads as thread_service
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.unit]
 SCOPE = ActorScope(uid="user-1", app_id=None)
@@ -30,7 +33,7 @@ SCOPE = ActorScope(uid="user-1", app_id=None)
 @pytest_asyncio.fixture()
 async def session():
     """创建与生产 ORM 同形的独立内存数据库。"""
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    engine = create_utc_sqlite_engine()
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -221,3 +224,23 @@ async def test_new_thread_cannot_seed_attachment_records(session):
         project_id="22222222-2222-4222-8222-222222222222",
     )
     assert "attachments" not in agent_session.extra_metadata
+
+
+async def test_read_side_effect_rejects_same_user_other_app(monkeypatch):
+    """直接调用 service 也不能跨 APP 使用相同 UID 的 Thread。"""
+
+    class Repository:
+        def __init__(self, _db):
+            pass
+
+        async def lock_session_by_thread_id(self, _thread_id):
+            return SimpleNamespace(uid="user-1", app_id="app-a", status="active")
+
+    monkeypatch.setattr(thread_service, "SessionRepository", Repository)
+    with pytest.raises(HTTPException) as exc:
+        await thread_service.mark_thread_viewed(
+            db=object(),
+            scope=ActorScope(uid="user-1", app_id="app-b"),
+            thread_id="thread-1",
+        )
+    assert exc.value.status_code == 404

@@ -11,7 +11,7 @@ from test.live_api_cleanup import (
     make_test_session_title,
     remove_e2e_thread_storage,
 )
-from yuxi.infrastructure.minio.client import get_minio_client
+from test.e2e.e2e_helpers import cleanup_uploaded_chat_attachment
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.e2e]
 
@@ -172,14 +172,7 @@ async def _cleanup_created_resources(
 
     if uploaded:
         me = await e2e_client.get("/api/auth/me", headers=e2e_headers)
-        prefix = f"tmp/chat_attachments/{me.json()['uid']}/{uploaded['id']}/"
-        await get_minio_client().adelete_objects_by_prefix(get_minio_client().KB_BUCKETS["documents"], prefix)
-        from yuxi.modules.workspace.filesystem import Workspace
-
-        try:
-            Workspace(str(me.json()["uid"])).delete_authorized_path("/" + prefix.rstrip("/"), root="/")
-        except FileNotFoundError:
-            pass
+        await cleanup_uploaded_chat_attachment(str(me.json()["uid"]), uploaded["id"])
 
     if thread_id:
         response = await e2e_client.post(f"/api/v1/agents/sessions/{thread_id}/archive", headers=e2e_headers)

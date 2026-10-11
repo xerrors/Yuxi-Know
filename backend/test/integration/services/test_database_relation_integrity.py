@@ -10,28 +10,12 @@ from sqlalchemy import insert, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from test_schema_migration_version import _create_isolated_manager, _drop_isolated_schema
+from test.integration.support.postgres_schema import create_isolated_manager as _create_isolated_manager
+from test.integration.support.postgres_schema import drop_isolated_schema as _drop_isolated_schema
 from yuxi.migrations.schema import create_business_tables, create_knowledge_tables, ensure_business_schema
 from yuxi.modules.knowledge.models import KnowledgeChunk, KnowledgeGraphEntity, KnowledgeGraphTriple
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
-
-
-@pytest.fixture(scope="session", autouse=True)
-def ensure_live_api_schema():
-    """本测试只使用独立 Schema。"""
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_knowledge_resources():
-    """资源由独立 Schema 拥有。"""
-    yield
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_sandboxes():
-    """本测试不创建沙盒。"""
-    yield
+pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
 
 async def test_knowledge_relationships_reject_cross_scope_and_keep_delete_semantics():

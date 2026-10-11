@@ -28,7 +28,7 @@ def _find_module_path() -> Path:
 MODULE_PATH = _find_module_path()
 
 
-def _load_module():
+def _import_module():
     existing = sys.modules.get(MODULE_NAME)
     if existing is not None:
         return existing
@@ -40,6 +40,27 @@ def _load_module():
     sys.modules[MODULE_NAME] = module
     spec.loader.exec_module(module)
     return module
+
+
+@pytest.fixture(scope="module")
+def module():
+    """在内存后端环境下只装载一次 provisioner 模块。"""
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setenv("PROVISIONER_BACKEND", "memory")
+        return _import_module()
+
+
+def _install_kubernetes_modules(monkeypatch, api_exception: type[Exception]) -> None:
+    """用测试定义的 API 异常装配最小 Kubernetes 导入桩。"""
+    kubernetes_module = ModuleType("kubernetes")
+    client_module = ModuleType("kubernetes.client")
+    rest_module = ModuleType("kubernetes.client.rest")
+    rest_module.ApiException = api_exception
+    client_module.rest = rest_module
+    kubernetes_module.client = client_module
+    monkeypatch.setitem(sys.modules, "kubernetes", kubernetes_module)
+    monkeypatch.setitem(sys.modules, "kubernetes.client", client_module)
+    monkeypatch.setitem(sys.modules, "kubernetes.client.rest", rest_module)
 
 
 def _docker_backend(module, tmp_path, run_container):
@@ -66,8 +87,7 @@ def _docker_backend(module, tmp_path, run_container):
     return backend
 
 
-def test_directory_validation_identifies_missing_mount_prerequisite(tmp_path):
-    module = _load_module()
+def test_directory_validation_identifies_missing_mount_prerequisite(module, tmp_path):
     root = tmp_path / "skill-projections"
     root.mkdir()
 
@@ -79,8 +99,7 @@ def test_directory_validation_identifies_missing_mount_prerequisite(tmp_path):
         )
 
 
-def _docker_backend_with_running_container(monkeypatch, tmp_path):
-    module = _load_module()
+def _docker_backend_with_running_container(module, monkeypatch, tmp_path):
     captured = []
 
     class FakeContainer:
@@ -105,18 +124,12 @@ def _docker_backend_with_running_container(monkeypatch, tmp_path):
     return module, backend, captured
 
 
-def test_canonical_backend_name(monkeypatch):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    module = _load_module()
-
+def test_canonical_backend_name(module):
     assert module.canonical_backend_name("docker") == "docker"
     assert module.canonical_backend_name("kubernetes") == "kubernetes"
 
 
-def test_merged_sandbox_env_user_values_override_global(monkeypatch):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    module = _load_module()
-
+def test_merged_sandbox_env_user_values_override_global(module):
     assert module.merged_sandbox_env(
         {"SHARED": "global", "GLOBAL_ONLY": "value"},
         {"SHARED": "user", "USER_ONLY": "value"},
@@ -165,15 +178,11 @@ def test_merged_sandbox_env_user_values_override_global(monkeypatch):
         ),
     ],
 )
-def test_sandbox_runtime_profile_environment(profile, expected):
-    module = _load_module()
-
+def test_sandbox_runtime_profile_environment(module, profile, expected):
     assert module.sandbox_runtime_environment(profile) == expected
 
 
-def test_sandbox_runtime_profile_rejects_unknown_value():
-    module = _load_module()
-
+def test_sandbox_runtime_profile_rejects_unknown_value(module):
     with pytest.raises(RuntimeError, match="invalid SANDBOX_RUNTIME_PROFILE"):
         module.sandbox_runtime_profile("unknown")
 
@@ -181,8 +190,7 @@ def test_sandbox_runtime_profile_rejects_unknown_value():
         module.sandbox_runtime_profile("")
 
 
-def test_docker_network_pool_reads_dedicated_subnets(monkeypatch):
-    module = _load_module()
+def test_docker_network_pool_reads_dedicated_subnets(module, monkeypatch):
     monkeypatch.setenv("DOCKER_ADDRESS_POOL", "10.253.240.0/20")
     monkeypatch.setenv("DOCKER_SUBNET_PREFIX", "28")
 
@@ -201,8 +209,7 @@ def test_docker_network_pool_reads_dedicated_subnets(monkeypatch):
         ("10.253.240.0/20", "invalid", "must be an integer"),
     ],
 )
-def test_docker_network_pool_rejects_invalid_configuration(monkeypatch, address_pool, subnet_prefix, error_match):
-    module = _load_module()
+def test_docker_network_pool_rejects_invalid_configuration(module, monkeypatch, address_pool, subnet_prefix, error_match):
     monkeypatch.setenv("DOCKER_ADDRESS_POOL", address_pool)
     monkeypatch.setenv("DOCKER_SUBNET_PREFIX", subnet_prefix)
 
@@ -210,8 +217,7 @@ def test_docker_network_pool_rejects_invalid_configuration(monkeypatch, address_
         module.docker_network_pool()
 
 
-def test_docker_network_pool_rejects_prefix_without_pool(monkeypatch):
-    module = _load_module()
+def test_docker_network_pool_rejects_prefix_without_pool(module, monkeypatch):
     monkeypatch.delenv("DOCKER_ADDRESS_POOL", raising=False)
     monkeypatch.setenv("DOCKER_SUBNET_PREFIX", "28")
 
@@ -219,30 +225,23 @@ def test_docker_network_pool_rejects_prefix_without_pool(monkeypatch):
         module.docker_network_pool()
 
 
-def test_sandbox_container_stop_timeout_defaults_to_two_seconds(monkeypatch):
-    module = _load_module()
+def test_sandbox_container_stop_timeout_defaults_to_two_seconds(module, monkeypatch):
     monkeypatch.delenv("SANDBOX_CONTAINER_STOP_TIMEOUT_SECONDS", raising=False)
 
     assert module.sandbox_container_stop_timeout_seconds() == 2
 
 
-def test_sandbox_container_stop_timeout_reads_configured_value():
-    module = _load_module()
-
+def test_sandbox_container_stop_timeout_reads_configured_value(module):
     assert module.sandbox_container_stop_timeout_seconds("3") == 3
 
 
 @pytest.mark.parametrize("value", ["", "0", "invalid"])
-def test_sandbox_container_stop_timeout_rejects_invalid_value(value):
-    module = _load_module()
-
+def test_sandbox_container_stop_timeout_rejects_invalid_value(module, value):
     with pytest.raises(RuntimeError, match="SANDBOX_CONTAINER_STOP_TIMEOUT_SECONDS"):
         module.sandbox_container_stop_timeout_seconds(value)
 
 
-def test_sandbox_delete_concurrency_rejects_invalid_configuration():
-    module = _load_module()
-
+def test_sandbox_delete_concurrency_rejects_invalid_configuration(module):
     assert module.sandbox_delete_concurrency("16") == 16
     with pytest.raises(RuntimeError, match="must be >= 1"):
         module.sandbox_delete_concurrency("0")
@@ -250,8 +249,7 @@ def test_sandbox_delete_concurrency_rejects_invalid_configuration():
         module.sandbox_delete_concurrency("invalid")
 
 
-def test_sandbox_container_limits_defaults_and_environment_overrides(monkeypatch):
-    module = _load_module()
+def test_sandbox_container_limits_defaults_and_environment_overrides(module, monkeypatch):
     for name in ("SANDBOX_MEM_LIMIT", "SANDBOX_CPUS", "SANDBOX_PIDS_LIMIT"):
         monkeypatch.delenv(name, raising=False)
 
@@ -285,26 +283,22 @@ def test_sandbox_container_limits_defaults_and_environment_overrides(monkeypatch
         ("2g", "2", "many", "SANDBOX_PIDS_LIMIT"),
     ],
 )
-def test_sandbox_container_limits_reject_invalid_configuration(mem_limit, cpus, pids_limit, error_match):
+def test_sandbox_container_limits_reject_invalid_configuration(module, mem_limit, cpus, pids_limit, error_match):
     """非法上限显式失败，不回退到默认值；每个案例覆盖一条守卫路径。"""
-    module = _load_module()
 
     with pytest.raises(RuntimeError, match=error_match):
         module.sandbox_container_limits(mem_limit=mem_limit, cpus=cpus, pids_limit=pids_limit)
 
 
-def test_sandbox_container_limits_reject_invalid_environment_at_startup(monkeypatch):
-    module = _load_module()
+def test_sandbox_container_limits_reject_invalid_environment_at_startup(module, monkeypatch):
     monkeypatch.setenv("SANDBOX_CPUS", "two")
 
     with pytest.raises(RuntimeError, match="SANDBOX_CPUS"):
         module.sandbox_container_limits()
 
 
-def test_docker_backend_init_fails_on_invalid_container_limits(monkeypatch):
+def test_docker_backend_init_fails_on_invalid_container_limits(module, monkeypatch):
     """非法上限让构造期显式失败，不创建 docker client 也不带病启动。"""
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    module = _load_module()
     monkeypatch.setenv("SANDBOX_CPUS", "nan")
     errors_module = ModuleType("docker.errors")
     errors_module.DockerException = type("DockerException", (Exception,), {})
@@ -318,9 +312,8 @@ def test_docker_backend_init_fails_on_invalid_container_limits(monkeypatch):
         module.LocalContainerProvisionerBackend()
 
 
-def test_docker_create_applies_resource_limits_to_sandbox_container(monkeypatch, tmp_path):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    _module, backend, captured = _docker_backend_with_running_container(monkeypatch, tmp_path)
+def test_docker_create_applies_resource_limits_to_sandbox_container(module, monkeypatch, tmp_path):
+    _module, backend, captured = _docker_backend_with_running_container(module, monkeypatch, tmp_path)
 
     backend.create("sandbox-1", "thread-1", "user-1")
 
@@ -330,15 +323,11 @@ def test_docker_create_applies_resource_limits_to_sandbox_container(monkeypatch,
     assert run_kwargs["pids_limit"] == 512
 
 
-def test_normalize_env_converts_values_to_strings(monkeypatch):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    module = _load_module()
-
+def test_normalize_env_converts_values_to_strings(module):
     assert module.normalize_env({"A": 1, "B": None, "": "ignored"}) == {"A": "1", "B": ""}
 
 
-def test_wait_for_sandbox_ready_uses_bounded_fast_backoff(monkeypatch):
-    module = _load_module()
+def test_wait_for_sandbox_ready_uses_bounded_fast_backoff(module, monkeypatch):
     clock = SimpleNamespace(now=0.0, sleeps=[])
     probe_timeouts = []
 
@@ -370,8 +359,7 @@ def test_wait_for_sandbox_ready_uses_bounded_fast_backoff(monkeypatch):
     assert clock.now == pytest.approx(2.2)
 
 
-def test_wait_for_sandbox_ready_returns_immediately_when_first_probe_succeeds(monkeypatch):
-    module = _load_module()
+def test_wait_for_sandbox_ready_returns_immediately_when_first_probe_succeeds(module, monkeypatch):
     sleeps = []
 
     class SuccessfulResponse:
@@ -399,9 +387,7 @@ def test_wait_for_sandbox_ready_returns_immediately_when_first_probe_succeeds(mo
     assert sleeps == []
 
 
-def test_local_container_identity_validation_rejects_unsafe_path_segments(monkeypatch):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    module = _load_module()
+def test_local_container_identity_validation_rejects_unsafe_path_segments(module):
     backend_cls = module.LocalContainerProvisionerBackend
 
     assert backend_cls._validate_thread_id("thread-1_2") == "thread-1_2"
@@ -428,9 +414,7 @@ def test_local_container_identity_validation_rejects_unsafe_path_segments(monkey
             module.normalize_workdir_path(value)
 
 
-def test_docker_host_paths_require_explicit_storage_mounts(monkeypatch):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    module = _load_module()
+def test_docker_host_paths_require_explicit_storage_mounts(module, monkeypatch):
     backend = object.__new__(module.LocalContainerProvisionerBackend)
     backend._user_data_host_path = None
     backend._skill_projections_host_path = None
@@ -458,9 +442,7 @@ def test_docker_host_paths_require_explicit_storage_mounts(monkeypatch):
         backend._resolve_host_paths()
 
 
-def test_memory_backend_accepts_runtime_thread_id(monkeypatch):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    module = _load_module()
+def test_memory_backend_accepts_runtime_thread_id(module):
     backend = module.MemoryProvisionerBackend()
 
     record = backend.create(
@@ -473,9 +455,7 @@ def test_memory_backend_accepts_runtime_thread_id(monkeypatch):
     assert backend.discover("sandbox-1") is record
 
 
-def test_memory_backend_concurrent_get_or_create_returns_one_generation(monkeypatch):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    module = _load_module()
+def test_memory_backend_concurrent_get_or_create_returns_one_generation(module):
     backend = module.MemoryProvisionerBackend()
 
     with ThreadPoolExecutor(max_workers=8) as executor:
@@ -506,10 +486,7 @@ def test_memory_backend_concurrent_get_or_create_returns_one_generation(monkeypa
     assert backend.discover("sandbox-shared") is None
 
 
-def test_idle_reaper_does_not_delete_or_forget_new_generation(monkeypatch):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    module = _load_module()
-
+def test_idle_reaper_does_not_delete_or_forget_new_generation(module):
     class FakeBackend:
         def __init__(self):
             self.generation = "generation-2"
@@ -533,9 +510,7 @@ def test_idle_reaper_does_not_delete_or_forget_new_generation(monkeypatch):
     assert reaper._last_activity_at["sandbox-1"][0] == "generation-2"
 
 
-def test_operation_pins_drain_started_requests_and_block_new_requests_during_delete(monkeypatch):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    module = _load_module()
+def test_operation_pins_drain_started_requests_and_block_new_requests_during_delete(module):
     pins = module.SandboxOperationPins()
     delete_started = threading.Event()
     delete_finished = threading.Event()
@@ -572,9 +547,7 @@ def test_operation_pins_drain_started_requests_and_block_new_requests_during_del
     next_thread.join(timeout=1)
 
 
-def test_docker_mount_checks_reject_uploads_and_outputs_mounts(monkeypatch, tmp_path):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    module = _load_module()
+def test_docker_mount_checks_reject_uploads_and_outputs_mounts(module, tmp_path):
     backend = object.__new__(module.LocalContainerProvisionerBackend)
     backend._user_data_host_path = str(tmp_path)
     backend._skill_projections_host_path = str(tmp_path.parent / "skill-projections")
@@ -606,9 +579,8 @@ def test_docker_mount_checks_reject_uploads_and_outputs_mounts(monkeypatch, tmp_
     assert backend._has_expected_user_data_mounts(container, "user-1") is False
 
 
-def test_docker_sandbox_mounts_shared_workspace_without_thread_history_projection(monkeypatch, tmp_path):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    module, backend, captured = _docker_backend_with_running_container(monkeypatch, tmp_path)
+def test_docker_sandbox_mounts_shared_workspace_without_thread_history_projection(module, monkeypatch, tmp_path):
+    module, backend, captured = _docker_backend_with_running_container(module, monkeypatch, tmp_path)
 
     backend.create("sandbox-1", "thread-1", "user-1")
 
@@ -621,9 +593,8 @@ def test_docker_sandbox_mounts_shared_workspace_without_thread_history_projectio
     assert all("/agents/chats" not in destination for destination in destinations)
 
 
-def test_docker_project_workdir_contract_mounts_shared_posix_roots(monkeypatch, tmp_path):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    module, backend, captured = _docker_backend_with_running_container(monkeypatch, tmp_path)
+def test_docker_project_workdir_contract_mounts_shared_posix_roots(module, monkeypatch, tmp_path):
+    module, backend, captured = _docker_backend_with_running_container(module, monkeypatch, tmp_path)
 
     workdir = tmp_path / "shared" / "user-1" / "workspace" / "projects" / "11111111-1111-4111-8111-111111111111"
     workdir.mkdir(parents=True)
@@ -645,9 +616,8 @@ def test_docker_project_workdir_contract_mounts_shared_posix_roots(monkeypatch, 
     assert record.workdir_path is None  # Fake container has no Docker labels; real discover reads the label.
 
 
-def test_docker_rejects_symlink_in_workspace_identity_path(monkeypatch, tmp_path):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    _module, backend, captured = _docker_backend_with_running_container(monkeypatch, tmp_path)
+def test_docker_rejects_symlink_in_workspace_identity_path(module, monkeypatch, tmp_path):
+    _module, backend, captured = _docker_backend_with_running_container(module, monkeypatch, tmp_path)
     shared = backend._user_data_container_path / "shared"
     outside = tmp_path.parent / "outside-user-workspace"
     shared.mkdir(exist_ok=True)
@@ -662,10 +632,7 @@ def test_docker_rejects_symlink_in_workspace_identity_path(monkeypatch, tmp_path
     assert captured == []
 
 
-def test_docker_rejects_rebinding_existing_runtime_to_another_workdir(monkeypatch, tmp_path):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    module = _load_module()
-
+def test_docker_rejects_rebinding_existing_runtime_to_another_workdir(module, monkeypatch, tmp_path):
     class FakeContainer:
         status = "running"
         labels = {"thread-id": "root-thread", "workdir-path": "projects/11111111-1111-4111-8111-111111111111"}
@@ -681,9 +648,7 @@ def test_docker_rejects_rebinding_existing_runtime_to_another_workdir(monkeypatc
         backend.create("sandbox-project", "root-thread", "user-1", workdir_path="projects/22222222-2222-4222-8222-222222222222")
 
 
-def test_kubernetes_mount_check_rejects_uploads_and_outputs_mounts(monkeypatch):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    module = _load_module()
+def test_kubernetes_mount_check_rejects_uploads_and_outputs_mounts(module):
     backend = object.__new__(module.KubernetesProvisionerBackend)
     backend._user_data_pvc = "user-data"
     backend._skill_pvc = "skills"
@@ -755,9 +720,7 @@ def test_kubernetes_mount_check_rejects_uploads_and_outputs_mounts(monkeypatch):
     assert not backend._pod_has_expected_mounts(pod, uid="user-1")
 
 
-def test_ephemeral_mount_validation_rejects_exact_projects_root(monkeypatch):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    module = _load_module()
+def test_ephemeral_mount_validation_rejects_exact_projects_root(module):
     container = SimpleNamespace(attrs={"Mounts": [{"Destination": "/home/gem/projects"}]})
 
     assert not module.LocalContainerProvisionerBackend._has_no_persistent_file_mounts(container)
@@ -781,11 +744,9 @@ def test_ephemeral_mount_validation_rejects_exact_projects_root(monkeypatch):
     )
 
 
-def test_management_api_requires_bearer_token(monkeypatch):
+def test_management_api_requires_bearer_token(module, monkeypatch):
     token = "test-provisioner-token-that-is-long-enough"
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
     monkeypatch.setenv("SANDBOX_PROVISIONER_TOKEN", token)
-    module = _load_module()
 
     with TestClient(module.app) as client:
         assert client.get("/api/sandboxes").status_code == 401
@@ -800,12 +761,10 @@ def test_management_api_requires_bearer_token(monkeypatch):
     assert response.json() == {"sandboxes": [], "count": 0}
 
 
-def test_authenticated_management_api_returns_proxied_sandbox_url(monkeypatch):
+def test_authenticated_management_api_returns_proxied_sandbox_url(module, monkeypatch):
     token = "test-provisioner-token-that-is-long-enough"
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
     monkeypatch.setenv("SANDBOX_PROVISIONER_TOKEN", token)
     monkeypatch.setenv("PROVISIONER_PUBLIC_URL", "http://sandbox-provisioner:8002")
-    module = _load_module()
     headers = {"Authorization": f"Bearer {token}"}
     sandbox_id = "sandbox-auth-test"
 
@@ -846,9 +805,7 @@ def test_authenticated_management_api_returns_proxied_sandbox_url(monkeypatch):
     assert delete_response.status_code == 200
 
 
-def test_create_sandbox_forwards_environment_policy(monkeypatch):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    module = _load_module()
+def test_create_sandbox_forwards_environment_policy(module, monkeypatch):
     calls = []
 
     def create(*_args, **kwargs):
@@ -870,8 +827,7 @@ def test_create_sandbox_forwards_environment_policy(monkeypatch):
     assert calls[0]["inherit_env"] is False
 
 
-def test_create_sandbox_reports_address_pool_exhaustion_as_unavailable(monkeypatch):
-    module = _load_module()
+def test_create_sandbox_reports_address_pool_exhaustion_as_unavailable(module, monkeypatch):
     monkeypatch.setenv("SANDBOX_PROVISIONER_TOKEN", "test-provisioner-token-that-is-long-enough")
 
     def create(*_args, **_kwargs):
@@ -894,11 +850,9 @@ def test_create_sandbox_reports_address_pool_exhaustion_as_unavailable(monkeypat
     assert response.json()["detail"].endswith("has no available /28 subnet")
 
 
-def test_authenticated_proxy_forwards_request_without_management_token(monkeypatch):
+def test_authenticated_proxy_forwards_request_without_management_token(module, monkeypatch):
     token = "test-provisioner-token-that-is-long-enough"
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
     monkeypatch.setenv("SANDBOX_PROVISIONER_TOKEN", token)
-    module = _load_module()
     headers = {"Authorization": f"Bearer {token}"}
     captured = []
 
@@ -954,11 +908,9 @@ def test_authenticated_proxy_forwards_request_without_management_token(monkeypat
 
 
 @pytest.mark.asyncio
-async def test_proxy_discovers_sandbox_outside_event_loop_thread(monkeypatch):
+async def test_proxy_discovers_sandbox_outside_event_loop_thread(module, monkeypatch):
     token = "test-provisioner-token-that-is-long-enough"
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
     monkeypatch.setenv("SANDBOX_PROVISIONER_TOKEN", token)
-    module = _load_module()
     event_loop_thread = threading.get_ident()
     discover_threads = []
 
@@ -1000,9 +952,8 @@ async def test_proxy_discovers_sandbox_outside_event_loop_thread(monkeypatch):
     assert discover_threads and discover_threads[0] != event_loop_thread
 
 
-def test_docker_backend_uses_private_network_without_published_port(monkeypatch, tmp_path):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    _, backend, captured = _docker_backend_with_running_container(monkeypatch, tmp_path)
+def test_docker_backend_uses_private_network_without_published_port(module, monkeypatch, tmp_path):
+    _, backend, captured = _docker_backend_with_running_container(module, monkeypatch, tmp_path)
 
     record = backend.create("sandbox-1", "thread-1", "user-1")
 
@@ -1012,9 +963,8 @@ def test_docker_backend_uses_private_network_without_published_port(monkeypatch,
     assert "ports" not in captured[0][1]
 
 
-def test_docker_runtime_profile_cannot_be_overridden_by_request(monkeypatch, tmp_path):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    module, backend, captured = _docker_backend_with_running_container(monkeypatch, tmp_path)
+def test_docker_runtime_profile_cannot_be_overridden_by_request(module, monkeypatch, tmp_path):
+    module, backend, captured = _docker_backend_with_running_container(module, monkeypatch, tmp_path)
     monkeypatch.setattr(module, "runtime_profile_name", "core")
     backend._sandbox_env = {"GLOBAL_VALUE": "global", "DISABLE_BROWSER": "false"}
 
@@ -1031,12 +981,8 @@ def test_docker_runtime_profile_cannot_be_overridden_by_request(monkeypatch, tmp
     assert environment["DISABLE_BROWSER"] == "true"
 
 
-def test_docker_ephemeral_sandbox_has_runtime_profile_and_identity_without_persistent_mounts(
-    monkeypatch,
-    tmp_path,
-):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    module, backend, captured = _docker_backend_with_running_container(monkeypatch, tmp_path)
+def test_docker_ephemeral_sandbox_has_runtime_profile_and_identity_without_persistent_mounts(module, monkeypatch, tmp_path):
+    module, backend, captured = _docker_backend_with_running_container(module, monkeypatch, tmp_path)
     monkeypatch.setattr(module, "runtime_profile_name", "core")
     backend._sandbox_env = {"GLOBAL_SECRET": "value"}
     uid = "remote-skill-ephemeral"
@@ -1056,9 +1002,7 @@ def test_docker_ephemeral_sandbox_has_runtime_profile_and_identity_without_persi
     assert not (backend._skill_projections_container_path / uid).exists()
 
 
-def test_kubernetes_ephemeral_sandbox_uses_profile_and_only_empty_home(monkeypatch):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    module = _load_module()
+def test_kubernetes_ephemeral_sandbox_uses_profile_and_only_empty_home(module, monkeypatch):
     monkeypatch.setattr(module, "runtime_profile_name", "core")
 
     class FakeKubernetesClient:
@@ -1108,10 +1052,7 @@ def test_kubernetes_ephemeral_sandbox_uses_profile_and_only_empty_home(monkeypat
     )
 
 
-def test_kubernetes_workdir_contract_uses_user_workspace_subpath(monkeypatch):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    module = _load_module()
-
+def test_kubernetes_workdir_contract_uses_user_workspace_subpath(module):
     class FakeKubernetesClient:
         def __getattr__(self, _name):
             return lambda *_args, **kwargs: SimpleNamespace(**kwargs)
@@ -1170,9 +1111,7 @@ def test_kubernetes_workdir_contract_uses_user_workspace_subpath(monkeypatch):
     compile(init.args[0], "<kubernetes-storage-init>", "exec")
 
 
-def test_kubernetes_storage_init_migrates_only_real_entries(tmp_path, monkeypatch):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    module = _load_module()
+def test_kubernetes_storage_init_migrates_only_real_entries(module, tmp_path):
     user_data = tmp_path / "user-data"
     skills_data = tmp_path / "skills-data"
     user_data.mkdir()
@@ -1203,9 +1142,7 @@ def test_kubernetes_storage_init_migrates_only_real_entries(tmp_path, monkeypatc
     assert (skills_data / ".v072-runtime-identity/skills-user-1").exists()
 
 
-def test_kubernetes_storage_init_rejects_missing_authoritative_workdir(tmp_path, monkeypatch):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    module = _load_module()
+def test_kubernetes_storage_init_rejects_missing_authoritative_workdir(module, tmp_path):
     user_data = tmp_path / "user-data"
     skills_data = tmp_path / "skills-data"
     user_data.mkdir()
@@ -1220,25 +1157,14 @@ def test_kubernetes_storage_init_rejects_missing_authoritative_workdir(tmp_path,
     assert not (user_data / "shared/user-1/workspace/projects/missing").exists()
 
 
-def test_kubernetes_rejects_rebinding_existing_runtime_to_another_workdir(monkeypatch):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    module = _load_module()
+def test_kubernetes_rejects_rebinding_existing_runtime_to_another_workdir(module, monkeypatch):
     backend = object.__new__(module.KubernetesProvisionerBackend)
     backend._lock = threading.Lock()
     backend._core_api = SimpleNamespace()
-    kubernetes_module = ModuleType("kubernetes")
-    client_module = ModuleType("kubernetes.client")
-    rest_module = ModuleType("kubernetes.client.rest")
-
     class ApiException(Exception):
         pass
 
-    rest_module.ApiException = ApiException
-    client_module.rest = rest_module
-    kubernetes_module.client = client_module
-    monkeypatch.setitem(sys.modules, "kubernetes", kubernetes_module)
-    monkeypatch.setitem(sys.modules, "kubernetes.client", client_module)
-    monkeypatch.setitem(sys.modules, "kubernetes.client.rest", rest_module)
+    _install_kubernetes_modules(monkeypatch, ApiException)
     monkeypatch.setattr(
         backend,
         "discover",
@@ -1256,23 +1182,12 @@ def test_kubernetes_rejects_rebinding_existing_runtime_to_another_workdir(monkey
         backend.create("sandbox-1", "root-thread", "user-1", workdir_path="projects/22222222-2222-4222-8222-222222222222")
 
 
-def test_kubernetes_pod_conflict_is_revalidated_before_creating_service(monkeypatch):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    module = _load_module()
-    kubernetes_module = ModuleType("kubernetes")
-    client_module = ModuleType("kubernetes.client")
-    rest_module = ModuleType("kubernetes.client.rest")
-
+def test_kubernetes_pod_conflict_is_revalidated_before_creating_service(module, monkeypatch):
     class ApiException(Exception):
         def __init__(self, status=None):
             self.status = status
 
-    rest_module.ApiException = ApiException
-    client_module.rest = rest_module
-    kubernetes_module.client = client_module
-    monkeypatch.setitem(sys.modules, "kubernetes", kubernetes_module)
-    monkeypatch.setitem(sys.modules, "kubernetes.client", client_module)
-    monkeypatch.setitem(sys.modules, "kubernetes.client.rest", rest_module)
+    _install_kubernetes_modules(monkeypatch, ApiException)
 
     class FakeCoreApi:
         def create_namespaced_pod(self, **_kwargs):
@@ -1295,23 +1210,12 @@ def test_kubernetes_pod_conflict_is_revalidated_before_creating_service(monkeypa
         backend.create("sandbox-1", "root-thread", "user-1", workdir_path="projects/22222222-2222-4222-8222-222222222222")
 
 
-def test_kubernetes_delete_uses_uid_generation_precondition(monkeypatch):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    module = _load_module()
-    kubernetes_module = ModuleType("kubernetes")
-    client_module = ModuleType("kubernetes.client")
-    rest_module = ModuleType("kubernetes.client.rest")
-
+def test_kubernetes_delete_uses_uid_generation_precondition(module, monkeypatch):
     class ApiException(Exception):
         def __init__(self, status=None):
             self.status = status
 
-    rest_module.ApiException = ApiException
-    client_module.rest = rest_module
-    kubernetes_module.client = client_module
-    monkeypatch.setitem(sys.modules, "kubernetes", kubernetes_module)
-    monkeypatch.setitem(sys.modules, "kubernetes.client", client_module)
-    monkeypatch.setitem(sys.modules, "kubernetes.client.rest", rest_module)
+    _install_kubernetes_modules(monkeypatch, ApiException)
 
     calls = []
 
@@ -1352,9 +1256,7 @@ def test_kubernetes_delete_uses_uid_generation_precondition(monkeypatch):
         (False, "container start failed"),
     ],
 )
-def test_docker_backend_cleans_up_sandbox_and_network_on_failure(monkeypatch, tmp_path, start_succeeds, error_match):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    module = _load_module()
+def test_docker_backend_cleans_up_sandbox_and_network_on_failure(module, monkeypatch, tmp_path, start_succeeds, error_match):
     created_container = None
     deleted_networks = []
 
@@ -1401,9 +1303,7 @@ def test_docker_backend_cleans_up_sandbox_and_network_on_failure(monkeypatch, tm
         assert created_container.removed is True
 
 
-def test_docker_backend_assigns_each_sandbox_a_distinct_network(monkeypatch):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    module = _load_module()
+def test_docker_backend_assigns_each_sandbox_a_distinct_network(module):
     backend = object.__new__(module.LocalContainerProvisionerBackend)
     backend._lock = threading.RLock()
     backend._network_prefix = "yuxi-know-sandbox"
@@ -1424,9 +1324,7 @@ def test_docker_backend_assigns_each_sandbox_a_distinct_network(monkeypatch):
     )
 
 
-def test_docker_backend_creates_network_from_dedicated_address_pool(monkeypatch):
-    module = _load_module()
-
+def test_docker_backend_creates_network_from_dedicated_address_pool(module, monkeypatch):
     class NotFound(Exception):
         pass
 
@@ -1482,8 +1380,7 @@ def test_docker_backend_creates_network_from_dedicated_address_pool(monkeypatch)
     assert captured[0][1]["ipam"].pool_configs[0].subnet == "10.253.240.0/28"
 
 
-def test_docker_backend_skips_used_subnet_and_reuses_it_after_cleanup():
-    module = _load_module()
+def test_docker_backend_skips_used_subnet_and_reuses_it_after_cleanup(module):
     backend = object.__new__(module.LocalContainerProvisionerBackend)
     backend._network_pool = (module.ipaddress.ip_network("10.253.240.0/27"), 28)
 
@@ -1497,8 +1394,7 @@ def test_docker_backend_skips_used_subnet_and_reuses_it_after_cleanup():
     assert str(backend._next_network_subnet()) == "10.253.240.0/28"
 
 
-def test_docker_backend_reports_dedicated_address_pool_exhaustion():
-    module = _load_module()
+def test_docker_backend_reports_dedicated_address_pool_exhaustion(module):
     backend = object.__new__(module.LocalContainerProvisionerBackend)
     backend._network_pool = (module.ipaddress.ip_network("10.253.240.0/29"), 29)
     backend._client = SimpleNamespace(
@@ -1509,9 +1405,7 @@ def test_docker_backend_reports_dedicated_address_pool_exhaustion():
         backend._next_network_subnet()
 
 
-def test_docker_backend_retries_subnet_conflict_from_another_provisioner():
-    module = _load_module()
-
+def test_docker_backend_retries_subnet_conflict_from_another_provisioner(module):
     class IPAMPool:
         def __init__(self, *, subnet):
             self.subnet = subnet
@@ -1540,8 +1434,7 @@ def test_docker_backend_retries_subnet_conflict_from_another_provisioner():
     assert created_subnets == ["10.253.240.0/28", "10.253.240.16/28"]
 
 
-def test_docker_backend_deletes_distinct_sandboxes_with_bounded_parallelism():
-    module = _load_module()
+def test_docker_backend_deletes_distinct_sandboxes_with_bounded_parallelism(module):
     backend = object.__new__(module.LocalContainerProvisionerBackend)
     backend._lock = threading.RLock()
     backend._sandbox_locks = {}
@@ -1595,8 +1488,7 @@ def test_docker_backend_deletes_distinct_sandboxes_with_bounded_parallelism():
     assert set(deleted_networks) == set(containers)
 
 
-def test_docker_backend_serializes_same_sandbox_generation():
-    module = _load_module()
+def test_docker_backend_serializes_same_sandbox_generation(module):
     backend = object.__new__(module.LocalContainerProvisionerBackend)
     backend._lock = threading.RLock()
     backend._sandbox_locks = {}
@@ -1607,8 +1499,7 @@ def test_docker_backend_serializes_same_sandbox_generation():
     assert backend._sandbox_lock("sandbox-2") is not first
 
 
-def test_docker_backend_serializes_create_and_delete_for_same_sandbox(monkeypatch):
-    module = _load_module()
+def test_docker_backend_serializes_create_and_delete_for_same_sandbox(module, monkeypatch):
     backend = object.__new__(module.LocalContainerProvisionerBackend)
     backend._lock = threading.RLock()
     backend._sandbox_locks = {}
@@ -1688,10 +1579,8 @@ def test_docker_backend_serializes_create_and_delete_for_same_sandbox(monkeypatc
     assert container.removed is True
 
 
-def test_docker_backend_reconnects_provisioner_before_reusing_sandbox(monkeypatch, tmp_path):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
+def test_docker_backend_reconnects_provisioner_before_reusing_sandbox(module, monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, "docker.errors", SimpleNamespace(NotFound=RuntimeError))
-    module = _load_module()
     connected = []
 
     class FakeNetwork:
@@ -1731,10 +1620,8 @@ def test_docker_backend_reconnects_provisioner_before_reusing_sandbox(monkeypatc
     assert connected == [("provisioner-id", ["sandbox-provisioner"])]
 
 
-def test_docker_backend_does_not_remove_unowned_network(monkeypatch, tmp_path):
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
+def test_docker_backend_does_not_remove_unowned_network(module, monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, "docker.errors", SimpleNamespace(NotFound=RuntimeError))
-    module = _load_module()
     disconnected = []
     removed = []
 
@@ -1764,25 +1651,12 @@ def test_docker_backend_does_not_remove_unowned_network(monkeypatch, tmp_path):
     assert removed == []
 
 
-def test_kubernetes_inventory_includes_pod_without_service_and_fails_closed(
-    monkeypatch,
-):
+def test_kubernetes_inventory_includes_pod_without_service_and_fails_closed(module, monkeypatch):
     """迁移清理必须以 Pod 为权威事实，不能把 Service 丢失或枚举失败当成空集。"""
-    monkeypatch.setenv("PROVISIONER_BACKEND", "memory")
-    module = _load_module()
-    kubernetes_module = ModuleType("kubernetes")
-    client_module = ModuleType("kubernetes.client")
-    rest_module = ModuleType("kubernetes.client.rest")
-
     class ApiException(Exception):
         pass
 
-    rest_module.ApiException = ApiException
-    client_module.rest = rest_module
-    kubernetes_module.client = client_module
-    monkeypatch.setitem(sys.modules, "kubernetes", kubernetes_module)
-    monkeypatch.setitem(sys.modules, "kubernetes.client", client_module)
-    monkeypatch.setitem(sys.modules, "kubernetes.client.rest", rest_module)
+    _install_kubernetes_modules(monkeypatch, ApiException)
     pod = SimpleNamespace(
         metadata=SimpleNamespace(
             labels={

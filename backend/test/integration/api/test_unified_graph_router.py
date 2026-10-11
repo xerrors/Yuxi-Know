@@ -84,19 +84,3 @@ async def test_milvus_graph_endpoints(test_client, admin_headers, knowledge_base
     assert payload["success"] is True
     for key in expected_keys:
         assert key in payload["data"]
-
-
-@pytest.mark.parametrize(
-    "path",
-    [
-        "/api/graph/neo4j/nodes",
-        "/api/graph/neo4j/node",
-        "/api/graph/neo4j/info",
-        "/api/graph/neo4j/index-entities",
-        "/api/graph/neo4j/add-entities",
-    ],
-)
-async def test_neo4j_upload_routes_are_removed(test_client, admin_headers, path):
-    method = test_client.post if path.endswith(("index-entities", "add-entities")) else test_client.get
-    response = await method(path, headers=admin_headers)
-    assert response.status_code == 404

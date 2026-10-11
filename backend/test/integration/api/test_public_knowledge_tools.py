@@ -8,6 +8,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import select
 
+from test.support.knowledge import default_embedding_model_spec
 from yuxi.infrastructure.minio import get_minio_client
 from yuxi.infrastructure.minio.client import MinIOClient
 from yuxi.infrastructure.postgres.manager import pg_manager
@@ -16,31 +17,45 @@ from yuxi.modules.knowledge.models import KnowledgeBase, KnowledgeFile
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
 
-async def test_knowledge_key_tool_route_boundary_without_kb(test_client, admin_headers):
+async def test_knowledge_key_tool_route_boundary_without_kb(test_client, api_key_factory):
     """不依赖向量服务，证明 Knowledge Key 仅能调用登记的只读工具。"""
-    created = await test_client.post(
-        "/api/user/apikey/",
-        json={"request_id": str(uuid.uuid4()), "name": "Knowledge tool boundary", "access_level": "knowledge"},
-        headers=admin_headers,
+    created = await api_key_factory(
+        {"request_id": str(uuid.uuid4()), "name": "Knowledge tool boundary", "access_level": "knowledge"}
     )
-    assert created.status_code == 200, created.text
-    key_id = created.json()["api_key"]["id"]
-    key_headers = {"Authorization": f"Bearer {created.json()['secret']}"}
-    try:
-        listed = await test_client.get("/api/v1/knowledge/tools/list_kbs", headers=key_headers)
-        assert listed.status_code == 200, listed.text
-        assert isinstance(listed.json(), list)
+    listed = await test_client.get("/api/v1/knowledge/tools/list_kbs", headers=created.headers)
+    assert listed.status_code == 200, listed.text
+    assert isinstance(listed.json(), list)
 
-        blocked = await test_client.get("/api/v1/agents", headers=key_headers)
-        assert blocked.status_code == 403, blocked.text
-        absent = await test_client.post(
-            "/api/v1/knowledge/tools/download_kb_file",
-            json={"kb_id": "missing", "file_id": "missing"},
-            headers=key_headers,
-        )
-        assert absent.status_code == 404, absent.text
-    finally:
-        await test_client.delete(f"/api/user/apikey/{key_id}", headers=admin_headers)
+    for path in (
+        "/api/v1/agents",
+        "/api/knowledge/knowledge-bases",
+        "/api/knowledge/knowledge-bases/external",
+        "/api/user/apikey/",
+        "/api/graph/list",
+        "/api/evaluation/knowledge-bases/unused/datasets",
+    ):
+        blocked = await test_client.get(path, headers=created.headers)
+        assert blocked.status_code == 403, (path, blocked.text)
+    absent = await test_client.post(
+        "/api/v1/knowledge/tools/download_kb_file",
+        json={"kb_id": "missing", "file_id": "missing"},
+        headers=created.headers,
+    )
+    assert absent.status_code == 404, absent.text
+
+
+async def test_agents_key_cannot_access_public_knowledge_api(test_client, api_key_factory):
+    """Agents 与 Knowledge 两种受限 Key 的 API 面互不包含。"""
+    created = await api_key_factory(
+        {
+            "request_id": str(uuid.uuid4()),
+            "name": "Agents API boundary test",
+            "access_level": "agents",
+            "app_id": "knowledge-boundary-test",
+        }
+    )
+    tool_response = await test_client.get("/api/v1/knowledge/tools/list_kbs", headers=created.headers)
+    assert tool_response.status_code == 403, tool_response.text
 
 
 @pytest_asyncio.fixture
@@ -162,51 +177,46 @@ async def test_document_tools_return_persisted_results(test_client, admin_header
     assert "无效正则表达式" in invalid_regex.json()["detail"]
 
 
-async def test_knowledge_key_can_call_tools_but_not_unlisted_operations(test_client, admin_headers, knowledge_base_resource):
+async def test_knowledge_key_can_call_tools_but_not_unlisted_operations(
+    test_client, knowledge_base_resource, api_key_factory
+):
     """受限 Key 只进入列明的只读工具，下载与管理保持拒绝。"""
-    created = await test_client.post(
-        "/api/user/apikey/",
-        json={"request_id": str(uuid.uuid4()), "name": "Knowledge tools", "access_level": "knowledge"},
-        headers=admin_headers,
+    created = await api_key_factory(
+        {"request_id": str(uuid.uuid4()), "name": "Knowledge tools", "access_level": "knowledge"}
     )
-    assert created.status_code == 200, created.text
-    key_id = created.json()["api_key"]["id"]
-    key_headers = {"Authorization": f"Bearer {created.json()['secret']}"}
+    key_headers = created.headers
     kb_id = knowledge_base_resource["kb_id"]
-    try:
-        listed = await test_client.get("/api/v1/knowledge/tools/list_kbs", headers=key_headers)
-        assert listed.status_code == 200, listed.text
-        assert any(item["kb_id"] == kb_id for item in listed.json())
+    listed = await test_client.get("/api/v1/knowledge/tools/list_kbs", headers=key_headers)
+    assert listed.status_code == 200, listed.text
+    assert any(item["kb_id"] == kb_id for item in listed.json())
 
-        queried = await test_client.post(
-            "/api/v1/knowledge/tools/query_kb",
-            json={"kb_id": kb_id, "query_text": "hello"},
-            headers=key_headers,
-        )
-        assert queried.status_code == 200, queried.text
+    queried = await test_client.post(
+        "/api/v1/knowledge/tools/query_kb",
+        json={"kb_id": kb_id, "query_text": "hello"},
+        headers=key_headers,
+    )
+    assert queried.status_code == 200, queried.text
 
-        for name, payload, expected in (
-            ("open_kb_document", {"kb_id": kb_id, "file_id": "missing-file"}, 400),
-            ("find_kb_document", {"kb_id": kb_id, "file_id": "missing-file", "patterns": ["hello"]}, 400),
-            ("search_file", {"query": "missing-needle"}, 200),
-        ):
-            response = await test_client.post(f"/api/v1/knowledge/tools/{name}", json=payload, headers=key_headers)
-            assert response.status_code == expected, (name, response.text)
+    for name, payload, expected in (
+        ("open_kb_document", {"kb_id": kb_id, "file_id": "missing-file"}, 400),
+        ("find_kb_document", {"kb_id": kb_id, "file_id": "missing-file", "patterns": ["hello"]}, 400),
+        ("search_file", {"query": "missing-needle"}, 200),
+    ):
+        response = await test_client.post(f"/api/v1/knowledge/tools/{name}", json=payload, headers=key_headers)
+        assert response.status_code == expected, (name, response.text)
 
-        blocked = await test_client.post(
-            "/api/v1/knowledge/tools/download_kb_file",
-            json={"kb_id": kb_id, "file_id": "missing"},
-            headers=key_headers,
-        )
-        assert blocked.status_code == 404, blocked.text
-        blocked = await test_client.get("/api/knowledge/knowledge-bases", headers=key_headers)
-        assert blocked.status_code == 403, blocked.text
-    finally:
-        await test_client.delete(f"/api/user/apikey/{key_id}", headers=admin_headers)
+    blocked = await test_client.post(
+        "/api/v1/knowledge/tools/download_kb_file",
+        json={"kb_id": kb_id, "file_id": "missing"},
+        headers=key_headers,
+    )
+    assert blocked.status_code == 404, blocked.text
+    blocked = await test_client.get("/api/knowledge/knowledge-bases", headers=key_headers)
+    assert blocked.status_code == 403, blocked.text
 
 
-async def test_tool_query_hides_invisible_knowledge_base(test_client, admin_headers, standard_user):
-    """资源 ID 即便已知，另一用户也无法借工具查询其内容。"""
+async def test_tool_query_hides_invisible_knowledge_base(test_client, admin_headers, standard_user, api_key_factory):
+    """私有库的已知 ID 对另一用户的查询与搜索均不可见。"""
     owner = await test_client.get("/api/auth/me", headers=admin_headers)
     assert owner.status_code == 200, owner.text
     created = await test_client.post(
@@ -214,7 +224,7 @@ async def test_tool_query_hides_invisible_knowledge_base(test_client, admin_head
         json={
             "name": f"pytest_private_tool_{uuid.uuid4().hex[:8]}",
             "description": "private tool test",
-            "embedding_model_spec": "siliconflow-cn:Pro/BAAI/bge-m3",
+            "embedding_model_spec": default_embedding_model_spec(),
             "kb_type": "milvus",
             "additional_params": {},
             "share_config": {
@@ -228,12 +238,56 @@ async def test_tool_query_hides_invisible_knowledge_base(test_client, admin_head
     assert created.status_code == 200, created.text
     kb_id = created.json()["kb_id"]
     try:
-        response = await test_client.post(
-            "/api/v1/knowledge/tools/query_kb",
-            json={"kb_id": kb_id, "query_text": "hello"},
-            headers=standard_user["headers"],
+        owner_list = await test_client.get("/api/v1/knowledge/tools/list_kbs", headers=admin_headers)
+        assert owner_list.status_code == 200, owner_list.text
+        assert any(item.get("kb_id") == kb_id for item in owner_list.json())
+        user_list = await test_client.get("/api/v1/knowledge/tools/list_kbs", headers=standard_user["headers"])
+        assert user_list.status_code == 200, user_list.text
+        assert all(item.get("kb_id") != kb_id for item in user_list.json())
+
+        key_created = await api_key_factory(
+            {
+                "request_id": str(uuid.uuid4()),
+                "name": "Restricted tool test",
+                "access_level": "knowledge",
+            },
+            owner_headers=standard_user["headers"],
         )
-        assert response.status_code == 404, response.text
+        key_headers = key_created.headers
+        credentials = (
+            ("jwt", standard_user["headers"]),
+            ("knowledge-key", key_headers),
+        )
+        for label, headers in credentials:
+            listed = await test_client.get("/api/v1/knowledge/tools/list_kbs", headers=headers)
+            assert listed.status_code == 200, (label, listed.text)
+            assert all(item.get("kb_id") != kb_id for item in listed.json())
+            for route, payload in (
+                ("query_kb", {"kb_id": kb_id, "query_text": "hello"}),
+                ("search_file", {"kb_id": kb_id}),
+            ):
+                response = await test_client.post(f"/api/v1/knowledge/tools/{route}", json=payload, headers=headers)
+                assert response.status_code == 404, (label, route, response.text)
     finally:
         deleted = await test_client.delete(f"/api/knowledge/knowledge-bases/{kb_id}", headers=admin_headers)
         assert deleted.status_code == 200, deleted.text
+
+
+async def test_tool_file_search_by_id_preserves_pagination(test_client, admin_headers, knowledge_base_resource):
+    """按 ID 列文件可省略查询词，并保留分页与未知资源拒绝。"""
+    kb_id = knowledge_base_resource["kb_id"]
+    response = await test_client.post(
+        "/api/v1/knowledge/tools/search_file",
+        json={"kb_id": kb_id, "offset": 0, "limit": 100},
+        headers=admin_headers,
+    )
+    assert response.status_code == 200, response.text
+    assert isinstance(response.json()["files"], list)
+    assert response.json()["offset"] == 0
+    assert response.json()["limit"] == 100
+    missing = await test_client.post(
+        "/api/v1/knowledge/tools/search_file",
+        json={"kb_id": "missing-kb", "query": "anything"},
+        headers=admin_headers,
+    )
+    assert missing.status_code == 404, missing.text

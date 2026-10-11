@@ -368,7 +368,7 @@ async def test_reference_round_trip_uses_final_answer_and_same_turn_sources(
 
 
 async def test_references_are_web_only_and_absent_from_public_protocol(
-    test_client, admin_headers, standard_user, reference_turn, reference_replay
+    test_client, admin_headers, standard_user, reference_turn, reference_replay, api_key_factory
 ):
     """真实凭据与协议回读拒绝外部入口、完整 Key 和跨用户读取。"""
     target = reference_turn
@@ -382,30 +382,21 @@ async def test_references_are_web_only_and_absent_from_public_protocol(
         assert other_user.status_code == 404, other_user.text
 
     for access_level, app_id in (("full", None), ("full", "reference-app"), ("agents", "reference-app")):
-        created = await test_client.post(
-            "/api/user/apikey/",
-            headers=admin_headers,
-            json={
+        created = await api_key_factory(
+            {
                 "request_id": str(uuid.uuid4()),
                 "name": "Web reference boundary",
                 "access_level": access_level,
                 "app_id": app_id,
-            },
+            }
         )
-        assert created.status_code == 200, created.text
-        key_id = created.json()["api_key"]["id"]
-        key_headers = {"Authorization": f"Bearer {created.json()['secret']}"}
-        try:
-            for method in ("GET", "POST"):
-                denied = await test_client.request(method, target.references_path, headers=key_headers)
-                assert denied.status_code == 403, denied.text
-                if access_level == "full":
-                    assert denied.json()["detail"] == "来源标注仅支持 Web 登录用户"
-                old_route = await test_client.request(method, public_url, headers=key_headers)
-                assert old_route.status_code == 404, old_route.text
-        finally:
-            removed = await test_client.delete(f"/api/user/apikey/{key_id}", headers=admin_headers)
-            assert removed.status_code == 200, removed.text
+        for method in ("GET", "POST"):
+            denied = await test_client.request(method, target.references_path, headers=created.headers)
+            assert denied.status_code == 403, denied.text
+            if access_level == "full":
+                assert denied.json()["detail"] == "来源标注仅支持 Web 登录用户"
+            old_route = await test_client.request(method, public_url, headers=created.headers)
+            assert old_route.status_code == 404, old_route.text
 
     assert reference_replay.requests == []
     async with target.sessions() as db:

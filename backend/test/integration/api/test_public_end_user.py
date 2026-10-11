@@ -14,7 +14,7 @@ from yuxi.modules.identity.security import AuthUtils
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
 
-async def test_public_end_user_identity_is_unique_and_cannot_enter_product_api(test_client, admin_headers):
+async def test_public_end_user_identity_is_unique_and_cannot_enter_product_api(test_client, admin_headers, api_key_factory):
     """并发同身份只建一行；不同 APP 隔离；特殊用户无产品凭据。"""
     me = await test_client.get("/api/auth/me", headers=admin_headers)
     assert me.status_code == 200, me.text
@@ -22,29 +22,19 @@ async def test_public_end_user_identity_is_unique_and_cannot_enter_product_api(t
     marker = uuid.uuid4().hex
     app_ids = [f"end-user-a-{marker}", f"end-user-b-{marker}"]
     external_id = f"visitor-{marker}"
-    key_ids = []
     conn = await asyncpg.connect(os.environ["POSTGRES_URL"].replace("+asyncpg", ""))
     try:
         headers_by_app = []
         for app_id in app_ids:
-            created = await test_client.post(
-                "/api/user/apikey/",
-                headers=admin_headers,
-                json={
+            created = await api_key_factory(
+                {
                     "request_id": str(uuid.uuid4()),
                     "name": "Public end user integration",
                     "access_level": "agents",
                     "app_id": app_id,
-                },
-            )
-            assert created.status_code == 200, created.text
-            key_ids.append(created.json()["api_key"]["id"])
-            headers_by_app.append(
-                {
-                    "Authorization": f"Bearer {created.json()['secret']}",
-                    "X-End-User-Id": external_id,
                 }
             )
+            headers_by_app.append({**created.headers, "X-End-User-Id": external_id})
 
         responses = await asyncio.gather(*(test_client.get("/api/v1/agents", headers=headers_by_app[0]) for _ in range(6)))
         assert all(response.status_code == 200 for response in responses), [response.text for response in responses]
@@ -130,8 +120,6 @@ async def test_public_end_user_identity_is_unique_and_cannot_enter_product_api(t
         owner_catalog = await test_client.get("/api/v1/agents", headers={"Authorization": headers_by_app[0]["Authorization"]})
         assert owner_catalog.status_code == 200, owner_catalog.text
     finally:
-        for key_id in key_ids:
-            await test_client.delete(f"/api/user/apikey/{key_id}", headers=admin_headers)
         await conn.execute(
             "DELETE FROM users WHERE owner_user_id = $1 AND end_user_id = $2 AND app_id = ANY($3::varchar[])",
             owner_id,

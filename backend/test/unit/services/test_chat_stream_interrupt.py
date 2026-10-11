@@ -11,20 +11,6 @@ from yuxi.modules.agents.services.execution import (
 import yuxi.modules.agents.services.execution as svc
 
 
-class _FakeSession:
-    def __init__(self):
-        self.commit_count = 0
-
-    async def commit(self):
-        self.commit_count += 1
-
-
-async def _resolve_test_workdir(**_kwargs):
-    """返回测试 Session 的 Project Workdir。"""
-
-    return "projects/11111111-1111-4111-8111-111111111111"
-
-
 def test_build_tool_approval_payload_rejects_mismatched_lists():
     assert _build_tool_approval_payload({"action_requests": [{}], "review_configs": []}, "thread-1") is None
 

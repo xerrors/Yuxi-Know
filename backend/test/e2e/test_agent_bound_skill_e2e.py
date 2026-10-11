@@ -21,34 +21,36 @@ from e2e_helpers import (
     wait_for_consumed_input,
 )
 
-from test.e2e.test_permission_revocation_e2e import remote_tool as remote_tool_fixture
 from test.live_api_cleanup import make_test_session_title, remove_e2e_thread_storage
 from yuxi.infrastructure.runtime_settings import get_skill_data_dir
 from yuxi.modules.extensions.skills.projection import get_user_skills_root_dir
 
-remote_tool = remote_tool_fixture
-
 pytestmark = [pytest.mark.asyncio, pytest.mark.e2e, pytest.mark.slow, pytest.mark.timeout(360)]
 
 
-@pytest.mark.parametrize("edit_during_run,create_with_resources", [(False, False), (True, False), (False, True)])
-async def test_bound_skill_is_preloaded_without_explicit_selection(
+@pytest.mark.parametrize(
+    "skill_source,edit_during_run,create_with_resources",
+    [("bound", False, False), ("bound", True, False), ("bound", False, True), ("shared", False, False)],
+)
+async def test_preloaded_skill_edit_is_loaded_by_the_worker(
     e2e_client: httpx.AsyncClient,
     e2e_headers: dict[str, str],
+    skill_source: str,
     edit_during_run: bool,
     create_with_resources: bool,
     remote_tool,
 ):
-    """从 HTTP 编辑到 worker Run，回读实际投影与持久运行清单。"""
+    """验证 bound 与 shared Skill 编辑后的投影和运行清单。"""
     slug = f"pytest-run-skill-{uuid.uuid4().hex[:8]}"
     agent_slug = f"pytest-run-agent-{uuid.uuid4().hex[:8]}"
     marker_token = uuid.uuid4().hex
-    marker = f"BOUND_SKILL_{marker_token}"
+    marker = f"{'BOUND' if skill_source == 'bound' else 'UPDATED_SHARED'}_SKILL_{marker_token}"
     gate = str(uuid.uuid4())
     me = await e2e_client.get("/api/auth/me", headers=e2e_headers)
     assert me.status_code == 200, me.text
     uid = str(me.json()["uid"])
     provider_created = False
+    skill_created = False
     agent_created = False
     thread_id = None
     run_id = None
@@ -74,6 +76,23 @@ async def test_bound_skill_is_preloaded_without_explicit_selection(
         provider_created = True
         # Worker 的模型本地缓存有 5 秒 TTL，新测试 provider 在过期后进入真实构图。
         await asyncio.sleep(6)
+        if skill_source == "shared":
+            original = f"---\nname: {slug}\nslug: {slug}\ndescription: before\n---\n# Before\n"
+            prepared = await e2e_client.post(
+                "/api/skills/import/prepare",
+                headers=e2e_headers,
+                files={"file": ("SKILL.md", original.encode(), "text/markdown")},
+            )
+            assert prepared.status_code == 200, prepared.text
+            draft_id = prepared.json()["data"]["draft_id"]
+            confirmed = await e2e_client.post(
+                f"/api/skills/install-drafts/{draft_id}/confirm",
+                headers=e2e_headers,
+                json={"slugs": [slug], "share_config": None},
+            )
+            assert confirmed.status_code == 200, confirmed.text
+            assert confirmed.json()["data"][0]["success"] is True
+            skill_created = True
         payload = {
             "name": agent_slug,
             "slug": agent_slug,
@@ -87,8 +106,8 @@ async def test_bound_skill_is_preloaded_without_explicit_selection(
                     "tools": [],
                     "knowledges": [],
                     "mcps": [],
-                    "skills": [],
-                    "preload_skills": [],
+                    "skills": [slug] if skill_source == "shared" else [],
+                    "preload_skills": [slug] if skill_source == "shared" else [],
                 }
             },
             "share_config": {
@@ -124,46 +143,53 @@ async def test_bound_skill_is_preloaded_without_explicit_selection(
             agent = await e2e_client.post("/api/agent", headers=e2e_headers, json=payload)
         assert agent.status_code == 200, agent.text
         agent_created = True
-        bound = await e2e_client.request(
-            "GET" if create_with_resources else "POST", f"/api/agent/{agent_slug}/self-skill", headers=e2e_headers
-        )
-        assert bound.status_code == 200, bound.text
-        slug = bound.json()["skill"]["slug"]
+        if skill_source == "bound":
+            bound = await e2e_client.request(
+                "GET" if create_with_resources else "POST", f"/api/agent/{agent_slug}/self-skill", headers=e2e_headers
+            )
+            assert bound.status_code == 200, bound.text
+            slug = bound.json()["skill"]["slug"]
         root = await e2e_client.get(f"/api/system/skills/{slug}/file?path=SKILL.md", headers=e2e_headers)
         assert root.status_code == 200, root.text
         original = root.json()["data"]["content"]
-        updated = original.replace("---\n\n# 操作指南", "tool_dependencies:\n- present_artifacts\n---\n\n# 图片生成技能") + marker
+        if skill_source == "bound":
+            updated = original.replace("---\n\n# 操作指南", "tool_dependencies:\n- present_artifacts\n---\n\n# 图片生成技能") + marker
+        else:
+            updated = original.replace("description: before", "description: after\ntool_dependencies:\n- present_artifacts").replace(
+                "# Before", f"# 图片生成技能\n{marker}"
+            )
         saved = await e2e_client.put(
             f"/api/system/skills/{slug}/file",
             headers=e2e_headers,
             json={"path": "SKILL.md", "content": updated, "expected_revision": root.json()["data"]["revision"]},
         )
         assert saved.status_code == 200, saved.text
-        history = await e2e_client.get(f"/api/system/skills/{slug}/versions", headers=e2e_headers)
-        released = await e2e_client.post(
-            f"/api/system/skills/{slug}/versions",
-            headers=e2e_headers,
-            json={"expected_revision": history.json()["data"]["revision"]},
-        )
-        assert released.status_code == 200, released.text
-        changed = await e2e_client.put(
-            f"/api/system/skills/{slug}/file",
-            headers=e2e_headers,
-            json={
-                "path": "SKILL.md",
-                "content": updated.replace(marker, "UNRELEASED_GUIDE"),
-                "expected_revision": saved.json()["data"]["revision"],
-            },
-        )
-        assert changed.status_code == 200, changed.text
-        latest = await e2e_client.get(f"/api/system/skills/{slug}/versions", headers=e2e_headers)
-        restored = await e2e_client.post(
-            f"/api/system/skills/{slug}/versions/{released.json()['data']['version']}/restore",
-            headers=e2e_headers,
-            json={"expected_revision": latest.json()["data"]["revision"]},
-        )
-        assert restored.status_code == 200, restored.text
-        assert restored.json()["data"]["skill"]["slug"] == slug
+        if skill_source == "bound":
+            history = await e2e_client.get(f"/api/system/skills/{slug}/versions", headers=e2e_headers)
+            released = await e2e_client.post(
+                f"/api/system/skills/{slug}/versions",
+                headers=e2e_headers,
+                json={"expected_revision": history.json()["data"]["revision"]},
+            )
+            assert released.status_code == 200, released.text
+            changed = await e2e_client.put(
+                f"/api/system/skills/{slug}/file",
+                headers=e2e_headers,
+                json={
+                    "path": "SKILL.md",
+                    "content": updated.replace(marker, "UNRELEASED_GUIDE"),
+                    "expected_revision": saved.json()["data"]["revision"],
+                },
+            )
+            assert changed.status_code == 200, changed.text
+            latest = await e2e_client.get(f"/api/system/skills/{slug}/versions", headers=e2e_headers)
+            restored = await e2e_client.post(
+                f"/api/system/skills/{slug}/versions/{released.json()['data']['version']}/restore",
+                headers=e2e_headers,
+                json={"expected_revision": latest.json()["data"]["revision"]},
+            )
+            assert restored.status_code == 200, restored.text
+            assert restored.json()["data"]["skill"]["slug"] == slug
         thread = await e2e_client.post(
             "/api/v1/agents/sessions",
             headers={**e2e_headers, "Idempotency-Key": f"skill-edit-thread-{uuid.uuid4()}"},
@@ -184,7 +210,8 @@ async def test_bound_skill_is_preloaded_without_explicit_selection(
                                 "content": [
                                     {
                                         "type": "input_text",
-                                        "text": f"DETERMINISTIC_AGENT_E2E_OK DETERMINISTIC_BOUND_ROOT:{marker_token}"
+                                        "text": "DETERMINISTIC_AGENT_E2E_OK"
+                                        + (f" DETERMINISTIC_BOUND_ROOT:{marker_token}" if skill_source == "bound" else "")
                                         + (" DETERMINISTIC_CREATE_MCP" if create_with_resources else "")
                                         + (f" DETERMINISTIC_BLOCK_BEFORE_RESPONSE:{gate}" if edit_during_run else ""),
                                     }
@@ -267,6 +294,9 @@ async def test_bound_skill_is_preloaded_without_explicit_selection(
             assert response.status_code in {200, 404}, response.text
         if provider_created:
             response = await e2e_client.delete(f"/api/system/model-providers/{provider_id}", headers=e2e_headers)
+            assert response.status_code in {200, 404}, response.text
+        if skill_created:
+            response = await e2e_client.delete(f"/api/system/skills/{slug}", headers=e2e_headers)
             assert response.status_code in {200, 404}, response.text
         if agent_created:
             assert not get_user_skills_root_dir(uid).joinpath(slug).exists()

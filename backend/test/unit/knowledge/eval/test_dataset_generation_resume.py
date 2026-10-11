@@ -4,27 +4,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from conftest import NoQueryKnowledgeBase, TrackingLlm, make_chunk
+from conftest import NoQueryKnowledgeBase, TrackingLlm
 
 from yuxi.modules.knowledge.evaluation import benchmark_generation
 from yuxi.modules.knowledge.evaluation import service as eval_service_module
 from yuxi.modules.knowledge.evaluation.benchmark_generation import iter_generated_benchmark_items
 from yuxi.modules.knowledge.evaluation.service import EvaluationService
 
-
-@pytest.fixture(autouse=True)
-def fake_chunk_repository(monkeypatch):
-    class FakeChunkRepository:
-        chunks = [make_chunk("anchor_chunk")]
-
-        async def list_by_kb_id(self, kb_id):
-            return [chunk for chunk in self.chunks if chunk.kb_id == kb_id]
-
-    monkeypatch.setattr(
-        "yuxi.modules.knowledge.repositories.chunks.KnowledgeChunkRepository",
-        FakeChunkRepository,
-    )
-    return FakeChunkRepository
+pytestmark = pytest.mark.usefixtures("fake_chunk_repository")
 
 
 @pytest.mark.asyncio
@@ -433,7 +420,7 @@ def make_generation_context(neighbors_count=2):
     return FakeContext(
         {
             "dataset_id": "ds_1",
-            # 与本文件 autouse fixture fake_chunk_repository 中 chunk 的 kb_id 对齐
+            # 与本文件 fake_chunk_repository fixture 中 chunk 的 kb_id 对齐
             "kb_id": "db_1",
             "count": 5,
             "neighbors_count": neighbors_count,

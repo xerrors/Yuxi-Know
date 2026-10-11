@@ -5,74 +5,26 @@ from __future__ import annotations
 import asyncio
 import os
 import uuid
-from typing import Any
 
 import asyncpg
 import httpx
 import pytest
 
-from test.e2e.test_agent_lifecycle_e2e import output_text
-from test.e2e.e2e_helpers import wait_for_consumed_input
-from e2e_helpers import delete_agent, postgres_dsn, skip_if_external_quota
-from test.live_api_cleanup import make_test_session_title
+from test.e2e.e2e_helpers import output_text
+from test.e2e.e2e_helpers import (
+    create_public_agent,
+    create_public_thread,
+    delete_agent,
+    postgres_dsn,
+    skip_if_external_quota,
+    wait_for_consumed_input,
+)
 from test.support.public_events import read_events
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.e2e, pytest.mark.slow]
 
 EXPECTED_OUTPUT = "ASYNC_AGENT_E2E_OK"
 RUN_TIMEOUT_SECONDS = int(os.getenv("E2E_RUN_TIMEOUT_SECONDS", "240"))
-
-
-async def _create_agent(client: httpx.AsyncClient, headers: dict[str, str], uid: str) -> str:
-    """创建只输出固定标记的临时 Agent。"""
-    default_response = await client.get("/api/agent/default", headers=headers)
-    assert default_response.status_code == 200, default_response.text
-    default_context = ((default_response.json().get("agent") or {}).get("config_json") or {}).get("context") or {}
-
-    slug = f"e2e-async-agent-{uuid.uuid4().hex[:8]}"
-    context: dict[str, Any] = {
-        "system_prompt": f"你是端到端测试专用智能体。不要调用任何工具，只输出 {EXPECTED_OUTPUT}。",
-        "tools": [],
-        "knowledges": [],
-        "mcps": [],
-        "skills": [],
-    }
-    if default_context.get("model"):
-        context["model"] = default_context["model"]
-
-    response = await client.post(
-        "/api/agent",
-        json={
-            "name": f"E2E 异步 Agent {slug[-8:]}",
-            "slug": slug,
-            "backend_id": "ChatbotAgent",
-            "visibility": "shared",
-            "description": "真实异步 Agent E2E 临时智能体",
-            "config_json": {"context": context},
-            "share_config": {
-                "version": 2,
-                "read_scope": {"access_level": "user", "department_ids": [], "user_uids": [uid]},
-                "manage_scope": None,
-            },
-        },
-        headers=headers,
-    )
-    assert response.status_code == 200, response.text
-    assert (response.json().get("agent") or {}).get("slug") == slug
-    return slug
-
-
-async def _create_thread(client: httpx.AsyncClient, headers: dict[str, str], agent_slug: str) -> str:
-    """通过 Public API 创建独立测试 Thread。"""
-    response = await client.post(
-        "/api/v1/agents/sessions",
-        json={"agent_id": agent_slug, "title": make_test_session_title("agent-async-e2e")},
-        headers={**headers, "Idempotency-Key": f"async-thread-{uuid.uuid4().hex}"},
-    )
-    assert response.status_code == 201, response.text
-    thread_id = response.json()["id"]
-    assert thread_id, response.text
-    return str(thread_id)
 
 
 async def _submit_input(client: httpx.AsyncClient, headers: dict[str, str], thread_id: str) -> dict:
@@ -191,12 +143,20 @@ async def test_async_agent_run_stream_result_and_persistence(
 ):
     """Public 流、游标重连和 Turn 结果指向同一持久 Run。"""
     uid = e2e_agent_context["uid"]
-    agent_slug = await _create_agent(e2e_client, e2e_headers, uid)
+    agent_slug = await create_public_agent(
+        e2e_client,
+        e2e_headers,
+        uid,
+        slug_prefix="e2e-async-agent-",
+        expected_output=EXPECTED_OUTPUT,
+        name_prefix="E2E 异步 Agent",
+        description="真实异步 Agent E2E 临时智能体",
+    )
     thread_id: str | None = None
     accepted: dict | None = None
     completed = False
     try:
-        thread_id = await _create_thread(e2e_client, e2e_headers, agent_slug)
+        thread_id = await create_public_thread(e2e_client, e2e_headers, agent_slug, tag="agent-async-e2e")
         accepted = await _submit_input(e2e_client, e2e_headers, thread_id)
         run_id, turn_id, input_id = accepted["run_id"], accepted["turn_id"], accepted["input_id"]
 

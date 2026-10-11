@@ -11,6 +11,7 @@ import pytest
 from langchain_core.messages import ToolMessage
 from langgraph.types import Command
 
+from test.support.agent_stream_fixtures import native
 from yuxi.modules.agents.services.openai_events import OpenAIEventAdapter
 from yuxi.modules.agents.services.message_recorder import tool_event_output
 
@@ -24,19 +25,6 @@ def test_native_event_identity_is_unique_across_execution_owners():
     event = first.extension("turn.state", "0:state", state={})
     assert event == first.extension("turn.state", "0:state", state={})
     assert event["event_id"] != second.extension("turn.state", "0:state", state={})["event_id"]
-
-
-def native(seq, data, method="messages"):
-    """原生 fixture 固定执行通道、来源序号和 namespace。"""
-    return {
-        "seq": seq,
-        "method": method,
-        "params": {
-            "timestamp": 1777000123456,
-            "namespace": ["model:x"],
-            "data": (data, {"run_id": "model"}) if method == "messages" else data,
-        },
-    }
 
 
 @pytest.fixture

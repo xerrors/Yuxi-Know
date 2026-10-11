@@ -10,62 +10,18 @@ import asyncpg
 import pytest
 from yuxi.modules.agents.runtime.sandbox.paths import runtime_user_data_path
 from yuxi.modules.workspace.filesystem import Workspace
-from test.live_api_cleanup import delete_test_session_resources, validate_test_runs_terminal
+from test.integration.api.helpers import delete_created_threads
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
 
-async def delete_created_threads(*thread_ids: str | None) -> None:
-    """仅清理本测试创建的隐式 Project、Thread 和 Workdir。"""
-
-    targets = {thread_id for thread_id in thread_ids if thread_id}
-    if not targets:
-        return
-    await validate_test_runs_terminal(targets)
-    conn = await asyncpg.connect(os.environ["POSTGRES_URL"].replace("+asyncpg", ""))
-    try:
-        rows = await conn.fetch(
-            "SELECT c.thread_id, c.uid, c.project_id, p.workdir_path, "
-            "p.directory_mode, p.selection_status, u.user_kind, u.end_user_id "
-            "FROM sessions c JOIN projects p ON p.id = c.project_id AND p.uid = c.uid "
-            "JOIN users u ON u.uid = c.uid "
-            "WHERE c.thread_id = ANY($1::text[])",
-            sorted(targets),
-        )
-    finally:
-        await conn.close()
-    if {row["thread_id"] for row in rows} != targets:
-        raise RuntimeError("Test Thread cleanup cannot verify all created resources")
-    if any(row["directory_mode"] != "managed" or row["selection_status"] != "implicit" for row in rows):
-        raise RuntimeError("Test Thread cleanup refuses a non-implicit Project")
-    workdirs = {(row["uid"], row["workdir_path"]): {row["project_id"]} for row in rows}
-    await delete_test_session_resources(workdirs, targets, {row["project_id"] for row in rows})
-    public_uids = {row["uid"] for row in rows if row["user_kind"] == "end_user" and row["end_user_id"] == "__default__"}
-    if public_uids:
-        conn = await asyncpg.connect(os.environ["POSTGRES_URL"].replace("+asyncpg", ""))
-        try:
-            await conn.execute(
-                "DELETE FROM users WHERE uid = ANY($1::text[]) AND user_kind = 'end_user' "
-                "AND end_user_id = '__default__' "
-                "AND NOT EXISTS (SELECT 1 FROM sessions WHERE sessions.uid = users.uid) "
-                "AND NOT EXISTS (SELECT 1 FROM projects WHERE projects.uid = users.uid)",
-                sorted(public_uids),
-            )
-        finally:
-            await conn.close()
-
-
-async def test_unbound_full_key_uses_owners_product_thread_scope(test_client, admin_headers):
+async def test_unbound_full_key_uses_owners_product_thread_scope(test_client, admin_headers, api_key_factory):
     """CLI 登录签发的完整 Key 可创建产品 Thread，且不能伪造终端用户。"""
-    created_key = await test_client.post(
-        "/api/user/apikey/",
-        json={"request_id": str(uuid.uuid4()), "name": "CLI product scope", "access_level": "full"},
-        headers=admin_headers,
+    created_key = await api_key_factory(
+        {"request_id": str(uuid.uuid4()), "name": "CLI product scope", "access_level": "full"}
     )
-    assert created_key.status_code == 200, created_key.text
-    key_id = created_key.json()["api_key"]["id"]
-    assert created_key.json()["api_key"]["app_id"] is None
-    key_headers = {"Authorization": f"Bearer {created_key.json()['secret']}"}
+    assert created_key.response.json()["api_key"]["app_id"] is None
+    key_headers = created_key.headers
     thread_id = None
     try:
         created = await test_client.post(
@@ -86,10 +42,9 @@ async def test_unbound_full_key_uses_owners_product_thread_scope(test_client, ad
         assert forged.status_code == 403, forged.text
     finally:
         await delete_created_threads(thread_id)
-        await test_client.delete(f"/api/user/apikey/{key_id}", headers=admin_headers)
 
 
-async def test_agents_key_cannot_use_product_routes_or_spoof_source(test_client, admin_headers):
+async def test_agents_key_cannot_use_product_routes_or_spoof_source(test_client, admin_headers, api_key_factory):
     """受限 Key 可读公开目录，但不能跨 APP 或使用管理接口。"""
     payload = {
         "request_id": str(uuid.uuid4()),
@@ -97,13 +52,9 @@ async def test_agents_key_cannot_use_product_routes_or_spoof_source(test_client,
         "access_level": "agents",
         "app_id": "integration-app",
     }
-    created = await test_client.post("/api/user/apikey/", json=payload, headers=admin_headers)
-    assert created.status_code == 200, created.text
-    key_id = created.json()["api_key"]["id"]
-    headers = {
-        "Authorization": f"Bearer {created.json()['secret']}",
-        "X-App-Id": "forged-source",
-    }
+    created = await api_key_factory(payload)
+    key_id = created.key_id
+    headers = {**created.headers, "X-App-Id": "forged-source"}
     product_thread_id = None
     public_thread_id = None
     try:
@@ -183,10 +134,7 @@ async def test_agents_key_cannot_use_product_routes_or_spoof_source(test_client,
             await test_client.post(f"/api/v1/agents/sessions/{public_thread_id}/archive", headers=headers)
         if product_thread_id is not None:
             await test_client.post(f"/api/v1/agents/sessions/{product_thread_id}/archive", headers=admin_headers)
-        try:
-            await delete_created_threads(public_thread_id, product_thread_id)
-        finally:
-            await test_client.delete(f"/api/user/apikey/{key_id}", headers=admin_headers)
+        await delete_created_threads(public_thread_id, product_thread_id)
 
 
 async def test_public_api_accepts_product_jwt_without_end_user_impersonation(test_client, admin_headers):
@@ -206,21 +154,17 @@ async def test_public_api_accepts_product_jwt_without_end_user_impersonation(tes
     assert spoofed.status_code == 403, spoofed.text
 
 
-async def test_key_without_end_user_id_cannot_reach_product_project_files(test_client, admin_headers):
+async def test_key_without_end_user_id_cannot_reach_product_project_files(test_client, admin_headers, api_key_factory):
     """无终端用户 Header 的 APP Key 仍使用独立 UID 与 Workspace。"""
-    created_key = await test_client.post(
-        "/api/user/apikey/",
-        json={
+    created_key = await api_key_factory(
+        {
             "request_id": str(uuid.uuid4()),
             "name": "Default APP user isolation",
             "access_level": "agents",
             "app_id": f"boundary-{uuid.uuid4()}",
-        },
-        headers=admin_headers,
+        }
     )
-    assert created_key.status_code == 200, created_key.text
-    key_id = created_key.json()["api_key"]["id"]
-    key_headers = {"Authorization": f"Bearer {created_key.json()['secret']}"}
+    key_headers = created_key.headers
     product_thread_id = None
     app_thread_id = None
     product_workspace = None
@@ -263,7 +207,7 @@ async def test_key_without_end_user_id_cannot_reach_product_project_files(test_c
         app = bindings[app_thread_id]
         assert product["uid"] != app["uid"]
         assert product["app_id"] is None
-        assert app["app_id"] == created_key.json()["api_key"]["app_id"]
+        assert app["app_id"] == created_key.response.json()["api_key"]["app_id"]
         assert app["user_kind"] == "end_user"
         assert app["end_user_id"] == "__default__"
 
@@ -312,10 +256,7 @@ async def test_key_without_end_user_id_cannot_reach_product_project_files(test_c
             await test_client.post(f"/api/v1/agents/sessions/{app_thread_id}/archive", headers=key_headers)
         if product_thread_id is not None:
             await test_client.post(f"/api/v1/agents/sessions/{product_thread_id}/archive", headers=admin_headers)
-        try:
-            await delete_created_threads(app_thread_id, product_thread_id)
-        finally:
-            await test_client.delete(f"/api/user/apikey/{key_id}", headers=admin_headers)
+        await delete_created_threads(app_thread_id, product_thread_id)
 
 
 @pytest.mark.parametrize(

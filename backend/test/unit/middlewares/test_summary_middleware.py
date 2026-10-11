@@ -719,44 +719,73 @@ def test_wrap_model_call_does_not_sanitize_without_summary_trigger() -> None:
 
 
 @pytest.mark.unit
-async def test_awrap_model_call_emits_completed_for_compaction_without_summary(
+@pytest.mark.parametrize(
+    ("async_call", "summary_triggered"),
+    [
+        pytest.param(True, False, id="async-tool-result-offload-only"),
+        pytest.param(False, True, id="sync-summary"),
+        pytest.param(True, True, id="async-summary"),
+    ],
+)
+async def test_compression_emits_started_and_completed(
     compression_events: list[dict],
+    async_call: bool,
+    summary_triggered: bool,
 ) -> None:
+    """同步和异步压缩均发送完成事件，并区分摘要触发与仅卸载工具结果。"""
     backend = _MemoryBackend()
-    large_result = "BEGIN\n" + ("raw result payload\n" * 200)
-    messages = [
-        HumanMessage(content="查资料"),
-        AIMessage(content="", tool_calls=[{"id": "call-1", "name": "query_kb", "args": {}}]),
-        ToolMessage(content=large_result, tool_call_id="call-1", name="query_kb"),
-        HumanMessage(content="继续"),
-    ]
-    middleware = YuxiSummarizationMiddleware(
-        model=_RecordingModel(),
-        backend=backend,
-        trigger=("tokens", 500),
-        keep=("messages", 2),
-        token_counter=_content_char_counter,
-        trim_tokens_to_summarize=None,
-        tool_result_offload_token_limit=1,
-    )
-    middleware._history_path_prefix = VIRTUAL_PATH_CONVERSATION_HISTORY
-    middleware._large_tool_results_prefix = VIRTUAL_PATH_LARGE_TOOL_RESULTS
     captured_messages: list | None = None
 
-    async def handler(request: ModelRequest) -> ModelResponse:
+    if summary_triggered:
+        middleware, large_result = _make_compressing_middleware(backend)
+        messages = _compressing_messages(large_result)
+    else:
+        large_result = "BEGIN\n" + ("raw result payload\n" * 200)
+        messages = [
+            HumanMessage(content="查资料"),
+            AIMessage(content="", tool_calls=[{"id": "call-1", "name": "query_kb", "args": {}}]),
+            ToolMessage(content=large_result, tool_call_id="call-1", name="query_kb"),
+            HumanMessage(content="继续"),
+        ]
+        middleware = YuxiSummarizationMiddleware(
+            model=_RecordingModel(),
+            backend=backend,
+            trigger=("tokens", 500),
+            keep=("messages", 2),
+            token_counter=_content_char_counter,
+            trim_tokens_to_summarize=None,
+            tool_result_offload_token_limit=1,
+        )
+        middleware._history_path_prefix = VIRTUAL_PATH_CONVERSATION_HISTORY
+        middleware._large_tool_results_prefix = VIRTUAL_PATH_LARGE_TOOL_RESULTS
+
+    def handler(request: ModelRequest) -> ModelResponse:
         nonlocal captured_messages
         captured_messages = request.messages
         return ModelResponse(result=[AIMessage(content="ok")])
 
-    result = await middleware.awrap_model_call(_model_request(messages), handler)
+    async def async_handler(request: ModelRequest) -> ModelResponse:
+        return handler(request)
 
-    assert not isinstance(result, ExtendedModelResponse)
+    if async_call:
+        result = await middleware.awrap_model_call(_model_request(messages), async_handler)
+    else:
+        result = middleware.wrap_model_call(_model_request(messages), handler)
+
     assert [event["status"] for event in compression_events] == ["started", "completed"]
-    assert captured_messages is not None
-    formatted = get_buffer_string(captured_messages)
-    assert "[Tool result saved]" in formatted
-    assert "Truncated" in formatted
-    assert messages[2].content == large_result
+    if summary_triggered:
+        assert isinstance(result, ExtendedModelResponse)
+        assert all(event["type"] == "yuxi.context_compression" for event in compression_events)
+        completed = compression_events[-1]
+        assert isinstance(completed.get("cutoff_index"), int)
+        assert completed.get("file_path") is not None
+    else:
+        assert not isinstance(result, ExtendedModelResponse)
+        assert captured_messages is not None
+        formatted = get_buffer_string(captured_messages)
+        assert "[Tool result saved]" in formatted
+        assert "Truncated" in formatted
+        assert messages[2].content == large_result
 
 
 @pytest.mark.unit
@@ -965,115 +994,55 @@ def _compressing_messages(large_result: str) -> list:
 
 @pytest.mark.unit
 @pytest.mark.parametrize("async_call", [False, True], ids=["sync", "async"])
-async def test_wrap_model_call_emits_started_and_completed(
-    compression_events: list[dict],
-    async_call: bool,
-) -> None:
-    backend = _MemoryBackend()
-    middleware, large_result = _make_compressing_middleware(backend)
-    messages = _compressing_messages(large_result)
-
-    if async_call:
-
-        async def handler(request: ModelRequest) -> ModelResponse:
-            return ModelResponse(result=[AIMessage(content="ok")])
-
-        result = await middleware.awrap_model_call(_model_request(messages), handler)
-    else:
-
-        def handler(request: ModelRequest) -> ModelResponse:
-            return ModelResponse(result=[AIMessage(content="ok")])
-
-        result = middleware.wrap_model_call(_model_request(messages), handler)
-
-    assert isinstance(result, ExtendedModelResponse)
-    statuses = [event["status"] for event in compression_events]
-    assert statuses == ["started", "completed"]
-    assert all(event["type"] == "yuxi.context_compression" for event in compression_events)
-    completed = compression_events[-1]
-    assert isinstance(completed.get("cutoff_index"), int)
-    assert completed.get("file_path") is not None
-
-
-@pytest.mark.unit
-@pytest.mark.parametrize("async_call", [False, True], ids=["sync", "async"])
-async def test_auto_summary_fails_when_history_cannot_be_saved(
-    compression_events: list[dict],
-    async_call: bool,
-) -> None:
-    backend = _FailingHistoryWriteBackend()
-    model = _RecordingModel()
-    middleware, large_result = _make_compressing_middleware(backend, model=model)
-    messages = _compressing_messages(large_result)
-    handler_calls = 0
-
-    if async_call:
-
-        async def handler(request: ModelRequest) -> ModelResponse:
-            nonlocal handler_calls
-            handler_calls += 1
-            return ModelResponse(result=[AIMessage(content="ok")])
-
-        with pytest.raises(RuntimeError, match="无法保存可恢复的对话历史"):
-            await middleware.awrap_model_call(_model_request(messages), handler)
-    else:
-
-        def handler(request: ModelRequest) -> ModelResponse:
-            nonlocal handler_calls
-            handler_calls += 1
-            return ModelResponse(result=[AIMessage(content="ok")])
-
-        with pytest.raises(RuntimeError, match="无法保存可恢复的对话历史"):
-            middleware.wrap_model_call(_model_request(messages), handler)
-
-    assert handler_calls == 0
-    assert model.prompts == []
-    assert [event["status"] for event in compression_events] == ["started", "failed"]
-
-
-@pytest.mark.unit
-@pytest.mark.parametrize("async_call", [False, True], ids=["sync", "async"])
 @pytest.mark.parametrize(
-    ("model_type", "error_match"),
+    ("backend_type", "model_type", "error_match", "expected_prompt_count", "history_saved"),
     [
-        pytest.param(_FailingSummaryModel, "summary failed", id="model_error"),
-        pytest.param(_EmptySummaryModel, "摘要模型返回空内容", id="empty_summary"),
+        pytest.param(
+            _FailingHistoryWriteBackend,
+            _RecordingModel,
+            "无法保存可恢复的对话历史",
+            0,
+            False,
+            id="history-write-failure",
+        ),
+        pytest.param(_MemoryBackend, _FailingSummaryModel, "summary failed", 1, True, id="model-error"),
+        pytest.param(_MemoryBackend, _EmptySummaryModel, "摘要模型返回空内容", 1, True, id="empty-summary"),
     ],
 )
-async def test_auto_summary_propagates_summary_failure(
+async def test_auto_summary_propagates_failure_and_keeps_run_open(
     compression_events: list[dict],
     async_call: bool,
-    model_type: type[_RecordingModel],
+    backend_type,
+    model_type,
     error_match: str,
+    expected_prompt_count: int,
+    history_saved: bool,
 ) -> None:
-    backend = _MemoryBackend()
+    """写历史失败或摘要失败均阻止下游调用，并让 job hook 接管终态。"""
+    backend = backend_type()
     model = model_type()
     middleware, large_result = _make_compressing_middleware(backend, model=model)
     messages = _compressing_messages(large_result)
     handler_calls = 0
 
-    if async_call:
+    def handler(request: ModelRequest) -> ModelResponse:
+        nonlocal handler_calls
+        handler_calls += 1
+        return ModelResponse(result=[AIMessage(content="ok")])
 
-        async def handler(request: ModelRequest) -> ModelResponse:
-            nonlocal handler_calls
-            handler_calls += 1
-            return ModelResponse(result=[AIMessage(content="ok")])
+    async def async_handler(request: ModelRequest) -> ModelResponse:
+        return handler(request)
 
-        with pytest.raises(RuntimeError, match=error_match):
-            await middleware.awrap_model_call(_model_request(messages), handler)
-    else:
-
-        def handler(request: ModelRequest) -> ModelResponse:
-            nonlocal handler_calls
-            handler_calls += 1
-            return ModelResponse(result=[AIMessage(content="ok")])
-
-        with pytest.raises(RuntimeError, match=error_match):
+    with pytest.raises(RuntimeError, match=error_match):
+        if async_call:
+            await middleware.awrap_model_call(_model_request(messages), async_handler)
+        else:
             middleware.wrap_model_call(_model_request(messages), handler)
 
     assert handler_calls == 0
-    assert len(model.prompts) == 1
-    assert any(path.startswith(VIRTUAL_PATH_CONVERSATION_HISTORY) for path, _ in backend.writes)
+    assert len(model.prompts) == expected_prompt_count
+    history_writes = [path for path, _ in backend.writes if path.startswith(VIRTUAL_PATH_CONVERSATION_HISTORY)]
+    assert bool(history_writes) is history_saved
     assert [event["status"] for event in compression_events] == ["started", "failed"]
 
 

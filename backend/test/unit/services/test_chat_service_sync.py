@@ -5,15 +5,13 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from fastapi import HTTPException
 from langchain.messages import AIMessage, HumanMessage, ToolMessage
 
 from yuxi.modules.agents.runtime import context as agent_context
 from yuxi.modules.workspace import paths as workspace_paths
-from test.unit.agent_context_fixtures import prepared_execution
+from test.unit.support.agent_context_fixtures import prepared_execution
 import yuxi.modules.agents.services.execution as svc
 import yuxi.modules.agents.services.messages as message_svc
-import yuxi.modules.agents.services.state as state_svc
 import yuxi.modules.agents.services.runs as lifecycle_runs
 
 
@@ -43,10 +41,6 @@ def test_approval_binding_uses_current_model_and_keeps_duplicate_call_order():
 
 def _empty_agent_context(_uid: str) -> str:
     return ""
-
-
-async def _fake_normalize_agent_context_config(context, **_kwargs):
-    return dict(context or {})
 
 
 async def _resolve_test_workdir(**_kwargs):
@@ -133,14 +127,30 @@ def owning_turn_boundary(monkeypatch):
 
 
 class _FakeDBBase:
+    async def commit(self):
+        """提供默认提交边界。"""
+
+    async def rollback(self):
+        """提供默认回滚边界。"""
+
     async def flush(self):
         """模拟仓储原语只 flush、顶层拥有提交。"""
 
 
 class _FakeRunRepoBase:
+    def __init__(self, _db):
+        """接受事务对象，专项用例可覆盖身份校验。"""
+
     async def get_run(self, _run_id: str):
         """消息重建测试固定当前 Run 与 Turn 的输出归属。"""
         return SimpleNamespace(run_type="chat", id="run-1", uid="user-1", app_id=None, turn_id="turn-1", input_message_id=None)
+
+    async def set_output_message(self, _run_id, _message_id, *, worker_id):
+        """默认不记录输出绑定。"""
+
+    async def cancel_active_execution_tree_descendants(self, _run):
+        """默认没有需要取消的子 Run。"""
+        return []
 
 
 class _FakeConvRepo:
@@ -271,8 +281,6 @@ async def test_error_output_and_failed_run_commit_together(monkeypatch):
             steps.append("rollback")
 
     class FakeRunRepo(_FakeRunRepoBase):
-        def __init__(self, _db):
-            pass
 
         async def lock_output_persistence(self, *_args, **_kwargs):
             return SimpleNamespace(id="run-1", run_type="chat", input_message_id=None)
@@ -322,8 +330,6 @@ async def test_empty_final_checkpoint_cannot_complete_prior_error_output(monkeyp
             self.rolled_back = True
 
     class FakeRunRepo(_FakeRunRepoBase):
-        def __init__(self, _db):
-            pass
 
         async def lock_output_persistence(self, *_args, **_kwargs):
             return SimpleNamespace(id="run-1", run_type="chat", output_message_id=99)
@@ -363,8 +369,6 @@ async def test_steer_before_first_model_yields_without_ai_output(monkeypatch):
             pytest.fail("合法的 steer 让位不应回滚")
 
     class RunRepo(_FakeRunRepoBase):
-        def __init__(self, db):
-            pass
 
         async def lock_output_persistence(self, *args, **kwargs):
             return run
@@ -415,8 +419,6 @@ async def test_save_messages_from_langgraph_state_backfills_run_output_message(m
         async def commit(self):
             self.commit_count += 1
 
-        async def rollback(self):
-            pass
 
     class FakeGraph:
         async def aget_state(self, _config):
@@ -477,12 +479,7 @@ async def test_save_messages_from_langgraph_state_backfills_run_output_message(m
 
 @pytest.mark.asyncio
 async def test_state_fallback_does_not_rebind_hidden_message_from_previous_run(monkeypatch: pytest.MonkeyPatch) -> None:
-    class FakeDB(_FakeDBBase):
-        async def commit(self):
-            pass
-
-        async def rollback(self):
-            pass
+    FakeDB = _FakeDBBase
 
     class FakeGraph:
         async def aget_state(self, _config):
@@ -498,8 +495,6 @@ async def test_state_fallback_does_not_rebind_hidden_message_from_previous_run(m
     captured: dict[str, int] = {}
 
     class FakeRunRepo(_FakeRunRepoBase):
-        def __init__(self, _db):
-            pass
 
         async def lock_output_persistence(self, *_args, **_kwargs):
             return object()
@@ -555,12 +550,7 @@ async def test_state_reconcile_uses_latest_error_unless_run_is_interrupted(
 ) -> None:
     """只用最后一条错误补全审计，中断则保留 pending ToolCall 供恢复。"""
 
-    class FakeDB(_FakeDBBase):
-        async def commit(self):
-            pass
-
-        async def rollback(self):
-            pass
+    FakeDB = _FakeDBBase
 
     class FakeGraph:
         async def aget_state(self, _config):
@@ -574,8 +564,6 @@ async def test_state_reconcile_uses_latest_error_unless_run_is_interrupted(
             )
 
     class FakeRunRepo(_FakeRunRepoBase):
-        def __init__(self, _db):
-            pass
 
         async def lock_output_persistence(self, *_args, **_kwargs):
             return SimpleNamespace(id="run-current", run_type="chat", session_record_id=1)
@@ -639,15 +627,7 @@ async def test_model_state_reconcile_uses_latest_message_when_operation_id_is_re
         message_type="model_audit",
     )
 
-    class FakeDB(_FakeDBBase):
-        async def commit(self):
-            pass
-
-        async def rollback(self):
-            pass
-
-        async def flush(self):
-            pass
+    FakeDB = _FakeDBBase
 
     class FakeGraph:
         async def aget_state(self, _config):
@@ -676,14 +656,10 @@ async def test_model_state_reconcile_uses_latest_message_when_operation_id_is_re
             return audit
 
     class FakeRunRepo(_FakeRunRepoBase):
-        def __init__(self, _db):
-            pass
 
         async def lock_output_persistence(self, *_args, **_kwargs):
             return SimpleNamespace(id="run-1", run_type="chat", input_message_id=None)
 
-        async def set_output_message(self, *_args, **_kwargs):
-            pass
 
     session_repo = _FakeConvRepo(FakeDB())
     monkeypatch.setattr(message_svc, "AgentRunRepository", FakeRunRepo)
@@ -717,15 +693,7 @@ async def test_completed_run_rejects_unmatched_final_state_message(monkeypatch: 
         session_record_id=1,
     )
 
-    class FakeDB(_FakeDBBase):
-        async def commit(self):
-            pass
-
-        async def rollback(self):
-            pass
-
-        async def flush(self):
-            pass
+    FakeDB = _FakeDBBase
 
     class FakeGraph:
         async def aget_state(self, _config):
@@ -750,8 +718,6 @@ async def test_completed_run_rejects_unmatched_final_state_message(monkeypatch: 
             return audit_message if operation_id == "known-intermediate" else None
 
     class FakeRunRepo(_FakeRunRepoBase):
-        def __init__(self, _db):
-            pass
 
         async def lock_output_persistence(self, *_args, **_kwargs):
             return SimpleNamespace(id="run-1", run_type="chat", input_message_id=None)
@@ -789,15 +755,7 @@ async def test_interrupted_run_does_not_bind_older_reconciled_model_audit(
         session_record_id=1,
     )
 
-    class FakeDB(_FakeDBBase):
-        async def commit(self):
-            pass
-
-        async def rollback(self):
-            pass
-
-        async def flush(self):
-            pass
+    FakeDB = _FakeDBBase
 
     class FakeGraph:
         async def aget_state(self, _config):
@@ -824,8 +782,6 @@ async def test_interrupted_run_does_not_bind_older_reconciled_model_audit(
     output_ids: list[int] = []
 
     class FakeRunRepo(_FakeRunRepoBase):
-        def __init__(self, _db):
-            pass
 
         async def lock_output_persistence(self, *_args, **_kwargs):
             return SimpleNamespace(id="run-1", run_type="chat", input_message_id=None)
@@ -873,15 +829,7 @@ async def test_tool_call_interrupt_ignores_historical_same_id_tool_message(monke
         session_record_id=1,
     )
 
-    class FakeDB(_FakeDBBase):
-        async def commit(self):
-            pass
-
-        async def rollback(self):
-            pass
-
-        async def flush(self):
-            pass
+    FakeDB = _FakeDBBase
 
     class FakeGraph:
         async def aget_state(self, _config):
@@ -911,8 +859,6 @@ async def test_tool_call_interrupt_ignores_historical_same_id_tool_message(monke
     output_ids: list[int] = []
 
     class FakeRunRepo(_FakeRunRepoBase):
-        def __init__(self, _db):
-            pass
 
         async def lock_output_persistence(self, *_args, **_kwargs):
             return SimpleNamespace(id="run-1", run_type="chat", input_message_id=None)
@@ -968,8 +914,6 @@ async def test_interrupt_persists_message_and_terminal_status_in_one_commit(
             return SimpleNamespace(values={"messages": [AIMessage(content="waiting")]})
 
     class FakeRunRepo(_FakeRunRepoBase):
-        def __init__(self, _db):
-            pass
 
         async def lock_output_persistence(self, *_args, **_kwargs):
             events.append(("lock",))
@@ -1071,157 +1015,6 @@ async def test_manifest_snapshot_prompt_keeps_workspace_agent_context(monkeypatc
     assert context.system_prompt == "MANIFEST-CONFIG\n\n用户工作区 agents/AGENTS.md 内容：\nWORKSPACE-MARKER"
     assert context.thread_id == "thread-1"
     assert context.uid == "user-1"
-
-
-@pytest.mark.asyncio
-async def test_get_agent_state_view_rejects_missing_session(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    child_thread_id = "missing-child-agent_session"
-
-    class ConvRepo:
-        def __init__(self, _db):
-            pass
-
-        async def get_session_by_thread_id(self, thread_id: str):
-            del thread_id
-            return None
-
-    monkeypatch.setattr(state_svc, "SessionRepository", ConvRepo)
-
-    with pytest.raises(HTTPException) as exc:
-        await state_svc.get_agent_state_view(
-            thread_id=child_thread_id,
-            current_user=SimpleNamespace(uid="user-1"),
-            db=object(),
-        )
-
-    assert exc.value.status_code == 404
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("turn_status", ["waiting", "cancelled"])
-async def test_get_agent_state_view_returns_interrupt_only_for_waiting_owner(monkeypatch: pytest.MonkeyPatch, turn_status):
-    thread_id = "thread-1"
-
-    class ConvRepo:
-        def __init__(self, _db):
-            pass
-
-        async def get_session_by_thread_id(self, requested_thread_id: str):
-            assert requested_thread_id == thread_id
-            return SimpleNamespace(
-                id=20,
-                uid="user-1",
-                app_id=None,
-                agent_id="main",
-                status="active",
-                parent_thread_id=None,
-                project_id="11111111-1111-4111-8111-111111111111",
-                extra_metadata={"model_spec": "provider:agent_session-model"},
-            )
-
-    class RunRepo:
-        def __init__(self, _db):
-            pass
-
-        async def get_latest_run_by_thread_for_user(self, requested_thread_id: str, uid: str):
-            assert requested_thread_id == thread_id
-            assert uid == "user-1"
-            return SimpleNamespace(
-                id="run-1",
-                turn_id="turn",
-                status="interrupted",
-                input_payload={"model_spec": "provider:stale-run-model"},
-            )
-
-    async def read_checkpoint_state(*, uid, thread_id):
-        assert uid == "user-1"
-        assert thread_id == "thread-1"
-        return {}, SimpleNamespace(
-            value={
-                "action_requests": [{"name": "execute", "args": {"command": "pytest -q"}}],
-                "review_configs": [{"action_name": "execute", "allowed_decisions": ["approve", "reject"]}],
-            }
-        )
-
-    class TurnRepo:
-        def __init__(self, _db):
-            pass
-
-        async def get_for_scope(self, **kwargs):
-            return SimpleNamespace(status=turn_status, current_run_id="run-1", waitpoint={"run_id": "run-1"})
-
-    monkeypatch.setattr(state_svc, "AgentTurnRepository", TurnRepo)
-    monkeypatch.setattr(state_svc, "SessionRepository", ConvRepo)
-    monkeypatch.setattr(state_svc, "AgentRunRepository", RunRepo)
-    from yuxi.modules.agents.repositories.public_items import PublicItemRepository
-    from unittest.mock import AsyncMock
-
-    monkeypatch.setattr(PublicItemRepository, "list_items", AsyncMock(return_value=[]))
-    monkeypatch.setattr(state_svc, "_read_checkpoint_state", read_checkpoint_state)
-
-    monkeypatch.setattr(state_svc, "tree_snapshot", AsyncMock(return_value={"sessions": []}))
-    result = await state_svc.get_agent_state_view(
-        thread_id=thread_id,
-        current_user=SimpleNamespace(uid="user-1"),
-        db=object(),
-    )
-
-    if turn_status == "cancelled":
-        assert "interrupt" not in result
-        return
-    assert result["interrupt"]["status"] == "human_approval_required"
-    assert result["interrupt"]["run_id"] == "run-1"
-    assert result["interrupt"]["approval"]["action_requests"][0]["name"] == "execute"
-
-
-@pytest.mark.asyncio
-async def test_get_agent_state_view_reads_checkpoint_without_workspace_binding(monkeypatch: pytest.MonkeyPatch):
-    class ConvRepo:
-        def __init__(self, _db):
-            pass
-
-        async def get_session_by_thread_id(self, thread_id: str):
-            assert thread_id == "thread-1"
-            return SimpleNamespace(
-                id=20,
-                uid="user-1",
-                app_id=None,
-                agent_id="main",
-                status="active",
-                parent_thread_id=None,
-                project_id="missing-project",
-            )
-
-    class RunRepo:
-        def __init__(self, _db):
-            pass
-
-        async def get_latest_run_by_thread_for_user(self, thread_id: str, uid: str):
-            assert thread_id == "thread-1"
-            assert uid == "user-1"
-            return None
-
-    async def read_checkpoint_state(*_args, **_kwargs):
-        return {}, None
-
-    monkeypatch.setattr(state_svc, "SessionRepository", ConvRepo)
-    monkeypatch.setattr(state_svc, "AgentRunRepository", RunRepo)
-    from yuxi.modules.agents.repositories.public_items import PublicItemRepository
-    from unittest.mock import AsyncMock
-
-    monkeypatch.setattr(PublicItemRepository, "list_items", AsyncMock(return_value=[]))
-    monkeypatch.setattr(state_svc, "_read_checkpoint_state", read_checkpoint_state)
-
-    monkeypatch.setattr(state_svc, "tree_snapshot", AsyncMock(return_value={"sessions": []}))
-    result = await state_svc.get_agent_state_view(
-        thread_id="thread-1",
-        current_user=SimpleNamespace(uid="user-1"),
-        db=object(),
-    )
-
-    assert result["agent_state"]["cooperation"] == {"sessions": []}
 
 
 @pytest.mark.asyncio

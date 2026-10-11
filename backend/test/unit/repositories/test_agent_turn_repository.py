@@ -2,8 +2,9 @@
 
 import pytest
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from test.support.sqlite import create_utc_sqlite_engine
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.turns import AgentTurn
@@ -17,7 +18,7 @@ pytestmark = [pytest.mark.asyncio, pytest.mark.unit]
 @pytest_asyncio.fixture()
 async def session():
     """建立包含 Turn、Run 与 Message 约束的 SQLite 单测库。"""
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    engine = create_utc_sqlite_engine()
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)

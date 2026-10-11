@@ -5,8 +5,9 @@ from __future__ import annotations
 import pytest
 import pytest_asyncio
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from test.support.sqlite import create_utc_sqlite_engine
 from yuxi.modules.identity.repositories.departments import DepartmentRepository
 from yuxi.modules.identity.models import APIKey, Department, User
 from yuxi.infrastructure.postgres.base import Base
@@ -18,7 +19,7 @@ pytestmark = [pytest.mark.asyncio, pytest.mark.unit]
 @pytest_asyncio.fixture()
 async def department_session():
     """创建包含默认部门和待删除部门的 SQLite 会话。"""
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    engine = create_utc_sqlite_engine()
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)

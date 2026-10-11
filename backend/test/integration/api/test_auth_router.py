@@ -17,6 +17,7 @@ import yuxi.modules.identity.services.login_limits as login_limiter
 from yuxi.modules.identity.models import User as UserModel
 from yuxi.infrastructure.redis import close_async_redis_client, create_async_redis_client, get_async_redis_client
 from yuxi.shared.datetime import utc_now
+from test.integration.api.helpers import create_api_user, create_department, delete_department_by_id, delete_user_by_id
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
@@ -89,17 +90,16 @@ async def _create_department_with_admin(test_client, headers, label: str) -> dic
     suffix = uuid.uuid4().hex[:8]
     admin_uid = f"adm{label}_{suffix}"
     admin_password = f"Pw!{suffix}"
-    response = await test_client.post(
-        "/api/departments",
-        json={
+    department = await create_department(
+        test_client,
+        headers,
+        {
             "name": f"pytest_{label}_{suffix}",
             "description": "pytest managed department",
             "admin_uid": admin_uid,
             "admin_password": admin_password,
         },
-        headers=headers,
     )
-    assert response.status_code == 201, response.text
 
     login_response = await test_client.post(
         "/api/auth/token",
@@ -109,7 +109,7 @@ async def _create_department_with_admin(test_client, headers, label: str) -> dic
 
     login_payload = login_response.json()
     return {
-        "department": response.json(),
+        "department": department,
         "admin_id": login_payload["user_id"],
         "admin_headers": {"Authorization": f"Bearer {login_payload['access_token']}"},
     }
@@ -125,19 +125,7 @@ async def _create_user(test_client, headers, label: str, role: str = "user", dep
     if department_id is not None:
         payload["department_id"] = department_id
 
-    response = await test_client.post("/api/auth/users", json=payload, headers=headers)
-    assert response.status_code == 200, response.text
-    return response.json()
-
-
-async def _cleanup_user(test_client, headers, user_id: int) -> None:
-    response = await test_client.delete(f"/api/auth/users/{user_id}", headers=headers)
-    assert response.status_code in {200, 404}, response.text
-
-
-async def _cleanup_department(test_client, headers, department_id: int) -> None:
-    response = await test_client.delete(f"/api/departments/{department_id}", headers=headers)
-    assert response.status_code in {200, 404}, response.text
+    return await create_api_user(test_client, headers, payload)
 
 
 async def test_login_with_invalid_credentials(test_client):
@@ -404,11 +392,11 @@ async def test_department_admin_is_limited_to_own_department_users(test_client, 
         user_ids.remove(user_a["id"])
     finally:
         for user_id in user_ids:
-            await _cleanup_user(test_client, admin_headers, user_id)
+            await delete_user_by_id(test_client, admin_headers, user_id)
         for admin_id in admin_ids:
-            await _cleanup_user(test_client, admin_headers, admin_id)
+            await delete_user_by_id(test_client, admin_headers, admin_id)
         for department_id in department_ids:
-            await _cleanup_department(test_client, admin_headers, department_id)
+            await delete_department_by_id(test_client, admin_headers, department_id)
 
 
 async def test_invalid_token_is_rejected(test_client):

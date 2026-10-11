@@ -11,9 +11,13 @@ from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from test.integration.services.test_agent_input_schema import _create_schema, _drop_schema
+from test.integration.services.agent_input_fixtures import (
+    create_input_schema as _create_schema,
+    drop_input_schema as _drop_schema,
+    input_workdir_binding as _binding,
+    queue_inputs as _queue_inputs,
+)
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
-from yuxi.modules.agents.repositories.input import AgentInputRepository
 from yuxi.modules.agents.repositories.input_receipt import AgentInputReceiptRepository
 from yuxi.modules.agents.repositories.sessions import SessionRepository
 import yuxi.modules.agents.services.runs as runs
@@ -21,71 +25,12 @@ import yuxi.modules.agents.services.scheduler as scheduler
 import yuxi.modules.agents.services.threads as threads
 import yuxi.modules.agents.services.turns as turns
 from yuxi.modules.agents.services.scope import ActorScope
-from yuxi.modules.workspace.services.bindings import WorkdirBinding
 from yuxi.modules.agents.models.inputs import AgentInput, AgentInputReceipt
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.modules.agents.models.messages import Message
-from yuxi.modules.agents.services.input_messages import build_chat_input_message, serialize_input_message
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
-
-
-@pytest.fixture(scope="session", autouse=True)
-def ensure_live_api_schema():
-    """本测试使用自己创建的隔离 Schema。"""
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_knowledge_resources():
-    """本测试不创建知识库资源。"""
-    yield
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_sandboxes():
-    """本测试不创建沙盒资源。"""
-    yield
-
-
-async def _queue_inputs(sessions, *, count: int) -> None:
-    """接收多条持久输入，保持原始消息及 FIFO 序号。"""
-    async with sessions() as db:
-        for number in range(count):
-            input_id = f"input-{number}"
-            await AgentInputRepository(db).create(
-                input_id=input_id,
-                messages=[serialize_input_message(build_chat_input_message(f"message-{number}"))],
-                thread_id="input-thread",
-                uid="input-user",
-                app_id=None,
-                agent_slug="main",
-                kind="follow_up",
-                input_payload={"context_snapshot": {"model": "ci-replay:deterministic-chat", "tool_approval_mode": "default"}},
-            )
-            await AgentInputReceiptRepository(db).create(
-                receipt_id=f"receipt-{number}",
-                idempotency_key=f"key-{number}",
-                uid="input-user",
-                app_id=None,
-                thread_id="input-thread",
-                event_type="agent.session.input.message",
-                intent_hash=f"intent-{number}",
-                input_id=input_id,
-            )
-        await db.commit()
-
-
-def _binding() -> WorkdirBinding:
-    """只提供领取所需的已授权 Project 目录快照。"""
-    return WorkdirBinding(
-        session_record_id=1,
-        thread_id="input-thread",
-        uid="input-user",
-        project_id="input-project",
-        workdir_path="projects/input-project",
-        directory_mode="managed",
-    )
+pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
 
 async def test_concurrent_claims_consume_only_fifo_head() -> None:

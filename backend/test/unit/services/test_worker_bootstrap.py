@@ -1,0 +1,263 @@
+from __future__ import annotations
+
+import asyncio
+from contextlib import asynccontextmanager
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import pytest
+
+import yuxi.bootstrap.worker as worker_bootstrap
+from yuxi.modules.system import options as config_options
+
+
+@pytest.fixture(autouse=True)
+def api_key_derivation_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("JWT_SECRET_KEY", "test-jwt-secret-that-is-at-least-32-chars")
+    monkeypatch.setenv("API_KEY_DERIVATION_SECRET", "test-api-key-derivation-secret-32-chars")
+    monkeypatch.setenv("SANDBOX_PROVISIONER_TOKEN", "test-sandbox-token-that-is-at-least-32-chars")
+
+
+@pytest.mark.asyncio
+async def test_worker_startup_ensures_builtin_mcp_servers(monkeypatch: pytest.MonkeyPatch):
+    calls: list[str] = []
+
+    def fake_initialize():
+        calls.append("initialize")
+
+    async def fake_require_current_schema(_manager):
+        calls.append("require_current_schema")
+
+    async def fake_ensure_builtin_mcp_servers_in_db():
+        calls.append("ensure_builtin_mcp_servers_in_db")
+
+    @asynccontextmanager
+    async def fake_session_ctx():
+        yield SimpleNamespace(commit=AsyncMock())
+
+    async def fake_init_builtin_skills(session):
+        del session
+        calls.append("init_builtin_skills")
+
+    async def fake_ensure_options_in_db(session):
+        del session
+        calls.append("ensure_options_in_db")
+
+    async def fake_invalidate_option_cache(key):
+        del key
+        calls.append("invalidate_option_cache")
+
+    async def fake_recover_pending_dispatches():
+        calls.append("recover_pending_dispatches")
+
+    async def fake_publish_reconciliation_health():
+        calls.append("publish_reconciliation_health")
+
+    async def fake_publish_job_reconciliation_health():
+        calls.append("publish_job_reconciliation_health")
+
+    async def fake_reconcile_expired_run_leases():
+        calls.append("reconcile_expired_run_leases")
+        return []
+
+    async def fake_reconcile_pending_runtime_cleanups():
+        calls.append("reconcile_pending_runtime_cleanups")
+        return []
+
+    async def fake_reconciliation_loop():
+        calls.append("reconciliation_loop")
+
+    async def fake_reconcile_and_publish_jobs():
+        calls.append("reconcile_and_publish_jobs")
+        return []
+
+    async def fake_job_reconciliation_loop():
+        calls.append("job_reconciliation_loop")
+
+    async def fake_recover_scheduled_dispatches():
+        calls.append("recover_scheduled_dispatches")
+
+    async def fake_claim_and_dispatch_due_jobs():
+        calls.append("claim_and_dispatch_due_jobs")
+
+    monkeypatch.setattr(worker_bootstrap.pg_manager, "initialize", fake_initialize)
+    monkeypatch.setattr(worker_bootstrap, "require_current_schema", fake_require_current_schema)
+    monkeypatch.setattr(worker_bootstrap.pg_manager, "get_async_session_context", fake_session_ctx)
+    monkeypatch.setattr(worker_bootstrap, "ensure_builtin_mcp_servers_in_db", fake_ensure_builtin_mcp_servers_in_db)
+    monkeypatch.setattr(worker_bootstrap, "init_builtin_skills", fake_init_builtin_skills)
+    monkeypatch.setattr(config_options, "ensure_options_in_db", fake_ensure_options_in_db)
+    monkeypatch.setattr(config_options, "invalidate_option_cache", fake_invalidate_option_cache)
+    monkeypatch.setattr(worker_bootstrap, "recover_pending_dispatches", fake_recover_pending_dispatches)
+    for name in ("reconcile_stopped_trees", "recover_cooperation_waits", "release_idle_sandboxes"):
+        monkeypatch.setattr(worker_bootstrap, name, AsyncMock(return_value=[]))
+    monkeypatch.setattr(worker_bootstrap, "reconcile_expired_run_leases", fake_reconcile_expired_run_leases)
+    monkeypatch.setattr(
+        worker_bootstrap,
+        "reconcile_pending_runtime_cleanups",
+        fake_reconcile_pending_runtime_cleanups,
+    )
+    monkeypatch.setattr(worker_bootstrap, "_publish_reconciliation_health", fake_publish_reconciliation_health)
+    monkeypatch.setattr(worker_bootstrap, "_publish_job_reconciliation_health", fake_publish_job_reconciliation_health)
+    monkeypatch.setattr(worker_bootstrap, "_reconcile_agent_run_leases_forever", fake_reconciliation_loop)
+    monkeypatch.setattr(worker_bootstrap, "reconcile_and_publish_jobs", fake_reconcile_and_publish_jobs)
+    monkeypatch.setattr(worker_bootstrap, "_reconcile_background_jobs_forever", fake_job_reconciliation_loop)
+    monkeypatch.setattr(worker_bootstrap, "_reconcile_sandboxes_forever", AsyncMock())
+    monkeypatch.setattr(worker_bootstrap, "recover_scheduled_dispatches", fake_recover_scheduled_dispatches)
+    monkeypatch.setattr(worker_bootstrap, "claim_and_dispatch_due_jobs", fake_claim_and_dispatch_due_jobs)
+
+    ctx = {}
+    await worker_bootstrap._worker_startup(ctx)
+    await ctx[worker_bootstrap._RECONCILIATION_TASK_KEY]
+    await ctx[worker_bootstrap._JOB_RECONCILIATION_TASK_KEY]
+
+    assert calls == [
+        "initialize",
+        "require_current_schema",
+        "ensure_options_in_db",
+        "invalidate_option_cache",
+        "ensure_builtin_mcp_servers_in_db",
+        "init_builtin_skills",
+        "reconcile_expired_run_leases",
+        "reconcile_pending_runtime_cleanups",
+        "recover_pending_dispatches",
+        "recover_scheduled_dispatches",
+        "claim_and_dispatch_due_jobs",
+        "publish_reconciliation_health",
+        "reconcile_and_publish_jobs",
+        "publish_job_reconciliation_health",
+        "reconciliation_loop",
+        "job_reconciliation_loop",
+    ]
+    assert ctx["worker_id"] == worker_bootstrap.WORKER_ID
+
+
+@pytest.mark.asyncio
+async def test_worker_shutdown_closes_queue_clients_before_postgres(monkeypatch: pytest.MonkeyPatch):
+    calls: list[str] = []
+    never_finishes = asyncio.Event()
+    reconciliation_job = asyncio.create_task(never_finishes.wait())
+
+    async def fake_close_queue_clients():
+        calls.append("redis")
+
+    async def fake_close_postgres():
+        calls.append("postgres")
+
+    monkeypatch.setattr("yuxi.modules.agents.services.transport.close_queue_clients", fake_close_queue_clients)
+    monkeypatch.setattr(worker_bootstrap.pg_manager, "close", fake_close_postgres)
+
+    await worker_bootstrap._worker_shutdown({worker_bootstrap._RECONCILIATION_TASK_KEY: reconciliation_job})
+
+    assert calls == ["redis", "postgres"]
+    assert reconciliation_job.cancelled()
+
+
+async def test_background_job_publication_failure_does_not_refresh_health(monkeypatch):
+    sleep_calls = 0
+    health_calls = 0
+
+    async def controlled_sleep(_seconds):
+        nonlocal sleep_calls
+        sleep_calls += 1
+        if sleep_calls > 1:
+            raise asyncio.CancelledError
+
+    async def fail_reconciliation():
+        raise ConnectionError("arq publication failed")
+
+    async def publish_health():
+        nonlocal health_calls
+        health_calls += 1
+
+    monkeypatch.setattr(worker_bootstrap.asyncio, "sleep", controlled_sleep)
+    monkeypatch.setattr(worker_bootstrap, "reconcile_and_publish_jobs", fail_reconciliation)
+    monkeypatch.setattr(worker_bootstrap, "_publish_job_reconciliation_health", publish_health)
+
+    with pytest.raises(asyncio.CancelledError):
+        await worker_bootstrap._reconcile_background_jobs_forever()
+
+    assert health_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_reconciliation_failure_does_not_refresh_success_lease(monkeypatch: pytest.MonkeyPatch):
+    calls = {"reconcile": 0, "publish": 0}
+
+    async def no_wait(_seconds: float):
+        return None
+
+    async def fail_then_cancel():
+        calls["reconcile"] += 1
+        if calls["reconcile"] == 1:
+            raise RuntimeError("database schema mismatch")
+        raise asyncio.CancelledError
+
+    async def publish():
+        calls["publish"] += 1
+
+    monkeypatch.setattr(worker_bootstrap.asyncio, "sleep", no_wait)
+    for name in (
+        "reconcile_pending_runtime_cleanups",
+        "reconcile_stopped_trees",
+        "recover_cooperation_waits",
+        "recover_pending_dispatches",
+        "recover_scheduled_dispatches",
+        "claim_and_dispatch_due_jobs",
+    ):
+        monkeypatch.setattr(worker_bootstrap, name, AsyncMock())
+    monkeypatch.setattr(worker_bootstrap, "reconcile_expired_run_leases", fail_then_cancel)
+    monkeypatch.setattr(worker_bootstrap, "_publish_reconciliation_health", publish)
+
+    with pytest.raises(asyncio.CancelledError):
+        await worker_bootstrap._reconcile_agent_run_leases_forever()
+
+    assert calls == {"reconcile": 2, "publish": 0}
+
+
+@pytest.mark.asyncio
+async def test_worker_startup_fails_when_system_options_cannot_initialize(monkeypatch: pytest.MonkeyPatch):
+
+    monkeypatch.setattr(worker_bootstrap.pg_manager, "initialize", lambda: None)
+    monkeypatch.setattr(worker_bootstrap, "require_current_schema", AsyncMock())
+
+    @asynccontextmanager
+    async def fake_session_ctx():
+        yield object()
+
+    async def fail_initialize(_session):
+        raise RuntimeError("config load failed")
+
+    monkeypatch.setattr(worker_bootstrap.pg_manager, "get_async_session_context", fake_session_ctx)
+    monkeypatch.setattr(config_options, "ensure_options_in_db", fail_initialize)
+
+    with pytest.raises(RuntimeError, match="config load failed"):
+        await worker_bootstrap._worker_startup({})
+
+
+async def test_reconciliation_continues_later_phases_without_publishing_success(monkeypatch):
+    """坏恢复阶段不阻断后续派发，部分成功也不续报完整恢复健康。"""
+    progressed = []
+
+    async def bad_wait():
+        """模拟已记录的恢复失败。"""
+        raise ValueError("broken wait")
+
+    async def dispatch():
+        """观察后续派发阶段仍有机会推进。"""
+        progressed.append("dispatched")
+
+    for name in (
+        "reconcile_expired_run_leases",
+        "reconcile_pending_runtime_cleanups",
+        "reconcile_stopped_trees",
+        "recover_scheduled_dispatches",
+        "claim_and_dispatch_due_jobs",
+    ):
+        monkeypatch.setattr(worker_bootstrap, name, AsyncMock())
+    monkeypatch.setattr(worker_bootstrap, "recover_cooperation_waits", bad_wait)
+    monkeypatch.setattr(worker_bootstrap, "recover_pending_dispatches", dispatch)
+    health = AsyncMock()
+    monkeypatch.setattr(worker_bootstrap, "_publish_reconciliation_health", health)
+    await worker_bootstrap._reconcile_agent_runs_once()
+    assert progressed == ["dispatched"]
+    health.assert_not_awaited()

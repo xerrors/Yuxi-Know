@@ -733,8 +733,6 @@ async def test_parent_cancel_does_not_cancel_other_session(session):
     await session.refresh(child)
     assert cancelled == [parent.id]
     assert child.status == "running"
-
-    assert child.status == "running"
     assert child.error_type is None
     assert child.worker_id == "child-worker"
     assert child.heartbeat_at is not None

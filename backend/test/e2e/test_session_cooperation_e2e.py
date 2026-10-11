@@ -12,7 +12,12 @@ from langchain_core.messages import ToolMessage
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
 from test.e2e.e2e_helpers import archive_public_thread, delete_agent, postgres_dsn
-from test.e2e.test_agent_lifecycle_e2e import _agent, _message, _provider, output_text
+from test.e2e.e2e_helpers import (
+    create_lifecycle_agent as _agent,
+    output_text,
+    public_message as _message,
+    register_replay_provider as _provider,
+)
 from test.live_api_cleanup import make_test_session_title
 from yuxi.modules.workspace.paths import user_workspace_dir
 from yuxi.modules.agents.runtime.sandbox import get_sandbox_provider, ProvisionerSandboxBackend

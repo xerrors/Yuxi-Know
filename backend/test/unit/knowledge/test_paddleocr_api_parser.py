@@ -69,119 +69,101 @@ def test_layout_images_preserve_titles_and_reference_links(tmp_path, monkeypatch
     assert "https://images.example.test/chart.png" not in text
 
 
-def test_paddleocr_vl_submits_model_specific_payload(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    file_path = _build_file(tmp_path)
-    submitted: dict[str, Any] = {}
-
-    def fake_post(url, headers=None, data=None, files=None, json=None, timeout=None):  # noqa: A002
-        submitted["url"] = url
-        submitted["data"] = data
-        submitted["json"] = json
-        submitted["files"] = files
-        return FakeResponse(200, {"code": 0, "data": {"jobId": "job-vl"}})
-
-    def fake_get(url, headers=None, timeout=None):
-        if url.endswith("/job-vl"):
-            return FakeResponse(200, {"data": {"state": "done", "resultUrl": {"jsonUrl": "https://result.test/vl"}}})
-        row = {
-            "result": {"layoutParsingResults": [{"markdown": {"text": "VL markdown", "images": {}}, "outputImages": {"debug": "ignored"}}]}
-        }
-        return FakeResponse(200, text=json.dumps(row))
-
-    monkeypatch.setattr(paddleocr_api.requests, "post", fake_post)
-    monkeypatch.setattr(paddleocr_api.requests, "get", fake_get)
-
-    parser = PaddleOCRVLParser(api_token="token")
-    result = parser.process_file(
-        str(file_path),
-        tmp_path,
-        params={
-            "optional_payload": {
+@pytest.mark.parametrize(
+    ("parser_type", "input_url", "job_id", "result_body", "expected_result", "expected_model", "optional_payload", "expected_payload"),
+    [
+        pytest.param(
+            PaddleOCRVLParser,
+            None,
+            "job-vl",
+            {
+                "result": {
+                    "layoutParsingResults": [
+                        {"markdown": {"text": "VL markdown", "images": {}}, "outputImages": {"debug": "ignored"}}
+                    ]
+                }
+            },
+            "VL markdown",
+            "PaddleOCR-VL-1.6",
+            {"useChartRecognition": True, "useTextlineOrientation": True, "ignored": True},
+            {
+                "useDocOrientationClassify": False,
+                "useDocUnwarping": False,
                 "useChartRecognition": True,
+            },
+            id="vl-upload",
+        ),
+        pytest.param(
+            PaddleOCRPPOCRv6Parser,
+            None,
+            "job-ocr",
+            {"result": {"ocrResults": [{"prunedResult": {"rec_texts": ["PaddleOCR API Test", "", "Invoice total: 123.45"]}}]}},
+            "PaddleOCR API Test\nInvoice total: 123.45",
+            "PP-OCRv6",
+            {"useTextlineOrientation": True, "useChartRecognition": True, "ignored": True},
+            {
+                "useDocOrientationClassify": False,
+                "useDocUnwarping": False,
                 "useTextlineOrientation": True,
-                "ignored": True,
-            }
-        },
-    )
-
-    assert result == "VL markdown"
-    assert submitted["data"]["model"] == "PaddleOCR-VL-1.6"
-    optional_payload = json.loads(submitted["data"]["optionalPayload"])
-    assert optional_payload == {
-        "useDocOrientationClassify": False,
-        "useDocUnwarping": False,
-        "useChartRecognition": True,
-    }
-
-
-def test_paddleocr_pp_ocrv6_submits_model_specific_payload(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    file_path = _build_file(tmp_path)
+            },
+            id="pp-ocr-upload",
+        ),
+        pytest.param(
+            PaddleOCRPPOCRv6Parser,
+            "https://example.test/file.png?signature=abc",
+            "job-url",
+            {"result": {"ocrResults": [{"prunedResult": {"rec_texts": ["url text"]}}]}},
+            "url text",
+            "PP-OCRv6",
+            None,
+            None,
+            id="pp-ocr-url",
+        ),
+    ],
+)
+def test_paddleocr_submits_model_specific_payload(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    parser_type,
+    input_url: str | None,
+    job_id: str,
+    result_body: dict[str, Any],
+    expected_result: str,
+    expected_model: str,
+    optional_payload: dict[str, Any] | None,
+    expected_payload: dict[str, Any] | None,
+) -> None:
     submitted: dict[str, Any] = {}
 
     def fake_post(url, headers=None, data=None, files=None, json=None, timeout=None):  # noqa: A002
-        submitted["data"] = data
-        return FakeResponse(200, {"data": {"jobId": "job-ocr"}})
+        submitted.update(headers=headers, data=data, files=files, json=json)
+        return FakeResponse(200, {"data": {"jobId": job_id}})
 
     def fake_get(url, headers=None, timeout=None):
-        if url.endswith("/job-ocr"):
-            return FakeResponse(200, {"data": {"state": "done", "resultUrl": {"jsonUrl": "https://result.test/ocr"}}})
-        row = {"result": {"ocrResults": [{"prunedResult": {"rec_texts": ["PaddleOCR API Test", "", "Invoice total: 123.45"]}}]}}
-        return FakeResponse(200, text=json.dumps(row))
+        if url.endswith(f"/{job_id}"):
+            return FakeResponse(
+                200,
+                {"data": {"state": "done", "resultUrl": {"jsonUrl": f"https://result.test/{job_id}.json"}}},
+            )
+        return FakeResponse(200, text=json.dumps(result_body))
 
     monkeypatch.setattr(paddleocr_api.requests, "post", fake_post)
     monkeypatch.setattr(paddleocr_api.requests, "get", fake_get)
 
-    parser = PaddleOCRPPOCRv6Parser(api_token="token")
-    result = parser.process_file(
-        str(file_path),
-        tmp_path,
-        params={
-            "optional_payload": {
-                "useTextlineOrientation": True,
-                "useChartRecognition": True,
-                "ignored": True,
-            }
-        },
-    )
+    source = input_url or str(_build_file(tmp_path))
+    params = {"optional_payload": optional_payload} if optional_payload is not None else None
+    result = parser_type(api_token="token").process_file(source, tmp_path, params=params)
 
-    assert result == "PaddleOCR API Test\nInvoice total: 123.45"
-    assert submitted["data"]["model"] == "PP-OCRv6"
-    optional_payload = json.loads(submitted["data"]["optionalPayload"])
-    assert optional_payload == {
-        "useDocOrientationClassify": False,
-        "useDocUnwarping": False,
-        "useTextlineOrientation": True,
-    }
-
-
-def test_paddleocr_url_input_uses_json_payload(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
-    submitted: dict[str, Any] = {}
-
-    def fake_post(url, headers=None, data=None, files=None, json=None, timeout=None):  # noqa: A002
-        submitted["headers"] = headers
-        submitted["data"] = data
-        submitted["files"] = files
-        submitted["json"] = json
-        return FakeResponse(200, {"data": {"jobId": "job-url"}})
-
-    def fake_get(url, headers=None, timeout=None):
-        if url.endswith("/job-url"):
-            return FakeResponse(200, {"data": {"state": "done", "resultUrl": {"jsonUrl": "https://result.test/url"}}})
-        row = {"result": {"ocrResults": [{"prunedResult": {"rec_texts": ["url text"]}}]}}
-        return FakeResponse(200, text=json.dumps(row))
-
-    monkeypatch.setattr(paddleocr_api.requests, "post", fake_post)
-    monkeypatch.setattr(paddleocr_api.requests, "get", fake_get)
-
-    parser = PaddleOCRPPOCRv6Parser(api_token="token")
-    result = parser.process_file("https://example.test/file.png?signature=abc", tmp_path)
-
-    assert result == "url text"
-    assert submitted["headers"]["Content-Type"] == "application/json"
-    assert submitted["data"] is None
-    assert submitted["files"] is None
-    assert submitted["json"]["fileUrl"] == "https://example.test/file.png?signature=abc"
-    assert submitted["json"]["model"] == "PP-OCRv6"
+    assert result == expected_result
+    if input_url:
+        assert submitted["headers"]["Content-Type"] == "application/json"
+        assert submitted["data"] is None
+        assert submitted["files"] is None
+        assert submitted["json"]["fileUrl"] == input_url
+        assert submitted["json"]["model"] == expected_model
+    else:
+        assert submitted["data"]["model"] == expected_model
+        assert json.loads(submitted["data"]["optionalPayload"]) == expected_payload
 
 
 def test_paddleocr_poll_handles_pending_running_and_done(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -15,27 +15,11 @@ from yuxi.modules.agents.models.inputs import AgentInput
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.modules.agents.models.sessions import Session
+from yuxi.modules.agents.services.input_messages import build_chat_input_message, serialize_input_message
 from yuxi.modules.workspace.models import Project
 from yuxi.modules.identity.models import User
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
-
-
-@pytest.fixture(scope="session", autouse=True)
-def ensure_live_api_schema():
-    """本文件在已迁移的隔离 PostgreSQL 上运行。"""
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_knowledge_resources():
-    """本文件不创建知识库资源。"""
-    yield
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_sandboxes():
-    """本文件不创建沙盒。"""
-    yield
+pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
 
 @pytest.mark.parametrize("pending_kind", ["input", "turn"])
@@ -74,6 +58,7 @@ async def test_project_delete_rejects_pending_work_then_archives_history(pending
                         agent_slug="main",
                         kind="follow_up",
                         status="pending",
+                        messages=[serialize_input_message(build_chat_input_message("pending input"))],
                     )
                 )
             else:
@@ -200,7 +185,7 @@ async def test_archive_respects_independent_child_and_runtime_cleanup(remaining_
 
         async with sessions() as db:
             if remaining_work == "child_run":
-                assert (await archive_thread(db=db, scope=scope, thread_id=thread_id))["status"] == "archived"
+                await archive_thread(db=db, scope=scope, thread_id=thread_id)
             else:
                 with pytest.raises(HTTPException) as thread_error:
                     await archive_thread(db=db, scope=scope, thread_id=thread_id)
@@ -224,7 +209,13 @@ async def test_archive_respects_independent_child_and_runtime_cleanup(remaining_
             await db.commit()
 
         async with sessions() as db:
-            assert (await archive_thread(db=db, scope=scope, thread_id=thread_id))["status"] == "archived"
+            await archive_thread(db=db, scope=scope, thread_id=thread_id)
+
+        async with sessions() as db:
+            agent_session = await db.scalar(select(Session).where(Session.thread_id == thread_id))
+            assert agent_session is not None and agent_session.status == "archived"
+
+        async with sessions() as db:
             result = await delete_project_view(uid=uid, project_id=project_id, db=db)
             assert result["archived_threads"] == (1 if remaining_work == "child_run" else 0)
     finally:

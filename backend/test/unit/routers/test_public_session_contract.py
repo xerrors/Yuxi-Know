@@ -1,11 +1,13 @@
 """公开 Session 请求与生成 OpenAPI 的可执行契约。"""
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import ValidationError
 
 from yuxi.api.routers.public_v1.agents import public_agents_router
-from yuxi.api.routers.public_v1.agents.schemas import SessionCreate, input_messages_to_domain
+from yuxi.api.routers.public_v1.agents.events import public_stream_response
+from yuxi.api.routers.public_v1.agents.schemas import SessionCreate, SessionEventCreate, SessionUpdate, input_messages_to_domain
+from yuxi.modules.agents.services.scope import ActorScope
 
 
 def test_initial_text_shorthand_has_same_domain_message_as_array():
@@ -44,6 +46,7 @@ def test_submission_attachments_reject_old_message_fields_and_enforce_total_limi
         {"agent": {"instructions": "unsupported"}},
         {"environment": {"type": "none"}},
         {"model_spec": "old-field"},
+        {"workdir_path": "client/demo"},
     ],
 )
 def test_unsupported_or_empty_creation_fields_are_rejected(extra):
@@ -82,10 +85,14 @@ def test_openapi_session_models_and_stream_media_type():
 @pytest.mark.parametrize("payload", [{"model_spec": "old"}, {"agent": {"model": None}}, {"title": "old"}])
 def test_session_update_rejects_old_fields_and_null_model(payload):
     """旧字段和没有定义重置语义的 null 必须显式拒绝。"""
-    from yuxi.api.routers.public_v1.agents.schemas import SessionUpdate
-
     with pytest.raises(ValidationError):
         SessionUpdate.model_validate(payload)
+
+
+def test_thread_update_rejects_project_rebinding():
+    """已有 Session 不接受 project_id 改绑。"""
+    with pytest.raises(ValidationError):
+        SessionUpdate(project_id="project-2")
 
 
 def test_session_receipt_does_not_override_state_or_expose_internal_snapshot():
@@ -134,6 +141,60 @@ def test_public_waiting_status_expresses_the_required_action(kind, expected):
 
     turn = SimpleNamespace(status="waiting", waitpoint={"kind": kind})
     assert turn_status(turn, None) == expected
+
+
+def test_invalid_cursor_rejected_before_streaming_response():
+    """非法游标必须成为 HTTP 422，不能在 SSE 200 后断流。"""
+    with pytest.raises(HTTPException) as error:
+        public_stream_response(
+            scope=ActorScope(uid="user", app_id=None),
+            thread_id="thread",
+            after_cursor="not-a-cursor",
+        )
+    assert error.value.status_code == 422
+
+
+def _resume_body(answer):
+    """构建单题恢复事件。"""
+    return {
+        "events": [
+            {
+                "type": "yuxi.session.input.resume",
+                "turn_id": "turn-1",
+                "waitpoint_id": "wait-1",
+                "response": {"type": "answer", "answers": [{"question_id": "q-1", "answer": answer}]},
+            }
+        ]
+    }
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        ["杭州", "上海"],
+        {"type": "other", "text": "苏州", "selected": ["杭州"]},
+    ],
+)
+def test_resume_wire_preserves_web_multiselect_and_other_answers(answer):
+    """Web 多选与其他选项按原类型通过严格 Public 协议。"""
+    body = _resume_body(answer)
+    assert SessionEventCreate.model_validate(body).model_dump(mode="json") == body
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        42,
+        ["杭州", 42],
+        {"type": "other", "text": "苏州", "selected": [42]},
+        {"type": "other", "text": "苏州", "selected": [], "extra": True},
+        {"type": "unknown", "text": "苏州", "selected": []},
+    ],
+)
+def test_resume_wire_rejects_unrelated_answer_shapes(answer):
+    """数字、混合数组和无约束对象不能越过 wire 边界。"""
+    with pytest.raises(ValidationError):
+        SessionEventCreate.model_validate(_resume_body(answer))
 
 
 def test_turn_http_core_matches_terminal_event_and_preserves_cancelling():

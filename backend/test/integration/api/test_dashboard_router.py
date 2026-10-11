@@ -49,13 +49,6 @@ async def test_admin_can_fetch_sessions(test_client, admin_headers):
     assert data["total"] >= len(data["items"])
 
 
-async def test_retired_conversation_routes_are_not_registered(test_client, admin_headers):
-    """旧会话审计路由不提供兼容入口。"""
-    for path in ("/api/dashboard/conversations", "/api/dashboard/conversations/options"):
-        response = await test_client.get(path, headers=admin_headers)
-        assert response.status_code == 404, response.text
-
-
 async def test_admin_can_fetch_session_filter_options(test_client, admin_headers):
     response = await test_client.get("/api/dashboard/sessions/options", headers=admin_headers)
 

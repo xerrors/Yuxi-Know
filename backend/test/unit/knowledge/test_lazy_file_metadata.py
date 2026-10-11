@@ -1,41 +1,6 @@
-from types import SimpleNamespace
-
 import pytest
 
-from yuxi.modules.knowledge.base import KnowledgeBase
-
-
-class FakeKnowledgeBase(KnowledgeBase):
-    @property
-    def kb_type(self) -> str:
-        return "fake"
-
-    async def _create_kb_instance(self, kb_id: str, embedding_model_spec: str | None):
-        return None
-
-    async def _initialize_kb_instance(self, instance) -> None:
-        pass
-
-    async def index_file(self, kb_id: str, file_id: str, operator_id: str | None = None) -> dict:
-        return {}
-
-    async def aquery(self, query_text: str, kb_id: str, **kwargs) -> list[dict]:
-        return []
-
-    def get_query_params_config(self, kb_id: str, **kwargs) -> dict:
-        return {"options": []}
-
-    async def delete_file(self, kb_id: str, file_id: str) -> None:
-        pass
-
-    async def get_file_basic_info(self, kb_id: str, file_id: str) -> dict:
-        return {}
-
-    async def get_file_content(self, kb_id: str, file_id: str) -> dict:
-        return {}
-
-    async def get_file_info(self, kb_id: str, file_id: str) -> dict:
-        return {}
+from test.unit.support.knowledge import FakeKnowledgeBase, make_knowledge_file_record as make_file_record
 
 
 @pytest.mark.asyncio
@@ -44,35 +9,6 @@ async def test_base_export_is_explicitly_unsupported(tmp_path):
 
     with pytest.raises(NotImplementedError, match="不支持数据导出"):
         await kb.export_data("db", format="csv")
-
-
-def make_file_record(**overrides):
-    data = {
-        "file_id": "file-1",
-        "kb_id": "db",
-        "parent_id": None,
-        "filename": "demo.md",
-        "file_type": "md",
-        "path": "minio://knowledgebases/db/upload/demo.md",
-        "markdown_file": None,
-        "status": "uploaded",
-        "content_hash": "hash",
-        "file_size": 123,
-        "chunk_count": 0,
-        "token_count": 0,
-        "content_type": "file",
-        "processing_params": {"ocr_engine": "disable"},
-        "is_folder": False,
-        "error_message": None,
-        "created_by": "user",
-        "updated_by": None,
-        "created_at": None,
-        "updated_at": None,
-        "original_filename": None,
-        "minio_url": None,
-    }
-    data.update(overrides)
-    return SimpleNamespace(**data)
 
 
 @pytest.mark.asyncio
@@ -106,7 +42,6 @@ async def test_update_file_params_lazy_loads_single_file(monkeypatch, tmp_path):
         additional_params=additional_params,
     )
 
-    assert not hasattr(kb, "files_meta")
     assert len(file_repo.updated) == 1
     file_id, kb_id, update_data = file_repo.updated[0]
     assert file_id == "file-1"

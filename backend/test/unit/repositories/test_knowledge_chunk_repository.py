@@ -14,7 +14,6 @@ def _extract_id_batch(statement) -> list[str]:
 
 
 @pytest.mark.asyncio
-@pytest.mark.asyncio
 async def test_list_by_chunk_ids_splits_large_inputs_and_preserves_order(monkeypatch):
     chunk_ids = [
         *(f"chunk-b-{index:05d}" for index in range(SQL_IN_BATCH_SIZE)),

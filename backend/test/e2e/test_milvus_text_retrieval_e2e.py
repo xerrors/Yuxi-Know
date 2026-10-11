@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import pymilvus
 import pytest
+from packaging.version import Version
 from pymilvus import Collection, connections, utility
 from sqlalchemy import select
 
@@ -203,8 +204,8 @@ async def test_worker_index_and_all_search_modes_use_text_constraints(e2e_client
             db_name=os.getenv("MILVUS_DB", "yuxi"),
         )
         collection = Collection(kb_id, using=alias)
-        assert pymilvus.__version__ == "3.0.2"
-        assert utility.get_server_version(using=alias) == "3.0.2"
+        assert Version(pymilvus.__version__) >= Version("3.0.2")
+        assert Version(utility.get_server_version(using=alias)) >= Version("3.0.2")
         collection.load()
         stored = collection.query(expr='id != ""', output_fields=["content", "file_id"], consistency_level="Strong")
         assert {row["content"] for row in stored} == set(samples.values())

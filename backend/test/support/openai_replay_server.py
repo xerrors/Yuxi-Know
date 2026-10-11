@@ -6,8 +6,9 @@ import argparse
 import json
 import re
 import time
+from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from threading import Event, Lock
+from threading import Event, Lock, Thread
 from urllib.parse import parse_qs, urlparse
 
 EXPECTED_OUTPUT = "DETERMINISTIC_AGENT_E2E_OK"
@@ -24,6 +25,48 @@ LARGE_TOOL_CALL_ID = "call-large-tool-result"
 BLOCKING_REQUEST_TOKENS: set[str] = set()
 BLOCKING_REQUEST_TOKENS_LOCK = Lock()
 BLOCKING_GATES: dict[str, Event] = {}
+
+
+def send_json_response(handler, status: int, payload: dict) -> None:
+    """发送确定性 JSON 响应。"""
+    body = json.dumps(payload).encode()
+    handler.send_response(status)
+    handler.send_header("Content-Type", "application/json")
+    handler.send_header("Content-Length", str(len(body)))
+    handler.end_headers()
+    handler.wfile.write(body)
+    handler.wfile.flush()
+
+
+def send_openai_sse_response(handler, payloads: list[dict], *, headers=(), flush_each: bool = True, after_first_payload=None) -> None:
+    """发送 OpenAI SSE 事件，支持首块后的场景专属同步点。"""
+    handler.send_response(200)
+    handler.send_header("Content-Type", "text/event-stream")
+    for name, value in headers:
+        handler.send_header(name, value)
+    handler.end_headers()
+    for index, payload in enumerate(payloads):
+        handler.wfile.write(f"data: {json.dumps(payload)}\n\n".encode())
+        if flush_each or index == 0 and after_first_payload is not None:
+            handler.wfile.flush()
+        if index == 0 and after_first_payload is not None:
+            after_first_payload()
+    handler.wfile.write(b"data: [DONE]\n\n")
+    handler.wfile.flush()
+
+
+@contextmanager
+def serve_replay_handler(handler_class, *, host: str = "0.0.0.0", api_host: str = "api"):
+    """启动临时 HTTP replay，并在退出时关闭服务线程。"""
+    server = ThreadingHTTPServer((host, 0), handler_class)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://{api_host}:{server.server_port}/v1"
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()
 
 
 def validate_request(authorization: str | None, request: dict) -> str | None:
@@ -282,35 +325,144 @@ class ReplayHandler(BaseHTTPRequestHandler):
         blocking_match = re.search(rf"{BLOCK_BEFORE_RESPONSE_MARKER}:([0-9a-f-]+)", serialized_messages)
         model = str(request["model"])
         payloads = _stream_payloads(model, messages)
-        self.send_response(200)
-        self.send_header("Content-Type", "text/event-stream")
-        self.send_header("Cache-Control", "no-cache")
-        self.send_header("Connection", "close")
-        self.end_headers()
         if blocking_match:
-            self.wfile.write(f"data: {json.dumps(payloads.pop(0))}\n\n".encode())
-            self.wfile.flush()
-            with BLOCKING_REQUEST_TOKENS_LOCK:
-                BLOCKING_REQUEST_TOKENS.add(blocking_match.group(1))
-                gate = BLOCKING_GATES.setdefault(blocking_match.group(1), Event())
-            gate.wait(60)
-        for payload in payloads:
-            self.wfile.write(f"data: {json.dumps(payload)}\n\n".encode())
-            self.wfile.flush()
-        self.wfile.write(b"data: [DONE]\n\n")
-        self.wfile.flush()
+            token = blocking_match.group(1)
+
+            def wait_after_first_payload() -> None:
+                with BLOCKING_REQUEST_TOKENS_LOCK:
+                    BLOCKING_REQUEST_TOKENS.add(token)
+                    gate = BLOCKING_GATES.setdefault(token, Event())
+                gate.wait(60)
+
+            after_first_payload = wait_after_first_payload
+        else:
+            after_first_payload = None
+        send_openai_sse_response(
+            self,
+            payloads,
+            headers=(("Cache-Control", "no-cache"), ("Connection", "close")),
+            after_first_payload=after_first_payload,
+        )
         self.close_connection = True
 
     def log_message(self, format: str, *args: object) -> None:
         return
 
     def _write_json(self, status: int, payload: dict) -> None:
-        body = json.dumps(payload).encode()
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+        send_json_response(self, status, payload)
+
+
+@contextmanager
+def permission_replay_server():
+    """提供带可控阻塞点的权限场景 OpenAI replay。"""
+    entered, release = Event(), Event()
+    observations = []
+    action = {}
+
+    class Handler(BaseHTTPRequestHandler):
+        """返回工具调用、终态文本或指定模型错误。"""
+
+        def do_POST(self):  # noqa: N802
+            """按测试动作返回 OpenAI SSE 或错误响应。"""
+            request = json.loads(self.rfile.read(int(self.headers["content-length"])))
+            observations.append(request)
+            assert self.headers["authorization"] == "Bearer ci-replay-key"
+            assert request["model"] == "deterministic-chat"
+            failure = action.get("failure")
+            if failure and len(observations) == 1:
+                entered.set()
+                assert release.wait(60)
+                send_json_response(
+                    self,
+                    503 if failure == "network" else 400,
+                    {
+                        "error": {
+                            "message": "service unavailable" if failure == "network" else "context length exceeded",
+                            "type": "server_error" if failure == "network" else "invalid_request_error",
+                            "code": "service_unavailable" if failure == "network" else "context_length_exceeded",
+                        }
+                    },
+                )
+                return
+            if action.get("plain") and not request.get("stream"):
+                send_json_response(
+                    self,
+                    200,
+                    {
+                        "id": "chatcmpl-summary",
+                        "object": "chat.completion",
+                        "created": 1,
+                        "model": "deterministic-chat",
+                        "choices": [
+                            {
+                                "index": 0,
+                                "message": {"role": "assistant", "content": "Summary"},
+                                "finish_reason": "stop",
+                            }
+                        ],
+                        "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+                    },
+                )
+                return
+            has_result = any(message["role"] == "tool" for message in request["messages"])
+            if action.get("plain"):
+                delta = {"role": "assistant", "content": "PERMISSION_CHECK_COMPLETE"}
+            elif not has_result:
+                assert action["name"] in {tool["function"]["name"] for tool in request["tools"]}
+                entered.set()
+                assert release.wait(60)
+                delta = {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "index": 0,
+                            "id": "call-permission",
+                            "type": "function",
+                            "function": {"name": action["name"], "arguments": json.dumps(action["arguments"])},
+                        }
+                    ],
+                }
+            else:
+                delta = {"role": "assistant", "content": "PERMISSION_CHECK_COMPLETE"}
+            common = {
+                "id": "chatcmpl-permission",
+                "object": "chat.completion.chunk",
+                "created": 1,
+                "model": "deterministic-chat",
+            }
+            send_openai_sse_response(
+                self,
+                [
+                    {**common, "choices": [{"index": 0, "delta": delta, "finish_reason": None}]},
+                    {
+                        **common,
+                        "choices": [
+                            {
+                                "index": 0,
+                                "delta": {},
+                                "finish_reason": "stop" if has_result or action.get("plain") else "tool_calls",
+                            }
+                        ],
+                        "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+                    },
+                ],
+                flush_each=False,
+            )
+
+        def log_message(self, *args):
+            """测试不输出请求日志。"""
+
+    with serve_replay_handler(Handler) as url:
+        try:
+            yield {
+                "url": url,
+                "entered": entered,
+                "release": release,
+                "requests": observations,
+                "action": action,
+            }
+        finally:
+            release.set()
 
 
 def main() -> None:

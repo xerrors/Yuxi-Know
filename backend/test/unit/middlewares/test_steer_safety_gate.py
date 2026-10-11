@@ -13,6 +13,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.tools import tool
 from langgraph.checkpoint.memory import InMemorySaver
+from test.support.agent_stream_fixtures import FinalAnswerModel
 from yuxi.modules.agents.runtime.middlewares.steer import SteerMiddleware
 import yuxi.modules.agents.services.runs as runs
 
@@ -46,20 +47,6 @@ class _ParallelToolModel(BaseChatModel):
                 )
             ]
         )
-
-
-class _FinalAnswerModel(BaseChatModel):
-    """只返回最终文本，模拟 Steer 到达最后一次模型检查后的窗口。"""
-
-    call_count: int = 0
-
-    @property
-    def _llm_type(self) -> str:
-        return "steer-final-answer"
-
-    def _generate(self, messages, stop=None, run_manager=None, **kwargs):  # noqa: ARG002
-        self.call_count += 1
-        return ChatResult(generations=[ChatGeneration(message=AIMessage(content="旧 Run 已完成当前回答"))])
 
 
 @dataclass
@@ -157,7 +144,7 @@ async def test_tool_free_model_turn_keeps_steer_intent_for_handoff(monkeypatch: 
         return checks >= 2
 
     monkeypatch.setattr(runs, "should_yield_for_steer", should_end)
-    model = _FinalAnswerModel()
+    model = FinalAnswerModel()
     checkpointer = InMemorySaver()
     agent = create_agent(
         model=model,

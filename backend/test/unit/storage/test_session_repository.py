@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta
+from unittest.mock import AsyncMock
 
 import pytest
 import pytest_asyncio
@@ -14,13 +16,15 @@ from yuxi.infrastructure.postgres.base import Base
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.models.messages import Message, ToolCall
 from yuxi.shared.datetime import utc_now
+from yuxi.modules.agents.repositories.sessions import MEMORY_HISTORY_READ_RESPONSE_MAX_BYTES
+from test.support.sqlite import create_utc_sqlite_engine
 
 pytestmark = pytest.mark.unit
 
 
 @pytest_asyncio.fixture()
-async def session_session():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+async def session():
+    engine = create_utc_sqlite_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -49,7 +53,7 @@ def test_normalize_title_trims_spaces():
 
 
 @pytest.mark.asyncio
-async def test_list_agent_runs_for_trace_returns_latest_bounded_window_in_order(session_session):
+async def test_list_agent_runs_for_trace_returns_latest_bounded_window_in_order(session):
     now = utc_now()
     agent_session = Session(
         thread_id="thread-run-trace-window",
@@ -61,13 +65,13 @@ async def test_list_agent_runs_for_trace_returns_latest_bounded_window_in_order(
         created_at=now,
         updated_at=now,
     )
-    session_session.add(agent_session)
-    await session_session.flush()
-    session_session.add(AgentTurn(id="turn-trace", thread_id=agent_session.thread_id, uid=agent_session.uid, status="completed"))
-    await session_session.flush()
+    session.add(agent_session)
+    await session.flush()
+    session.add(AgentTurn(id="turn-trace", thread_id=agent_session.thread_id, uid=agent_session.uid, status="completed"))
+    await session.flush()
     for index in range(3):
         created_at = now + timedelta(seconds=index)
-        session_session.add(
+        session.add(
             AgentRun(
                 id=f"run-trace-{index}",
                 thread_id=agent_session.thread_id,
@@ -83,9 +87,9 @@ async def test_list_agent_runs_for_trace_returns_latest_bounded_window_in_order(
                 finished_at=created_at,
             )
         )
-    await session_session.commit()
+    await session.commit()
 
-    runs, truncated = await SessionRepository(session_session).list_agent_runs_for_trace(
+    runs, truncated = await SessionRepository(session).list_agent_runs_for_trace(
         agent_session.id,
         limit=2,
     )
@@ -171,7 +175,7 @@ def _seed_source_filter_sessions() -> tuple[Session, Session, Session, datetime]
 
 
 @pytest.mark.asyncio
-async def test_model_audit_messages_are_hidden_from_history_and_message_count(session_session):
+async def test_model_audit_messages_are_hidden_from_history_and_message_count(session):
     now = utc_now()
     agent_session = Session(
         thread_id="thread-model-audit",
@@ -183,8 +187,8 @@ async def test_model_audit_messages_are_hidden_from_history_and_message_count(se
         created_at=now,
         updated_at=now,
     )
-    session_session.add(agent_session)
-    await session_session.flush()
+    session.add(agent_session)
+    await session.flush()
     visible_message = Message(
         session_record_id=agent_session.id,
         role="user",
@@ -209,10 +213,10 @@ async def test_model_audit_messages_are_hidden_from_history_and_message_count(se
         sequence=2,
         execution_status="completed",
     )
-    session_session.add_all([visible_message, audit_message, tool_audit])
-    await session_session.commit()
+    session.add_all([visible_message, audit_message, tool_audit])
+    await session.commit()
 
-    repo = SessionRepository(session_session)
+    repo = SessionRepository(session)
     messages = await repo.get_messages(agent_session.id)
 
     assert [message.content for message in messages] == ["visible"]
@@ -227,127 +231,22 @@ async def test_model_audit_messages_are_hidden_from_history_and_message_count(se
 
 
 @pytest.mark.asyncio
-async def test_only_state_proven_terminal_model_audit_keeps_tool_call_visible(session_session):
-    now = utc_now()
-    agent_session = Session(
-        thread_id="thread-tool-audit",
-        project_id="project-tool-audit",
-        uid="user-a",
-        agent_id="agent-a",
-        title="Tool Audit",
-        status="active",
-        created_at=now,
-        updated_at=now,
-    )
-    session_session.add(agent_session)
-    await session_session.flush()
-    session_session.add(AgentTurn(id="turn-tool-audit", thread_id=agent_session.thread_id, uid=agent_session.uid))
-    await session_session.flush()
-    runs = [
-        AgentRun(
-            id="run-active",
-            thread_id=agent_session.thread_id,
-            runtime_scope_id=agent_session.thread_id,
-            agent_slug="main",
-            uid=agent_session.uid,
-            status="running",
-            turn_id="turn-tool-audit",
-            session_record_id=agent_session.id,
-            input_payload={},
-        ),
-        AgentRun(
-            id="run-unproven",
-            thread_id=agent_session.thread_id,
-            runtime_scope_id=agent_session.thread_id,
-            agent_slug="main",
-            uid=agent_session.uid,
-            status="completed",
-            turn_id="turn-tool-audit",
-            session_record_id=agent_session.id,
-            input_payload={},
-        ),
-        AgentRun(
-            id="run-proven",
-            thread_id=agent_session.thread_id,
-            runtime_scope_id=agent_session.thread_id,
-            agent_slug="main",
-            uid=agent_session.uid,
-            status="interrupted",
-            turn_id="turn-tool-audit",
-            session_record_id=agent_session.id,
-            input_payload={},
-        ),
-    ]
-    session_session.add_all(runs)
-    await session_session.flush()
-    audit_messages = [
-        Message(
-            session_record_id=agent_session.id,
-            role="assistant",
-            content="active",
-            message_type="model_audit",
-            extra_metadata={"state_reconciled": True},
-            run_id="run-active",
-            operation_id="model-active",
-            execution_status="completed",
-        ),
-        Message(
-            session_record_id=agent_session.id,
-            role="assistant",
-            content="unproven",
-            message_type="model_audit",
-            run_id="run-unproven",
-            operation_id="model-unproven",
-            execution_status="completed",
-        ),
-        Message(
-            session_record_id=agent_session.id,
-            role="assistant",
-            content="proven",
-            message_type="model_audit",
-            extra_metadata={"state_reconciled": True},
-            run_id="run-proven",
-            operation_id="model-proven",
-            execution_status="completed",
-        ),
-    ]
-    for message in audit_messages:
-        message.turn_id = "turn-tool-audit"
-    session_session.add_all(audit_messages)
-    await session_session.flush()
-    session_session.add_all(
-        [
-            ToolCall(
-                message_id=message.id,
-                langgraph_tool_call_id=f"tool-{message.operation_id}",
-                tool_name="search",
-                status="success",
-            )
-            for message in audit_messages
-        ]
-    )
-    await session_session.commit()
-
-    messages = await SessionRepository(session_session).get_messages(agent_session.id)
-
-    assert [message.content for message in messages] == ["proven"]
-    assert messages[0].tool_calls[0].langgraph_tool_call_id == "tool-model-proven"
 
 
 @pytest.mark.asyncio
-async def test_session_page_includes_different_sources(session_session):
+async def test_session_page_includes_different_sources(session):
     normal, scheduled, public_api, _ = _seed_source_filter_sessions()
-    session_session.add_all([normal, scheduled, public_api])
-    await session_session.commit()
+    session.add_all([normal, scheduled, public_api])
+    await session.commit()
 
-    repo = SessionRepository(session_session)
+    repo = SessionRepository(session)
     items, _ = await repo.list_public_sessions(uid="user-a", app_id=None, agent_id=None, limit=20, after=None, order="desc")
 
     assert {item.thread_id for item in items} == {"thread-normal", "thread-public", "thread-scheduled"}
 
 
 @pytest.mark.asyncio
-async def test_session_page_bounds_pinned_items_and_uses_stable_cursor(session_session):
+async def test_session_page_bounds_pinned_items_and_uses_stable_cursor(session):
     now = utc_now()
     pinned = Session(
         thread_id="thread-pinned",
@@ -373,10 +272,10 @@ async def test_session_page_bounds_pinned_items_and_uses_stable_cursor(session_s
         )
         for index in range(4)
     ]
-    session_session.add_all([pinned, *regular])
-    await session_session.commit()
+    session.add_all([pinned, *regular])
+    await session.commit()
 
-    repository = SessionRepository(session_session)
+    repository = SessionRepository(session)
     first_page, has_more = await repository.list_public_sessions(
         uid="user-a", app_id=None, agent_id=None, limit=2, after=None, order="desc"
     )
@@ -390,7 +289,7 @@ async def test_session_page_bounds_pinned_items_and_uses_stable_cursor(session_s
 
 
 @pytest.mark.asyncio
-async def test_search_sessions_by_message_content_filters_user_status_and_tool_messages(session_session):
+async def test_search_sessions_by_message_content_filters_user_status_and_tool_messages(session):
     now = utc_now()
     active = Session(
         thread_id="thread-active",
@@ -432,9 +331,9 @@ async def test_search_sessions_by_message_content_filters_user_status_and_tool_m
         created_at=now,
         updated_at=now,
     )
-    session_session.add_all([active, deleted, other_user, tool_only])
-    await session_session.flush()
-    session_session.add_all(
+    session.add_all([active, deleted, other_user, tool_only])
+    await session.flush()
+    session.add_all(
         [
             Message(
                 agent_session=active,
@@ -466,9 +365,9 @@ async def test_search_sessions_by_message_content_filters_user_status_and_tool_m
             ),
         ]
     )
-    await session_session.commit()
+    await session.commit()
 
-    repo = SessionRepository(session_session)
+    repo = SessionRepository(session)
     items, has_more = await repo.search_sessions_by_message_content(
         uid="user-a",
         query="大陆",
@@ -484,11 +383,11 @@ async def test_search_sessions_by_message_content_filters_user_status_and_tool_m
 
 
 @pytest.mark.asyncio
-async def test_search_sessions_by_message_content_includes_different_sources(session_session):
+async def test_search_sessions_by_message_content_includes_different_sources(session):
     normal, scheduled, public_api, now = _seed_source_filter_sessions()
-    session_session.add_all([normal, scheduled, public_api])
-    await session_session.flush()
-    session_session.add_all(
+    session.add_all([normal, scheduled, public_api])
+    await session.flush()
+    session.add_all(
         [
             Message(agent_session=normal, role="user", content="导航隐藏检查", message_type="text", created_at=now),
             Message(
@@ -507,9 +406,9 @@ async def test_search_sessions_by_message_content_includes_different_sources(ses
             ),
         ]
     )
-    await session_session.commit()
+    await session.commit()
 
-    repo = SessionRepository(session_session)
+    repo = SessionRepository(session)
     items, has_more = await repo.search_sessions_by_message_content(
         uid="user-a",
         query="导航隐藏检查",
@@ -522,7 +421,7 @@ async def test_search_sessions_by_message_content_includes_different_sources(ses
 
 
 @pytest.mark.asyncio
-async def test_search_sessions_by_message_content_filters_agent_and_paginates(session_session):
+async def test_search_sessions_by_message_content_filters_agent_and_paginates(session):
     now = utc_now()
     old = now - timedelta(days=1)
     first = Session(
@@ -555,9 +454,9 @@ async def test_search_sessions_by_message_content_filters_agent_and_paginates(se
         created_at=now,
         updated_at=now,
     )
-    session_session.add_all([first, second, other_agent])
-    await session_session.flush()
-    session_session.add_all(
+    session.add_all([first, second, other_agent])
+    await session.flush()
+    session.add_all(
         [
             Message(
                 agent_session=first,
@@ -582,9 +481,9 @@ async def test_search_sessions_by_message_content_filters_agent_and_paginates(se
             ),
         ]
     )
-    await session_session.commit()
+    await session.commit()
 
-    repo = SessionRepository(session_session)
+    repo = SessionRepository(session)
     first_page, has_more = await repo.search_sessions_by_message_content(
         uid="user-a",
         agent_id="agent-a",
@@ -607,7 +506,7 @@ async def test_search_sessions_by_message_content_filters_agent_and_paginates(se
 
 
 @pytest.mark.asyncio
-async def test_search_batches_snippets_without_query_growth(session_session):
+async def test_search_batches_snippets_without_query_growth(session):
     """命中会话增加时 SQL 数量固定，片段有界且保留所属会话。"""
     from sqlalchemy import event
     from yuxi.modules.agents.repositories.sessions import MESSAGE_SEARCH_SNIPPETS_PER_THREAD
@@ -625,10 +524,10 @@ async def test_search_batches_snippets_without_query_growth(session_session):
         )
         for i in range(3)
     ]
-    session_session.add_all(sessions)
-    await session_session.flush()
+    session.add_all(sessions)
+    await session.flush()
     for i, agent_session in enumerate(sessions):
-        session_session.add_all(
+        session.add_all(
             [
                 Message(
                     agent_session=agent_session,
@@ -640,18 +539,18 @@ async def test_search_batches_snippets_without_query_growth(session_session):
                 for j in range(5)
             ]
         )
-    await session_session.commit()
+    await session.commit()
     statements = []
 
     def record(_conn, _cursor, statement, _params, _context, _many):
         statements.append(statement)
 
-    engine = session_session.bind.sync_engine
+    engine = session.bind.sync_engine
     event.listen(engine, "before_cursor_execute", record)
     try:
         for limit in [1, 3]:
             statements.clear()
-            rows, more = await SessionRepository(session_session).search_sessions_by_message_content(
+            rows, more = await SessionRepository(session).search_sessions_by_message_content(
                 uid="batch-user", query="batch-key", limit=limit, app_id=None
             )
             assert len(rows) == limit and more is (limit == 1)
@@ -663,3 +562,293 @@ async def test_search_batches_snippets_without_query_growth(session_session):
                 assert row["snippets"][0]["content"].endswith("-4")
     finally:
         event.remove(engine, "before_cursor_execute", record)
+
+
+async def _session(db, *, thread_id: str, uid: str = "user-1", metadata: dict | None = None):
+    agent_session = Session(
+        thread_id=thread_id,
+        project_id=f"project-{thread_id}",
+        uid=uid,
+        agent_id="main",
+        status="active",
+        extra_metadata=metadata,
+    )
+    db.add(agent_session)
+    await db.flush()
+    return agent_session
+
+
+async def test_memory_search_includes_public_source_and_excludes_hidden_messages(session):
+    visible = await _session(session, thread_id="visible")
+    other = await _session(session, thread_id="other", uid="user-2")
+    public = await _session(session, thread_id="public", metadata={"source": "public_api"})
+    child = await _session(session, thread_id="child")
+    session.add_all(
+        [
+            Message(session_record_id=visible.id, role="user", content="needle visible", message_type="text"),
+            Message(session_record_id=visible.id, role="tool", content="needle tool", message_type="text"),
+            Message(session_record_id=visible.id, role="assistant", content="needle result", message_type="tool_result"),
+            Message(session_record_id=other.id, role="user", content="needle other", message_type="text"),
+            Message(session_record_id=public.id, role="user", content="needle public", message_type="text"),
+            Message(session_record_id=child.id, role="assistant", content="needle child", message_type="text"),
+        ]
+    )
+    await session.commit()
+
+    result = await SessionRepository(session).search_memory_messages(uid="user-1", query="needle")
+
+    assert {item["thread_id"]: item["content"] for item in result["items"]} == {
+        "visible": "needle visible",
+        "public": "needle public",
+        "child": "needle child",
+    }
+    assert all("truncated" not in item for item in result["items"])
+    assert "truncated" not in result
+    assert all(set(item) == {"thread_id", "title", "message_id", "role", "content"} for item in result["items"])
+
+
+async def test_memory_read_uses_allowlist_and_only_explicit_toolcall_table(session):
+    agent_session = await _session(session, thread_id="visible")
+    assistant = Message(
+        session_record_id=agent_session.id,
+        role="assistant",
+        content="safe assistant",
+        message_type="text",
+        extra_metadata={"tool_calls": [{"args": {"secret": "METADATA-SECRET"}}]},
+        image_content="IMAGE-SECRET",
+    )
+    session.add_all(
+        [
+            Message(session_record_id=agent_session.id, role="user", content="safe user", message_type="text"),
+            assistant,
+            Message(session_record_id=agent_session.id, role="tool", content="TOOL-ROLE-SECRET", message_type="text"),
+            Message(
+                session_record_id=agent_session.id,
+                role="assistant",
+                content="TOOL-TYPE-SECRET",
+                message_type="tool_result",
+            ),
+        ]
+    )
+    await session.flush()
+    session.add(
+        ToolCall(
+            message_id=assistant.id,
+            langgraph_tool_call_id="call-1",
+            tool_name="secret_tool",
+            tool_input={"secret": "TOOLCALL-INPUT"},
+            tool_output="TOOLCALL-OUTPUT",
+            status="success",
+        )
+    )
+    await session.commit()
+    repository = SessionRepository(session)
+
+    default_result = await repository.read_memory_messages(uid="user-1", thread_id="visible")
+    explicit_result = await repository.read_memory_messages(
+        uid="user-1",
+        thread_id="visible",
+        include_tools=True,
+    )
+
+    default_json = json.dumps(default_result, ensure_ascii=False)
+    explicit_json = json.dumps(explicit_result, ensure_ascii=False)
+    assert [item["content"] for item in default_result["messages"]] == ["safe user", "safe assistant"]
+    assert default_result["tool_calls"] == []
+    assert "truncated" not in default_result
+    assert all(set(item) == {"message_id", "role", "content"} for item in default_result["messages"])
+    assert "METADATA-SECRET" not in default_json
+    assert "IMAGE-SECRET" not in default_json
+    assert "TOOL-ROLE-SECRET" not in default_json
+    assert "TOOL-TYPE-SECRET" not in default_json
+    assert "METADATA-SECRET" not in explicit_json
+    assert "truncated" not in explicit_result["tool_calls"][0]
+    assert set(explicit_result["tool_calls"][0]) == {
+        "tool_call_id",
+        "name",
+        "input",
+        "output",
+        "status",
+        "error",
+    }
+    assert explicit_result["tool_calls"][0]["input"] == '{"secret":"TOOLCALL-INPUT"}'
+    assert explicit_result["tool_calls"][0]["output"] == "TOOLCALL-OUTPUT"
+
+
+async def test_memory_read_enforces_utf8_and_final_response_budget(session):
+    agent_session = await _session(session, thread_id="large")
+    session.add_all(
+        [
+            Message(
+                session_record_id=agent_session.id,
+                role="user" if index % 2 == 0 else "assistant",
+                content="记" * 20_000,
+                message_type="text",
+            )
+            for index in range(20)
+        ]
+    )
+    await session.commit()
+
+    result = await SessionRepository(session).read_memory_messages(uid="user-1", thread_id="large")
+    encoded = json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+
+    assert len(encoded) <= MEMORY_HISTORY_READ_RESPONSE_MAX_BYTES
+    assert result["truncated"] is True
+    assert all(len(item["content"].encode("utf-8")) <= 8 * 1024 for item in result["messages"])
+    assert len(b"".join(item["content"].encode("utf-8") for item in result["messages"])) <= 32 * 1024
+
+
+async def test_memory_tools_exclude_unproven_or_active_model_audits(session):
+    """历史与 Memory 两种读取入口都只公开终态 State 已证明的 Model 工具调用。"""
+    agent_session = await _session(session, thread_id="audits")
+    session.add_all(
+        [
+            AgentTurn(id="turn-active", thread_id="audits", uid="user-1", status="running"),
+            AgentTurn(id="turn-unproven", thread_id="audits", uid="user-1", status="completed"),
+            AgentTurn(id="turn-proven", thread_id="audits", uid="user-1", status="cancelled"),
+        ]
+    )
+    await session.flush()
+    session.add_all(
+        [
+            AgentRun(
+                id="run-active",
+                thread_id="audits",
+                runtime_scope_id="audits",
+                agent_slug="main",
+                uid="user-1",
+                status="running",
+                turn_id="turn-active",
+                session_record_id=agent_session.id,
+                input_payload={},
+            ),
+            AgentRun(
+                id="run-unproven",
+                thread_id="audits",
+                runtime_scope_id="audits",
+                agent_slug="main",
+                uid="user-1",
+                status="completed",
+                turn_id="turn-unproven",
+                session_record_id=agent_session.id,
+                input_payload={},
+            ),
+            AgentRun(
+                id="run-proven",
+                thread_id="audits",
+                runtime_scope_id="audits",
+                agent_slug="main",
+                uid="user-1",
+                status="interrupted",
+                turn_id="turn-proven",
+                session_record_id=agent_session.id,
+                input_payload={},
+            ),
+        ]
+    )
+    await session.flush()
+    messages = [
+        Message(
+            session_record_id=agent_session.id,
+            role="assistant",
+            content=label,
+            message_type="model_audit",
+            extra_metadata={"state_reconciled": proven},
+            run_id=run_id,
+            turn_id=turn_id,
+            operation_id=f"model-{label}",
+            execution_status="completed",
+        )
+        for label, run_id, turn_id, proven in [
+            ("active", "run-active", "turn-active", True),
+            ("unproven", "run-unproven", "turn-unproven", False),
+            ("proven", "run-proven", "turn-proven", True),
+        ]
+    ]
+    session.add_all(messages)
+    await session.flush()
+    session.add_all(
+        [
+            ToolCall(
+                message_id=message.id,
+                langgraph_tool_call_id=f"call-{message.content}",
+                tool_name="search",
+                tool_output=f"output-{message.content}",
+                status="success",
+            )
+            for message in messages
+        ]
+    )
+    await session.commit()
+
+    repository = SessionRepository(session)
+    history = await repository.get_messages(agent_session.id)
+
+    assert [message.content for message in history] == ["proven"]
+    assert history[0].tool_calls[0].langgraph_tool_call_id == "call-proven"
+
+    result = await repository.read_memory_messages(
+        uid="user-1",
+        thread_id="audits",
+        include_tools=True,
+    )
+
+    assert [message["content"] for message in result["messages"]] == ["proven"]
+    assert [tool_call["tool_call_id"] for tool_call in result["tool_calls"]] == ["call-proven"]
+
+
+async def test_new_session_persists_project_binding(session):
+    agent_session = await SessionRepository(session).add_session(
+        uid="oidc:user@example.com",
+        agent_id="main",
+        thread_id="thread-1",
+        project_id="11111111-1111-4111-8111-111111111111",
+    )
+
+    assert agent_session.project_id == "11111111-1111-4111-8111-111111111111"
+
+
+async def test_session_requires_project_binding(session):
+    with pytest.raises(TypeError, match="project_id"):
+        await SessionRepository(session).add_session(
+            uid="user-1",
+            agent_id="main",
+            thread_id="thread-missing-binding",
+        )
+
+
+async def test_failed_session_flush_propagates(session, monkeypatch):
+    monkeypatch.setattr(session, "flush", AsyncMock(side_effect=RuntimeError("db failure")))
+
+    with pytest.raises(RuntimeError, match="db failure"):
+        await SessionRepository(session).add_session(
+            uid="user-1",
+            agent_id="main",
+            thread_id="thread-failed",
+            project_id="33333333-3333-4333-8333-333333333333",
+        )
+
+
+async def test_failed_commit_does_not_change_project_binding(session, monkeypatch):
+    monkeypatch.setattr(session, "commit", AsyncMock(side_effect=RuntimeError("commit failure")))
+
+    with pytest.raises(RuntimeError, match="commit failure"):
+        await SessionRepository(session).create_session(
+            uid="user-1",
+            agent_id="main",
+            thread_id="thread-commit-failed",
+            project_id="44444444-4444-4444-8444-444444444444",
+        )
+
+
+async def test_outer_transaction_rollback_removes_new_session(session):
+    await SessionRepository(session).add_session(
+        uid="user-1",
+        agent_id="main",
+        thread_id="thread-outer-rollback",
+        project_id="55555555-5555-4555-8555-555555555555",
+    )
+    await session.rollback()
+
+    assert await SessionRepository(session).get_session_by_thread_id("thread-outer-rollback") is None

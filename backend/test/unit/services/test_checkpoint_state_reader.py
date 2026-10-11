@@ -1,6 +1,7 @@
 """真实 checkpoint 验证完整快照读取、中断与执行初始化隔离。"""
 
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException
@@ -10,6 +11,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 from yuxi.modules.agents.runtime.agent_backends.chatbot.state import ChatBotState
 import yuxi.modules.agents.services.state as svc
+from yuxi.modules.agents.repositories.public_items import PublicItemRepository
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
 
@@ -23,6 +25,27 @@ def _approval(state):
 def _unexpected_runtime(*args, **kwargs):
     """读取持久化数据不得初始化 Agent。"""
     raise AssertionError("state query initialized execution runtime")
+
+
+def _patch_state_view_repositories(monkeypatch, *, session, latest_run=None, turn=None):
+    """为读视图测试安装最小的授权与执行仓储边界。"""
+    monkeypatch.setattr(
+        svc,
+        "SessionRepository",
+        lambda _db: SimpleNamespace(get_session_by_thread_id=AsyncMock(return_value=session)),
+    )
+    monkeypatch.setattr(
+        svc,
+        "AgentRunRepository",
+        lambda _db: SimpleNamespace(get_latest_run_by_thread_for_user=AsyncMock(return_value=latest_run)),
+    )
+    if turn is not None:
+        monkeypatch.setattr(
+            svc,
+            "AgentTurnRepository",
+            lambda _db: SimpleNamespace(get_for_scope=AsyncMock(return_value=turn)),
+        )
+    monkeypatch.setattr(PublicItemRepository, "list_items", AsyncMock(return_value=[]))
 
 
 @pytest.fixture
@@ -64,7 +87,8 @@ async def test_checkpoint_reader_missing_thread_is_empty(checkpoint_reader):
     assert await svc._read_checkpoint_state(uid="user", thread_id="missing") == ({}, None)
 
 
-async def test_state_view_reads_persisted_fields_without_agent_runtime(checkpoint_reader, monkeypatch):
+@pytest.mark.parametrize("include_relations", [False, True])
+async def test_state_view_reads_persisted_fields_without_agent_runtime(checkpoint_reader, monkeypatch, include_relations):
     """面板字段及消息来自快照，内部 channel 不进入响应。"""
     from typing import TypedDict
 
@@ -93,43 +117,93 @@ async def test_state_view_reads_persisted_fields_without_agent_runtime(checkpoin
     builder.add_edge("done", END)
     await builder.compile(checkpointer=checkpoint_reader).ainvoke(payload, {"configurable": {"thread_id": "thread"}})
 
-    async def agent_session(thread_id):
-        """返回已授权的持久化线程。"""
-        return SimpleNamespace(id=1, uid="user", app_id=None, status="active")
-
-    async def latest_run(thread_id, uid):
-        """返回已完成运行。"""
-        return SimpleNamespace(status="completed")
-
-    monkeypatch.setattr(svc, "SessionRepository", lambda db: SimpleNamespace(get_session_by_thread_id=agent_session))
-    monkeypatch.setattr(svc, "AgentRunRepository", lambda db: SimpleNamespace(get_latest_run_by_thread_for_user=latest_run))
-    from yuxi.modules.agents.repositories.public_items import PublicItemRepository
-    from unittest.mock import AsyncMock
-
-    monkeypatch.setattr(PublicItemRepository, "list_items", AsyncMock(return_value=[]))
+    session = SimpleNamespace(
+        id=1,
+        uid="user",
+        app_id=None,
+        status="active",
+        parent_thread_id=None,
+        project_id="missing-project",
+    )
+    _patch_state_view_repositories(monkeypatch, session=session)
+    monkeypatch.setattr(svc, "tree_snapshot", AsyncMock(return_value={"sessions": []}))
     response = await svc.get_agent_state_view(
         thread_id="thread",
         current_user=SimpleNamespace(uid="user"),
         db=None,
-        include_relations=False,
+        include_relations=include_relations,
     )
     assert response["agent_state"] == {key: payload[key] for key in ("todos", "artifacts", "cooperation", "token_usage")}
     assert "items" not in response
     assert "saved message" not in str(response)
     assert "interrupt" not in response
-    assert set(response) == {"agent_state"}
+    if include_relations:
+        assert response["agent_state"]["cooperation"] == {"sessions": []}
+        assert response["parent_thread_id"] is None
+        assert set(response) == {"agent_state", "parent_thread_id"}
+    else:
+        assert set(response) == {"agent_state"}
 
 
-@pytest.mark.parametrize("owner,status", [("other-user", "active"), ("user", "deleted")])
-async def test_state_view_rejects_invisible_thread_before_checkpoint(monkeypatch, owner, status):
+@pytest.mark.parametrize(
+    "agent_session",
+    [
+        None,
+        SimpleNamespace(uid="other-user", app_id=None, status="active"),
+        SimpleNamespace(uid="user", app_id=None, status="deleted"),
+    ],
+)
+async def test_state_view_rejects_missing_or_invisible_thread_before_checkpoint(monkeypatch, agent_session):
     """不可见线程不能到达 checkpoint 读取边界。"""
 
-    async def agent_session(thread_id):
-        """返回不可见的线程。"""
-        return SimpleNamespace(uid=owner, app_id=None, status=status)
-
-    monkeypatch.setattr(svc, "SessionRepository", lambda db: SimpleNamespace(get_session_by_thread_id=agent_session))
+    _patch_state_view_repositories(monkeypatch, session=agent_session)
     monkeypatch.setattr(svc, "get_langgraph_checkpointer", lambda _manager: _unexpected_runtime())
     with pytest.raises(HTTPException) as exc:
         await svc.get_agent_state_view(thread_id="thread", current_user=SimpleNamespace(uid="user"), db=None)
     assert exc.value.status_code == 404
+@pytest.mark.parametrize("turn_status", ["waiting", "cancelled"])
+async def test_get_agent_state_view_returns_interrupt_only_for_waiting_owner(monkeypatch: pytest.MonkeyPatch, turn_status):
+    thread_id = "thread-1"
+
+    async def read_checkpoint_state(*, uid, thread_id):
+        assert uid == "user-1"
+        assert thread_id == "thread-1"
+        return {}, SimpleNamespace(
+            value={
+                "action_requests": [{"name": "execute", "args": {"command": "pytest -q"}}],
+                "review_configs": [{"action_name": "execute", "allowed_decisions": ["approve", "reject"]}],
+            }
+        )
+
+    session = SimpleNamespace(
+        id=20,
+        uid="user-1",
+        app_id=None,
+        agent_id="main",
+        status="active",
+        parent_thread_id=None,
+        project_id="11111111-1111-4111-8111-111111111111",
+        extra_metadata={"model_spec": "provider:agent_session-model"},
+    )
+    latest_run = SimpleNamespace(
+        id="run-1",
+        turn_id="turn",
+        status="interrupted",
+        input_payload={"model_spec": "provider:stale-run-model"},
+    )
+    turn = SimpleNamespace(status=turn_status, current_run_id="run-1", waitpoint={"run_id": "run-1"})
+    _patch_state_view_repositories(monkeypatch, session=session, latest_run=latest_run, turn=turn)
+    monkeypatch.setattr(svc, "_read_checkpoint_state", read_checkpoint_state)
+    monkeypatch.setattr(svc, "tree_snapshot", AsyncMock(return_value={"sessions": []}))
+    result = await svc.get_agent_state_view(
+        thread_id=thread_id,
+        current_user=SimpleNamespace(uid="user-1"),
+        db=object(),
+    )
+
+    if turn_status == "cancelled":
+        assert "interrupt" not in result
+        return
+    assert result["interrupt"]["status"] == "human_approval_required"
+    assert result["interrupt"]["run_id"] == "run-1"
+    assert result["interrupt"]["approval"]["action_requests"][0]["name"] == "execute"

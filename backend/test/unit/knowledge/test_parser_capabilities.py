@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import subprocess
 import sys
-import zipfile
 from pathlib import Path
 
 import pytest
@@ -89,20 +88,6 @@ def test_capability_registry_declares_shipping_processors() -> None:
         "paddleocr_vl_1_6",
         "paddleocr_pp_ocrv6",
     )
-
-
-@pytest.mark.asyncio
-async def test_zip_parser_returns_markdown_text_without_sidecar_metadata(tmp_path: Path) -> None:
-    from yuxi.infrastructure.document_parsing.artifacts import extract_markdown_archive
-
-    archive = tmp_path / "result.zip"
-    with zipfile.ZipFile(archive, "w") as zip_file:
-        zip_file.writestr("full.md", "# Parsed ZIP document")
-
-    result = extract_markdown_archive(str(archive), tmp_path)
-
-    assert result == "# Parsed ZIP document"
-    assert isinstance(result, str)
 
 
 def test_concurrent_engine_configuration_returns_each_requested_instance(monkeypatch):

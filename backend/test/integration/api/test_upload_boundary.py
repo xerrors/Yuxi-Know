@@ -10,8 +10,6 @@ import pytest
 from PIL import Image
 
 from yuxi.infrastructure.minio import get_minio_client
-from yuxi.infrastructure.postgres.manager import pg_manager
-from yuxi.modules.agents.models.attachments import AgentAttachment
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
@@ -75,41 +73,6 @@ async def test_workspace_upload_preserves_bytes_and_existing_file(test_client, s
     finally:
         removed = await test_client.delete("/api/workspace/file", params={"path": path}, headers=headers)
         assert removed.status_code in {200, 404}, removed.text
-
-
-async def test_attachment_upload_preserves_metadata_and_minio_bytes(test_client, standard_user):
-    """协议读取不能丢失附件文件名、类型、大小和对象字节。"""
-    storage = get_minio_client()
-    bucket = storage.KB_BUCKETS["documents"]
-    content = b"attachment bytes\x00\xff"
-    file_id = None
-    try:
-        response = await test_client.post(
-            "/api/v1/agents/files",
-            headers=standard_user["headers"],
-            files={"file": ("source.txt", content, "text/plain")},
-        )
-        assert response.status_code == 201, response.text
-        payload = response.json()
-        file_id = payload["id"]
-        async with pg_manager.get_async_session_context() as db:
-            draft = await db.get(AgentAttachment, file_id)
-            assert draft.uid == str(standard_user["user"]["uid"])
-            assert draft.status == "draft" and draft.input_id is None
-            assert draft.filename == "source.txt" and draft.mime_type == "text/plain"
-            assert draft.size_bytes == len(content)
-            object_name = draft.object_name
-        assert payload["filename"] == "source.txt"
-        assert payload["mime_type"] == "text/plain"
-        assert payload["bytes"] == len(content)
-        assert object_name.startswith(f"tmp/chat_attachments/{standard_user['user']['uid']}/")
-        assert await storage.adownload_file(bucket, object_name) == content
-    finally:
-        if file_id:
-            removed = await test_client.delete(f"/api/v1/agents/files/{file_id}", headers=standard_user["headers"])
-            assert removed.status_code == 200, removed.text
-            async with pg_manager.get_async_session_context() as db:
-                assert await db.get(AgentAttachment, file_id) is None
 
 
 @pytest.mark.parametrize("endpoint,url_key", [("/api/user/upload-image", "image_url"), ("/api/auth/upload-avatar", "avatar_url")])

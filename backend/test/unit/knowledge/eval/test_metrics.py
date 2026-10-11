@@ -1,8 +1,4 @@
-import os
-
 import pytest
-
-os.environ.setdefault("OPENAI_API_KEY", "test-key")
 
 from yuxi.modules.knowledge.evaluation.metrics import EvaluationMetricsCalculator
 

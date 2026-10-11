@@ -3,20 +3,22 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 import io
-import os
-import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 import pytest
-
-os.environ.setdefault("OPENAI_API_KEY", "test-key")
-os.environ.setdefault("YUXI_RUNTIME_DIR", os.path.join(os.environ.get("CLAUDE_JOB_DIR", tempfile.gettempdir()), "yuxi-test-saves"))
 
 from yuxi.modules.agents.runtime.sandbox.paths import workdir_scope_from_runtime_path
 import yuxi.modules.agents.services.attachments as service
 from yuxi.modules.agents.models.attachments import AgentAttachment
 
 pytestmark = pytest.mark.unit
+
+
+@pytest.fixture(autouse=True)
+def _isolated_attachment_environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    """附件测试的模型凭据与运行目录只作用于当前用例。"""
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("YUXI_RUNTIME_DIR", str(tmp_path / "runtime"))
 
 
 class FakeMinioClient:
@@ -158,14 +160,6 @@ def _write_parse_result(output_dir, markdown):
     path = output_dir / "document.md"
     path.write_text(markdown)
     return ParseResult(output_dir, path, ())
-
-
-def _write_local_parsed_object(object_name, content):
-    """把测试解析入口写入真实 Workspace 边界。"""
-    with tempfile.TemporaryDirectory() as directory:
-        path = Path(directory) / "document.md"
-        path.write_bytes(content)
-        service.Workspace("user-1").upload_authorized_file_from_path("/" + object_name, str(path))
 
 
 @pytest.mark.asyncio

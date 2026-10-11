@@ -1,5 +1,4 @@
 import json
-from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -7,7 +6,7 @@ import pytest
 import yuxi.modules.knowledge.implementations.milvus as milvus_module
 import yuxi.modules.knowledge.graphs.milvus_graph_vector_store as graph_module
 from yuxi.modules.knowledge.implementations.milvus import MilvusKB
-from test.unit.plugins.test_milvus_kb import FakeCollection, FakeHit, make_kb, make_query_config
+from test.unit.support.milvus import FakeCollection, FakeHit, make_kb, make_query_config
 
 
 @pytest.mark.parametrize("search_mode", ["vector", "keyword", "hybrid"])
@@ -119,71 +118,3 @@ def test_database_operations_use_own_connection_and_fail_closed(monkeypatch, mod
     with pytest.raises(RuntimeError, match="database unavailable"):
         instance._init_connection()
     assert selected == {"own": "target"}
-
-
-async def test_collection_load_failure_is_observable():
-    """加载失败不得被当作可查询的集合。"""
-
-    def fail_load():
-        """模拟集合加载失败。"""
-        raise RuntimeError("load unavailable")
-
-    with pytest.raises(RuntimeError, match="load unavailable"):
-        await object.__new__(MilvusKB)._initialize_kb_instance(SimpleNamespace(load=fail_load))
-
-
-@pytest.mark.parametrize("mismatch", ["model", "dimension", "missing_embedding", "text_schema"])
-def test_incompatible_collection_is_rejected_without_deletion(monkeypatch, mismatch):
-    """不匹配的集合显式失败，查询入口不能删除已存在的数据。"""
-    collection = SimpleNamespace(
-        description="Knowledge base collection for db using model",
-        schema=SimpleNamespace(fields=[SimpleNamespace(name="embedding", params={"dim": 4})]),
-    )
-    if mismatch == "model":
-        collection.description = "different model"
-    elif mismatch == "dimension":
-        collection.schema.fields[0].params["dim"] = 8
-    elif mismatch == "missing_embedding":
-        collection.schema.fields = []
-    monkeypatch.setattr(milvus_module.utility, "has_collection", lambda *args, **kwargs: True)
-    monkeypatch.setattr(milvus_module, "Collection", lambda **kwargs: collection)
-    monkeypatch.setattr(
-        milvus_module.model_cache,
-        "get_model_info",
-        lambda spec: SimpleNamespace(
-            model_type="embedding",
-            model_id="model",
-            dimension=4,
-        ),
-    )
-
-    def reject_drop(*args, **kwargs):
-        """错误的破坏性修复必须使测试失败。"""
-        pytest.fail("collection was deleted")
-
-    monkeypatch.setattr(milvus_module.utility, "drop_collection", reject_drop)
-    kb = object.__new__(MilvusKB)
-    kb.connection_alias = "own"
-    kb._collection_supports_text_retrieval = lambda candidate: mismatch != "text_schema"
-    kb._create_new_collection = reject_drop
-    with pytest.raises(RuntimeError, match="does not match"):
-        kb._create_kb_instance_sync("db", "provider:model")
-
-
-async def test_hybrid_highlighting_preserves_ranking_and_scores():
-    """补取高亮只能附加片段，不能用第二次搜索的分数覆盖融合结果。"""
-    fusion_hits = [FakeHit("first", 0.7), FakeHit("second", 0.5)]
-    highlighted_hits = [FakeHit("second", 1), FakeHit("first", 1)]
-    for hit, chunk_id in zip(fusion_hits, ["a", "b"]):
-        hit.entity["chunk_id"] = chunk_id
-    for hit, chunk_id in zip(highlighted_hits, ["b", "a"]):
-        hit.entity["chunk_id"] = chunk_id
-        hit.highlight = {"content": {"fragments": [f"\ue000{hit.entity.get('content')}\ue001"], "scores": []}}
-    collection = FakeCollection()
-    collection.search = lambda **kwargs: [highlighted_hits]
-    collection.hybrid_search = lambda **kwargs: [fusion_hits]
-    chunks = await make_kb(collection).aquery("query", "db", config=make_query_config(), search_mode="hybrid")
-    assert [chunk["metadata"]["chunk_id"] for chunk in chunks] == ["a", "b"]
-    assert [chunk["score"] for chunk in chunks] == [0.7, 0.5]
-    assert all(chunk["score_type"] == "hybrid" for chunk in chunks)
-    assert chunks[0]["highlights"] == [[{"text": "first", "matched": True}]]

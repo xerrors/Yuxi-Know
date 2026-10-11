@@ -1,9 +1,6 @@
-import os
 from types import SimpleNamespace
 
 import pytest
-
-os.environ.setdefault("OPENAI_API_KEY", "test-key")
 
 from yuxi.modules.models.providers.builtin import BUILTIN_PROVIDERS
 from yuxi.modules.models.tables import ModelProvider
@@ -16,6 +13,12 @@ from yuxi.modules.models.providers.service import (
     fetch_remote_models,
     update_provider_config,
 )
+
+
+@pytest.fixture(autouse=True)
+def _isolated_openai_api_key(monkeypatch: pytest.MonkeyPatch):
+    """模型客户端的凭据仅在当前测试期间可见。"""
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
 
 def test_model_provider_to_dict_redacts_credentials():

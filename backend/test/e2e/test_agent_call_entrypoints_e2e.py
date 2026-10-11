@@ -11,9 +11,8 @@ import asyncpg
 import httpx
 import pytest
 
-from e2e_helpers import delete_agent, postgres_dsn, skip_if_external_quota
-from test.e2e.test_agent_lifecycle_e2e import output_text
-from test.e2e.e2e_helpers import wait_for_consumed_input
+from test.e2e.e2e_helpers import create_public_agent, delete_agent, postgres_dsn, skip_if_external_quota, wait_for_consumed_input
+from test.e2e.e2e_helpers import output_text
 from test.live_api_cleanup import make_test_session_title
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.e2e, pytest.mark.slow]
@@ -21,45 +20,6 @@ pytestmark = [pytest.mark.asyncio, pytest.mark.e2e, pytest.mark.slow]
 POLL_INTERVAL_SECONDS = float(os.getenv("E2E_RUN_POLL_INTERVAL_SECONDS", "2"))
 RUN_TIMEOUT_SECONDS = int(os.getenv("E2E_RUN_TIMEOUT_SECONDS", "240"))
 EVAL_EXPECTED_OUTPUT = "AGENT_EVAL_E2E_OK"
-
-
-async def _create_agent(client: httpx.AsyncClient, headers: dict[str, str], uid: str) -> str:
-    """创建评估样例使用的临时 Agent。"""
-    default_response = await client.get("/api/agent/default", headers=headers)
-    assert default_response.status_code == 200, default_response.text
-    default_context = ((default_response.json().get("agent") or {}).get("config_json") or {}).get("context") or {}
-
-    slug = f"e2e-agent-eval-{uuid.uuid4().hex[:8]}"
-    context: dict[str, Any] = {
-        "system_prompt": f"你是端到端测试专用智能体。不要调用任何工具，只输出 {EVAL_EXPECTED_OUTPUT}。",
-        "tools": [],
-        "knowledges": [],
-        "mcps": [],
-        "skills": [],
-    }
-    if default_context.get("model"):
-        context["model"] = default_context["model"]
-
-    response = await client.post(
-        "/api/agent",
-        json={
-            "name": f"E2E Agent Eval {slug[-8:]}",
-            "slug": slug,
-            "backend_id": "ChatbotAgent",
-            "visibility": "shared",
-            "description": "真实 Public 评估样例 E2E 临时智能体",
-            "config_json": {"context": context},
-            "share_config": {
-                "version": 2,
-                "read_scope": {"access_level": "user", "department_ids": [], "user_uids": [uid]},
-                "manage_scope": None,
-            },
-        },
-        headers=headers,
-    )
-    assert response.status_code == 200, response.text
-    assert (response.json().get("agent") or {}).get("slug") == slug
-    return slug
 
 
 async def _wait_turn(client: httpx.AsyncClient, headers: dict[str, str], thread_id: str, turn_id: str) -> dict[str, Any]:
@@ -118,7 +78,15 @@ async def test_public_thread_evaluation_sample_uses_one_input_turn_run_flow(
     e2e_agent_context: dict[str, str],
 ):
     """评估样例仅用 Public 输入、Turn 结果与 Run 快照执行。"""
-    agent_slug = await _create_agent(e2e_client, e2e_headers, e2e_agent_context["uid"])
+    agent_slug = await create_public_agent(
+        e2e_client,
+        e2e_headers,
+        e2e_agent_context["uid"],
+        slug_prefix="e2e-agent-eval-",
+        expected_output=EVAL_EXPECTED_OUTPUT,
+        name_prefix="E2E Agent Eval",
+        description="真实 Public 评估样例 E2E 临时智能体",
+    )
     thread_id: str | None = None
     accepted: dict | None = None
     completed = False

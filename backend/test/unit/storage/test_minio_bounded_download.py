@@ -50,17 +50,43 @@ async def test_negative_object_read_limit_fails_before_opening_object():
 class _Response(BytesIO):
     """记录实际消费字节数与响应清理结果。"""
 
-    def __init__(self, content):
+    def __init__(self, content, *, read_error=False):
         super().__init__(content)
         self.read_sizes = []
         self.bytes_read = 0
+        self.read_error = read_error
         self.released = False
 
     def read(self, size=-1):
         self.read_sizes.append(size)
+        if self.read_error:
+            raise RuntimeError("read failed")
         content = super().read(size)
         self.bytes_read += len(content)
         return content
 
     def release_conn(self):
         self.released = True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_read", [False, True])
+@pytest.mark.parametrize("read_error", [False, True])
+async def test_unbounded_object_download_always_releases_response(async_read, read_error):
+    response = _Response(b"content", read_error=read_error)
+    storage = MinIOClient()
+    storage._client = SimpleNamespace(get_object=lambda **_kwargs: response)
+
+    if read_error:
+        with pytest.raises(RuntimeError, match="read failed"):
+            if async_read:
+                await storage.adownload_file("bucket", "object")
+            else:
+                storage.download_file("bucket", "object")
+    elif async_read:
+        assert await storage.adownload_file("bucket", "object") == b"content"
+    else:
+        assert storage.download_file("bucket", "object") == b"content"
+
+    assert response.closed is True
+    assert response.released is True

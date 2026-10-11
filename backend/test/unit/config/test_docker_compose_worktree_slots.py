@@ -1,9 +1,6 @@
 from copy import deepcopy
-import os
-from pathlib import Path
 
-import pytest
-import yaml
+from test.unit.config._shared import load_compose, project_root
 
 
 STATE_ROOT = "${YUXI_STATE_DIR:-./docker/volumes}"
@@ -38,23 +35,6 @@ LOCAL_IMAGE_SUFFIXES = {
     "mineru-api": "-mineru:",
     "paddlex": "-paddlex:",
 }
-
-
-def _project_root() -> Path:
-    """定位包含 Compose 文件的仓库根目录。"""
-    configured = os.environ.get("YUXI_PROJECT_ROOT")
-    if configured:
-        return Path(configured)
-
-    for parent in Path(__file__).resolve().parents:
-        if (parent / "docker-compose.yml").exists():
-            return parent
-    pytest.skip("当前测试环境未挂载仓库根目录")
-
-
-def _load_compose(filename: str = "docker-compose.yml") -> dict:
-    """读取未插值的 Compose 契约。"""
-    return yaml.safe_load((_project_root() / filename).read_text())
 
 
 def _slot_isolation_violations(compose: dict) -> set[str]:
@@ -99,7 +79,7 @@ def _slot_isolation_violations(compose: dict) -> set[str]:
 
 def test_development_compose_is_parameterized_for_parallel_worktree_slots() -> None:
     """开发 Compose 的宿主资源必须由项目名、状态根和端口共同隔离。"""
-    compose = _load_compose()
+    compose = load_compose()
 
     assert _slot_isolation_violations(compose) == set()
 
@@ -118,7 +98,7 @@ def test_development_compose_is_parameterized_for_parallel_worktree_slots() -> N
 
 def test_slot_isolation_guard_rejects_fixed_host_resources() -> None:
     """负控证明固定容器、网络、端口、镜像或状态路径会被拒绝。"""
-    compose = deepcopy(_load_compose())
+    compose = deepcopy(load_compose())
     compose["services"]["api"]["container_name"] = "api-dev"
     compose["services"]["api"]["ports"] = ["5050:5050"]
     compose["services"]["api"]["image"] = "yuxi-api:latest"
@@ -136,7 +116,7 @@ def test_slot_isolation_guard_rejects_fixed_host_resources() -> None:
 
 def test_production_compose_scopes_images_by_project_with_legacy_default() -> None:
     """生产镜像按项目隔离，未配置项目名时仍使用 yuxi 前缀。"""
-    compose = _load_compose("docker-compose.prod.yml")
+    compose = load_compose("docker-compose.prod.yml")
 
     assert compose["services"]["api"]["image"].startswith("${COMPOSE_PROJECT_NAME:-yuxi}-api:${YUXI_VERSION:-")
     assert compose["services"]["frontend"]["image"].startswith("${COMPOSE_PROJECT_NAME:-yuxi}-frontend:${YUXI_VERSION:-")
@@ -144,7 +124,7 @@ def test_production_compose_scopes_images_by_project_with_legacy_default() -> No
 
 def test_host_test_runner_probes_current_compose_slot() -> None:
     """测试运行器必须通过 Compose service 探测当前槽位的 readiness。"""
-    source = (_project_root() / "backend/test/run_tests.sh").read_text()
+    source = (project_root() / "backend/test/run_tests.sh").read_text()
 
     assert "docker compose exec -T api curl -fsS http://localhost:5050/api/system/ready" in source
     assert "docker compose exec -T api curl -fsS http://localhost:5050/api/system/health" not in source

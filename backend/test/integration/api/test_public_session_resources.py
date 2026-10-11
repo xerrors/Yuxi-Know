@@ -4,7 +4,7 @@ import uuid
 
 import pytest
 
-from test.integration.api.test_public_agents_key_boundary import delete_created_threads
+from test.integration.api.helpers import delete_created_threads
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 

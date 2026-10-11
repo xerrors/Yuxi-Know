@@ -13,6 +13,8 @@ import yuxi.modules.agents.runtime.sandbox.backend as backend_module
 from yuxi.modules.agents.runtime.sandbox.backend import ProvisionerSandboxBackend
 from yuxi.modules.agents.runtime.middlewares.filesystem import create_agent_filesystem_middleware
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.mark.asyncio
 async def test_native_grep_http_and_model_tool(monkeypatch):

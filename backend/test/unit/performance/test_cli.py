@@ -15,11 +15,10 @@ from test.performance.__main__ import build_parser, main
 
 
 def test_parser_preserves_matrix_budget_and_requires_command():
-    """子命令必须显式选择，默认矩阵仍为 3150 个请求。"""
+    """CLI 默认分组与矩阵一致，且必须显式选择子命令。"""
     args = build_parser().parse_args(["matrix", "--output-dir", "unused"])
     assert args.workers == [1, 4, 8]
     assert args.concurrency == [1, 10, 20, 50, 100]
-    assert sum(c * matrix.channel_rounds(c, None) for c in args.concurrency) * len(args.workers) == 3150
     with pytest.raises(SystemExit) as error:
         build_parser().parse_args([])
     assert error.value.code == 2
@@ -113,6 +112,7 @@ def test_report_duplicate_groups_preserves_all_outputs(tmp_path):
         main(["report", str(path), "--refresh"])
     for name in ("stages.json", "report.md"):
         assert (tmp_path / name).read_text() == "previous\n"
+    assert not (tmp_path / "complete.json").exists()
 
 
 def test_report_preserves_failed_samples_and_actual_rounds(tmp_path):

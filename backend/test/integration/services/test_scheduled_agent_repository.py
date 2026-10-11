@@ -31,24 +31,7 @@ from yuxi.modules.identity.models import User
 from yuxi.modules.agents.services.input_messages import build_chat_input_message, serialize_input_message
 from yuxi.shared.datetime import utc_now
 
-pytestmark = pytest.mark.integration
-
-
-@pytest.fixture(scope="session", autouse=True)
-def ensure_live_api_schema():
-    """测试在已迁移的隔离 PostgreSQL 中运行。"""
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_knowledge_resources():
-    """本文件仅验证独立 PostgreSQL 中的调度事实。"""
-    yield
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_sandboxes():
-    """调度仓储测试不创建沙盒资源。"""
-    yield
+pytestmark = [pytest.mark.integration, pytest.mark.self_managed_resources]
 
 
 @pytest.mark.asyncio

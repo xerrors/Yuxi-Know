@@ -5,7 +5,9 @@ from datetime import timedelta
 import pytest
 import pytest_asyncio
 from fastapi import HTTPException
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker
+
+from test.support.sqlite import create_utc_sqlite_engine
 
 from yuxi.api.routers.identity.auth import delete_user
 from yuxi.api.routers.identity.users import APIKeyCreate, create_api_key, get_accessible_api_key
@@ -44,7 +46,7 @@ class _FakeApiKeySession:
 
 @pytest_asyncio.fixture()
 async def session():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    engine = create_utc_sqlite_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)

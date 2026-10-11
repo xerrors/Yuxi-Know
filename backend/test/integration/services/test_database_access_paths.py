@@ -5,27 +5,11 @@ import json
 import pytest
 from sqlalchemy import text
 
-from test_schema_migration_version import _create_isolated_manager, _drop_isolated_schema
+from test.integration.support.postgres_schema import create_isolated_manager as _create_isolated_manager
+from test.integration.support.postgres_schema import drop_isolated_schema as _drop_isolated_schema
 from yuxi.migrations.schema import create_business_tables, create_knowledge_tables, ensure_business_schema
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
-
-
-@pytest.fixture(scope="session", autouse=True)
-def ensure_live_api_schema():
-    """只使用隔离数据集，不依赖线上行数。"""
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_knowledge_resources():
-    """独立 Schema 拥有全部资源。"""
-    yield
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_sandboxes():
-    """本测试不创建沙盒。"""
-    yield
+pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
 
 async def test_fresh_schema_has_no_exact_duplicate_physical_indexes():
@@ -56,6 +40,7 @@ async def test_fresh_schema_has_no_exact_duplicate_physical_indexes():
 
 async def test_queue_history_and_membership_indexes_remove_baseline_work():
     """固定两万条合成事实，比较原查询计划与删除目标索引的负向计划。"""
+    # 只比较计划形状与实际行数，不把受 planner 统计影响的估算作为性能门禁。
     schema, admin, engine, manager = await _create_isolated_manager("pytest_access_paths")
     try:
         await create_business_tables(manager)
@@ -116,7 +101,6 @@ async def test_queue_history_and_membership_indexes_remove_baseline_work():
                     ):
                         assert '"Sort"' not in json.dumps(current)
                         assert '"Sort"' in json.dumps(baseline)
-                    print(json.dumps({"index": index, "rows": 20000, "current": current, "without_index": baseline}))
                 finally:
                     await savepoint.rollback()
         # 小型 Session 列表保留原索引；现有 lease/job 复合索引不重复新增。
@@ -130,6 +114,5 @@ async def test_queue_history_and_membership_indexes_remove_baseline_work():
                 raw = await conn.scalar(text("EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) " + query))
                 plan = json.loads(raw) if isinstance(raw, str) else raw
                 assert plan[0]["Plan"]["Actual Rows"] > 0
-                print(json.dumps({"query": query, "plan": plan}))
     finally:
         await _drop_isolated_schema(schema, admin, engine)
