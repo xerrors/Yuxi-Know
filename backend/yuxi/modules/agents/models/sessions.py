@@ -1,7 +1,5 @@
 """业务 PostgreSQL 映射。"""
 
-from typing import Any
-
 from sqlalchemy import (
     JSON,
     Boolean,
@@ -17,7 +15,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from yuxi.infrastructure.postgres.base import BusinessBase as Base
-from yuxi.shared.datetime import format_utc_datetime, utc_now
+from yuxi.shared.datetime import utc_now
 
 UNVIEWED_RUN_MARKER = "__unviewed__"
 
@@ -89,26 +87,3 @@ class Session(Base):
         UniqueConstraint("uid", "creation_request_id", name="uq_sessions_uid_creation_request_id"),
         UniqueConstraint("id", "thread_id", name="uq_sessions_id_thread"),
     )
-
-    def to_dict(self) -> dict[str, Any]:
-        metadata = self.extra_metadata or {}
-        return {
-            "id": self.id,
-            "thread_id": self.thread_id,
-            "session_id": self.thread_id,
-            "tree_root_session_id": self.tree_root_thread_id,
-            "parent_session_id": self.parent_thread_id,
-            "name": self.cooperation_name,
-            "path": self.cooperation_path,
-            "creation_request_id": self.creation_request_id,
-            "uid": self.uid,
-            "agent_id": self.agent_id,
-            "title": self.title,
-            "status": self.status,
-            "queue_paused": bool(self.queue_paused),
-            "is_pinned": bool(self.is_pinned),
-            "project_id": self.project_id,
-            "created_at": format_utc_datetime(self.created_at),
-            "updated_at": format_utc_datetime(self.updated_at),
-            "metadata": metadata,
-        }

@@ -132,20 +132,6 @@ class AgentTurnRepository:
         )
         return result.scalar_one_or_none()
 
-    async def get_latest_for_thread(self, *, thread_id: str, uid: str, app_id: str | None) -> AgentTurn | None:
-        """读取线程最近的整轮事实。"""
-        result = await self.db.execute(
-            select(AgentTurn)
-            .where(
-                AgentTurn.thread_id == thread_id,
-                AgentTurn.uid == uid,
-                AgentTurn.app_id == app_id,
-            )
-            .order_by(AgentTurn.created_at.desc(), AgentTurn.id.desc())
-            .limit(1)
-        )
-        return result.scalar_one_or_none()
-
     async def list_page(
         self,
         *,

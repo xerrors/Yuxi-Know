@@ -196,17 +196,3 @@ class ModelCache:
 
 
 model_cache = ModelCache()
-
-
-def resolve_model_spec(spec: str) -> ModelInfo:
-    """根据 spec 返回 ModelInfo。"""
-    if not spec:
-        raise ValueError("model spec 不能为空")
-
-    info = model_cache.get_model_info(spec)
-    if info:
-        return info
-
-    all_specs = model_cache.get_all_specs()
-    available = [item.spec for item in all_specs[:10]]
-    raise ValueError(f"未找到模型: '{spec}'。可用模型 ({len(all_specs)}): {available}")

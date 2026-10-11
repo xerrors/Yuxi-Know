@@ -1,7 +1,5 @@
 """业务 PostgreSQL 映射。"""
 
-from typing import Any
-
 from sqlalchemy import (
     JSON,
     BigInteger,
@@ -21,7 +19,7 @@ from sqlalchemy.orm import relationship
 
 from yuxi.infrastructure.postgres.base import JSON_VALUE
 from yuxi.infrastructure.postgres.base import BusinessBase as Base
-from yuxi.shared.datetime import format_utc_datetime, utc_now
+from yuxi.shared.datetime import utc_now
 
 MODEL_AUDIT_MESSAGE_TYPE = "model_audit"
 
@@ -111,33 +109,6 @@ class Message(Base):
     agent_session = relationship("Session", back_populates="messages")
     tool_calls = relationship("ToolCall", back_populates="message", cascade="all, delete-orphan")
 
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "id": self.id,
-            "session_record_id": self.session_record_id,
-            "role": self.role,
-            "content": self.content,
-            "message_type": self.message_type,
-            "created_at": format_utc_datetime(self.created_at),
-            "source_input_id": self.source_input_id,
-            "input_position": self.input_position,
-            "received_at": format_utc_datetime(self.received_at),
-            "metadata": self.extra_metadata or {},
-            "image_content": self.image_content,
-            "run_id": self.run_id,
-            "turn_id": self.turn_id,
-            "status": self.delivery_status,
-            "operation_id": self.operation_id,
-            "started_at": format_utc_datetime(self.started_at),
-            "finished_at": format_utc_datetime(self.finished_at),
-            "duration_ms": self.duration_ms,
-            "sequence": self.sequence,
-            "execution_status": self.execution_status,
-            "usage": self.usage,
-            "tool_calls": [tc.to_dict() for tc in self.tool_calls] if self.tool_calls else [],
-        }
-
-
 class ToolCall(Base):
     """ToolCall table - 工具调用表"""
 
@@ -155,16 +126,3 @@ class ToolCall(Base):
 
     # Relationships
     message = relationship("Message", back_populates="tool_calls")
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "id": self.id,
-            "message_id": self.message_id,
-            "langgraph_tool_call_id": self.langgraph_tool_call_id,
-            "tool_name": self.tool_name,
-            "tool_input": self.tool_input or {},
-            "tool_output": self.tool_output,
-            "status": self.status,
-            "error_message": self.error_message,
-            "created_at": format_utc_datetime(self.created_at),
-        }

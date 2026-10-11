@@ -185,16 +185,6 @@ async def get_mcp_tools(
     return await load_mcp_tools(server_slug, config, disabled_tools=disabled_tools, cache=cache, force_refresh=force_refresh)
 
 
-async def get_tools_from_all_servers() -> list[Callable[..., Any]]:
-    """Get all tools from all configured MCP servers."""
-    server_configs = await _load_enabled_mcp_server_configs()
-    all_tools = []
-    for server_slug in server_configs:
-        tools = await get_mcp_tools(server_slug, additional_servers=server_configs)
-        all_tools.extend(tools)
-    return all_tools
-
-
 # =============================================================================
 # === Server Config CRUD ===
 # =============================================================================
@@ -407,18 +397,6 @@ async def get_enabled_mcp_tools(server_slug: str) -> list:
 
     disabled_tools = config.get("disabled_tools") or []
     return await get_mcp_tools(server_slug, additional_servers={server_slug: config}, disabled_tools=disabled_tools)
-
-
-async def get_servers_config(names: list[str]) -> dict[str, dict[str, Any]]:
-    """Batch get server configurations.
-
-    Args:
-        names: List of server names
-
-    Returns:
-        {name: config} dictionary, containing only found servers
-    """
-    return await _load_enabled_mcp_server_configs(names=names)
 
 
 async def get_all_mcp_tools(server_slug: str) -> list:

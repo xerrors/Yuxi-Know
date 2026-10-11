@@ -352,34 +352,6 @@ async def test_get_mcp_tools_rebuilds_cache_when_config_hash_changes(monkeypatch
     mcp_runtime.clear_mcp_cache()
 
 
-async def test_get_tools_from_all_servers_loads_names_from_db_once(monkeypatch):
-    server_configs = {
-        "alpha": {"transport": "streamable_http", "url": "cmd-a", "disabled_tools": []},
-        "beta": {"transport": "streamable_http", "url": "cmd-b", "disabled_tools": []},
-    }
-    calls: list[tuple[str, dict[str, dict]]] = []
-
-    async def fake_load_enabled_mcp_server_configs(*, names=None, db=None):
-        del names, db
-        return server_configs
-
-    async def fake_get_mcp_tools(server_name: str, additional_servers=None, **kwargs):
-        del kwargs
-        calls.append((server_name, additional_servers or {}))
-        return [server_name]
-
-    monkeypatch.setattr(mcp_service, "_load_enabled_mcp_server_configs", fake_load_enabled_mcp_server_configs)
-    monkeypatch.setattr(mcp_service, "get_mcp_tools", fake_get_mcp_tools)
-
-    tools = await mcp_service.get_tools_from_all_servers()
-
-    assert tools == ["alpha", "beta"]
-    assert calls == [
-        ("alpha", server_configs),
-        ("beta", server_configs),
-    ]
-
-
 async def test_get_mcp_tools_sets_handle_tool_error(monkeypatch):
     mcp_runtime.clear_mcp_cache()
 

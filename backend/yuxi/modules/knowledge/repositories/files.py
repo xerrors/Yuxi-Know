@@ -111,12 +111,6 @@ class KnowledgeFileRepository:
             sanitized["updated_at"] = utc_now()
         return sanitized
 
-    async def get_all(self) -> list[KnowledgeFile]:
-        """获取所有文件记录"""
-        async with pg_manager.get_async_session_context() as session:
-            result = await session.execute(select(KnowledgeFile).where(KnowledgeFile.deleted_at.is_(None)))
-            return list(result.scalars().all())
-
     async def get_by_file_id(self, file_id: str, *, include_deleted: bool = False) -> KnowledgeFile | None:
         filters = [KnowledgeFile.file_id == file_id]
         if not include_deleted:
@@ -124,23 +118,6 @@ class KnowledgeFileRepository:
         async with pg_manager.get_async_session_context() as session:
             result = await session.execute(select(KnowledgeFile).where(*filters))
             return result.scalar_one_or_none()
-
-    async def list_by_file_ids(self, file_ids: list[str]) -> list[KnowledgeFile]:
-        normalized_ids = [file_id for file_id in file_ids if file_id]
-        if not normalized_ids:
-            return []
-
-        records_by_id: dict[str, KnowledgeFile] = {}
-        async with pg_manager.get_async_session_context() as session:
-            for batch in self._iter_batches(normalized_ids):
-                result = await session.execute(
-                    select(KnowledgeFile).where(
-                        KnowledgeFile.file_id.in_(batch),
-                        KnowledgeFile.deleted_at.is_(None),
-                    )
-                )
-                records_by_id.update({record.file_id: record for record in result.scalars().all()})
-        return [records_by_id[file_id] for file_id in normalized_ids if file_id in records_by_id]
 
     async def list_active_generations(self, kb_id: str) -> list[tuple[str, int]]:
         """只读取可见文件的 active 代次，供向量库在截取 top-k 前过滤。"""
@@ -160,26 +137,6 @@ class KnowledgeFileRepository:
     async def list_by_kb_id(self, kb_id: str) -> list[KnowledgeFile]:
         async with pg_manager.get_async_session_context() as session:
             result = await session.execute(select(KnowledgeFile).where(KnowledgeFile.kb_id == kb_id, KnowledgeFile.deleted_at.is_(None)))
-            return list(result.scalars().all())
-
-    async def list_by_kb_id_after(
-        self,
-        kb_id: str,
-        *,
-        after_file_id: str | None = None,
-        limit: int = 500,
-        files_only: bool = False,
-    ) -> list[KnowledgeFile]:
-        filters = [KnowledgeFile.kb_id == kb_id, KnowledgeFile.deleted_at.is_(None)]
-        if after_file_id:
-            filters.append(KnowledgeFile.file_id > after_file_id)
-        if files_only:
-            filters.append(KnowledgeFile.is_folder.is_(False))
-
-        async with pg_manager.get_async_session_context() as session:
-            result = await session.execute(
-                select(KnowledgeFile).where(*filters).order_by(KnowledgeFile.file_id.asc()).limit(min(max(int(limit or 100), 1), 1000))
-            )
             return list(result.scalars().all())
 
     async def search_files(

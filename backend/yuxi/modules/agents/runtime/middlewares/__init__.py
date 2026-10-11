@@ -1,4 +1,3 @@
-from yuxi.modules.agents.runtime.middlewares.context import context_aware_prompt, context_based_model
 from yuxi.modules.agents.runtime.middlewares.memory import create_memory_middleware
 from yuxi.modules.agents.runtime.middlewares.model_input import ImageInputCompatibilityMiddleware
 from yuxi.modules.agents.runtime.middlewares.network_retry import NetworkRetryMiddleware
@@ -16,8 +15,6 @@ __all__ = [
     "SteerMiddleware",
     "TokenUsageMiddleware",
     "ToolErrorGuardMiddleware",
-    "context_aware_prompt",
-    "context_based_model",
     "create_memory_middleware",
     "create_summary_middleware",
     "create_summary_middleware_from_context",

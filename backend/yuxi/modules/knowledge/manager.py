@@ -1051,16 +1051,6 @@ class KnowledgeBaseManager:
         kb_instance = await self.get_kb_executor(kb_id)
         return await kb_instance.get_file_info(kb_id, file_id)
 
-    async def list_file_tree(
-        self,
-        kb_id: str,
-        parent_id: str | None = None,
-        recursive: bool = False,
-        files_only: bool = False,
-    ) -> dict:
-        kb_instance = await self.get_kb_executor(kb_id)
-        return await kb_instance.list_file_tree(kb_id, parent_id, recursive, files_only)
-
     async def get_file_download(self, kb_id: str, file_id: str, variant: str = "original") -> dict:
         await self._require_kb_supports_documents(kb_id, "download")
         kb_instance = await self.get_kb_executor(kb_id)

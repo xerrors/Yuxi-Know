@@ -134,16 +134,6 @@ class ReadOnlyConnectors(KnowledgeBase):
     async def get_file_info(self, kb_id: str, file_id: str) -> dict:
         raise self._readonly_error()
 
-    async def list_file_tree(
-        self,
-        kb_id: str,
-        parent_id: str | None = None,
-        recursive: bool = False,
-        files_only: bool = False,
-    ) -> dict:
-        del kb_id, parent_id, recursive, files_only
-        raise ValueError("只读检索连接器不支持文件树预览")
-
     async def get_file_download(self, kb_id: str, file_id: str, variant: str = "original") -> dict:
         del kb_id, file_id, variant
         raise ValueError("只读检索连接器不支持文件下载")

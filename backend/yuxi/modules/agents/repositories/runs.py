@@ -150,28 +150,6 @@ class AgentRunRepository:
         )
         return result.scalar_one_or_none()
 
-    async def get_active_run_by_runtime_scope_for_user(
-        self,
-        *,
-        runtime_scope_id: str,
-        uid: str,
-    ) -> AgentRun | None:
-        """读取共享同一 runtime 的任意未终态 Run。"""
-        result = await self.db.execute(
-            select(AgentRun)
-            .where(
-                AgentRun.runtime_scope_id == str(runtime_scope_id),
-                AgentRun.uid == str(uid),
-                or_(
-                    AgentRun.status.notin_(TERMINAL_RUN_STATUSES),
-                    AgentRun.runtime_cleanup_pending.is_(True),
-                ),
-            )
-            .order_by(AgentRun.created_at.desc(), AgentRun.id.desc())
-            .limit(1)
-        )
-        return result.scalar_one_or_none()
-
     async def create_run(
         self,
         *,

@@ -604,7 +604,6 @@ async def test_langchain_chat_adapter_preserves_call_response_contract():
     response = await adapter.call([{"role": "user", "content": "Say hello"}], stream=False)
 
     assert response.content == "hello"
-    assert response.is_full is False
     assert type(captured["messages"][0]).__name__ == "HumanMessage"
 
 

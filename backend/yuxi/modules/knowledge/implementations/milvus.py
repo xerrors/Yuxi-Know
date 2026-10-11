@@ -38,7 +38,6 @@ from yuxi.modules.system.options import system_options
 from yuxi.shared.datetime import utc_isoformat
 from yuxi.shared.hashing import hashstr
 
-MILVUS_AVAILABLE = True
 CONTENT_SPARSE_FIELD = "content_sparse"
 CONTENT_ANALYZER_PARAMS = {"type": "chinese"}
 VECTOR_METRIC_TYPE = "COSINE"
@@ -330,9 +329,6 @@ class MilvusKB(KnowledgeBase):
             **kwargs: 其他配置参数
         """
         super().__init__(work_dir)
-
-        if not MILVUS_AVAILABLE:
-            raise ImportError("pymilvus is not installed. Please install it with: pip install pymilvus")
 
         # Milvus 配置
         # self.milvus_host = kwargs.get('milvus_host', os.getenv('MILVUS_HOST', 'localhost'))

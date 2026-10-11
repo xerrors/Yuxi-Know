@@ -30,28 +30,6 @@ def _event_stream_key(run_id: str) -> str:
     return f"run:events:v2:{run_id}"
 
 
-def _is_valid_stream_seq(value: str) -> bool:
-    """识别 Redis Stream 游标。"""
-    major, sep, minor = value.partition("-")
-    if sep != "-":
-        return False
-    return major.isdigit() and minor.isdigit()
-
-
-def normalize_after_seq(after_seq: str | None) -> str:
-    """将无效或缺失游标归一到事件流起点。"""
-    if after_seq is None:
-        return "0-0"
-
-    text = str(after_seq).strip()
-    if not text:
-        return "0-0"
-
-    if _is_valid_stream_seq(text):
-        return text
-    return "0-0"
-
-
 async def get_redis_client():
     """取得当前进程共用的短期传输连接。"""
     return await get_async_redis_client()
@@ -201,17 +179,6 @@ async def list_recent_run_stream_events(run_id: str, *, limit: int = 100) -> lis
         if event is not None:
             events.append(event)
     return events
-
-
-async def get_last_run_stream_seq(run_id: str) -> str:
-    """读取当前 Run 最新事件游标。"""
-    redis = await get_redis_client()
-    key = _event_stream_key(run_id)
-    rows = await redis.xrevrange(key, max="+", min="-", count=1)
-    if not rows:
-        return "0-0"
-    event_id, _ = rows[0]
-    return str(event_id)
 
 
 async def close_queue_clients() -> None:

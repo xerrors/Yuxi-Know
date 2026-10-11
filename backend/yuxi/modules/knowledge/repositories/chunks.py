@@ -154,11 +154,6 @@ class KnowledgeChunkRepository:
             result = await session.execute(delete(KnowledgeChunk).where(*filters))
             return int(result.rowcount or 0)
 
-    async def delete_by_kb_id(self, kb_id: str) -> int:
-        async with pg_manager.get_async_session_context() as session:
-            result = await session.execute(delete(KnowledgeChunk).where(KnowledgeChunk.kb_id == kb_id))
-            return int(result.rowcount or 0)
-
     async def count_by_kb_id(self, kb_id: str) -> int:
         return await self._count_by_kb_id(kb_id)
 
@@ -295,21 +290,6 @@ class KnowledgeChunkRepository:
                     }
                 )
             )
-
-    async def mark_graph_indexed(
-        self,
-        chunk_id: str,
-        ent_ids: list[str] | None = None,
-        tags: list[str] | None = None,
-    ) -> None:
-        values: dict[str, Any] = {"graph_indexed": True}
-        if ent_ids is not None:
-            values["ent_ids"] = ent_ids
-        if tags is not None:
-            values["tags"] = tags
-
-        async with pg_manager.get_async_session_context() as session:
-            await session.execute(update(KnowledgeChunk).where(KnowledgeChunk.chunk_id == chunk_id).values(**values))
 
     async def mark_graph_structure_indexed(self, chunk_id: str, ent_ids: list[str]) -> None:
         async with pg_manager.get_async_session_context() as session:

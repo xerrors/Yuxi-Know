@@ -42,25 +42,6 @@ def is_builtin_agent(agent: Agent) -> bool:
     return bool(getattr(agent, "is_builtin", False)) or agent.slug == DEFAULT_AGENT_SLUG
 
 
-def get_allowed_agent_access_levels(user: User) -> list[str]:
-    if user.role in ADMIN_ROLES:
-        return ["global", "department", "user"]
-    return ["user"]
-
-
-def normalize_agent_share_config(
-    share_config: dict | None,
-    *,
-    allowed_access_levels: Collection[str] | None = None,
-) -> dict:
-    return normalize_permission_config(
-        share_config or DEFAULT_SHARE_CONFIG,
-        allowed_access_levels=allowed_access_levels,
-        unauthorized_access_level_message="当前用户无权使用该智能体共享范围",
-        strict=True,
-    )
-
-
 def user_can_access_agent(user: User, agent: Agent) -> bool:
     return resolve_agent_permission(user, agent) != ResourcePermission.NONE
 

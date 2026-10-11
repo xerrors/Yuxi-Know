@@ -12,7 +12,7 @@ runtime 包重导出多个不同域的函数，空 chatbot main 伪装可运行�
 
 ### 实现方案
 
-保留开发文档引用的 BaseAgent、BaseContext、load_chat_model 导出。内建 chatbot 和性能探针从实际 base Owner 导入。删除无源码/测试/文档消费者的 BaseState、resolve_chat_model_spec、get_tool_info、get_enabled_mcp_tools 包重导出；对应实现保持原处。删除空 main 和后台作业 list_all，保留实际使用的有界 list 与 summarize。
+保留开发文档引用的 BaseAgent、BaseContext、load_chat_model 导出。内建 chatbot 和性能探针从实际 base Owner 导入。删除无源码/测试/文档消费者的 BaseState、resolve_chat_model_spec、get_tool_info、get_enabled_mcp_tools 包重导出；模型解析、状态及 MCP 的对应实现保持原处；未消费的工具信息旧实现由[模块死代码清理](./2026-10-12-dead-code-cleanup.md)删除。删除空 main 和后台作业 list_all，保留实际使用的有界 list 与 summarize。
 
 ## 替代方案
 

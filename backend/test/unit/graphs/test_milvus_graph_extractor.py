@@ -146,8 +146,6 @@ def test_llm_graph_extractor_appends_schema_to_fixed_prompt():
 
 
 def test_graph_extractor_factory_supports_only_llm_and_rejects_spacy():
-    assert GraphExtractorFactory.supported_types() == ["llm"]
-
     with pytest.raises(ValueError, match="spacy"):
         GraphExtractorFactory.create("spacy", {"model": "zh_core_web_sm"})
 

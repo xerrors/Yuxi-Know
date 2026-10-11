@@ -830,18 +830,6 @@ async def test_failed_session_flush_propagates(session, monkeypatch):
         )
 
 
-async def test_failed_commit_does_not_change_project_binding(session, monkeypatch):
-    monkeypatch.setattr(session, "commit", AsyncMock(side_effect=RuntimeError("commit failure")))
-
-    with pytest.raises(RuntimeError, match="commit failure"):
-        await SessionRepository(session).create_session(
-            uid="user-1",
-            agent_id="main",
-            thread_id="thread-commit-failed",
-            project_id="44444444-4444-4444-8444-444444444444",
-        )
-
-
 async def test_outer_transaction_rollback_removes_new_session(session):
     await SessionRepository(session).add_session(
         uid="user-1",

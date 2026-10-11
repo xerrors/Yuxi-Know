@@ -20,7 +20,3 @@ class GraphExtractorFactory:
         extractor = extractor_class(options or {})
         extractor.validate_options()
         return extractor
-
-    @classmethod
-    def supported_types(cls) -> list[str]:
-        return list(cls._registry.keys())

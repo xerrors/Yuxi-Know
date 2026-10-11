@@ -7,7 +7,7 @@ import pytest
 from yuxi.modules.knowledge import preview
 from yuxi.shared.files import MAX_FILE_PREVIEW_BYTES
 from yuxi.infrastructure.minio import ObjectSizeLimitError
-from test.unit.support.knowledge import FakeKnowledgeBase, make_knowledge_file_record
+from test.unit.support.knowledge import make_knowledge_file_record
 
 
 class FakeMinioClient:
@@ -60,22 +60,6 @@ def stub_file_record(monkeypatch: pytest.MonkeyPatch, record: SimpleNamespace) -
         "KnowledgeFileRepository",
         lambda: SimpleNamespace(get_by_file_id=get_by_file_id),
     )
-
-
-def test_office_file_entry_exposes_logical_file_availability(tmp_path) -> None:
-    kb = FakeKnowledgeBase(str(tmp_path))
-    file_meta = {
-        "file_id": "file1",
-        "kb_id": "db1",
-        "filename": "demo.docx",
-        "path": "minio://knowledgebases/db1/upload/demo.docx",
-        "status": "parsed",
-    }
-
-    entry = kb._knowledge_file_entry("db1", "file1", file_meta)
-
-    assert "preview_modes" not in entry
-    assert "default_preview_mode" not in entry
 
 
 @pytest.mark.asyncio

@@ -7,8 +7,6 @@ ToolApprovalMode = Literal["default", "always_trust"]
 
 DEFAULT_TOOL_APPROVAL_MODE: ToolApprovalMode = "default"
 TOOL_APPROVAL_MODES = frozenset({"default", "always_trust"})
-# 主、子 Agent 默认审批模式在自身 Turn 中拦截的敏感工具。
-SENSITIVE_BACKEND_TOOLS = frozenset({"write_file", "edit_file", "execute"})
 _ALLOWED_DECISIONS = ["approve", "reject"]
 
 

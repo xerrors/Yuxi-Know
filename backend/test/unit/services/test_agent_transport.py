@@ -101,7 +101,6 @@ async def test_run_stream_event_roundtrip(monkeypatch: pytest.MonkeyPatch):
     events = await transport.list_run_stream_events(run_id, after_seq="0-0", limit=100)
     assert events == [{"seq": seq1, "event": first}, {"seq": seq2, "event": second}]
     assert (await transport.list_run_stream_events(run_id, after_seq=seq1))[0]["event"]["event_id"] == "logical-2"
-    assert await transport.get_last_run_stream_seq(run_id) == seq2
     assert [row["event"] for row in await transport.list_recent_run_stream_events(run_id)] == [second, first]
 
 
@@ -122,13 +121,6 @@ async def test_run_stream_event_decoder_drops_malformed_legacy_payload(monkeypat
         await transport.list_run_stream_events("run-legacy")
     with pytest.raises(ValueError):
         await transport.list_recent_run_stream_events("run-legacy")
-
-
-def test_normalize_after_seq_stream_id_only():
-    assert transport.normalize_after_seq(None) == "0-0"
-    assert transport.normalize_after_seq("1700000000000-3") == "1700000000000-3"
-    assert transport.normalize_after_seq("12") == "0-0"
-    assert transport.normalize_after_seq("bad-value") == "0-0"
 
 
 @pytest.mark.asyncio

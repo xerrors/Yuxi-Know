@@ -92,14 +92,13 @@ async def test_user_page_filters_before_pagination_and_excludes_deleted_users(us
     assert all(row[0].is_deleted == 0 for row in rows)
 
 
-async def test_soft_delete_tombstones_all_api_keys_without_rewriting_history(user_session) -> None:
-    """通用软删除入口也必须阻止旧请求复活凭据。"""
+async def test_admin_delete_preserves_existing_api_key_tombstones(user_session) -> None:
+    """管理员删除停用凭据并保留已有撤销时间。"""
 
     session, user, keys, previous_revocation = user_session
 
-    deleted = await UserRepository(session).soft_delete(user.id, username=user.username)
+    await UserRepository(session).delete_for_admin(user)
 
-    assert deleted is True
     assert user.is_deleted == 1
     assert keys[0].is_enabled is False
     assert keys[0].revoked_at is not None
@@ -134,8 +133,6 @@ async def test_user_page_defaults_to_humans_and_filters_kind_before_counting(use
     assert total == 2
     assert [row[0].id for row in rows] == [end_user.id]
 
-    assert [item.id for item in await repo.list_users(skip=1, limit=1)] == [human.id]
-    assert [item.id for item in await repo.list_users(skip=2, limit=1)] == []
     assert [row[0].id for row in await repo.list_with_department(skip=1, limit=1)] == [human.id]
     assert [row[0].id for row in await repo.list_with_department(skip=2, limit=1)] == []
     assert await repo.count() == 2

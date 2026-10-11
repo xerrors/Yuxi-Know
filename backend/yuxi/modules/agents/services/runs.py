@@ -185,17 +185,6 @@ async def get_run_snapshot(*, db: AsyncSession, scope: ActorScope, thread_id: st
     return result
 
 
-async def get_run_langfuse_link(*, db: AsyncSession, scope: ActorScope, thread_id: str, run_id: str) -> dict:
-    """按根 Thread 作用域解析同一 Turn 的 Langfuse trace 链接。"""
-    snapshot = await get_run_snapshot(db=db, scope=scope, thread_id=thread_id, run_id=run_id)
-    if not snapshot.get("langfuse_trace_id"):
-        return {"run_id": run_id, "available": False, "reason": "trace_not_available"}
-    url = snapshot.get("langfuse_url")
-    if not url:
-        return {"run_id": run_id, "available": False, "reason": "langfuse_unavailable"}
-    return {"run_id": run_id, "available": True, "url": url}
-
-
 async def _consume_steer(*, db: AsyncSession, agent_session: Session, turn: AgentTurn, previous: AgentRun, pending) -> str:
     """消费 Thread 优先批次，在当前 Turn 建立下一执行段。"""
     input_repo = AgentInputRepository(db)

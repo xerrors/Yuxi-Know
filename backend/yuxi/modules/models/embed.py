@@ -9,7 +9,6 @@ import requests
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.modules.models.providers.cache import model_cache
 from yuxi.modules.models.utils import get_docker_safe_url
-from yuxi.shared.hashing import hashstr
 
 EMBEDDING_RATE_LIMIT_MAX_RETRIES = 10
 EMBEDDING_TRANSIENT_MAX_RETRIES = 2
@@ -35,7 +34,6 @@ class BaseEmbeddingModel(ABC):
         self.base_url = get_docker_safe_url(base_url)
         self.api_key = os.getenv(api_key, api_key)
         self.batch_size = int(batch_size or 40)
-        self.embed_state = {}
 
     @abstractmethod
     def encode(self, message: list[str] | str) -> list[list[float]]:
@@ -54,42 +52,24 @@ class BaseEmbeddingModel(ABC):
     def batch_encode(self, messages: list[str], batch_size: int | None = None) -> list[list[float]]:
         batch_size = batch_size or self.batch_size
         data = []
-        task_id = None
-        if len(messages) > batch_size:
-            task_id = hashstr(messages)
-            self.embed_state[task_id] = {"status": "in-progress", "total": len(messages), "progress": 0}
 
         for i in range(0, len(messages), batch_size):
             group_msg = messages[i : i + batch_size]
             logger.info(f"Encoding [{i}/{len(messages)}] messages (bsz={batch_size})")
             response = self.encode(group_msg)
             data.extend(response)
-            if task_id:
-                self.embed_state[task_id]["progress"] = i + len(group_msg)
-
-        if task_id:
-            self.embed_state[task_id]["status"] = "completed"
 
         return data
 
     async def abatch_encode(self, messages: list[str], batch_size: int | None = None) -> list[list[float]]:
         batch_size = batch_size or self.batch_size
         data = []
-        task_id = None
-        if len(messages) > batch_size:
-            task_id = hashstr(messages)
-            self.embed_state[task_id] = {"status": "in-progress", "total": len(messages), "progress": 0}
 
         for i in range(0, len(messages), batch_size):
             group_msg = messages[i : i + batch_size]
             logger.info(f"Async encoding [{i}/{len(messages)}] messages (bsz={batch_size})")
             res = await self.aencode(group_msg)
             data.extend(res)
-            if task_id:
-                self.embed_state[task_id]["progress"] = i + len(group_msg)
-
-        if task_id:
-            self.embed_state[task_id]["status"] = "completed"
 
         return data
 

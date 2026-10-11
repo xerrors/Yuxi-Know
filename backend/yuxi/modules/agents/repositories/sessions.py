@@ -152,30 +152,6 @@ class SessionRepository:
         logger.info(f"Created agent_session: {agent_session.thread_id} for user {uid}")
         return agent_session
 
-    async def create_session(
-        self,
-        uid: str,
-        agent_id: str,
-        project_id: str,
-        title: str | None = None,
-        thread_id: str | None = None,
-        metadata: dict | None = None,
-        creation_request_id: str | None = None,
-    ) -> Session:
-        """创建并提交一个完整对话，适用于不需要外层事务编排的入口。"""
-        agent_session = await self.add_session(
-            uid=uid,
-            agent_id=agent_id,
-            title=title,
-            thread_id=thread_id,
-            metadata=metadata,
-            project_id=project_id,
-            creation_request_id=creation_request_id,
-        )
-        await self.db.commit()
-        await self.db.refresh(agent_session)
-        return agent_session
-
     async def public_facts(self, sessions, *, uid, app_id) -> list[tuple]:
         """批量读取资源事实，列表、搜索和详情共享同一查询集合。"""
         from yuxi.modules.agents.models.runs import AGENT_RUN_TERMINAL_STATUSES

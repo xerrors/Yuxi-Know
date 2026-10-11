@@ -60,22 +60,6 @@ class FakeFileRepository:
     async def list_by_kb_id(self, kb_id: str):
         return [record for record in self.records.values() if record.kb_id == kb_id]
 
-    async def list_by_kb_id_after(
-        self,
-        kb_id: str,
-        *,
-        after_file_id: str | None = None,
-        limit: int = 500,
-        files_only: bool = False,
-    ):
-        records = [
-            record
-            for record in self.records.values()
-            if record.kb_id == kb_id and (not after_file_id or record.file_id > after_file_id) and (not files_only or not record.is_folder)
-        ]
-        records.sort(key=lambda record: record.file_id)
-        return records[:limit]
-
     async def update_fields(self, *, file_id: str, data: dict, kb_id: str | None = None):
         record = self.records.get(file_id)
         if record is None or (kb_id and record.kb_id != kb_id):

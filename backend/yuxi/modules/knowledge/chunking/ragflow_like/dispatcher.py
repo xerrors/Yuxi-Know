@@ -72,8 +72,3 @@ def chunk_markdown(markdown_content: str, file_id: str, filename: str, processin
 
     text_chunks = _dispatch_markdown_parser(preset_id, filename, markdown_content, parser_config)
     return _build_chunk_records(text_chunks, file_id, filename, markdown_content)
-
-
-def chunk_file(file_content: str, file_id: str, filename: str, processing_params: dict[str, Any]) -> list[dict[str, Any]]:
-    # 当前链路中入库前均已转换为 markdown，因此与 chunk_markdown 保持同实现。
-    return chunk_markdown(file_content, file_id, filename, processing_params)
