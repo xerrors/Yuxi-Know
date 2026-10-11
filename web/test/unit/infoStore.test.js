@@ -65,3 +65,57 @@ test('品牌配置合并并发读取，成功缓存，失败与强制刷新可�
     await server.close()
   }
 })
+
+test('品牌配置写入标签页标题，组织名缺失时回退到默认品牌', async (t) => {
+  const previousDocument = globalThis.document
+  globalThis.document = { title: '' }
+  const server = await createServer({
+    server: { middlewareMode: true, hmr: false },
+    appType: 'custom'
+  })
+  setActivePinia(createPinia())
+  try {
+    const { useInfoStore } = await server.ssrLoadModule('/src/stores/info.js')
+    const { brandApi } = await server.ssrLoadModule('/src/apis/system_api.js')
+    const store = useInfoStore()
+    const pending = []
+    t.mock.method(brandApi, 'getInfoConfig', () => new Promise((resolve) => pending.push(resolve)))
+
+    const configured = store.loadInfoConfig(true)
+    pending[0]({ success: true, data: { organization: { name: '睿狐' } } })
+    await configured
+    assert.equal(globalThis.document.title, '睿狐 - Knowledge Management')
+
+    const fallback = store.loadInfoConfig(true)
+    pending[1]({ success: true, data: { branding: { name: 'Smartfox' } } })
+    await fallback
+    assert.equal(globalThis.document.title, '睿狐 - Knowledge Management')
+  } finally {
+    await server.close()
+    if (previousDocument === undefined) delete globalThis.document
+    else globalThis.document = previousDocument
+  }
+})
+
+test('品牌配置读取失败时不覆盖静态标签页标题', async (t) => {
+  const previousDocument = globalThis.document
+  globalThis.document = { title: '睿狐 - Knowledge Management' }
+  const server = await createServer({
+    server: { middlewareMode: true, hmr: false },
+    appType: 'custom'
+  })
+  setActivePinia(createPinia())
+  try {
+    const { useInfoStore } = await server.ssrLoadModule('/src/stores/info.js')
+    const { brandApi } = await server.ssrLoadModule('/src/apis/system_api.js')
+    const store = useInfoStore()
+    t.mock.method(brandApi, 'getInfoConfig', async () => ({ success: false }))
+
+    assert.equal(await store.loadInfoConfig(true), null)
+    assert.equal(globalThis.document.title, '睿狐 - Knowledge Management')
+  } finally {
+    await server.close()
+    if (previousDocument === undefined) delete globalThis.document
+    else globalThis.document = previousDocument
+  }
+})

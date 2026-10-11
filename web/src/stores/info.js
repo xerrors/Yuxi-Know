@@ -52,6 +52,10 @@ export const useInfoStore = defineStore('info', () => {
   function setInfoConfig(newConfig) {
     infoConfig.value = newConfig
     isLoaded.value = true
+    // 标签页标题跟随品牌配置；SSR 单测无 document，与 localStorage 读取同样降级跳过。
+    if (typeof document !== 'undefined') {
+      document.title = `${newConfig.organization?.name || '睿狐'} - Knowledge Management`
+    }
   }
 
   function setDebugMode(enabled) {

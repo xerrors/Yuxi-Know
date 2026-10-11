@@ -3,14 +3,14 @@
 
 # 组织信息
 organization:
-  name: "语析"               # 完整组织名称
+  name: "睿狐"               # 完整组织名称
   logo: "/favicon.svg"       # Logo文件路径（放在 web/public 目录下）
   avatar: "/favicon.svg"      # 头像文件路径（放在 web/public 目录下）
   login_bg: "/login-bg.jpg"  # 登录背景图片路径（放在 web/public 目录下）
 
 # 项目信息
 branding:
-  name: "Yuxi"
+  name: "Smartfox"
   title: "让团队知识可连接，让智能体可行动"     # 系统标题
   subtitle: "知识库 × 知识图谱 × 智能体 Harness，开源且可私有部署"   # 副标题（subtitles 为空时使用）
   subtitles:
@@ -21,6 +21,6 @@ branding:
 
 # 页脚信息
 footer:
-  copyright: "© 语析 2026 v{{YUXI_VERSION}}"
+  copyright: "© 睿狐 2026 v{{YUXI_VERSION}}"
   user_agreement_url: "/protocols/user-agreement.template.html"
   privacy_policy_url: "/protocols/privacy-policy.template.html"

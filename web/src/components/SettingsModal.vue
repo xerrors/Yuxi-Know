@@ -266,8 +266,6 @@ const handleClose = () => {
   emit('close')
 }
 
-onMounted(() => {})
-
 watch(
   () => [props.visible, props.initialTab],
   ([newVal]) => {
