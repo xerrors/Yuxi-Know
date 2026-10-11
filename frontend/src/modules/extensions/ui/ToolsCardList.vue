@@ -44,6 +44,7 @@
         :subtitle="getToolSlug(tool)"
         :description="tool.description || '无描述'"
         :default-icon="getToolIcon(getToolSlug(tool)) || WrenchIcon"
+        :icon-color="getExtensionIconColor(tool.id || getToolSlug(tool), themeStore.isDark)"
         :tags="toolTags(tool)"
         @click="selectTool(tool)"
       >
@@ -125,12 +126,15 @@ import { message } from 'ant-design-vue'
 import { Wrench, RefreshCw, FileText, Tag, Tags, List } from '@lucide/vue'
 import { toolApi } from '@/apis/tool_api'
 import { getToolIcon } from '@/modules/session/ui/tools/toolRegistry'
+import { getExtensionIconColor } from '@/modules/extensions/model/extensionIconColor'
+import { useThemeStore } from '@/shared/model/theme'
 import ExtensionCardGrid from './ExtensionCardGrid.vue'
 import InfoCard from '@/shared/ui/InfoCard.vue'
 import PageShoulder from '@/shared/ui/PageShoulder.vue'
 import { formatExtensionCardTitle } from '@/modules/extensions/model/extensionDisplayName'
 
 const WrenchIcon = Wrench
+const themeStore = useThemeStore()
 
 const loading = ref(false)
 const searchQuery = ref('')

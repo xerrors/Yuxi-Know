@@ -1,6 +1,5 @@
 <template>
   <div
-    ref="previewRef"
     v-bind="$attrs"
     :class="[
       'yk-markdown-preview',
@@ -13,18 +12,21 @@
     @focusin="handleReferenceEnter"
     @focusout="scheduleReferenceClose"
     @keydown="handleReferenceKeydown"
-  ></div>
-  <ReferenceSourcePopover
-    v-if="referencePreview"
-    ref="referencePopover"
-    :anchor="referencePreview.anchor"
-    :citations="referencePreview.citations"
-    :preview-id="referencePreviewId"
-    @keep-open="cancelReferenceClose"
-    @leave="scheduleReferenceClose"
-    @close="closeReferencePreview"
-    @open="openReference"
-  />
+  >
+    <!-- 单根承接调用方 scoped 样式；正文替换只操作独立容器，保留 Vue 浮层。 -->
+    <div ref="previewRef"></div>
+    <ReferenceSourcePopover
+      v-if="referencePreview"
+      ref="referencePopover"
+      :anchor="referencePreview.anchor"
+      :citations="referencePreview.citations"
+      :preview-id="referencePreviewId"
+      @keep-open="cancelReferenceClose"
+      @leave="scheduleReferenceClose"
+      @close="closeReferencePreview"
+      @open="openReference"
+    />
+  </div>
 </template>
 
 <script setup>

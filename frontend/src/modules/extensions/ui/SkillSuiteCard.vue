@@ -1,7 +1,16 @@
 <template>
   <button type="button" class="skill-suite-card" @click="$emit('open', suite)">
     <div class="suite-card-head">
-      <div class="suite-card-icon"><Boxes :size="18" /></div>
+      <div
+        class="suite-card-icon"
+        :class="{
+          'suite-card-icon-colored': iconColor,
+          'suite-card-icon-bordered': iconBorder
+        }"
+        :style="iconColor ? { '--suite-icon-color': iconColor } : undefined"
+      >
+        <Boxes :size="18" />
+      </div>
       <div class="suite-card-title-group">
         <div class="suite-card-title">{{ suite.name }}</div>
         <div class="suite-card-provider">{{ suite.provider }}</div>
@@ -26,6 +35,8 @@ import { Boxes, ChevronRight } from '@lucide/vue'
 
 const props = defineProps({
   suite: { type: Object, required: true },
+  iconColor: { type: String, default: '' },
+  iconBorder: { type: Boolean, default: false },
   installedSlugs: { type: Array, default: () => [] }
 })
 
@@ -88,6 +99,16 @@ const statusText = computed(() => {
   border-radius: 8px;
   background: var(--gray-100);
   color: var(--gray-700);
+
+  &-colored {
+    background: color-mix(in srgb, var(--suite-icon-color) 7%, var(--gray-0));
+    color: var(--suite-icon-color);
+  }
+
+  &-bordered {
+    border: 1px solid
+      color-mix(in srgb, var(--suite-icon-color, var(--gray-700)) 24%, var(--gray-150));
+  }
 }
 
 .suite-card-title-group {

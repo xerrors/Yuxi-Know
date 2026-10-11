@@ -98,6 +98,7 @@
             <SkillSuiteCard
               v-if="skill.isSuite"
               :suite="skill"
+              :icon-color="getExtensionIconColor(skill.id || skill.slug, themeStore.isDark)"
               :installed-slugs="[...installedPersonalSkillKeys]"
               @open="openRecommendedSuite"
             />
@@ -120,6 +121,7 @@
                 :description="skill.description || '暂无描述'"
                 :tags="skillCardTags(skill)"
                 :default-icon="getSkillIcon(skill.slug)"
+                :icon-color="getExtensionIconColor(skill.id || skill.slug, themeStore.isDark)"
                 @click="handleCardClick(skill)"
                 :class="{ 'card-clickable-select': isBatchDeleteMode }"
               >
@@ -527,6 +529,10 @@ import MarkdownPreview from '@/modules/workspace/ui/MarkdownPreview.vue'
 import { formatExtensionCardTitle } from '@/modules/extensions/model/extensionDisplayName'
 import { getShareConfigLabel } from '@/modules/agents/model/shareConfig'
 import { getSkillIcon } from '@/shared/lib/skill_icon_utils'
+import { getExtensionIconColor } from '@/modules/extensions/model/extensionIconColor'
+import { useThemeStore } from '@/shared/model/theme'
+
+const themeStore = useThemeStore()
 
 const RECOMMENDED_SUITES = [
   {

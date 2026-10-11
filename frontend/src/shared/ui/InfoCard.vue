@@ -9,7 +9,14 @@
   >
     <template v-if="variant === 'mini'">
       <div class="info-card-mini-row">
-        <div class="info-card-icon">
+        <div
+          class="info-card-icon"
+          :class="{
+            'info-card-icon-colored': iconColor,
+            'info-card-icon-bordered': iconBorder
+          }"
+          :style="iconColor ? { '--info-card-icon-color': iconColor } : undefined"
+        >
           <slot name="icon">
             <component :is="defaultIcon" v-if="defaultIcon" :size="16" />
           </slot>
@@ -47,7 +54,14 @@
 
     <template v-else>
       <div class="info-card-header">
-        <div class="info-card-icon">
+        <div
+          class="info-card-icon"
+          :class="{
+            'info-card-icon-colored': iconColor,
+            'info-card-icon-bordered': iconBorder
+          }"
+          :style="iconColor ? { '--info-card-icon-color': iconColor } : undefined"
+        >
           <slot name="icon">
             <component :is="defaultIcon" v-if="defaultIcon" :size="16" />
           </slot>
@@ -149,6 +163,8 @@ const props = defineProps({
   info: { type: Array, default: () => [] },
   disabled: { type: Boolean, default: false },
   defaultIcon: { type: [Object, String, Function], default: () => Plug },
+  iconColor: { type: String, default: '' },
+  iconBorder: { type: Boolean, default: false },
   tags: { type: Array, default: () => [] },
   status: { type: Object, default: null },
   actionLabel: { type: String, default: '' },
@@ -211,7 +227,6 @@ const normalizedTags = computed(() => {
     height: 32px;
     border-radius: 7px;
     background: var(--gray-50);
-    border: 1px solid var(--gray-150);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -224,6 +239,16 @@ const normalizedTags = computed(() => {
       width: 20px;
       height: 20px;
       object-fit: contain;
+    }
+
+    &-colored {
+      color: var(--info-card-icon-color);
+      background: color-mix(in srgb, var(--info-card-icon-color) 7%, var(--gray-0));
+    }
+
+    &-bordered {
+      border: 1px solid
+        color-mix(in srgb, var(--info-card-icon-color, var(--gray-600)) 24%, var(--gray-150));
     }
   }
 
