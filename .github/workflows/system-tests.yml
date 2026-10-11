@@ -332,6 +332,13 @@ jobs:
         run: docker compose exec -T api uv run --no-sync --no-dev pytest test/integration/services/test_agent_run_lease.py -q
       - name: Verify Turn result causality
         run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_turn_result_causality.py -q
+      - name: Verify feedback persistence and execution boundary
+        run: docker compose exec -T api uv run --no-sync --no-dev pytest test/integration/services/test_agent_feedback.py -q
+      - name: Verify feedback HTTP access and worker collection
+        timeout-minutes: 5
+        run: |
+          docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_agent_feedback_api.py -q
+          docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_agent_feedback_e2e.py -q
       - name: Verify lifecycle HTTP and PostgreSQL boundaries
         timeout-minutes: 8
         run: |

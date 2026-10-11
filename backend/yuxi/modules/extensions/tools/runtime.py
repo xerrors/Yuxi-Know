@@ -3,6 +3,7 @@
 from typing import Any
 
 from yuxi.infrastructure.observability.logging import logger
+from yuxi.modules.extensions.tools.builtin import BASE_TOOL_NAMES
 from yuxi.modules.extensions.tools.catalog import get_tool_instances_by_category
 
 
@@ -16,7 +17,7 @@ async def resolve_configured_runtime_tools(context) -> list[Any]:
     selected_tool_sources: dict[str, str] = {}
     builtin_tools = {tool.name: tool for tool in get_tool_instances_by_category("builtin")}
 
-    for tool_name in getattr(context, "tools", None) or []:
+    for tool_name in (*BASE_TOOL_NAMES, *(getattr(context, "tools", None) or [])):
         if not isinstance(tool_name, str) or tool_name in selected_tool_names:
             continue
         tool = builtin_tools.get(tool_name)

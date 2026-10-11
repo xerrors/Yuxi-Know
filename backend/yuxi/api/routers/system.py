@@ -1,16 +1,20 @@
 import os
 from pathlib import Path
+from typing import Literal
 
 import aiofiles
 import yaml
-from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi import get_version
 from yuxi.api.dependencies.auth import get_db, get_required_user, get_superadmin_user
+from yuxi.api.routers.agents.feedback import FeedbackPage
 from yuxi.infrastructure.observability.logging import LOG_FILE, logger
+from yuxi.modules.agents.services.feedback import list_feedback
+from yuxi.modules.agents.services.scope import ActorScope
 from yuxi.modules.identity.models import User
 from yuxi.modules.system.options import invalidate_option_cache, system_options, update_option_value
 from yuxi.modules.system.readiness import get_readiness
@@ -74,6 +78,32 @@ async def discovery():
             "cli_auth_authorize": "/auth/cli/authorize",
         },
     }
+
+
+@system.get("/agent-feedback", response_model=FeedbackPage)
+async def get_agent_feedback(
+    request: Request,
+    agent_id: str | None = Query(default=None, max_length=80),
+    source: Literal["user", "agent"] | None = None,
+    rating: Literal["like", "dislike"] | None = None,
+    after: str | None = Query(default=None, max_length=64),
+    limit: int = Query(default=50, ge=1, le=100),
+    user: User = Depends(get_superadmin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """仅产品 JWT 平台管理员可集中查看反馈，所有 API Key 均拒绝。"""
+    if getattr(request.state, "api_key", None) is not None:
+        raise HTTPException(status_code=403, detail="API Key 无权查询集中反馈")
+    return await list_feedback(
+        db=db,
+        scope=ActorScope(uid=user.uid, app_id=None, is_superadmin=True),
+        platform=True,
+        agent_id=agent_id,
+        source=source,
+        rating=rating,
+        after=after,
+        limit=limit,
+    )
 
 
 # =============================================================================

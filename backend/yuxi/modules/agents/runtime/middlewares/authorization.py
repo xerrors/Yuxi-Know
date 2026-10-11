@@ -10,6 +10,7 @@ from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.repositories.definitions import AgentRepository
 from yuxi.modules.agents.runtime.context import normalize_agent_context_config
 from yuxi.modules.agents.services.event_writer import append_run_event_best_effort
+from yuxi.modules.extensions.tools.builtin import BASE_TOOL_NAMES
 from yuxi.modules.extensions.mcp.models import MCPServer
 from yuxi.modules.extensions.skills.runtime import resolve_runtime_skills_for_context, sync_agent_context_skills
 from yuxi.modules.identity.models import User
@@ -62,7 +63,7 @@ class RuntimeAuthorizationMiddleware(AgentMiddleware):
 def tool_allowed(context, name: str, state: dict) -> bool:
     """按当前资源和已授权 Skill 依赖检查已注册工具。"""
     allowed_mcps = set(context.mcps)
-    allowed_tools = set(context.tools)
+    allowed_tools = set(context.tools) | set(BASE_TOOL_NAMES)
     snapshot = context._skill_runtime_snapshot
     active = set(state.get("activated_skills", [])) | set(snapshot["preloaded_skills"])
     for slug in active & set(snapshot["effective_skills"]):

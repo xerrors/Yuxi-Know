@@ -208,4 +208,4 @@ Turn 详情的 `yuxi` 包含 `current_run_id`、`result_run_id`、`waitpoint`、
 
 协作成员拥有独立 Thread、Turn、Run、等待点和结果，全部使用相同公开协议。父轮次完成、失败或取消均保留后代工作；普通取消固定指定 Turn。“停止全部”通过 POST `/sessions/{session_id}/events` 提交 `yuxi.session.tree.stop`，停止所有成员在途 Turn 与队列消费；`yuxi.session.tree.continue` 在在途工作收敛后重新消费保留队列，已取消轮次不恢复。这两种控制输入本身不作为 SSE 输出事件发布，结果通过持久树状态和各 Turn 观察。整树共享实际沙盒与 Project Workdir，各 Run 的 lease 和 heartbeat 独立。工具与用户操作见[会话协作](../agents/session-cooperation.md)。
 
-该协议使用 business schema v8、Redis 事件格式 v2 和 cursor v2。schema-init 只初始化新库或校验当前版本；旧 Schema 明确拒绝启动，不提供升级入口，也不清空现有数据库。部署须配置独立新库，保留旧库由运维明确处置。旧创建请求顶层 `attachment_file_ids` 和逐消息 `input[].yuxi.attachment_file_ids` 不再支持，统一使用提交级 `yuxi.attachment_file_ids`；事件没有双格式消费。
+该协议使用 business schema v9、Redis 事件格式 v2 和 cursor v2。schema-init 支持新库初始化及 v8→v9 原子新增反馈表，保留原有数据；其他旧版本明确拒绝启动，不清空现有数据库。更早版本的部署须配置独立新库，保留旧库由运维明确处置。旧创建请求顶层 `attachment_file_ids` 和逐消息 `input[].yuxi.attachment_file_ids` 不再支持，统一使用提交级 `yuxi.attachment_file_ids`；事件没有双格式消费。

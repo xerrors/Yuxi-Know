@@ -11,7 +11,7 @@
     >
       <template #info>
         <span class="header-context">
-          {{ activeTab === 'overview' ? '系统运行与资源使用' : '会话趋势与历史审计' }}
+          {{ headerContext }}
         </span>
       </template>
       <template #actions>
@@ -111,6 +111,7 @@
     <div v-if="threadActivated" v-show="activeTab === 'threads'" class="thread-tab-container">
       <ThreadStatsComponent ref="threadStatsRef" />
     </div>
+    <AgentFeedbackList v-if="activeTab === 'feedback' && userStore.isSuperAdmin" />
 
   </div>
 </template>
@@ -135,22 +136,29 @@ import AgentStatsComponent from '@/modules/dashboard/ui/AgentStatsComponent.vue'
 import CallStatsComponent from '@/modules/dashboard/ui/CallStatsComponent.vue'
 import StatsOverviewComponent from '@/modules/dashboard/ui/StatsOverviewComponent.vue'
 import ThreadStatsComponent from '@/modules/dashboard/ui/ThreadStatsComponent.vue'
+import AgentFeedbackList from '@/modules/dashboard/ui/AgentFeedbackList.vue'
 
 const route = useRoute()
 const router = useRouter()
-const dashboardTabs = [
+const userStore = useUserStore()
+const dashboardTabs = computed(() => [
   { key: 'overview', label: '系统概览' },
-  { key: 'threads', label: '会话分析' }
-]
-const normalizeTab = (tab) => (tab === 'threads' ? 'threads' : 'overview')
+  { key: 'threads', label: '会话分析' },
+  ...(userStore.isSuperAdmin ? [{ key: 'feedback', label: '智能体反馈' }] : [])
+])
+const normalizeTab = (tab) => (tab === 'threads' || (tab === 'feedback' && userStore.isSuperAdmin) ? tab : 'overview')
 const activeTab = ref(normalizeTab(route.query.tab))
+const headerContext = computed(() => {
+  if (activeTab.value === 'overview') return '系统运行与资源使用'
+  if (activeTab.value === 'feedback') return '用户评价与智能体改进线索'
+  return '会话趋势与历史审计'
+})
 const overviewActivated = ref(activeTab.value === 'overview')
 const threadActivated = ref(activeTab.value === 'threads')
 
 // 组件引用
 const jobsStore = useBackgroundJobsStore()
 const themeStore = useThemeStore()
-const userStore = useUserStore()
 const { activeCount } = storeToRefs(jobsStore)
 const { openSettingsModal } = inject('settingsModal', {})
 const activeJobCount = computed(() => activeCount.value || 0)
@@ -208,6 +216,7 @@ const loadAllStats = async () => {
 
 // 切换 Tab 处理
 const handleTabChange = async ({ key }) => {
+  if (key === 'feedback') return
   if (key === 'overview') {
     overviewActivated.value = true
     await loadAllStats()

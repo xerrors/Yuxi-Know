@@ -65,6 +65,16 @@ def example_tool(text: str) -> str:
 
 LangGraph checkpoint 保存标准问题结构，执行服务将其投影为持久等待点。Web、CLI 和 API 客户端使用等待点中的 `question_id` 提交回答；Web 只转换展示字段和推导文本、单选、多选类型，不重新生成 ID。恢复沿用同一 Turn，协议入口见 [Public API](../advanced/agents-public-api.md)。参数契约与工具实现在[提问模块](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/tools/builtin/ask_user_question.py)，完整恢复链路由[生命周期 E2E](https://github.com/xerrors/Yuxi/blob/main/backend/test/e2e/test_agent_lifecycle_e2e.py)验证。
 
+## 内置工具：记录改进线索
+
+`mark_for_improvement(reason)` 与 `ask_user_question` 同属基础内置工具，所有正常 Agent 图自动注册，不受工具选择、模型、专属 Skill 或 Skill 激活状态限制。基础工具集合由[内置工具模块](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/tools/builtin/__init__.py)统一维护，注册、授权和门控使用同一集合。用户明确纠正操作流程，或多次尝试后找到有实际依据的可复用方法、脚本时，Agent 可主动记录。
+
+reason 去除首尾空白后为 1–4000 字符，写明发生了什么、经验以及对应步骤或产物依据；不要包含凭据和无关原始用户内容。同一经验记录一次，普通完成任务不要求标记。
+
+没有真实 Run 或工具调用 ID 时，工具明确拒绝保存。工具从注入的 runtime 取得当前身份、Run、worker token 和 tool_call_id，executor 在 PostgreSQL 事务中再次检查账号、Agent 使用权及有效执行租约。提交后返回 `{id, run_id, saved:true}`；同一 Run 的同一调用重放返回同一 ID，改变原因产生冲突。数据库失败或无效原因返回工具错误，原任务按普通工具错误处理继续；授权撤销仍终止执行。
+
+标记保存为待复盘线索，Run 后续失败或取消不会删除已提交标记。它不表示经验已验证或 Skill 已更新，不自动读取正文中的文件路径，不修改 Skill 或同步 Langfuse。用户反馈和集中查询的权限、保留和分页见[反馈采集](../advanced/agent-feedback.md#反馈采集)。
+
 ## 知识库工具
 
 知识库工具以 `@tool(category="knowledge")` 注册，但不默认出现在模型工具列表。Agent 激活内置 `knowledge-base` Skill 后，Skills middleware 才会向模型开放：
@@ -112,7 +122,7 @@ DOUBAO_SEARCH_API_KEY=<your-doubao-key>
 内置 Agent 创建 Graph 时执行：
 
 1. `prepare_agent_runtime_context` 按当前用户权限过滤工具、知识库、MCP、Skills。
-2. `resolve_configured_runtime_tools(context)` 注册 Agent 配置和可见 Skill 依赖的可执行本地工具，并加载配置的 MCP 工具。
+2. `resolve_configured_runtime_tools(context)` 注册 Agent 配置和可见 Skill 依赖的可执行本地工具，统一加入基础工具集合，并加载配置的 MCP 工具。
 3. `SkillsMiddleware` 根据当前已预加载或已激活的 Skill，向模型请求开放相应工具 schema。
 4. 工具执行器再次检查具体文件、知识库、MCP 和用户身份。
 

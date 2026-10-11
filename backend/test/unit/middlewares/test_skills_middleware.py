@@ -243,6 +243,60 @@ async def test_resolve_skill_gated_tools_registers_kb_tools():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("run_id", [None, "test-run"])
+async def test_base_tools_are_registered_once_without_configuration_or_skill(run_id):
+    """基础工具来自同一注册循环，空配置可用，重复选择不会重复注册。"""
+    context = SimpleNamespace(
+        run_id=run_id,
+        tools=[],
+        mcps=[],
+        _skill_runtime_snapshot={"effective_skills": [], "runtime_skills": {}},
+    )
+    tools = await resolve_configured_runtime_tools(context)
+    assert [tool.name for tool in tools] == ["ask_user_question", "mark_for_improvement"]
+    context.tools = ["mark_for_improvement", "ask_user_question", "present_artifacts"]
+    tools = await resolve_configured_runtime_tools(context)
+    assert [tool.name for tool in tools] == ["ask_user_question", "mark_for_improvement", "present_artifacts"]
+
+
+@pytest.mark.asyncio
+async def test_unactivated_skill_cannot_hide_base_tools():
+    """Skill 声明基础工具依赖时，模型仍能看到基础工具，普通依赖保持隐藏。"""
+    context = SimpleNamespace(
+        tools=[],
+        mcps=[],
+        _skill_runtime_snapshot={
+            "effective_skills": ["alpha"],
+            "runtime_skills": {"alpha": _runtime_skill("alpha", tools=["ask_user_question", "mark_for_improvement", "query_kb"])},
+        },
+    )
+    request = SimpleNamespace(
+        runtime=SimpleNamespace(context=context),
+        state={},
+        tools=[SimpleNamespace(name=name) for name in ["ask_user_question", "mark_for_improvement", "query_kb"]],
+    )
+    request.override = lambda **updates: SimpleNamespace(**{**vars(request), **updates})
+
+    async def handler(current):
+        """读取实际交给模型的工具集合。"""
+        return [tool.name for tool in current.tools]
+
+    visible = await SkillsMiddleware(enable_skills_prompt=False).awrap_model_call(request, handler)
+    assert visible == ["ask_user_question", "mark_for_improvement"]
+
+
+@pytest.mark.asyncio
+async def test_improvement_tool_without_run_rejects_untraceable_write():
+    """工具可被注册，但缺少真实执行归属时明确拒绝保存。"""
+    from langchain_core.tools import ToolException
+    from yuxi.modules.extensions.tools.builtin.mark_for_improvement import mark_for_improvement
+
+    runtime = SimpleNamespace(context=SimpleNamespace(run_id=None), tool_call_id="call-test")
+    with pytest.raises(ToolException, match="未绑定真实 Run"):
+        await mark_for_improvement.coroutine(reason="可复用经验", runtime=runtime)
+
+
+@pytest.mark.asyncio
 async def test_preloaded_skill_rejects_duplicate_mcp_tool_names(monkeypatch):
     @tool("chart_tool")
     async def chart_tool(value: int) -> str:

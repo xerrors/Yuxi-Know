@@ -1,5 +1,5 @@
 # ruff: noqa: E402  # 入口必须先加载环境。
-"""只为全新部署建立当前 PostgreSQL Schema。"""
+"""建立当前 PostgreSQL Schema，并执行明确支持的增量升级。"""
 
 from __future__ import annotations
 
@@ -25,6 +25,7 @@ from yuxi.migrations.schema import (
     ensure_knowledge_schema,
     record_schema_version,
     schema_migration_lock,
+    upgrade_feedback_schema,
 )
 from yuxi.modules.system.options import ensure_options_in_db
 
@@ -64,6 +65,9 @@ async def main() -> None:
                 await drop_fresh_schema(pg_manager)
                 versions = {}
             if versions == current:
+                return
+            if versions == {"business": 8, "knowledge": KNOWLEDGE_SCHEMA_VERSION}:
+                await upgrade_feedback_schema(pg_manager)
                 return
             if versions:
                 raise RuntimeError(f"Unsupported Yuxi schema versions: {versions}; required {current}")

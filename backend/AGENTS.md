@@ -5,6 +5,7 @@
 ## 边界与所有权
 
 - `yuxi/api/routers` 只处理 HTTP 模型、认证依赖、状态码和响应装配；跨 repository 的用例进入 对应 `yuxi/modules/<业务域>/services`。
+- Public API（`api/routers/public_v1`）只承接用户明确要求的对外能力；未经明确要求，不得新增 Public 路由或扩展其协议。Web 产品功能放在对应业务路由，不能因已有 Public Session 链路就默认加入 Public。
 - PostgreSQL 是 Thread、Turn、Input、Receipt、Run、Message、权限和业务终态的 Owner；Redis/ARQ 是投递与短期事件平面。
 - 写入事实、提交事务、发布队列/事件的顺序必须显式；通知不能早于 owning transaction 的 commit point。
 - 跨 repository 用例只有一个事务 Owner；需要经 HTTP 返回的一次性 secret 必须可由幂等请求安全重放，不能先不可逆消费再祈望响应送达。凭据撤销必须保留足以阻止同一幂等请求复活 secret 的 tombstone。

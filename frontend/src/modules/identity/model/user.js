@@ -4,6 +4,7 @@ import { authApi } from '@/apis/auth_api'
 import { configureApiAuth } from '@/apis/auth_context'
 import { useAgentStore } from '../../agents/model/agent'
 import { useProjectsStore } from '../../projects/model/projects'
+import { useSessionFeedbackStore } from '../../session/model/sessionFeedback'
 
 export const useUserStore = defineStore('user', () => {
   // 状态
@@ -26,6 +27,7 @@ export const useUserStore = defineStore('user', () => {
   /** 统一应用认证响应，保持响应式会话与持久 token 同步。 */
   function applySession(data) {
     useProjectsStore().reset()
+    useSessionFeedbackStore().reset()
     token.value = data.access_token
     userId.value = data.user_id ?? data.uid ?? null
     username.value = data.username
@@ -65,6 +67,7 @@ export const useUserStore = defineStore('user', () => {
     const agentStore = useAgentStore()
     agentStore.reset()
     useProjectsStore().reset()
+    useSessionFeedbackStore().reset()
 
     // 只清除 token
     localStorage.removeItem('user_token')

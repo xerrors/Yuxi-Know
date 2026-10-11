@@ -11,10 +11,12 @@ import { useStreamSmoother } from './useStreamSmoother'
 import { createItemState, itemsToMessages, mergeItemSnapshot } from './agentItems'
 import { bindMessageInputRun } from './messageDebug'
 import { extractPendingInterrupt, pendingInterruptFromWaitpoint } from './useApproval'
+import { useSessionFeedbackStore } from './sessionFeedback'
 
 /** 每个 Thread 共享运行数据和订阅，视图仅注册展示回调。 */
 export const useSessionRuntimeStore = defineStore('sessionRuntime', () => {
   const chatThreads = useChatThreadsStore()
+  const feedback = useSessionFeedbackStore()
   const chatState = reactive({ threadStates: {} })
   const threadMessages = ref({})
   const threadRuns = ref({})
@@ -104,6 +106,9 @@ export const useSessionRuntimeStore = defineStore('sessionRuntime', () => {
         historyItems.set(threadId, projection)
         streamSmoother.flushThread(threadId)
         threadMessages.value[threadId] = itemsToMessages(Object.values(projection.items))
+        void feedback.load(threadId, threadMessages.value[threadId]
+          .filter((message) => message.phase === 'final_answer' && message.execution_status === 'completed')
+          .map((message) => message.run_id), fresh)
         threadRuns.value[threadId] = [...runs.values()]
         if (!state.isStreaming) state.turnStatus = session.yuxi.current_turn?.status || null
         chatThreads.upsertThread(session)

@@ -19,6 +19,7 @@ from yuxi.modules.extensions.mcp.service import get_enabled_mcp_tools
 from yuxi.modules.extensions.skills.package import is_valid_skill_slug, normalize_string_list
 from yuxi.modules.extensions.skills.runtime import RuntimeSkill, build_dependency_bundle
 from yuxi.modules.extensions.tools import get_all_tool_instances
+from yuxi.modules.extensions.tools.builtin import BASE_TOOL_NAMES
 
 
 def _activated_skills_reducer(left: list[str] | None, right: list[str] | None) -> list[str]:
@@ -142,6 +143,7 @@ class SkillsMiddleware(AgentMiddleware):
         runtime_skills = self._get_runtime_skills(runtime_context)
         effective_skills = self._get_effective_skills(runtime_context)
         base_tool_names = set(normalize_string_list(getattr(runtime_context, "tools", None)))
+        base_tool_names.update(BASE_TOOL_NAMES)
         gated: set[str] = set()
         for slug in effective_skills:
             gated.update(runtime_skills.get(slug, {}).get("tools", []))

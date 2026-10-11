@@ -13,6 +13,7 @@ MODEL_MODULES = (
     "yuxi.modules.agents.models.turns",
     "yuxi.modules.agents.models.runs",
     "yuxi.modules.agents.models.messages",
+    "yuxi.modules.agents.models.feedback",
     "yuxi.modules.workspace.models",
     "yuxi.modules.identity.models",
     "yuxi.modules.extensions.skills.models",

@@ -43,6 +43,15 @@ def test_mcp_single_tool_or_server_disable_rejects_old_registration(context):
     assert not tool_allowed(context, "remote_tool", state)
 
 
+@pytest.mark.parametrize("name", ["ask_user_question", "mark_for_improvement"])
+def test_base_tool_is_allowed_without_configuration_skill_or_run(context, name):
+    """基础工具使用统一白名单，不依赖配置、Skill 或 Run 是否存在。"""
+    context._registered_builtin_tool_names.add(name)
+    assert tool_allowed(context, name, {})
+    context._mcp_tool_servers[name] = "remote"
+    assert not tool_allowed(context, name, {})
+
+
 @pytest.mark.asyncio
 async def test_network_retry_rechecks_before_each_model_request(monkeypatch, context):
     """网络失败同时撤权后，不得发送第二个实际模型请求。"""

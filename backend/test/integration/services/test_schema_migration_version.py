@@ -19,6 +19,7 @@ from yuxi.migrations.schema import (
     create_schema_version_table,
     ensure_business_schema,
     record_schema_version,
+    upgrade_feedback_schema,
 )
 from yuxi.infrastructure.postgres.schema import get_schema_versions, require_current_schema
 from yuxi.modules.knowledge.models import KnowledgeBase
@@ -31,6 +32,50 @@ from test.integration.support.postgres_schema import (
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
 
+async def test_feedback_upgrade_is_atomic_repeatable_and_preserves_old_data(monkeypatch):
+    """真实 8→9 失败回滚，重跑建表与索引后保留原有样本。"""
+    from yuxi.modules.agents.models.feedback import AgentFeedbackRecord
+
+    schema, admin, engine, manager = await _create_isolated_manager("pytest_feedback_upgrade")
+    try:
+        await create_business_tables(manager)
+        await create_schema_version_table(manager)
+        await record_schema_version(manager, "business", 8)
+        await record_schema_version(manager, "knowledge", KNOWLEDGE_SCHEMA_VERSION)
+        async with engine.begin() as conn:
+            await conn.execute(text("DROP TABLE agent_feedback_records"))
+            await conn.execute(
+                text(
+                    "INSERT INTO users (username, uid, password_hash, role, login_failed_count, is_deleted) "
+                    "VALUES ('upgrade-user', 'upgrade-user', 'hash', 'user', 0, 0)"
+                )
+            )
+        create_table = AgentFeedbackRecord.__table__.create
+
+        def fail_after_ddl(conn, **kwargs):
+            """在真实 DDL 后注入中断，不能提交表或新版本。"""
+            create_table(conn, **kwargs)
+            raise RuntimeError("after feedback ddl")
+
+        with monkeypatch.context() as patch:
+            patch.setattr(AgentFeedbackRecord.__table__, "create", fail_after_ddl)
+            with pytest.raises(RuntimeError, match="after feedback ddl"):
+                await upgrade_feedback_schema(manager)
+        assert (await get_schema_versions(manager))["business"] == 8
+        async with engine.connect() as conn:
+            assert await conn.scalar(text("SELECT to_regclass('agent_feedback_records')")) is None
+        monkeypatch.setattr(schema_bootstrap, "pg_manager", manager)
+        monkeypatch.setattr(manager, "initialize", lambda: None)
+        monkeypatch.setattr(manager, "close", AsyncMock())
+        await schema_bootstrap.main()
+        await schema_bootstrap.main()
+        await require_current_schema(manager)
+        async with engine.connect() as conn:
+            assert await conn.scalar(text("SELECT uid FROM users WHERE username='upgrade-user'")) == "upgrade-user"
+            assert await conn.scalar(text("SELECT to_regclass('uq_agent_feedback_tool_call')")) is not None
+            assert await conn.scalar(text("SELECT to_regclass('uq_agent_feedback_user_run')")) is not None
+    finally:
+        await _drop_isolated_schema(schema, admin, engine)
 
 
 async def test_schema_migration_lock_serializes_real_postgres_sessions() -> None:
@@ -145,7 +190,7 @@ async def test_fresh_business_schema_contains_input_lifecycle_without_request_ta
             "thread_id",
         } <= input_columns
         assert "conversation_thread_id" not in input_columns
-        assert BUSINESS_SCHEMA_VERSION == 8
+        assert BUSINESS_SCHEMA_VERSION == 9
         assert KNOWLEDGE_SCHEMA_VERSION == 3
     finally:
         await _drop_isolated_schema(schema, admin_engine, scoped_engine)

@@ -1,19 +1,34 @@
 <template>
   <div class="refs" v-if="showRefs">
     <div class="tags">
-      <span
-        class="item btn"
-        @click="likeThisResponse"
-        title="点赞"
+      <button
+        v-if="feedbackEntry"
+        type="button"
+        class="item btn feedback-vote"
+        :class="{ selected: feedbackEntry.record?.rating === 'like' }"
+        :aria-pressed="feedbackEntry.record?.rating === 'like'"
+        :disabled="feedbackEntry.pending || !feedbackEntry.loaded"
+        @click="rate('like', $event)"
+        :title="feedbackEntry.record?.rating === 'like' ? '已点赞，再次点击撤销' : '点赞：反馈供平台管理员用于改进 Agent'"
+        aria-label="点赞"
       >
-        <ThumbsUp size="12" />
-      </span>
-      <span
-        class="item btn"
-        @click="dislikeThisResponse"
-        title="点踩"
+        <ThumbsUp :size="12" aria-hidden="true" />
+      </button>
+      <button
+        v-if="feedbackEntry"
+        type="button"
+        class="item btn feedback-vote"
+        :class="{ selected: feedbackEntry.record?.rating === 'dislike' }"
+        :aria-pressed="feedbackEntry.record?.rating === 'dislike'"
+        :disabled="feedbackEntry.pending || !feedbackEntry.loaded"
+        @click="rate('dislike', $event)"
+        :title="feedbackEntry.record?.rating === 'dislike' ? '已点踩，再次点击撤销' : '点踩：反馈供平台管理员用于改进 Agent'"
+        aria-label="点踩"
       >
-        <ThumbsDown size="12" />
+        <ThumbsDown :size="12" aria-hidden="true" />
+      </button>
+      <span v-if="feedbackEntry?.pending" class="feedback-status" role="status">
+        保存中…
       </span>
       <!-- 模型名称 -->
       <span v-if="showKey('model') && getModelName(msg)" class="item" @click="console.log(msg)">
@@ -93,6 +108,22 @@
       </div>
     </div>
 
+    <p v-if="feedbackEntry?.error && !feedbackDialogOpen" class="feedback-error" role="alert">
+      {{ feedbackEntry.error }}
+      <button v-if="!feedbackEntry.loaded" type="button" class="item btn" :disabled="feedbackEntry.loading" @click="feedbackStore.load(threadId, [msg.run_id])">重新读取</button>
+      <span v-else>请重试刚才的操作。</span>
+    </p>
+    <UserFeedbackModal
+      v-if="feedbackEntry"
+      :open="feedbackDialogOpen"
+      :entry="feedbackEntry"
+      :run-id="msg.run_id"
+      @update-draft="feedbackEntry.draft = $event"
+      @save="saveFeedback"
+      @close="closeFeedback"
+      @after-close="feedbackDialogOpen = false; feedbackTrigger?.focus()"
+    />
+
     <p v-if="referenceEntry?.error && referenceEntry.loaded" class="reference-notice" role="alert">
       {{ referenceEntry.error }}
     </p>
@@ -110,7 +141,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, onDeactivated, watch } from 'vue'
 import { useClipboard } from '@vueuse/core'
 import { message as antMessage } from 'ant-design-vue'
 import {
@@ -128,8 +159,10 @@ import {
 import { formatChatTime } from '@/shared/lib/time'
 import KnowledgeSourceSection from '@/modules/agents/ui/KnowledgeSourceSection.vue'
 import WebSearchSourceSection from '@/modules/agents/ui/WebSearchSourceSection.vue'
+import UserFeedbackModal from '@/modules/session/ui/UserFeedbackModal.vue'
 import { formatRunTimingDuration, getRunTotalLatencyMs } from '@/modules/session/model/runTiming'
 import { useTurnReferencesStore } from '@/modules/session/model/turnReferences'
+import { useSessionFeedbackStore } from '@/modules/session/model/sessionFeedback'
 
 const emit = defineEmits(['retry', 'openRefs'])
 const props = defineProps({
@@ -299,9 +332,41 @@ const getModelName = (msg) => {
   }
   return null
 }
-const likeThisResponse = () => antMessage.info('反馈功能开发中')
-
-const dislikeThisResponse = () => antMessage.info('反馈功能开发中')
+const feedbackStore = useSessionFeedbackStore()
+// phase 来自服务端 result_run_id 与 output_message_id 的持久关联，流式 done 不足以开放评价。
+const feedbackEntry = computed(() => props.threadId && msg.value?.run_id && msg.value?.turn_id &&
+  msg.value.phase === 'final_answer' && msg.value.execution_status === 'completed' &&
+  typeof msg.value.content === 'string' && msg.value.content.trim()
+  ? feedbackStore.getEntry(props.threadId, msg.value.run_id) : null)
+// 同一 Run 的评价共享，弹窗只由当前触发它的视图打开。
+const feedbackDialogOpen = ref(false)
+let feedbackTrigger = null
+let feedbackViewRevision = 0
+/** 关闭当前视图的弹窗，保留已提交评价与未提交草稿。 */
+function closeFeedback() {
+  feedbackDialogOpen.value = false
+}
+onDeactivated(() => {
+  // 返回缓存视图后，离开前尚未完成的评价也不能重新打开弹窗。
+  feedbackViewRevision += 1
+  if (feedbackDialogOpen.value) closeFeedback()
+})
+/** 已保存评价由 Store 持有，当前视图关闭自己的说明弹窗。 */
+async function saveFeedback(reason) {
+  if (await feedbackStore.saveReason(props.threadId, msg.value.turn_id, msg.value.run_id, reason)) closeFeedback()
+}
+async function rate(rating, event) {
+  const entry = feedbackEntry.value
+  const removing = entry.record?.rating === rating
+  const revision = feedbackViewRevision
+  const trigger = event.currentTarget
+  feedbackTrigger = trigger
+  await feedbackStore.rate(props.threadId, msg.value.turn_id, msg.value.run_id, rating)
+  if (revision === feedbackViewRevision && !removing && !entry.error &&
+      entry.record?.rating === rating && trigger.isConnected) {
+    feedbackDialogOpen.value = true
+  }
+}
 </script>
 
 <style lang="less" scoped>
@@ -425,6 +490,16 @@ const dislikeThisResponse = () => antMessage.info('反馈功能开发中')
     animation: slideDown 0.2s ease-out;
   }
 }
+
+.refs .feedback-vote {
+  border: 0;
+  font-family: inherit;
+  &.selected { color: var(--main-color); }
+  &:focus-visible { outline: 2px solid var(--main-color); outline-offset: 2px; }
+  &:disabled { opacity: 0.5; cursor: wait; }
+}
+.feedback-error { color: var(--color-error-500); margin: 0; }
+.feedback-status { font-size: 12px; }
 
 @keyframes slideDown {
   from {
