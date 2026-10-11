@@ -1,15 +1,16 @@
 """真实 PG、MinIO 和文件验证附件接收与准备恢复。"""
 
 import asyncio
-from io import BytesIO
 import uuid
 from datetime import timedelta
+from io import BytesIO
 
 import pytest
-from fastapi import HTTPException
 from sqlalchemy import func, select
 
-from test.integration.services.agent_input_fixtures import SCOPE, send_input as _send, start_input_run as _start
+from test.integration.services.agent_input_fixtures import SCOPE
+from test.integration.services.agent_input_fixtures import send_input as _send
+from test.integration.services.agent_input_fixtures import start_input_run as _start
 from yuxi.infrastructure.minio import get_minio_client
 from yuxi.modules.agents.models.attachments import AgentAttachment
 from yuxi.modules.agents.models.inputs import AgentInput, AgentInputReceipt
@@ -21,11 +22,12 @@ from yuxi.modules.agents.services import attachments, inputs, runs, scheduler, t
 from yuxi.modules.agents.services.input_messages import build_chat_input_message
 from yuxi.modules.workspace.filesystem import Workspace
 from yuxi.modules.workspace.models import Project
-from yuxi.modules.workspace.repositories.projects import ProjectRepository
 from yuxi.modules.workspace.paths import ensure_user_workspace
+from yuxi.modules.workspace.repositories.projects import ProjectRepository
 from yuxi.modules.workspace.services.bindings import resolve_session_workdir_binding
 from yuxi.modules.workspace.workdir import Workdir
 from yuxi.shared.datetime import utc_now
+from yuxi.shared.errors import DomainError, InvalidInputError, StateConflictError
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 pytest_plugins = ["test.integration.services.agent_input_fixtures"]
@@ -79,6 +81,7 @@ async def files_env(sessions, tmp_path, monkeypatch):  # noqa: F811
 async def test_multi_message_files_bind_last_projection_and_receipt_stays_unchanged(files_env):
     """提交级附件只挂末条消息，消费不修改接收回执。"""
     from sqlalchemy.exc import IntegrityError
+
     from yuxi.modules.agents.models.messages import Message
 
     factory, upload, submit, workdir = files_env
@@ -130,7 +133,7 @@ async def test_multi_message_files_bind_last_projection_and_receipt_stays_unchan
                 await db.flush()
     draft = await upload("duplicate.txt")
     async with factory() as db:
-        with pytest.raises(HTTPException) as failure:
+        with pytest.raises(DomainError) as failure:
             await inputs.accept_message(
                 db=db,
                 scope=SCOPE,
@@ -140,7 +143,7 @@ async def test_multi_message_files_bind_last_projection_and_receipt_stays_unchan
                 messages=[build_chat_input_message(text) for text in ("A", "B")],
                 attachment_file_ids=[draft["id"], draft["id"]],
             )
-        assert failure.value.status_code == 422
+        assert isinstance(failure.value, InvalidInputError)
         await db.rollback()
         assert (await db.get(AgentAttachment, draft["id"])).input_id is None
 
@@ -244,9 +247,9 @@ async def test_draft_send_and_replay_have_one_durable_submission(files_env):
         assert await db.scalar(select(func.count()).select_from(AgentInput)) == 1
         assert await db.scalar(select(func.count()).select_from(AgentInputReceipt)) == 1
     assert len(workdir.list_directory("/uploads")) == 1
-    with pytest.raises(HTTPException) as error:
+    with pytest.raises(DomainError) as error:
         await submit(file, "another-submission")
-    assert error.value.status_code == 409
+    assert isinstance(error.value, StateConflictError)
 
 
 @pytest.mark.parametrize("archive_via", [None, "session", "project"])
@@ -274,9 +277,9 @@ async def test_failed_preparation_blocks_dispatch_and_cancel_keeps_submission(fi
         assert "private-host-path" not in error
         assert await db.scalar(select(func.count()).select_from(AgentRun)) == 0
         assert await AgentInputRepository(db).ready_batch(thread_id="input-thread", uid=SCOPE.uid, app_id=None) == []
-        with pytest.raises(HTTPException) as blocked:
+        with pytest.raises(DomainError) as blocked:
             await threads.promote_input(db=db, scope=SCOPE, thread_id="input-thread", input_id=item.id, idempotency_key="not-ready")
-        assert blocked.value.status_code == 409
+        assert isinstance(blocked.value, StateConflictError)
         await AgentInputRepository(db).cancel(item)
         await db.commit()
     if archive_via:
@@ -413,7 +416,7 @@ async def test_same_draft_cannot_be_received_by_two_threads(files_env, monkeypat
         results = await asyncio.gather(*requests, return_exceptions=True)
     assert sum(isinstance(item, dict) for item in results) == 1
     [failure] = [item for item in results if isinstance(item, Exception)]
-    assert isinstance(failure, HTTPException) and failure.status_code == 409
+    assert isinstance(failure, DomainError) and isinstance(failure, StateConflictError)
     async with factory() as db:
         owner = await db.get(AgentAttachment, file["id"])
         assert owner.input_id == next(item["input_id"] for item in results if isinstance(item, dict))
@@ -476,6 +479,7 @@ async def test_ready_steer_append_preserves_expired_source_and_committed_files(f
 async def test_attachment_delete_guards_and_failed_commit_preserve_formal_bytes(files_env, monkeypatch):
     """待消费、执行中和事务失败均不能删除正式文件，成功才删除关系与字节。"""
     from unittest.mock import AsyncMock
+
     from yuxi.modules.agents.models.turns import AgentTurn
 
     factory, upload, submit, workdir = files_env
@@ -487,9 +491,9 @@ async def test_attachment_delete_guards_and_failed_commit_preserve_formal_bytes(
         return await attachments.delete_thread_attachment_view(thread_id="input-thread", file_id=file["id"], db=db, current_uid=SCOPE.uid)
 
     async with factory() as db:
-        with pytest.raises(HTTPException) as error:
+        with pytest.raises(DomainError) as error:
             await delete(db)
-        assert error.value.status_code == 409
+        assert isinstance(error.value, StateConflictError)
         await AgentInputRepository(db).cancel(await db.get(AgentInput, receipt["input_id"]))
         await db.commit()
     async with factory() as db:
@@ -501,9 +505,9 @@ async def test_attachment_delete_guards_and_failed_commit_preserve_formal_bytes(
         assert await db.get(AgentAttachment, file["id"]) is not None
     run = await _start(factory)
     async with factory() as db:
-        with pytest.raises(HTTPException) as error:
+        with pytest.raises(DomainError) as error:
             await delete(db)
-        assert error.value.status_code == 409
+        assert isinstance(error.value, StateConflictError)
     assert workdir.read_file(path, 1024) == b"original"
     async with factory() as db:
         active = await db.get(AgentRun, run.id)

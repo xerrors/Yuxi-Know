@@ -74,7 +74,7 @@ docker compose logs --tail=100 api
 
 ```python
 if not await repo.try_lock(turn_id):
-    raise HTTPException(status_code=409, detail={"code": "references_busy", "message": "本轮正在标注来源，请稍后读取结果"})
+    raise StateConflictError("本轮正在标注来源，请稍后读取结果", code="references_busy")
 ```
 
 需要折行的调用按参数分行，关键字参数各占一行；参数内的集合或表达式继续按自身结构展开。只折开括号、多个参数仍挤在同一行的布局，改成清楚的单行调用或按参数分行。多行数据、有说明性注释的参数和复杂调用保留有意义的分组，不为压缩行数强行合并。

@@ -25,10 +25,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from yuxi.api.errors import domain_error_handler
 from yuxi.api.lifespan import lifespan
 from yuxi.api.middleware.access_log import AccessLogMiddleware
 from yuxi.api.routers import router
 from yuxi.infrastructure.observability.logging import setup_logging
+from yuxi.shared.errors import DomainError
 
 # 设置日志配置
 setup_logging()
@@ -103,6 +105,7 @@ app = FastAPI(
     ],
 )
 # 所有业务接口统一挂载到 /api，具体分组在 yuxi.api.routers 中集中注册。
+app.add_exception_handler(DomainError, domain_error_handler)
 app.include_router(router, prefix="/api")
 
 # CORS 设置

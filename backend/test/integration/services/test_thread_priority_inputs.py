@@ -5,24 +5,34 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from sqlalchemy import func, select
+
 from test.integration.services.agent_input_fixtures import (
     SCOPE,
+)
+from test.integration.services.agent_input_fixtures import (
     input_workdir_binding as _binding,
+)
+from test.integration.services.agent_input_fixtures import (
     queue_inputs as _queue_inputs,
+)
+from test.integration.services.agent_input_fixtures import (
     send_input as _send,
+)
+from test.integration.services.agent_input_fixtures import (
     start_input_run as _start,
 )
 from yuxi.api.dependencies.auth import get_db
+from yuxi.api.errors import domain_error_handler
 from yuxi.api.routers.public_v1.agents.auth import require_public_context
 from yuxi.api.routers.public_v1.agents.events import router
 from yuxi.modules.agents.models.definitions import Agent
 from yuxi.modules.agents.models.inputs import AgentInput, AgentInputReceipt
 from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.agents.models.runs import AgentRun
-from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.modules.agents.models.sessions import Session
+from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.modules.agents.repositories.input import AgentInputRepository
 from yuxi.modules.agents.repositories.input_receipt import AgentInputReceiptRepository
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
@@ -30,6 +40,7 @@ from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.agents.services import input_config, inputs, messages, runs, scheduler, threads, turns
 from yuxi.modules.agents.services.input_messages import build_chat_input_message
 from yuxi.modules.agents.services.scope import ActorScope
+from yuxi.shared.errors import DomainError, StateConflictError
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 pytest_plugins = ["test.integration.services.agent_input_fixtures"]
@@ -75,9 +86,9 @@ async def test_promote_keeps_original_identity_and_priority_while_paused(session
         accepted = await threads.continue_queue(db=db, scope=SCOPE, thread_id="input-thread", idempotency_key="continue-batch")
         ids = await AgentInputRepository(db).input_ids_for_runs([accepted["run_id"]])
         assert ids[accepted["run_id"]] == [first["input_id"], later["input_id"]]
-        with pytest.raises(HTTPException) as error:
+        with pytest.raises(DomainError) as error:
             await threads.promote_input(db=db, scope=SCOPE, thread_id="input-thread", input_id=original.id, idempotency_key="too-late")
-        assert error.value.status_code == 409
+        assert isinstance(error.value, StateConflictError)
 
 
 @pytest.mark.parametrize("waiting", ["answer", "approval", "cooperation", "cancelling"])
@@ -90,11 +101,11 @@ async def test_promote_rejects_waiting_or_cleanup(sessions, waiting):
         turn.status = "cancelling" if waiting == "cancelling" else "waiting"
         turn.waitpoint = None if waiting == "cancelling" else {"kind": waiting, "run_id": current.id}
         await db.commit()
-        with pytest.raises(HTTPException) as error:
+        with pytest.raises(DomainError) as error:
             await threads.promote_input(
                 db=db, scope=SCOPE, thread_id="input-thread", input_id=queued["input_id"], idempotency_key="blocked"
             )
-        assert error.value.status_code == 409
+        assert isinstance(error.value, StateConflictError)
         await db.rollback()
         assert (await db.get(AgentInput, queued["input_id"])).kind == "follow_up"
 
@@ -110,11 +121,11 @@ async def test_cancel_one_steer_does_not_cancel_other_submissions(sessions):
         assert snapshot["messages"][0]["content"][0]["text"] == "D"
         assert (await db.get(AgentInput, second["input_id"])).status == "pending"
         assert await db.scalar(select(func.count()).select_from(Message)) == 0
-        with pytest.raises(HTTPException) as error:
+        with pytest.raises(DomainError) as error:
             await threads.promote_input(
                 db=db, scope=SCOPE, thread_id="input-thread", input_id=first["input_id"], idempotency_key="promote-cancelled"
             )
-        assert error.value.status_code == 409
+        assert isinstance(error.value, StateConflictError)
 
 
 async def test_promote_after_completion_opens_next_turn(sessions):
@@ -151,8 +162,8 @@ async def test_cancel_and_promote_race_keeps_one_submission(sessions):
 
     results = await asyncio.gather(control(threads.cancel_input), control(threads.promote_input), return_exceptions=True)
     assert isinstance(results[0], dict)
-    if isinstance(results[1], HTTPException):
-        assert results[1].status_code == 409
+    if isinstance(results[1], DomainError):
+        assert isinstance(results[1], StateConflictError)
     else:
         assert isinstance(results[1], dict)
     async with sessions() as db:
@@ -183,8 +194,8 @@ async def test_consume_failure_rolls_back_projection_and_ownership(sessions):
 
 async def test_empty_session_freezes_system_default_before_first_input(sessions, monkeypatch):
     """创建后的默认模型与 Agent 修改不影响首个输入，投递前事务已提交。"""
-    from unittest.mock import AsyncMock
     from dataclasses import replace
+    from unittest.mock import AsyncMock
 
     defaults = {"default_model": "test:original-default"}
     monkeypatch.setattr(input_config, "system_options", SimpleNamespace(get=AsyncMock(return_value=defaults)))
@@ -366,6 +377,7 @@ async def test_recovery_claims_idle_steer_without_any_follow_up(sessions):
 async def test_steer_before_first_model_is_saved_as_yielded_not_failed(sessions, monkeypatch, cancel_batch, unready_tail):
     """模型前让位允许无输出；提交前取消批次则继续原 Run 而非失败。"""
     from langchain.messages import AIMessage
+
     from yuxi.modules.agents.runtime.middlewares.steer import SteerMiddleware
 
     current = await _start(sessions)
@@ -456,13 +468,15 @@ async def test_steer_before_first_model_is_saved_as_yielded_not_failed(sessions,
 
 async def test_cancelled_steer_continuation_preserves_wire_ids_and_audit_order(sessions, monkeypatch):
     """图段重置 seq 后，真实投影 ID 唯一且 PG 审计仍按原执行顺序返回。"""
-    from langchain.messages import AIMessage
     from unittest.mock import AsyncMock
+
+    from langchain.messages import AIMessage
+
     from test.support.agent_stream_fixtures import native
+    from yuxi.modules.agents.repositories.model_audit import ModelMessageAuditRepository
     from yuxi.modules.agents.runtime.base import GraphExecutionResult
     from yuxi.modules.agents.runtime.context import BaseContext
     from yuxi.modules.agents.runtime.middlewares.steer import SteerMiddleware
-    from yuxi.modules.agents.repositories.model_audit import ModelMessageAuditRepository
     from yuxi.modules.agents.services import execution
     from yuxi.modules.agents.services.tracing import LangfuseRunContext
 
@@ -622,6 +636,7 @@ async def test_concurrent_steer_receipts_share_one_thread_batch(sessions):
 async def test_http_steer_has_no_target_or_effective_mode_and_keeps_scope(sessions):
     """实际 HTTP 适配器持久化优先输入，旧目标字段和越权作用域被拒绝。"""
     app = FastAPI()
+    app.add_exception_handler(DomainError, domain_error_handler)
     app.include_router(router, prefix="/api/v1/agents")
 
     async def database():
@@ -656,7 +671,7 @@ async def test_http_steer_has_no_target_or_effective_mode_and_keeps_scope(sessio
         assert persisted.kind == "steer" and persisted.status == "pending" and persisted.turn_id is None
         assert await AgentInputRepository(db).list_messages(persisted.id) == []
         assert persisted.messages[0]["content"] == [{"type": "text", "text": "S1"}]
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(DomainError) as exc:
             await inputs.accept_message(
                 db=db,
                 scope=SCOPE,
@@ -665,4 +680,4 @@ async def test_http_steer_has_no_target_or_effective_mode_and_keeps_scope(sessio
                 mode="follow_up",
                 messages=[build_chat_input_message("S1")],
             )
-        assert exc.value.status_code == 409
+        assert isinstance(exc.value, StateConflictError)

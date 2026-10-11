@@ -8,8 +8,6 @@ import os
 import tempfile
 from pathlib import PurePosixPath
 
-from fastapi import HTTPException
-
 from yuxi.infrastructure.file_preview import prepare_file_preview, preview_too_large
 from yuxi.infrastructure.filesystem import copy_file_fd, open_regular_file_fd
 from yuxi.infrastructure.office_conversion import (
@@ -30,6 +28,14 @@ from yuxi.modules.extensions.skills.shared import lock_accessible_shared_skill_f
 from yuxi.modules.identity.repositories.users import UserRepository
 from yuxi.modules.workspace.errors import FileTransferLimitError
 from yuxi.modules.workspace.services.bindings import resolve_authorized_workdir
+from yuxi.shared.errors import (
+    ContentTooLargeError,
+    DomainError,
+    InvalidOperationError,
+    PermissionDeniedError,
+    ResourceNotFoundError,
+    StateConflictError,
+)
 from yuxi.shared.files import MAX_FILE_PREVIEW_BYTES, PreparedFile, PreviewResult, detect_media_type
 
 MAX_ARTIFACT_DOWNLOAD_BYTES = 1024 * 1024 * 1024
@@ -41,11 +47,11 @@ def _normalize_artifact_path(workdir_path: str, path: str) -> str:
     raw = str(path or "").strip()
     normalized = str(PurePosixPath(raw if raw.startswith("/") else f"/{raw}"))
     if ".." in PurePosixPath(raw).parts:
-        raise HTTPException(status_code=403, detail="access denied")
+        raise PermissionDeniedError("access denied")
     allowed = normalized.startswith(f"{workdir_path}/") or normalized.startswith(f"{VIRTUAL_PATH_PREFIX.rstrip('/')}/")
     allowed = allowed or normalized.startswith(f"{VIRTUAL_SKILLS_PATH}/")
     if not allowed:
-        raise HTTPException(status_code=403, detail="artifact is outside the current user's visible roots")
+        raise PermissionDeniedError("artifact is outside the current user's visible roots")
     return normalized
 
 
@@ -56,13 +62,13 @@ async def _require_skill_artifact_access(*, normalized_path: str, current_uid: s
     slug = normalized_path[len(skills_prefix) :].split("/", 1)[0]
     user = await UserRepository(db).get_by_uid(str(current_uid))
     if user is None or bool(user.is_deleted):
-        raise HTTPException(status_code=403, detail="artifact access denied")
+        raise PermissionDeniedError("artifact access denied")
     shared = await lock_accessible_shared_skill_for_file(db, user, slug)
     if shared is None:
-        raise HTTPException(status_code=403, detail="artifact access denied")
+        raise PermissionDeniedError("artifact access denied")
     relative_path = normalized_path[len(skills_prefix) + len(slug) :].lstrip("/")
     if not relative_path:
-        raise HTTPException(status_code=400, detail="artifact path is not a regular file")
+        raise InvalidOperationError("artifact path is not a regular file")
     return shared, relative_path
 
 
@@ -103,13 +109,13 @@ async def _copy_artifact_to_path(
             max_bytes,
         )
     except PermissionError as exc:
-        raise HTTPException(status_code=403, detail="artifact access denied") from exc
+        raise PermissionDeniedError("artifact access denied") from exc
     except IsADirectoryError as exc:
-        raise HTTPException(status_code=400, detail="artifact path is not a regular file") from exc
+        raise InvalidOperationError("artifact path is not a regular file") from exc
     except FileTransferLimitError as exc:
-        raise HTTPException(status_code=413, detail="artifact exceeds transfer limit") from exc
+        raise ContentTooLargeError("artifact exceeds transfer limit") from exc
     except (FileNotFoundError, ValueError) as exc:
-        raise HTTPException(status_code=404, detail="artifact not found") from exc
+        raise ResourceNotFoundError("artifact not found") from exc
 
 
 async def resolve_thread_artifact_view(
@@ -137,10 +143,10 @@ async def resolve_thread_artifact_view(
             temp_path,
             MAX_FILE_PREVIEW_BYTES if is_preview else MAX_ARTIFACT_DOWNLOAD_BYTES,
         )
-    except HTTPException as exc:
+    except DomainError as exc:
         with contextlib.suppress(FileNotFoundError):
             os.unlink(temp_path)
-        if is_preview and exc.status_code == 413:
+        if is_preview and isinstance(exc, ContentTooLargeError):
             return preview_too_large().payload()
         raise
     except Exception:
@@ -162,7 +168,7 @@ async def resolve_thread_artifact_view(
                 )
             return prepare_file_preview(normalized, raw_content)
         except OfficeConversionError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise InvalidOperationError(str(exc)) from exc
         finally:
             with contextlib.suppress(FileNotFoundError):
                 os.unlink(temp_path)
@@ -197,7 +203,7 @@ async def save_thread_artifact_to_workspace_view(
         or "://" in raw_destination
         or is_runtime_path(raw_destination)
     ):
-        raise HTTPException(status_code=403, detail="invalid artifact destination")
+        raise PermissionDeniedError("invalid artifact destination")
     destination_scope = destination.as_posix()
     destination_must_exist = destination_path is not None and destination_scope != DEFAULT_ARTIFACT_DESTINATION
     if destination_must_exist:
@@ -208,13 +214,13 @@ async def save_thread_artifact_to_workspace_view(
                 root="/",
             )
         except FileNotFoundError as exc:
-            raise HTTPException(status_code=404, detail="artifact destination does not exist") from exc
+            raise ResourceNotFoundError("artifact destination does not exist") from exc
         except NotADirectoryError as exc:
-            raise HTTPException(status_code=400, detail="artifact destination is not a directory") from exc
+            raise InvalidOperationError("artifact destination is not a directory") from exc
         except (PermissionError, ValueError) as exc:
-            raise HTTPException(status_code=403, detail="artifact destination access denied") from exc
+            raise PermissionDeniedError("artifact destination access denied") from exc
         if not destination_item["is_dir"]:
-            raise HTTPException(status_code=400, detail="artifact destination is not a directory")
+            raise InvalidOperationError("artifact destination is not a directory")
     skill_source = await _require_skill_artifact_access(normalized_path=normalized, current_uid=current_uid, db=db)
     descriptor, temp_path = tempfile.mkstemp(prefix="yuxi-save-artifact-")
     os.close(descriptor)
@@ -239,13 +245,13 @@ async def save_thread_artifact_to_workspace_view(
             except FileExistsError:
                 continue
             except FileNotFoundError as exc:
-                raise HTTPException(status_code=404, detail="artifact destination does not exist") from exc
+                raise ResourceNotFoundError("artifact destination does not exist") from exc
             except NotADirectoryError as exc:
-                raise HTTPException(status_code=400, detail="artifact destination is not a directory") from exc
+                raise InvalidOperationError("artifact destination is not a directory") from exc
             except (PermissionError, ValueError) as exc:
-                raise HTTPException(status_code=403, detail="artifact destination access denied") from exc
+                raise PermissionDeniedError("artifact destination access denied") from exc
         else:
-            raise HTTPException(status_code=409, detail="saved artifact name space is exhausted")
+            raise StateConflictError("saved artifact name space is exhausted")
     finally:
         with contextlib.suppress(FileNotFoundError):
             os.unlink(temp_path)

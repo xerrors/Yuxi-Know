@@ -6,7 +6,6 @@ import asyncio
 import json
 from typing import Any
 
-from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.infrastructure.observability.logging import logger
@@ -25,6 +24,7 @@ from yuxi.modules.agents.services.threads import require_thread
 from yuxi.modules.agents.services.transport import enqueue_agent_run
 from yuxi.modules.models.utils import parse_assistant_message_body
 from yuxi.shared.datetime import format_utc_datetime, utc_now
+from yuxi.shared.errors import PermissionDeniedError
 
 MESSAGE_AUDIT_LIMIT = 500
 AGENT_RUN_TRACE_LIMIT = 500
@@ -33,7 +33,7 @@ AGENT_RUN_TRACE_LIMIT = 500
 async def get_thread_audits(*, db: AsyncSession, scope: ActorScope, thread_id: str) -> dict:
     """只允许无 API Key 的超级管理员读取持久调试消息。"""
     if not scope.is_superadmin or scope.api_key_id is not None or scope.app_id is not None:
-        raise HTTPException(status_code=403, detail="无权读取模型与工具审计")
+        raise PermissionDeniedError("无权读取模型与工具审计")
     agent_session = await require_thread(db=db, scope=scope, thread_id=thread_id)
     repository = SessionRepository(db)
     messages, truncated = await repository.list_message_audits(agent_session.id, limit=MESSAGE_AUDIT_LIMIT)

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.modules.agents.models.messages import Message
@@ -12,6 +11,7 @@ from yuxi.modules.agents.models.runs import AgentRun, build_agent_run_timing
 from yuxi.modules.agents.repositories.attachments import AttachmentRepository
 from yuxi.modules.agents.services.attachments import serialize_attachment
 from yuxi.shared.datetime import format_utc_datetime
+from yuxi.shared.errors import InvalidOperationError, ResourceNotFoundError
 
 
 async def list_session_items(
@@ -34,7 +34,7 @@ async def list_session_items(
 
         turn = await AgentTurnRepository(db).get_for_scope(turn_id=turn_id, thread_id=thread_id, uid=scope.uid, app_id=scope.app_id)
         if turn is None:
-            raise HTTPException(status_code=404, detail="Turn 不存在")
+            raise ResourceNotFoundError("Turn 不存在")
     try:
         rows = await PublicItemRepository(db).list_page(
             thread_id=thread_id,
@@ -46,7 +46,7 @@ async def list_session_items(
             order=order,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise InvalidOperationError(str(exc)) from exc
     attachments = await AttachmentRepository(db).for_messages([row.id for row in rows[:limit] if row.role == "user"])
     page = [
         serialize_public_items(

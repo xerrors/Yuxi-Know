@@ -5,7 +5,6 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.modules.agents.models.runs import AgentRun
@@ -17,6 +16,7 @@ from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 from yuxi.modules.agents.services.scope import ActorScope
+from yuxi.shared.errors import ResourceNotFoundError
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,10 +149,10 @@ async def get_run_snapshot(*, db: AsyncSession, scope: ActorScope, thread_id: st
     """按 Thread/Turn/APP 归属读取执行段及持久输出。"""
     agent_session = await SessionRepository(db).get_session_by_thread_id(thread_id)
     if agent_session is None or agent_session.uid != scope.uid or agent_session.app_id != scope.app_id:
-        raise HTTPException(status_code=404, detail="Run 不存在")
+        raise ResourceNotFoundError("Run 不存在")
     run = await AgentRunRepository(db).get_run(run_id)
     if run is None or run.uid != scope.uid or run.app_id != scope.app_id or run.thread_id != thread_id:
-        raise HTTPException(status_code=404, detail="Run 不存在")
+        raise ResourceNotFoundError("Run 不存在")
     turn = await AgentTurnRepository(db).get_for_scope(
         turn_id=run.turn_id,
         thread_id=run.thread_id,
@@ -160,7 +160,7 @@ async def get_run_snapshot(*, db: AsyncSession, scope: ActorScope, thread_id: st
         app_id=scope.app_id,
     )
     if turn is None:
-        raise HTTPException(status_code=404, detail="Run 不存在")
+        raise ResourceNotFoundError("Run 不存在")
     from yuxi.modules.agents.services.public_items import serialize_public_run
 
     input_ids = await AgentInputRepository(db).input_ids_for_runs([run.id])

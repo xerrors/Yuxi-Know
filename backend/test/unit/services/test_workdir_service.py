@@ -1,10 +1,10 @@
 from types import SimpleNamespace
 
 import pytest
-from fastapi import HTTPException
 
 import yuxi.modules.workspace.services.bindings as svc
 from yuxi.modules.workspace.workdir import Workdir
+from yuxi.shared.errors import DomainError, ResourceNotFoundError
 
 
 def test_workdir_access_resolves_only_scope_relative_paths():
@@ -101,19 +101,19 @@ async def test_binding_rejects_cross_user_session(monkeypatch: pytest.MonkeyPatc
 
     monkeypatch.setattr(svc, "SessionRepository", _SessionRepository)
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(DomainError) as exc:
         await svc.resolve_authorized_workdir(thread_id="thread-1", uid="user-1", db=object())
 
-    assert exc.value.status_code == 404
+    assert isinstance(exc.value, ResourceNotFoundError)
 
 
 @pytest.mark.asyncio
 async def test_binding_rejects_same_user_from_other_app():
     """Workdir executor 不接受同 UID 的另一个 APP 身份。"""
     agent_session = SimpleNamespace(uid="user-1", app_id="app-a", status="active")
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(DomainError) as exc:
         await svc.resolve_authorized_session_workdir(agent_session=agent_session, uid="user-1", app_id="app-b", db=object())
-    assert exc.value.status_code == 404
+    assert isinstance(exc.value, ResourceNotFoundError)
 
 
 @pytest.mark.asyncio

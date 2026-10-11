@@ -11,7 +11,6 @@ import json
 import uuid
 from copy import deepcopy
 
-from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.modules.agents.models.runs import AGENT_RUN_TERMINAL_STATUSES
@@ -30,6 +29,7 @@ from yuxi.modules.agents.services.public_resources import session_resource
 from yuxi.modules.agents.services.scheduler import claim_next_input, deliver
 from yuxi.modules.agents.services.scope import ActorScope
 from yuxi.shared.datetime import format_utc_datetime, utc_now
+from yuxi.shared.errors import InvalidInputError, InvalidOperationError, ResourceNotFoundError, StateConflictError
 
 
 async def require_thread(*, db: AsyncSession, scope: ActorScope, thread_id: str, lock: bool = False) -> Session:
@@ -42,7 +42,7 @@ async def require_thread(*, db: AsyncSession, scope: ActorScope, thread_id: str,
         or agent_session.app_id != scope.app_id
         or agent_session.status not in {"active", "archived"}
     ):
-        raise HTTPException(status_code=404, detail="Thread 不存在")
+        raise ResourceNotFoundError("Thread 不存在")
     return agent_session
 
 
@@ -71,7 +71,7 @@ async def list_session_page(
             is_pinned=is_pinned,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise InvalidOperationError(str(exc)) from exc
     facts = await repo.public_facts(sessions, uid=scope.uid, app_id=scope.app_id)
     return [session_resource(*row) for row in facts], has_more
 
@@ -143,7 +143,7 @@ async def update_thread(
     if title is not None:
         normalized = title.strip()
         if not normalized or len(normalized) > 255:
-            raise HTTPException(status_code=422, detail="标题长度必须为 1 至 255")
+            raise InvalidInputError("标题长度必须为 1 至 255")
         agent_session.title = normalized
         metadata = dict(agent_session.extra_metadata or {})
         metadata.pop("auto_title", None)
@@ -152,7 +152,7 @@ async def update_thread(
         agent_session.is_pinned = is_pinned
     if tool_approval_mode is not None or model_spec is not None:
         if agent_session.status != "active":
-            raise HTTPException(status_code=409, detail="非活跃 Thread 不能修改执行配置")
+            raise StateConflictError("非活跃 Thread 不能修改执行配置")
         if agent_session.config_snapshot is None:
             raise ValueError("Session 缺少配置快照")
         snapshot = deepcopy(agent_session.config_snapshot)
@@ -178,7 +178,7 @@ async def archive_thread(*, db: AsyncSession, scope: ActorScope, thread_id: str)
         uid=scope.uid,
     )
     if active_turn is not None or inputs or active_run is not None:
-        raise HTTPException(status_code=409, detail="Thread 仍有活跃执行或待处理输入")
+        raise StateConflictError("Thread 仍有活跃执行或待处理输入")
     agent_session.status = "archived"
     agent_session.updated_at = utc_now()
     await db.commit()
@@ -235,9 +235,9 @@ async def continue_queue(*, db: AsyncSession, scope: ActorScope, thread_id: str,
         require_control_replay(existing, event_type, intent_hash)
         return control_accepted(existing)
     if not agent_session.queue_paused:
-        raise HTTPException(status_code=409, detail="队列未暂停")
+        raise StateConflictError("队列未暂停")
     if await AgentTurnRepository(db).lock_active_for_thread(thread_id=thread_id, uid=scope.uid, app_id=scope.app_id):
-        raise HTTPException(status_code=409, detail="当前 Turn 尚未结束")
+        raise StateConflictError("当前 Turn 尚未结束")
 
     agent_session.queue_paused = False
     dispatch = await claim_next_input(db=db, agent_session=agent_session)
@@ -278,9 +278,9 @@ async def cancel_input(*, db: AsyncSession, scope: ActorScope, thread_id: str, i
     input_repo = AgentInputRepository(db)
     input_item = await input_repo.get_for_scope(input_id=input_id, thread_id=thread_id, uid=scope.uid, app_id=scope.app_id, for_update=True)
     if input_item is None:
-        raise HTTPException(status_code=404, detail="Input 不存在")
+        raise ResourceNotFoundError("Input 不存在")
     if input_item.status != "pending":
-        raise HTTPException(status_code=409, detail="Input 已被领取或取消")
+        raise StateConflictError("Input 已被领取或取消")
     await input_repo.cancel(input_item)
     receipt = await receipt_repo.create(
         receipt_id=str(uuid.uuid4()),
@@ -320,14 +320,14 @@ async def promote_input(*, db: AsyncSession, scope: ActorScope, thread_id: str, 
         for_update=True,
     )
     if item is None:
-        raise HTTPException(status_code=404, detail="Input 不存在")
+        raise ResourceNotFoundError("Input 不存在")
     if item.status != "pending" or agent_session.status != "active":
-        raise HTTPException(status_code=409, detail="Input 已被领取、取消或会话已归档")
+        raise StateConflictError("Input 已被领取、取消或会话已归档")
     active = await AgentTurnRepository(db).lock_active_for_thread(thread_id=thread_id, uid=scope.uid, app_id=scope.app_id)
     if active is not None and active.status in {"waiting", "cancelling"}:
-        raise HTTPException(status_code=409, detail="当前任务正在等待或取消清理，不能转为引导")
+        raise StateConflictError("当前任务正在等待或取消清理，不能转为引导")
     if await AttachmentRepository(db).has_unready(input_id):
-        raise HTTPException(status_code=409, detail="附件尚未就绪")
+        raise StateConflictError("附件尚未就绪")
     changed = item.kind != "steer"
     item.kind = "steer"
     receipt = await receipt_repo.create(
@@ -355,7 +355,7 @@ async def promote_input(*, db: AsyncSession, scope: ActorScope, thread_id: str, 
 def check_control_key(key: str) -> None:
     """校验控制命令的幂等键。"""
     if not isinstance(key, str) or not 1 <= len(key) <= 128:
-        raise HTTPException(status_code=422, detail="Idempotency-Key 长度必须为 1 至 128")
+        raise InvalidInputError("Idempotency-Key 长度必须为 1 至 128")
 
 
 def hash_control_intent(*parts) -> str:
@@ -367,7 +367,7 @@ def hash_control_intent(*parts) -> str:
 def require_control_replay(receipt, event_type: str, intent_hash: str) -> None:
     """拒绝同一键改变控制命令或目标。"""
     if receipt.event_type != event_type or receipt.intent_hash != intent_hash:
-        raise HTTPException(status_code=409, detail="Idempotency-Key 已用于其他输入")
+        raise StateConflictError("Idempotency-Key 已用于其他输入")
 
 
 def control_accepted(receipt) -> dict:

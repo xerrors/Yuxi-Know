@@ -10,7 +10,6 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from croniter import CroniterBadDateError, CroniterError, croniter
-from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,6 +27,7 @@ from yuxi.modules.schedules.models import ScheduledAgentJob, ScheduledAgentRun
 from yuxi.modules.schedules.repository import ScheduledAgentRepository
 from yuxi.modules.workspace.repositories.projects import ProjectRepository
 from yuxi.shared.datetime import format_utc_datetime, utc_now
+from yuxi.shared.errors import DomainError, InvalidInputError, ResourceNotFoundError, StateConflictError
 
 SCHEDULED_AGENT_SOURCE = "scheduled_agent"
 MAX_PROMPT_LENGTH = 32_000
@@ -44,7 +44,7 @@ def _normalize_request_id(value: str) -> str:
     """校验客户端持有的稳定请求 ID。"""
     request_id = str(value or "").strip()
     if not 8 <= len(request_id) <= 64 or REQUEST_ID_PATTERN.fullmatch(request_id) is None:
-        raise HTTPException(status_code=422, detail="request_id 必须是 8 到 64 位字母、数字或 ._:-")
+        raise InvalidInputError("request_id 必须是 8 到 64 位字母、数字或 ._:-")
     return request_id
 
 
@@ -58,21 +58,21 @@ def validate_schedule(cron_expression: str, timezone: str) -> tuple[str, str]:
     """校验 cron 表达式和 IANA 时区。"""
     expression = str(cron_expression or "").strip()
     if not expression:
-        raise HTTPException(status_code=422, detail="cron_expression 不能为空")
+        raise InvalidInputError("cron_expression 不能为空")
     try:
         if len(expression.split()) != 5 or not croniter.is_valid(expression):
             raise ValueError
     except (TypeError, ValueError):
-        raise HTTPException(status_code=422, detail="cron_expression 不是有效的 5 段 cron 表达式") from None
+        raise InvalidInputError("cron_expression 不是有效的 5 段 cron 表达式") from None
     zone = str(timezone or "").strip()
     try:
         ZoneInfo(zone)
     except (ZoneInfoNotFoundError, ValueError):
-        raise HTTPException(status_code=422, detail="timezone 必须是有效的 IANA 时区") from None
+        raise InvalidInputError("timezone 必须是有效的 IANA 时区") from None
     try:
         next_run_at(expression, zone, utc_now())
     except (CroniterBadDateError, CroniterError, OverflowError, ValueError):
-        raise HTTPException(status_code=422, detail="cron_expression 没有可计算的下一次触发时间") from None
+        raise InvalidInputError("cron_expression 没有可计算的下一次触发时间") from None
     return expression, zone
 
 
@@ -87,9 +87,9 @@ def next_run_at(cron_expression: str, timezone: str, after: datetime) -> datetim
 def _normalize_text(value: str, field: str, maximum: int) -> str:
     normalized = str(value or "").strip()
     if not normalized:
-        raise HTTPException(status_code=422, detail=f"{field} 不能为空")
+        raise InvalidInputError(f"{field} 不能为空")
     if len(normalized) > maximum:
-        raise HTTPException(status_code=422, detail=f"{field} 不能超过 {maximum} 个字符")
+        raise InvalidInputError(f"{field} 不能超过 {maximum} 个字符")
     return normalized
 
 
@@ -97,7 +97,7 @@ async def _validate_project(project_id: str, user: User, db: AsyncSession):
     """锁定任务绑定的活动 Project，直到调用方提交事务。"""
     project = await ProjectRepository(db).lock_active_for_user(project_id, str(user.uid))
     if not project:
-        raise HTTPException(status_code=404, detail="Project 不存在或不可访问")
+        raise ResourceNotFoundError("Project 不存在或不可访问")
     return project
 
 
@@ -105,11 +105,11 @@ async def _validate_agent(agent_slug: str, user: User, db: AsyncSession):
     repo = AgentRepository(db)
     agent = await repo.get_visible_by_slug(slug=agent_slug, user=user)
     if not agent:
-        raise HTTPException(status_code=404, detail="智能体不存在或不可访问")
+        raise ResourceNotFoundError("智能体不存在或不可访问")
     try:
         get_agent_backend(agent.backend_id)
     except AgentBackendNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise ResourceNotFoundError(str(exc)) from exc
     return agent
 
 
@@ -208,11 +208,11 @@ async def create_scheduled_job(*, user: User, db: AsyncSession, data: dict) -> d
     expression, timezone = validate_schedule(data.get("cron_expression"), data.get("timezone"))
     model_spec = str(data.get("model_spec") or "").strip() or None
     if model_spec and len(model_spec) > 512:
-        raise HTTPException(status_code=422, detail="model_spec 不能超过 512 个字符")
+        raise InvalidInputError("model_spec 不能超过 512 个字符")
     try:
         tool_approval_mode = normalize_tool_approval_mode(data.get("tool_approval_mode", "default"))
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from None
+        raise InvalidInputError(str(exc)) from None
     intent_hash = _intent_hash(
         {
             "project_id": project_id,
@@ -229,7 +229,7 @@ async def create_scheduled_job(*, user: User, db: AsyncSession, data: dict) -> d
     existing = await repo.get_job_by_creation_request(str(user.uid), request_id)
     if existing is not None:
         if existing.creation_intent_hash != intent_hash:
-            raise HTTPException(status_code=409, detail="request_id 已用于其他定时任务创建意图")
+            raise StateConflictError("request_id 已用于其他定时任务创建意图")
         return existing.to_dict()
 
     await _validate_project(project_id, user, db)
@@ -260,9 +260,9 @@ async def create_scheduled_job(*, user: User, db: AsyncSession, data: dict) -> d
         await db.rollback()
         replay = await repo.get_job_by_creation_request(str(user.uid), request_id)
         if replay is None:
-            raise HTTPException(status_code=409, detail="定时任务创建冲突")
+            raise StateConflictError("定时任务创建冲突")
         if replay.creation_intent_hash != intent_hash:
-            raise HTTPException(status_code=409, detail="request_id 已用于其他定时任务创建意图")
+            raise StateConflictError("request_id 已用于其他定时任务创建意图")
         job = replay
     return job.to_dict()
 
@@ -289,11 +289,11 @@ async def update_scheduled_job(*, job_id: str, user: User, db: AsyncSession, dat
         try:
             job.tool_approval_mode = normalize_tool_approval_mode(data["tool_approval_mode"])
         except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from None
+            raise InvalidInputError(str(exc)) from None
     if "model_spec" in data:
         model_spec = str(data["model_spec"] or "").strip() or None
         if model_spec and len(model_spec) > 512:
-            raise HTTPException(status_code=422, detail="model_spec 不能超过 512 个字符")
+            raise InvalidInputError("model_spec 不能超过 512 个字符")
         job.model_spec = model_spec
     expression = data.get("cron_expression", job.cron_expression)
     timezone = data.get("timezone", job.timezone)
@@ -340,7 +340,7 @@ async def run_scheduled_job_now(
     run_id = build_stable_id("scheduled-run", identity)
     run = await repo.get_run(run_id)
     if run is not None and run.job_id != job.id:
-        raise HTTPException(status_code=409, detail="request_id 已用于其他立即运行意图")
+        raise StateConflictError("request_id 已用于其他立即运行意图")
     if run is None:
         await _validate_project(job.project_id, user, db)
         await _validate_agent(job.agent_slug, user, db)
@@ -360,9 +360,9 @@ async def run_scheduled_job_now(
             await db.rollback()
             replay = await repo.get_run(run_id)
             if replay is None:
-                raise HTTPException(status_code=409, detail="立即运行请求冲突")
+                raise StateConflictError("立即运行请求冲突")
             if replay.job_id != job.id:
-                raise HTTPException(status_code=409, detail="request_id 已用于其他立即运行意图")
+                raise StateConflictError("request_id 已用于其他立即运行意图")
             run = replay
     else:
         await db.commit()
@@ -462,7 +462,7 @@ async def dispatch_scheduled_run(*, scheduled_run_id: str) -> dict | None:
             await result_db.commit()
             input_item, run = await ScheduledAgentRepository(result_db).get_input_and_run(current.input_id)
             return _execution_to_dict(current, input_item, run)
-    except HTTPException as exc:
+    except DomainError as exc:
         settled = await _settle_dispatch_error(scheduled_run_id, exc, terminal=True)
         if settled is None:
             raise

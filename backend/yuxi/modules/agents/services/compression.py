@@ -6,7 +6,6 @@ import asyncio
 import uuid
 from typing import Any
 
-from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +25,7 @@ from yuxi.modules.agents.runtime.sandbox.paths import runtime_workdir_path
 from yuxi.modules.extensions.skills.projection import get_user_skills_root_dir
 from yuxi.modules.identity.models import User
 from yuxi.modules.workspace.services.bindings import ensure_session_workdir_available
+from yuxi.shared.errors import ResourceNotFoundError, StateConflictError
 
 
 async def compress_thread_context(
@@ -44,7 +44,7 @@ async def compress_thread_context(
         or getattr(agent_session, "app_id", None) != app_id
         or agent_session.status != "active"
     ):
-        raise HTTPException(status_code=404, detail="对话线程不存在")
+        raise ResourceNotFoundError("对话线程不存在")
 
     agent_slug = agent_session.agent_id
     await _ensure_thread_idle(db=db, thread_id=thread_id)
@@ -54,11 +54,11 @@ async def compress_thread_context(
         user=current_user,
     )
     if agent_item is None:
-        raise HTTPException(status_code=404, detail="智能体不存在")
+        raise ResourceNotFoundError("智能体不存在")
     try:
         agent = get_agent_backend(agent_item.backend_id)
     except AgentBackendNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise ResourceNotFoundError(str(exc)) from exc
 
     context = agent.context_schema()
     configured = agent_session.config_snapshot
@@ -107,10 +107,7 @@ async def _ensure_thread_idle(*, db: AsyncSession, thread_id: str) -> None:
     pending_input = await db.scalar(select(AgentInput.id).where(AgentInput.thread_id == thread_id, AgentInput.status == "pending").limit(1))
     if active_turn is None and pending_input is None:
         return
-    raise HTTPException(
-        status_code=409,
-        detail={"code": "thread_busy", "message": "线程仍有运行、交互或排队输入，暂时不能压缩"},
-    )
+    raise StateConflictError("线程仍有运行、交互或排队输入，暂时不能压缩", code="thread_busy")
 
 
 async def _compress_agent_checkpoint_in_runtime(

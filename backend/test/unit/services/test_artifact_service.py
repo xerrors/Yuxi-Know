@@ -5,14 +5,15 @@ import threading
 from pathlib import Path
 
 import pytest
+
 import yuxi.modules.agents.services.artifacts as svc
-from fastapi import HTTPException
 from yuxi.api.responses.files import render_file_result
 from yuxi.modules.agents.runtime.sandbox.paths import workspace_scope_from_runtime_path
 from yuxi.modules.extensions.skills import edit as skill_edit
-from yuxi.modules.workspace.services.bindings import AuthorizedWorkdir
 from yuxi.modules.workspace.errors import FileTransferLimitError
+from yuxi.modules.workspace.services.bindings import AuthorizedWorkdir
 from yuxi.modules.workspace.workdir import Workdir
+from yuxi.shared.errors import ContentTooLargeError, DomainError, InvalidOperationError, PermissionDeniedError, ResourceNotFoundError
 
 
 class _Workspace:
@@ -194,19 +195,19 @@ async def test_artifact_download_encodes_untrusted_posix_filename(live_files, fi
 
 @pytest.mark.asyncio
 async def test_artifact_rejects_other_project(live_files):
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(DomainError) as exc:
         await svc.resolve_thread_artifact_view(
             thread_id="thread-1",
             current_uid="user-1",
             db=object(),
             path="/home/gem/user-data/projects/other/secret.txt",
         )
-    assert exc.value.status_code == 404
+    assert isinstance(exc.value, ResourceNotFoundError)
 
 
 @pytest.mark.asyncio
 async def test_artifact_rejects_workdir_viewer_scope(live_files):
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(DomainError) as exc:
         await svc.resolve_thread_artifact_view(
             thread_id="thread-1",
             current_uid="user-1",
@@ -214,14 +215,14 @@ async def test_artifact_rejects_workdir_viewer_scope(live_files):
             path="/outputs/report.md",
         )
 
-    assert exc.value.status_code == 403
+    assert isinstance(exc.value, PermissionDeniedError)
 
 
 @pytest.mark.asyncio
 async def test_artifact_rechecks_current_skill_authorization(live_files, monkeypatch):
     monkeypatch.setattr(svc, "lock_accessible_shared_skill_for_file", lambda _db, _user, _slug: _async_value(None))
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(DomainError) as exc:
         await svc.resolve_thread_artifact_view(
             thread_id="thread-1",
             current_uid="user-1",
@@ -229,7 +230,7 @@ async def test_artifact_rechecks_current_skill_authorization(live_files, monkeyp
             path="/home/gem/skills/reporter/SKILL.md",
         )
 
-    assert exc.value.status_code == 403
+    assert isinstance(exc.value, PermissionDeniedError)
 
 
 @pytest.mark.asyncio
@@ -238,14 +239,14 @@ async def test_artifact_transfer_limit_is_not_reported_as_missing(live_files, mo
         raise FileTransferLimitError("file exceeds transfer limit")
 
     monkeypatch.setattr(live_files, "download_authorized_file_to_path", reject_large_file)
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(DomainError) as exc:
         await svc.resolve_thread_artifact_view(
             thread_id="thread-1",
             current_uid="user-1",
             db=object(),
             path="/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/report.md",
         )
-    assert exc.value.status_code == 413
+    assert isinstance(exc.value, ContentTooLargeError)
 
 
 @pytest.mark.asyncio
@@ -279,7 +280,7 @@ async def test_save_artifact_uses_selected_workspace_destination(live_files):
     ["../exports", "/exports/../reports", "/home/gem/user-data/exports", "/home/gem/skills/reporter"],
 )
 async def test_save_artifact_rejects_unsafe_destination(live_files, destination):
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(DomainError) as exc:
         await svc.save_thread_artifact_to_workspace_view(
             thread_id="thread-1",
             current_uid="user-1",
@@ -287,7 +288,7 @@ async def test_save_artifact_rejects_unsafe_destination(live_files, destination)
             path="/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/report.md",
             destination_path=destination,
         )
-    assert exc.value.status_code == 403
+    assert isinstance(exc.value, PermissionDeniedError)
 
 
 @pytest.mark.asyncio
@@ -305,7 +306,7 @@ async def test_save_artifact_accepts_explicit_default_destination(live_files):
 
 @pytest.mark.asyncio
 async def test_save_artifact_rejects_missing_destination(live_files):
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(DomainError) as exc:
         await svc.save_thread_artifact_to_workspace_view(
             thread_id="thread-1",
             current_uid="user-1",
@@ -313,7 +314,7 @@ async def test_save_artifact_rejects_missing_destination(live_files):
             path="/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/report.md",
             destination_path="/missing",
         )
-    assert exc.value.status_code == 404
+    assert isinstance(exc.value, ResourceNotFoundError)
 
 
 @pytest.mark.asyncio
@@ -326,7 +327,7 @@ async def test_save_artifact_does_not_recreate_selected_directory_after_validati
         return result
 
     monkeypatch.setattr(live_files, "stat_authorized_path", remove_after_stat)
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(DomainError) as exc:
         await svc.save_thread_artifact_to_workspace_view(
             thread_id="thread-1",
             current_uid="user-1",
@@ -334,13 +335,13 @@ async def test_save_artifact_does_not_recreate_selected_directory_after_validati
             path="/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/report.md",
             destination_path="/exports/reports",
         )
-    assert exc.value.status_code == 404
+    assert isinstance(exc.value, ResourceNotFoundError)
     assert "/exports/reports" not in live_files.directories
 
 
 @pytest.mark.asyncio
 async def test_save_artifact_rejects_file_in_destination_path(live_files):
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(DomainError) as exc:
         await svc.save_thread_artifact_to_workspace_view(
             thread_id="thread-1",
             current_uid="user-1",
@@ -348,7 +349,7 @@ async def test_save_artifact_rejects_file_in_destination_path(live_files):
             path="/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/report.md",
             destination_path="/notes.txt/child",
         )
-    assert exc.value.status_code == 400
+    assert isinstance(exc.value, InvalidOperationError)
 
 
 @pytest.mark.asyncio

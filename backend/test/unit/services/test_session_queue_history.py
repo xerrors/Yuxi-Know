@@ -6,23 +6,23 @@ from datetime import datetime, timedelta
 
 import pytest
 import pytest_asyncio
-from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from test.support.sqlite import create_utc_sqlite_engine
-from yuxi.modules.agents.repositories.public_items import PublicItemRepository
-from yuxi.modules.agents.services.public_items import serialize_public_items
-from yuxi.modules.agents.services.threads import get_queue_snapshot, require_thread
-from yuxi.modules.agents.services.scope import ActorScope
-from yuxi.modules.agents.models.inputs import AgentInput
-from yuxi.modules.agents.repositories.input import AgentInputRepository
-from yuxi.modules.agents.services.input_messages import build_chat_input_message, serialize_input_message
-from yuxi.modules.agents.models.runs import AgentRun
-from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.infrastructure.postgres.base import Base
-from yuxi.modules.agents.models.sessions import Session
+from yuxi.modules.agents.models.inputs import AgentInput
 from yuxi.modules.agents.models.messages import Message, ToolCall
+from yuxi.modules.agents.models.runs import AgentRun
+from yuxi.modules.agents.models.sessions import Session
+from yuxi.modules.agents.models.turns import AgentTurn
+from yuxi.modules.agents.repositories.input import AgentInputRepository
+from yuxi.modules.agents.repositories.public_items import PublicItemRepository
+from yuxi.modules.agents.services.input_messages import build_chat_input_message, serialize_input_message
+from yuxi.modules.agents.services.public_items import serialize_public_items
+from yuxi.modules.agents.services.scope import ActorScope
+from yuxi.modules.agents.services.threads import get_queue_snapshot, require_thread
 from yuxi.modules.workspace.models import Project
+from yuxi.shared.errors import DomainError, ResourceNotFoundError
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
 SCOPE = ActorScope(uid="user-1", app_id=None)
@@ -216,9 +216,9 @@ async def test_history_rejects_other_app_scope(session):
     agent_session = await session.get(Session, 1)
     agent_session.app_id = "other-app"
     await session.commit()
-    with pytest.raises(HTTPException) as failure:
+    with pytest.raises(DomainError) as failure:
         await _read_items(session)
-    assert failure.value.status_code == 404
+    assert isinstance(failure.value, ResourceNotFoundError)
 
 
 async def _register_visible(db):

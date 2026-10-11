@@ -34,6 +34,7 @@ from yuxi.modules.identity.models import User
 from yuxi.modules.workspace.repositories.projects import ProjectRepository
 from yuxi.modules.workspace.services.bindings import resolve_session_workdir_binding
 from yuxi.shared.datetime import format_utc_datetime, utc_now
+from yuxi.shared.errors import StateConflictError
 
 
 class SessionCooperationService:
@@ -567,7 +568,7 @@ async def notify_user_intervention(db, member: Session, *, key: str, action: str
 
 async def control_tree(*, db, scope: ActorScope, thread_id: str, idempotency_key: str, stopped: bool) -> dict:
     """持久接受用户的整树停止或继续意图，重试不改变新一轮状态。"""
-    from fastapi import HTTPException
+
     from sqlalchemy import text
     from sqlalchemy.dialects.postgresql import insert
 
@@ -625,7 +626,7 @@ async def control_tree(*, db, scope: ActorScope, thread_id: str, idempotency_key
         )
         is not None
     ):
-        raise HTTPException(status_code=409, detail="整树仍有未结束的 Turn")
+        raise StateConflictError("整树仍有未结束的 Turn")
     await db.execute(
         insert(CooperationRuntime)
         .values(tree_root_thread_id=member.tree_root_thread_id, stopped=stopped, released=False)

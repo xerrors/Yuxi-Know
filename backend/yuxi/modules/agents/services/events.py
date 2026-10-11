@@ -8,8 +8,6 @@ import re
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
-from fastapi import HTTPException
-
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.agents.repositories.input import AgentInputRepository
@@ -22,6 +20,7 @@ from yuxi.modules.agents.services.scope import ActorScope
 from yuxi.modules.agents.services.threads import require_thread
 from yuxi.modules.agents.services.transport import list_recent_run_stream_events, list_run_stream_events
 from yuxi.shared.datetime import utc_now
+from yuxi.shared.errors import InvalidInputError
 from yuxi.shared.hashing import hash_id
 
 SSE_HEARTBEAT_SECONDS = int(os.getenv("RUN_SSE_HEARTBEAT_SECONDS", "15"))
@@ -49,7 +48,7 @@ def _parse_cursor(raw: str | None) -> _Cursor:
         return _Cursor()
     match = _CURSOR.fullmatch(raw)
     if match is None:
-        raise HTTPException(status_code=422, detail="事件游标无效或版本不兼容")
+        raise InvalidInputError("事件游标无效或版本不兼容")
     receipt, run, event, phase = match.groups()
     return _Cursor(int(receipt), int(run), event, int(phase))
 

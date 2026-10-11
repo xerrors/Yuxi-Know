@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
@@ -13,6 +12,7 @@ from yuxi.modules.workspace.paths import allocate_default_user_workdir_path, nor
 from yuxi.modules.workspace.repositories.projects import ProjectHasPendingAgentWorkError, ProjectRepository
 from yuxi.modules.workspace.workdir import Workdir
 from yuxi.shared.datetime import utc_now
+from yuxi.shared.errors import InvalidInputError, InvalidOperationError, ResourceNotFoundError, StateConflictError
 
 MAX_PROJECT_NAME_LENGTH = 255
 
@@ -29,18 +29,18 @@ def _normalize_project_name(name: str | None, *, required: bool) -> str | None:
     """规范化并校验 Project 名称。"""
     normalized_name = (name or "").strip()
     if required and not normalized_name:
-        raise HTTPException(status_code=422, detail="项目名称不能为空")
+        raise InvalidInputError("项目名称不能为空")
     if len(normalized_name) > MAX_PROJECT_NAME_LENGTH:
-        raise HTTPException(status_code=422, detail="项目名称过长")
+        raise InvalidInputError("项目名称过长")
     return normalized_name or None
 
 
 def _require_matching_creation_intent(project: Project, *, name: str, workdir_path: str) -> None:
     """要求已有 Project 仍有效且匹配当前幂等创建意图。"""
     if project.status == "deleted":
-        raise HTTPException(status_code=409, detail="request_id 已用于已删除的 Project")
+        raise StateConflictError("request_id 已用于已删除的 Project")
     if project.name != name or project.directory_mode != "linked" or project.workdir_path != workdir_path:
-        raise HTTPException(status_code=409, detail="request_id 已用于其他 Project 创建意图")
+        raise StateConflictError("request_id 已用于其他 Project 创建意图")
 
 
 async def create_project_record(
@@ -56,26 +56,26 @@ async def create_project_record(
     """在当前事务内创建 Project，但不提交或物化 managed 目录。"""
     normalized_name = _normalize_project_name(name, required=selection_status == "selectable")
     if directory_mode not in {"managed", "linked"}:
-        raise HTTPException(status_code=422, detail="directory_mode 必须是 managed 或 linked")
+        raise InvalidInputError("directory_mode 必须是 managed 或 linked")
     if selection_status not in {"implicit", "selectable"}:
-        raise HTTPException(status_code=422, detail="selection_status 非法")
+        raise InvalidInputError("selection_status 非法")
 
     project_id = str(uuid.uuid4())
     if directory_mode == "managed":
         if workdir_path is not None:
-            raise HTTPException(status_code=422, detail="managed Project 不接受 workdir_path")
+            raise InvalidInputError("managed Project 不接受 workdir_path")
         normalized_path = allocate_default_user_workdir_path(str(uid), project_id)
     else:
         if workdir_path is None:
-            raise HTTPException(status_code=422, detail="linked Project 必须指定 workdir_path")
+            raise InvalidInputError("linked Project 必须指定 workdir_path")
         try:
             normalized_path = normalize_workdir_path(workdir_path)
             await _lock_project_workdir_changes(db=db, uid=str(uid))
             Workdir.open_existing(str(uid), normalized_path)
         except FileNotFoundError as exc:
-            raise HTTPException(status_code=404, detail="目录不存在") from exc
+            raise ResourceNotFoundError("目录不存在") from exc
         except (NotADirectoryError, PermissionError, OSError, ValueError) as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise InvalidOperationError(str(exc)) from exc
 
     project = Project(
         id=project_id,
@@ -105,16 +105,16 @@ async def create_project_view(*, uid: str, request_id: str, name: str, directory
     """幂等创建 selectable Project。"""
     normalized_request_id = (request_id or "").strip()
     if not normalized_request_id:
-        raise HTTPException(status_code=422, detail="request_id 不能为空")
+        raise InvalidInputError("request_id 不能为空")
     if directory_mode != "linked" or not (workdir_path or "").strip():
-        raise HTTPException(status_code=422, detail="手动创建项目必须选择目录")
+        raise InvalidInputError("手动创建项目必须选择目录")
     repository = ProjectRepository(db)
     existing = await repository.get_by_idempotency_key(normalized_request_id, str(uid))
     normalized_name = _normalize_project_name(name, required=True)
     try:
         normalized_path = normalize_workdir_path(workdir_path)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise InvalidOperationError(str(exc)) from exc
     if existing is not None:
         _require_matching_creation_intent(
             existing,
@@ -138,7 +138,7 @@ async def create_project_view(*, uid: str, request_id: str, name: str, directory
         await db.rollback()
         replay = await repository.get_by_idempotency_key(normalized_request_id, str(uid))
         if replay is None:
-            raise HTTPException(status_code=409, detail="Project 创建冲突")
+            raise StateConflictError("Project 创建冲突")
         _require_matching_creation_intent(
             replay,
             name=normalized_name,
@@ -160,7 +160,7 @@ async def rename_project_view(*, uid: str, project_id: str, name: str, db) -> di
     repository = ProjectRepository(db)
     project = await repository.lock_active_selectable_for_user(project_id, str(uid))
     if project is None:
-        raise HTTPException(status_code=404, detail="Project 不存在")
+        raise ResourceNotFoundError("Project 不存在")
 
     project.name = normalized_name
     project.updated_at = utc_now()
@@ -174,7 +174,7 @@ async def delete_project_view(*, uid: str, project_id: str, db) -> dict:
     repository = ProjectRepository(db)
     project = await repository.lock_active_selectable_for_user(project_id, str(uid))
     if project is None:
-        raise HTTPException(status_code=404, detail="Project 不存在")
+        raise ResourceNotFoundError("Project 不存在")
 
     try:
         archived_threads = await repository.delete_project_and_archive_threads(
@@ -182,7 +182,7 @@ async def delete_project_view(*, uid: str, project_id: str, db) -> dict:
             deleted_at=utc_now(),
         )
     except ProjectHasPendingAgentWorkError as exc:
-        raise HTTPException(status_code=409, detail="项目内仍有执行或待处理输入，暂不能归档") from exc
+        raise StateConflictError("项目内仍有执行或待处理输入，暂不能归档") from exc
     await db.commit()
     return {"message": "项目已删除，其中对话已归档", "archived_threads": archived_threads}
 

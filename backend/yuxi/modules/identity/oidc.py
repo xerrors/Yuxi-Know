@@ -10,7 +10,6 @@ import time
 import urllib.parse
 from typing import Any
 
-from fastapi import HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -21,6 +20,7 @@ from yuxi.modules.identity.models import Department, User
 from yuxi.modules.identity.repositories.users import UserRepository
 from yuxi.modules.identity.security import AuthUtils
 from yuxi.shared.datetime import utc_now
+from yuxi.shared.errors import OperationFailedError, PermissionDeniedError, StateConflictError
 
 # 前端 OIDC 回调路由路径（与 frontend/src/router/index.js 中的路由保持一致）
 FRONTEND_CALLBACK_PATH = "/auth/oidc/callback"
@@ -521,10 +521,7 @@ async def build_unique_oidc_username(db, preferred_username: str, sub: str) -> s
         if result.scalar_one_or_none() is None:
             return indexed_candidate
 
-    raise HTTPException(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail="无法生成可用用户名，请联系管理员",
-    )
+    raise OperationFailedError("无法生成可用用户名，请联系管理员")
 
 
 async def create_oidc_user(db, user_info: dict, department_id: int | None = None) -> User:
@@ -540,7 +537,7 @@ async def create_oidc_user(db, user_info: dict, department_id: int | None = None
         result = await db.execute(select(User).filter(User.uid == uid))
         existing_user = result.scalar_one_or_none()
         if existing_user and existing_user.user_kind == "end_user":
-            raise HTTPException(status_code=403, detail="终端用户不能用于 OIDC 登录")
+            raise PermissionDeniedError("终端用户不能用于 OIDC 登录")
         if existing_user and existing_user.is_deleted:
             existing_user = None
         if existing_user:
@@ -561,10 +558,7 @@ async def create_oidc_user(db, user_info: dict, department_id: int | None = None
                 logger.warning(
                     f"Cannot create OIDC user with raw uid {uid}: sub {sub} is already bound to another user {user_by_sub.id}, conflict"
                 )
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail=f"UID {uid} 已存在且OIDC标识 {sub} 已绑定到其他账号，请联系管理员处理冲突",
-                )
+                raise StateConflictError(f"UID {uid} 已存在且OIDC标识 {sub} 已绑定到其他账号，请联系管理员处理冲突")
     else:
         uid = f"oidc:{sub}"
 
@@ -599,20 +593,17 @@ async def create_oidc_user(db, user_info: dict, department_id: int | None = None
             existing_user = await find_user_by_oidc_sub(db, sub)
             if existing_user:
                 if oidc_config.use_raw_username and existing_user.uid != uid:
-                    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="OIDC标识已绑定到其他账号")
+                    raise StateConflictError("OIDC标识已绑定到其他账号")
                 return existing_user
             username = await build_unique_oidc_username(db, f"{preferred_username}-{retry_index + 2}", sub)
 
-    raise HTTPException(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail="创建 OIDC 用户失败，请重试",
-    )
+    raise OperationFailedError("创建 OIDC 用户失败，请重试")
 
 
 async def restore_deleted_oidc_user(db, deleted_user: User, user_info: dict) -> User:
     """恢复已注销的 OIDC 用户并返回可登录用户"""
     if deleted_user.user_kind == "end_user":
-        raise HTTPException(status_code=403, detail="终端用户不能用于 OIDC 登录")
+        raise PermissionDeniedError("终端用户不能用于 OIDC 登录")
     preferred_username = user_info["name"] or user_info["username"]
 
     deleted_user.is_deleted = 0

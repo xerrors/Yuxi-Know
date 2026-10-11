@@ -5,13 +5,13 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from fastapi import HTTPException
-from yuxi.shared.files import FileInput
 
 import yuxi.modules.workspace.services.viewer as svc
 from yuxi.modules.workspace.errors import FileTransferLimitError
-from yuxi.modules.workspace.workdir import Workdir
 from yuxi.modules.workspace.services.bindings import AuthorizedWorkdir
+from yuxi.modules.workspace.workdir import Workdir
+from yuxi.shared.errors import DomainError, PermissionDeniedError, ResourceNotFoundError, StateConflictError
+from yuxi.shared.files import FileInput
 
 
 class _Backend:
@@ -116,9 +116,9 @@ async def test_viewer_root_is_realtime_project_workdir(realtime_viewer):
 @pytest.mark.asyncio
 async def test_viewer_rejects_other_project_and_user_data(realtime_viewer):
     for path in ("/home/gem/user-data/projects/other/file.txt", "/home/gem/user-data/a.txt"):
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(DomainError) as exc:
             await svc.read_viewer_file_content(thread_id="thread-1", path=path, current_user=SimpleNamespace(uid="user-1"), db=object())
-        assert exc.value.status_code == 403
+        assert isinstance(exc.value, PermissionDeniedError)
 
 
 @pytest.mark.asyncio
@@ -173,7 +173,7 @@ async def test_viewer_download_uses_shared_media_type_fallback(realtime_viewer, 
 
 @pytest.mark.asyncio
 async def test_viewer_rejects_other_workdir_runtime_identity(realtime_viewer):
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(DomainError) as exc:
         await svc.read_viewer_file_content(
             thread_id="thread-1",
             path="/home/gem/user-data/projects/other/report.txt",
@@ -181,19 +181,19 @@ async def test_viewer_rejects_other_workdir_runtime_identity(realtime_viewer):
             db=object(),
         )
 
-    assert exc.value.status_code == 403
+    assert isinstance(exc.value, PermissionDeniedError)
 
 
 @pytest.mark.asyncio
 async def test_viewer_missing_live_file_returns_not_found(realtime_viewer):
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(DomainError) as exc:
         await svc.read_viewer_file_content(
             thread_id="thread-1",
             path="/missing.txt",
             current_user=SimpleNamespace(uid="user-1"),
             db=object(),
         )
-    assert exc.value.status_code == 404
+    assert isinstance(exc.value, ResourceNotFoundError)
 
 
 @pytest.mark.asyncio
@@ -251,7 +251,7 @@ async def test_viewer_upload_rejects_existing_and_batch_duplicate_names_without_
 ):
     original = dict(realtime_viewer.files)
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(DomainError) as exc:
         await svc.upload_viewer_files(
             thread_id="thread-1",
             parent_path="/",
@@ -260,7 +260,7 @@ async def test_viewer_upload_rejects_existing_and_batch_duplicate_names_without_
             db=object(),
         )
 
-    assert exc.value.status_code == 409
+    assert isinstance(exc.value, StateConflictError)
     assert realtime_viewer.uploads == []
     assert realtime_viewer.files == original
 
@@ -269,7 +269,7 @@ async def test_viewer_upload_rejects_existing_and_batch_duplicate_names_without_
 async def test_viewer_upload_maps_final_no_clobber_conflict_to_409(realtime_viewer):
     realtime_viewer.directories["/projects/11111111-1111-4111-8111-111111111111"] = []
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(DomainError) as exc:
         await svc.upload_viewer_files(
             thread_id="thread-1",
             parent_path="/",
@@ -278,7 +278,7 @@ async def test_viewer_upload_maps_final_no_clobber_conflict_to_409(realtime_view
             db=object(),
         )
 
-    assert exc.value.status_code == 409
+    assert isinstance(exc.value, StateConflictError)
 
 
 @pytest.mark.asyncio

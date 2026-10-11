@@ -3,11 +3,11 @@
 from types import SimpleNamespace
 
 import pytest
-from fastapi import HTTPException
 
 from yuxi.modules.agents.runtime.agent_backends.chatbot.context import ChatBotContext
 from yuxi.modules.agents.services.input_config import resolve_agent_context_snapshot
 from yuxi.modules.models.providers.cache import model_cache
+from yuxi.shared.errors import DomainError, InvalidInputError
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
 
@@ -34,22 +34,22 @@ async def test_snapshot_keeps_defaults_and_resource_intent_without_runtime_ident
 async def test_snapshot_requires_resolvable_chat_model(monkeypatch):
     """空会话也在创建边界拒绝不存在的模型。"""
     monkeypatch.setattr(model_cache, "get_model_info", lambda spec: None)
-    with pytest.raises(HTTPException) as error:
+    with pytest.raises(DomainError) as error:
         await resolve_agent_context_snapshot(
             None,
             None,
             SimpleNamespace(config_json={"context": {"model": "missing:model"}}),
             SimpleNamespace(context_schema=ChatBotContext),
         )
-    assert error.value.status_code == 422
-    assert error.value.detail["code"] == "chat_model_not_found"
+    assert isinstance(error.value, InvalidInputError)
+    assert error.value.code == "chat_model_not_found"
 
 
 async def test_explicit_blank_model_cannot_reset_to_configured_or_system_default():
     """显式空白模型是无效请求，不能复用 Agent 留空选择默认的语义。"""
     from yuxi.modules.agents.services.input_config import resolve_agent_run_model_spec
 
-    with pytest.raises(HTTPException) as error:
+    with pytest.raises(DomainError) as error:
         await resolve_agent_run_model_spec("   ", "valid:model")
-    assert error.value.status_code == 422
-    assert error.value.detail == "显式模型标识不能为空"
+    assert isinstance(error.value, InvalidInputError)
+    assert error.value.message == "显式模型标识不能为空"

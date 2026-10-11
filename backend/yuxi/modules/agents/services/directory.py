@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.modules.agents.models.definitions import Agent
 from yuxi.modules.agents.repositories.definitions import AgentRepository, user_can_run_agent
 from yuxi.modules.identity.models import User
+from yuxi.shared.errors import ResourceNotFoundError
 
 
 async def list_public_agents(*, user: User, db: AsyncSession) -> list[Agent]:
@@ -20,5 +20,5 @@ async def get_public_agent(*, agent_id: str, user: User, db: AsyncSession) -> Ag
     """按后端可见性读取主 Agent。"""
     agent = await AgentRepository(db).get_visible_by_slug(slug=agent_id, user=user)
     if agent is None:
-        raise HTTPException(status_code=404, detail="智能体不存在")
+        raise ResourceNotFoundError("智能体不存在")
     return agent

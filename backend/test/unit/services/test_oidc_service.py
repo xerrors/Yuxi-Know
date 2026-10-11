@@ -4,14 +4,13 @@ from urllib.parse import unquote
 
 import pytest
 import pytest_asyncio
-from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from test.support.sqlite import create_utc_sqlite_engine
 import yuxi.modules.identity.oidc as oidc_service
+from test.support.sqlite import create_utc_sqlite_engine
 from yuxi.api.routers.identity.oidc import oidc_callback_handler
 from yuxi.modules.identity.models import User
-
+from yuxi.shared.errors import DomainError, PermissionDeniedError
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.unit]
 
@@ -143,15 +142,15 @@ async def test_oidc_lookup_creation_and_restore_reject_end_user(oidc_session, mo
 
     monkeypatch.setattr(oidc_service.oidc_config, "use_raw_username", True)
     info = {"sub": "tenant:user", "name": user.uid, "username": user.uid}
-    with pytest.raises(HTTPException) as error:
+    with pytest.raises(DomainError) as error:
         await oidc_service.create_oidc_user(oidc_session, info)
-    assert error.value.status_code == 403
+    assert isinstance(error.value, PermissionDeniedError)
 
     user.is_deleted = 1
     await oidc_session.commit()
     assert await oidc_service.find_deleted_oidc_user_by_sub(oidc_session, "tenant:user") is None
-    with pytest.raises(HTTPException) as error:
+    with pytest.raises(DomainError) as error:
         await oidc_service.restore_deleted_oidc_user(oidc_session, user, info)
-    assert error.value.status_code == 403
+    assert isinstance(error.value, PermissionDeniedError)
     await oidc_session.refresh(user)
     assert user.is_deleted == 1

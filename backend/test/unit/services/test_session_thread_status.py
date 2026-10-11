@@ -7,11 +7,15 @@ from types import SimpleNamespace
 
 import pytest
 import pytest_asyncio
-from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+import yuxi.modules.agents.services.threads as thread_service
 from test.support.sqlite import create_utc_sqlite_engine
-from yuxi.modules.agents.repositories.sessions import SessionRepository, UNVIEWED_RUN_MARKER
+from yuxi.infrastructure.postgres.base import Base
+from yuxi.modules.agents.models.runs import AgentRun
+from yuxi.modules.agents.models.sessions import Session
+from yuxi.modules.agents.models.turns import AgentTurn
+from yuxi.modules.agents.repositories.sessions import UNVIEWED_RUN_MARKER, SessionRepository
 from yuxi.modules.agents.services.scope import ActorScope
 from yuxi.modules.agents.services.threads import (
     archive_thread,
@@ -19,12 +23,8 @@ from yuxi.modules.agents.services.threads import (
     list_session_page,
     mark_thread_viewed,
 )
-from yuxi.modules.agents.models.runs import AgentRun
-from yuxi.modules.agents.models.turns import AgentTurn
-from yuxi.infrastructure.postgres.base import Base
-from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.workspace.models import Project
-import yuxi.modules.agents.services.threads as thread_service
+from yuxi.shared.errors import DomainError, ResourceNotFoundError, StateConflictError
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.unit]
 SCOPE = ActorScope(uid="user-1", app_id=None)
@@ -183,9 +183,9 @@ async def test_public_archive_refuses_active_turn(session):
     await _seed_run(session, thread, "run-active", "running")
     await session.commit()
 
-    with pytest.raises(HTTPException) as failure:
+    with pytest.raises(DomainError) as failure:
         await archive_thread(db=session, scope=SCOPE, thread_id=thread.thread_id)
-    assert failure.value.status_code == 409
+    assert isinstance(failure.value, StateConflictError)
     assert thread.status == "active"
 
 
@@ -196,9 +196,9 @@ async def test_public_archive_refuses_pending_runtime_cleanup(session):
     run.runtime_cleanup_pending = True
     await session.commit()
 
-    with pytest.raises(HTTPException) as failure:
+    with pytest.raises(DomainError) as failure:
         await archive_thread(db=session, scope=SCOPE, thread_id=thread.thread_id)
-    assert failure.value.status_code == 409
+    assert isinstance(failure.value, StateConflictError)
     assert thread.status == "active"
 
 
@@ -237,10 +237,10 @@ async def test_read_side_effect_rejects_same_user_other_app(monkeypatch):
             return SimpleNamespace(uid="user-1", app_id="app-a", status="active")
 
     monkeypatch.setattr(thread_service, "SessionRepository", Repository)
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(DomainError) as exc:
         await thread_service.mark_thread_viewed(
             db=object(),
             scope=ActorScope(uid="user-1", app_id="app-b"),
             thread_id="thread-1",
         )
-    assert exc.value.status_code == 404
+    assert isinstance(exc.value, ResourceNotFoundError)
