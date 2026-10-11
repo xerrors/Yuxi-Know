@@ -58,6 +58,19 @@ export const agentApi = {
    */
   getThreadMessageAudits: (threadId) => apiGet(`/api/v1/agents/sessions/${threadId}/audits`),
 
+  /** 批量恢复当前消息页的用户评价。 */
+  getSessionFeedback: (threadId, runIds) => {
+    const params = new URLSearchParams({ source: 'user', limit: '100' })
+    for (const runId of runIds) params.append('run_ids', runId)
+    return apiGet(`/api/v1/agents/sessions/${encodeURIComponent(threadId)}/feedback?${params}`)
+  },
+
+  putUserFeedback: (threadId, turnId, payload) =>
+    apiPut(`/api/v1/agents/sessions/${encodeURIComponent(threadId)}/turns/${encodeURIComponent(turnId)}/feedback`, payload),
+
+  deleteUserFeedback: (threadId, turnId, runId) =>
+    apiDelete(`/api/v1/agents/sessions/${encodeURIComponent(threadId)}/turns/${encodeURIComponent(turnId)}/feedback?${new URLSearchParams({ run_id: runId })}`),
+
   /**
    * 获取指定会话的 AgentState
    * @param {string} agentId - 智能体ID

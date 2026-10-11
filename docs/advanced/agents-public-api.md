@@ -178,6 +178,22 @@ Turn 等待用户回答或审批时普通消息被拒绝，协作等待时 follo
 
 官方取消事件为 `agent.session.input.cancel`，可用 `yuxi.turn_id`、`yuxi.expected_run_id` 固定目标。省略目标时，事务内选择当前 Turn；幂等重试仍取消首次选定的 Turn。取消使当前 Turn 收敛，并暂停保留的后续 `follow_up`；等待点的 checkpoint 清理完成前，队列不会继续。`yuxi.session.input.continue` 在清理完成后显式解除暂停。`yuxi.session.input.cancel_input` 只移除指定的待处理 Input，不冒充尚未创建的 Turn。归档拒绝活跃 Turn 或待处理 Input；归档后的详情与历史仍可读。
 
+## 反馈采集
+
+用户评价只接受自身用户与 APP 下的终态 Turn，且 `run_id` 必须等于该 Turn 的 `yuxi.result_run_id`，拥有明确的最终助手输出。等待、中间 Run 和无最终回答的错误返回 `409`，未知或越权目标返回 `404`。反馈直接提交 PostgreSQL，不创建 Input、Turn 或队列任务。
+
+| 接口 | 输入与结果 |
+| --- | --- |
+| `PUT /sessions/{session_id}/turns/{turn_id}/feedback` | 完整当前值 `{run_id, rating, reason}`；rating 为 `like` 或 `dislike`，reason 可省略或为 null，去除首尾空白后最多 2000 字符；提交后返回记录 ID 和持久值 |
+| `DELETE /sessions/{session_id}/turns/{turn_id}/feedback?run_id=…` | 撤销当前用户评价，合法目标重复撤销返回 `204`；Agent 标记保持保留 |
+| `GET /sessions/{session_id}/feedback` | 自身会话的记录，source 可为 `user` 或 `agent`；重复参数 run_ids 最多 100 个；limit 为 1–100，after 使用上一页 last_id |
+
+反馈列表返回 `{items, has_more, last_id}`。每条记录包含来源、评价或原因、UTC 时间、Agent、Session/Turn/Run 标识和 Run 当前状态。游标必须属于相同身份与过滤条件，否则返回 `400`。每个 Run 保留一份当前用户评价，重复完整状态写入不增行；多个客户端并发修改采用最后提交值，不保留点击历史。归档保留记录，删除会话后查询隐藏记录。
+
+`GET /api/system/agent-feedback` 仅允许产品 JWT 的 `superadmin` 集中查看，可按 agent_id、source、rating 筛选并使用相同分页；普通 `admin`、Agent 管理者和所有 API Key 均被拒绝。列表不返回原始对话、manifest 或私有 Skill 元数据，也不扩展原会话、审计或文件权限。
+
+Agent 可通过[改进标记工具](../agents/tools-system.md#运行时工具-记录改进线索)记录流程纠正或经验候选。保存反馈只完成采集，后续复盘和 Skill 更新需要独立流程。
+
 ## 读取与事件
 
 Session、Turn 和 Items 列表均返回 `{object:"list", data, first_id, last_id, has_more}`，使用 `after/limit/order`。Session 默认每页 50 条，Turn 与 Items 默认 20 条，limit 为 1–100。默认 `order=desc`，传上一页 `last_id` 为 `after` 读取更早内容；`order=asc` 从最早内容开始。同一消息的多个公开 item 可分在不同页。Items 的游标必须属于当前 Session，指定 Turn 的 Items 游标还必须属于该 Turn；否则返回 `400`。排队用户输入的 `turn_id` 可空，消费状态见 `yuxi.delivery_status`；内部 prompt、checkpoint 和未登记的助手审计不进入 Items。
@@ -208,4 +224,4 @@ Turn 详情的 `yuxi` 包含 `current_run_id`、`result_run_id`、`waitpoint`、
 
 协作成员拥有独立 Thread、Turn、Run、等待点和结果，全部使用相同公开协议。父轮次完成、失败或取消均保留后代工作；普通取消固定指定 Turn。“停止全部”通过 POST `/sessions/{session_id}/events` 提交 `yuxi.session.tree.stop`，停止所有成员在途 Turn 与队列消费；`yuxi.session.tree.continue` 在在途工作收敛后重新消费保留队列，已取消轮次不恢复。这两种控制输入本身不作为 SSE 输出事件发布，结果通过持久树状态和各 Turn 观察。整树共享实际沙盒与 Project Workdir，各 Run 的 lease 和 heartbeat 独立。工具与用户操作见[会话协作](../agents/session-cooperation.md)。
 
-该协议使用 business schema v8、Redis 事件格式 v2 和 cursor v2。schema-init 只初始化新库或校验当前版本；旧 Schema 明确拒绝启动，不提供升级入口，也不清空现有数据库。部署须配置独立新库，保留旧库由运维明确处置。旧创建请求顶层 `attachment_file_ids` 和逐消息 `input[].yuxi.attachment_file_ids` 不再支持，统一使用提交级 `yuxi.attachment_file_ids`；事件没有双格式消费。
+该协议使用 business schema v9、Redis 事件格式 v2 和 cursor v2。schema-init 支持新库初始化及 v8→v9 原子新增反馈表，保留原有数据；其他旧版本明确拒绝启动，不清空现有数据库。更早版本的部署须配置独立新库，保留旧库由运维明确处置。旧创建请求顶层 `attachment_file_ids` 和逐消息 `input[].yuxi.attachment_file_ids` 不再支持，统一使用提交级 `yuxi.attachment_file_ids`；事件没有双格式消费。

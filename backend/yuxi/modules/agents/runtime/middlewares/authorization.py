@@ -61,6 +61,8 @@ class RuntimeAuthorizationMiddleware(AgentMiddleware):
 
 def tool_allowed(context, name: str, state: dict) -> bool:
     """按当前资源和已授权 Skill 依赖检查已注册工具。"""
+    if name == "mark_for_improvement":
+        return bool(context.run_id)
     allowed_mcps = set(context.mcps)
     allowed_tools = set(context.tools)
     snapshot = context._skill_runtime_snapshot

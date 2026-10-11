@@ -41,7 +41,8 @@ def validate_request(authorization: str | None, request: dict) -> str | None:
     serialized_messages = json.dumps(messages, ensure_ascii=False)
     if EXPECTED_OUTPUT not in serialized_messages:
         return "expected_input_missing"
-    if EXPECTED_PRELOADED_SKILL_MARKER not in serialized_messages:
+    feedback_flow = "DETERMINISTIC_FEEDBACK" in serialized_messages
+    if not feedback_flow and EXPECTED_PRELOADED_SKILL_MARKER not in serialized_messages:
         return "preloaded_skill_missing"
     if "DETERMINISTIC_FROZEN_CONFIG" in serialized_messages:
         system_messages = " ".join(str(message.get("content", "")) for message in messages if message.get("role") == "system")
@@ -96,6 +97,21 @@ def validate_request(authorization: str | None, request: dict) -> str | None:
         item.get("function", {}).get("name") for item in tools or [] if isinstance(item, dict) and isinstance(item.get("function"), dict)
     }
     tool_messages = [message for message in messages if isinstance(message, dict) and message.get("role") == "tool"]
+    if feedback_flow:
+        feedback_tool = next(
+            (item["function"] for item in tools or [] if item.get("function", {}).get("name") == "mark_for_improvement"), None
+        )
+        if feedback_tool is None or set(feedback_tool["parameters"]["properties"]) != {"reason"}:
+            return "feedback_tool_schema_mismatch"
+        if any(message.get("tool_call_id") != "call-improvement" for message in tool_messages):
+            return "feedback_call_id_mismatch"
+        if (
+            "DETERMINISTIC_FEEDBACK_INVALID" not in serialized_messages
+            and tool_messages
+            and not any('"saved": true' in str(message["content"]) for message in tool_messages)
+        ):
+            return "feedback_not_saved"
+        return None
     if "DETERMINISTIC_CREATE_MCP" in serialized_messages and "effect_probe" not in tool_names:
         return "creation_mcp_tool_missing"
     if "DETERMINISTIC_CANCEL_FOLLOWUP" in serialized_messages:
@@ -170,7 +186,17 @@ def _stream_payloads(model: str, messages: list[dict]) -> list[dict]:
     large_result = LARGE_TOOL_RESULT_MARKER in serialized_messages
     tool_call_id = LARGE_TOOL_CALL_ID if large_result else EXPECTED_TOOL_CALL_ID
     tool_name = "execute" if large_result else EXPECTED_PRELOADED_TOOL
-    if "DETERMINISTIC_ASK_USER_INVALID" in serialized_messages:
+    if "DETERMINISTIC_FEEDBACK" in serialized_messages:
+        tool_call_id, tool_name = "call-improvement", "mark_for_improvement"
+        tool_arguments = json.dumps(
+            {
+                "reason": " "
+                if "DETERMINISTIC_FEEDBACK_INVALID" in serialized_messages
+                else "多次尝试后确认批量读取更可靠；依据是本轮工具记录。"
+            },
+            ensure_ascii=False,
+        )
+    elif "DETERMINISTIC_ASK_USER_INVALID" in serialized_messages:
         tool_call_id, tool_name = "call-ask-user", "ask_user_question"
         tool_arguments = json.dumps({"questions": [{"question": "选择风格？", "multi_select": "false"}]})
     elif "DETERMINISTIC_ASK_USER" in serialized_messages:

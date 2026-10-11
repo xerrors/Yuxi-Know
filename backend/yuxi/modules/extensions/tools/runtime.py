@@ -16,6 +16,14 @@ async def resolve_configured_runtime_tools(context) -> list[Any]:
     selected_tool_sources: dict[str, str] = {}
     builtin_tools = {tool.name: tool for tool in get_tool_instances_by_category("builtin")}
 
+    if getattr(context, "run_id", None):
+        from yuxi.modules.extensions.tools.builtin.mark_for_improvement import mark_for_improvement
+
+        selected_tools.append(mark_for_improvement)
+        selected_tool_names.add(mark_for_improvement.name)
+        selected_tool_sources[mark_for_improvement.name] = "local"
+        context._registered_builtin_tool_names.add(mark_for_improvement.name)
+
     for tool_name in getattr(context, "tools", None) or []:
         if not isinstance(tool_name, str) or tool_name in selected_tool_names:
             continue

@@ -142,6 +142,8 @@ class SkillsMiddleware(AgentMiddleware):
         runtime_skills = self._get_runtime_skills(runtime_context)
         effective_skills = self._get_effective_skills(runtime_context)
         base_tool_names = set(normalize_string_list(getattr(runtime_context, "tools", None)))
+        if getattr(runtime_context, "run_id", None):
+            base_tool_names.add("mark_for_improvement")
         gated: set[str] = set()
         for slug in effective_skills:
             gated.update(runtime_skills.get(slug, {}).get("tools", []))

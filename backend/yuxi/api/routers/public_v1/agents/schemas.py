@@ -19,6 +19,36 @@ class WireModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class FeedbackRecord(BaseModel):
+    """已经提交的评价或待复盘线索。"""
+
+    id: str
+    run_id: str
+    source: Literal["user", "agent"]
+    rating: Literal["like", "dislike"] | None
+    reason: str | None
+    created_at: str
+    updated_at: str
+
+
+class FeedbackEntry(FeedbackRecord):
+    """反馈列表的精简执行关联，不公开消息正文或 manifest。"""
+
+    agent_id: str
+    agent_name: str | None
+    session_id: str
+    turn_id: str
+    run_status: str
+
+
+class FeedbackPage(BaseModel):
+    """按时间与 ID 游标分页的反馈记录。"""
+
+    items: list[FeedbackEntry]
+    has_more: bool
+    last_id: str | None
+
+
 class FileResponse(BaseModel):
     """隔离文件草稿的公开引用。"""
 
