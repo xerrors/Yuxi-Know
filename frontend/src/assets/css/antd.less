@@ -1,7 +1,30 @@
 /* 通用字重、间距和说明文字在此维护；组件皮肤由 theme token 拥有。 */
 button.ant-btn,
 a.ant-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  column-gap: 8px;
   font-weight: 500;
+
+  > .lucide,
+  > .anticon,
+  > .ant-btn-loading-icon {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  // 图文间距统一由 gap 提供，避免与 Ant 原生 margin 叠加。
+  > .anticon + span,
+  > span + .anticon {
+    margin-inline-start: 0;
+  }
+
+  &:not(.ant-btn-icon-only) > .ant-btn-loading-icon > .anticon.anticon-loading {
+    margin-inline-end: 0;
+  }
 }
 
 .ant-btn > span {

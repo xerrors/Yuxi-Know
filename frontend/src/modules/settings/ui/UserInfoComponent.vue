@@ -1,6 +1,6 @@
 <template>
   <div class="user-info-component">
-    <a-dropdown :trigger="['click']" v-if="userStore.isLoggedIn">
+    <a-dropdown v-model:open="menuOpen" :trigger="['click']" v-if="userStore.isLoggedIn">
       <div class="user-info-dropdown" :data-align="showRole ? 'left' : 'center'">
         <div class="user-avatar">
           <FallbackAvatar
@@ -21,7 +21,7 @@
         </div>
       </div>
       <template #overlay>
-        <a-menu>
+        <a-menu @click="handleMenuClick">
           <a-menu-item key="user-info" @click="openProfile">
             <div class="user-info-display">
               <div class="user-menu-username">{{ userStore.username }}</div>
@@ -38,12 +38,11 @@
           </a-menu-item>
           <a-menu-item key="theme" @click="toggleTheme">
             <template #icon>
-              <Sun v-if="themeStore.isDark" :size="16" />
-              <Moon v-else :size="16" />
+              <Sun v-if="themeStore.themeMode === 'light'" :size="16" />
+              <Moon v-else-if="themeStore.themeMode === 'dark'" :size="16" />
+              <Monitor v-else :size="16" />
             </template>
-            <span class="menu-text">{{
-              themeStore.isDark ? '切换到浅色模式' : '切换到深色模式'
-            }}</span>
+            <span class="menu-text">主题：{{ themeStore.themeLabel }}</span>
           </a-menu-item>
           <a-menu-divider />
           <a-menu-item v-if="userStore.isSuperAdmin" key="debug" @click="infoStore.openDebugModal">
@@ -69,13 +68,13 @@
 </template>
 
 <script setup>
-import { computed, inject, useSlots } from 'vue'
+import { computed, inject, ref, useSlots } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/modules/identity/model/user'
 import { useInfoStore } from '@/modules/settings/model/info'
 import DebugComponent from '@/modules/settings/ui/DebugComponent.vue'
 import { message } from 'ant-design-vue'
-import { BookOpen, Sun, Moon, LogOut, Settings, Terminal } from '@lucide/vue'
+import { BookOpen, Sun, Moon, Monitor, LogOut, Settings, Terminal } from '@lucide/vue'
 import { useThemeStore } from '@/shared/model/theme'
 import FallbackAvatar from '@/shared/ui/FallbackAvatar.vue'
 
@@ -84,6 +83,12 @@ const userStore = useUserStore()
 const infoStore = useInfoStore()
 const themeStore = useThemeStore()
 const slots = useSlots()
+const menuOpen = ref(false)
+
+/** 主题项允许连续轮换，其他菜单操作关闭浮层。 */
+function handleMenuClick({ key }) {
+  if (key !== 'theme') menuOpen.value = false
+}
 
 // Inject settings modal methods
 const { openSettingsModal } = inject('settingsModal', {})

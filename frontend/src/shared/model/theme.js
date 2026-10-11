@@ -1,10 +1,17 @@
-import { ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { theme } from 'ant-design-vue'
+import { usePreferredDark } from '@vueuse/core'
 
 export const useThemeStore = defineStore('theme', () => {
-  // 从 localStorage 读取保存的主题，默认为浅色
-  const isDark = ref(localStorage.getItem('theme') === 'dark')
+  const modes = ['light', 'dark', 'auto']
+  const savedMode = localStorage.getItem('theme')
+  const themeMode = ref(modes.includes(savedMode) ? savedMode : 'light')
+  const systemDark = usePreferredDark()
+  const isDark = computed(() => themeMode.value === 'dark' || (themeMode.value === 'auto' && systemDark.value))
+  const themeLabel = computed(() => ({
+    light: '浅色模式', dark: '深色模式', auto: '自动（跟随浏览器）'
+  })[themeMode.value])
 
   /** 从当前 CSS 色板装配控件主题，提供算法需要的实际色值。 */
   function createTheme() {
@@ -61,6 +68,10 @@ export const useThemeStore = defineStore('theme', () => {
         },
         Tag: { borderRadiusSM: 4 },
         Form: { colorTextHeading: css('--gray-800') },
+        Select: {
+          controlItemBgActive: css('--gray-100'),
+          controlItemBgHover: css('--gray-50')
+        },
         Switch: {
           colorTextLightSolid: css('--color-on-primary'),
           colorTextQuaternary: css('--gray-600'),
@@ -89,18 +100,21 @@ export const useThemeStore = defineStore('theme', () => {
 
   updateDocumentTheme()
   const currentTheme = ref(createTheme())
-
-  // 切换主题
-  function toggleTheme() {
-    setTheme(!isDark.value)
-  }
-
-  // 设置主题
-  function setTheme(dark) {
-    isDark.value = dark
-    localStorage.setItem('theme', dark ? 'dark' : 'light')
+  watch(isDark, () => {
     updateDocumentTheme()
     currentTheme.value = createTheme()
+  }, { flush: 'sync' })
+
+  /** 按浅色、深色、自动轮换用户选择。 */
+  function toggleTheme() {
+    setTheme(modes[(modes.indexOf(themeMode.value) + 1) % modes.length])
+  }
+
+  /** 保存主题选择；保留现有调用方的布尔明暗设置。 */
+  function setTheme(mode) {
+    if (typeof mode === 'boolean') mode = mode ? 'dark' : 'light'
+    themeMode.value = mode
+    localStorage.setItem('theme', mode)
   }
 
   // 更新 document 的主题类
@@ -113,6 +127,8 @@ export const useThemeStore = defineStore('theme', () => {
   }
 
   return {
+    themeMode,
+    themeLabel,
     isDark,
     currentTheme,
     toggleTheme,

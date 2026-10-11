@@ -79,20 +79,6 @@ body {
   line-height: 20px;
 }
 
-.ant-btn.lucide-icon-btn,
-.lucide-icon-btn.ant-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.ant-btn .ant-btn-icon,
-.ant-btn .anticon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
 .card-tag {
   display: inline-flex;
   align-items: center;

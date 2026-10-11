@@ -123,7 +123,11 @@ Yuxi 通过 `:root.dark` 覆盖同名 token。新增 UI 必须使用 CSS 变量�
 
 CSS 色板拥有颜色、字体和浮层阴影，`shared/model/theme.js` 读取当前主题的实际 CSS 色值并装配 Ant Design token。主题切换先更新根节点的 `dark` 类，再重新装配控件主题；需要参与颜色派生的 token 使用实际色值。按钮、表单、选择器、标签和普通弹窗的通用外观由主题与 `assets/css/antd.less` 统一维护。
 
+主题选择为 light、dark、auto，默认浅色，以 localStorage 的 `theme` 保存选择。auto 实时跟随浏览器 `prefers-color-scheme`，`isDark` 提供实际明暗状态。用户菜单与 Dashboard 按浅色 → 深色 → 自动 → 浅色轮换并显示当前模式；用户菜单点击主题保持展开，其他操作与点击外部关闭。
+
 当前 Ant Design Vue 4.2.6 将根 Provider 的设计 token 提供给静态 `message`、`notification` 和 `Modal.confirm`，这些反馈沿用同一主题入口。静态调用的其他上下文与组件树分离，不能据此假设它们获取业务注入。调用方保留反馈内容、时长、操作回调和显式定制；基础外观不逐页重复定义，升级组件库时验证静态反馈的主题切换。
+
+`a-select` 的下拉选项通过 `components.Select` 统一使用中性背景：`controlItemBgActive` 映射 `--gray-100`，`controlItemBgHover` 映射 `--gray-50`。选中与悬停保持不同明度，深浅主题沿用同名 CSS 色板；不在业务页覆盖下拉选项背景。
 
 `a-alert` 的四种状态共用当前主题的浅中性背景与柔和边框，以语义色图标区分成功、信息、警告和错误。背景、边框、图标颜色和圆角由 Alert 组件 token 维护，说明文字由共享样式维护；保留 banner、关闭按钮、操作与内容 slot 的原有行为。
 
@@ -141,7 +145,9 @@ CSS 色板拥有颜色、字体和浮层阴影，`shared/model/theme.js` 读取�
 | 次按钮 | 返回、取消、普通操作 | 使用中性边框和浅背景，hover 只增强边框或背景 |
 | 文本/链接按钮 | 表格行内操作、轻量入口 | 保持轻量，不扩大视觉权重 |
 | 危险按钮 | 删除、撤销、清空等不可逆操作 | 使用 error 语义色，并配合确认弹窗或明确文案 |
-| 图标按钮 | 工具栏、折叠、刷新、复制 | 使用 `lucide-icon-btn` 保证图标与文本居中 |
+| 图标按钮 | 工具栏、折叠、刷新、复制 | Ant 按钮使用 `#icon` 插槽；原生按钮使用 `lucide-icon-btn` |
+
+Ant 按钮的图标与文字由 `assets/css/antd.less` 统一居中排列，默认间距 8px；Lucide、Ant 原生图标和 loading 图标共用此布局，不在业务组件重复添加对齐、gap 或图标 margin。图标默认沿用文字字号，显式 `size` 保持生效。纯图标按钮提供 `aria-label`，与可见文字相邻的装饰图标使用 `aria-hidden="true"`。
 
 交互状态：
 
@@ -349,7 +355,7 @@ AI agent 修改或生成 Yuxi UI 时，优先按这一节执行。
 
 Agent 与 User 使用共享 [FallbackAvatar](https://github.com/xerrors/Yuxi/blob/main/frontend/src/shared/ui/FallbackAvatar.vue)。调用方传入 kind、稳定实体 seed、自定义图片 src 与展示尺寸；自定义图片优先。Agent 默认 Clay，User 默认 Glyphs。生成器随前端本地交付，不请求外部头像 API，Gaze 保持透明背景。
 
-组件支持 style 为 glyphs、clay、shape-grid、gaze；preset 默认为 default，也支持 studio、heritage、soft，每套色卡都有日间与夜间版本。dark 为 on、off、auto，auto 跟随 Yuxi 的主题 Store；circle、square、rounded 分别提供圆形、直角方形和圆角方形。颜色配置由 [共享色卡](https://github.com/xerrors/Yuxi/blob/main/frontend/src/shared/lib/avatar/presets.js) 拥有，几何与表情随稳定 seed 固定。
+组件支持 style 为 glyphs、clay、shape-grid、gaze；preset 默认为 default，也支持 studio、heritage、soft，每套色卡都有日间与夜间版本。明暗共用主体色，底纸与墨色可独立调整；default 保留各风格上游主体与对比色，夜间仅调整 Glyphs 与 Clay 的底纸，Shape Grid 保留彩色背景。dark 为 on、off、auto，auto 跟随 Yuxi 的主题 Store；circle、square、rounded 分别提供圆形、直角方形和圆角方形。颜色配置由 [共享色卡](https://github.com/xerrors/Yuxi/blob/main/frontend/src/shared/lib/avatar/presets.js) 拥有，几何与表情随稳定 seed 固定。
 
 图片加载或本地生成失败时，Agent 使用 Lucide Bot、User 使用 Lucide User，浅色背景 token 在深浅主题下保持相同。组件通过 fallback 事件提供 image 或 generation 原因。图片地址改变后重新加载；网络恢复只重试失败图片。装饰头像传 decorative，独立头像使用 alt 或 name 提供可访问名称。
 

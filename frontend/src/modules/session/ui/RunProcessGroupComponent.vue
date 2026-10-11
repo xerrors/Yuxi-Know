@@ -50,6 +50,7 @@ const summary = computed(() => formatProcessDuration(props.durationMs))
 .session-process-group {
   display: flex;
   flex-direction: column;
+  margin-bottom: 6px;
 }
 
 .process-summary {
@@ -112,7 +113,6 @@ const summary = computed(() => formatProcessDuration(props.durationMs))
 .process-content {
   display: flex;
   flex-direction: column;
-  padding-top: 8px;
 }
 
 @media (prefers-reduced-motion: reduce) {

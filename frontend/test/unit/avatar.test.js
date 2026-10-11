@@ -112,3 +112,25 @@ test('Gaze 不配置背景，恶意身份不进入 SVG 内容，Glyphs 保留署
   assert.match(glyph, /Matt Houser/)
   assert.match(glyph, /https:\/\/creativecommons.org\/licenses\/by\/4.0\//)
 })
+
+test('深浅色保留同一身份的主体填色，官方原色使用各风格上游色板', () => {
+  for (const [name, preset] of Object.entries(presets)) {
+    assert.deepEqual(preset.dark.body, preset.light.body, `${name} 主体色板`)
+  }
+  for (const style of ['glyphs', 'clay', 'shape-grid', 'gaze']) {
+    const native = JSON.parse(readFileSync(
+      new URL(`../../node_modules/@dicebear/styles/src/${style}.json`, import.meta.url)
+    ))
+    const channel = { glyphs: 'glyph', clay: 'body', 'shape-grid': 'background', gaze: 'body' }[style]
+    for (const preset of Object.keys(presets)) {
+      const body = preset === 'default' ? native.colors[channel].values : presets[preset].light.body.map(color => `#${color}`)
+      for (const seed of ['user:42', 'agent:research', 'mcp:filesystem']) {
+        const fills = dark => [...generate({ style, preset, seed, dark }).matchAll(/fill="([^"]+)"/g)]
+          .map(match => match[1]).filter(color => body.includes(color))
+        const light = fills('off')
+        assert.ok(light.length > 0, `${style}/${preset} 缺少主体填色`)
+        assert.deepEqual(fills('on'), light, `${style}/${preset}/${seed} 主体填色改变`)
+      }
+    }
+  }
+})

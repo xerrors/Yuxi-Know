@@ -26,15 +26,16 @@
               <Settings class="header-action-icon" />
             </button>
           </a-tooltip>
-          <a-tooltip :title="themeStore.isDark ? '切换到浅色模式' : '切换到深色模式'">
+          <a-tooltip :title="`主题：${themeStore.themeLabel}（点击切换）`">
             <button
               type="button"
               class="header-action-button"
-              aria-label="切换主题"
+              :aria-label="`切换主题，当前${themeStore.themeLabel}`"
               @click="toggleTheme"
             >
-              <Sun v-if="themeStore.isDark" class="header-action-icon" />
-              <Moon v-else class="header-action-icon" />
+              <Sun v-if="themeStore.themeMode === 'light'" class="header-action-icon" />
+              <Moon v-else-if="themeStore.themeMode === 'dark'" class="header-action-icon" />
+              <Monitor v-else class="header-action-icon" />
             </button>
           </a-tooltip>
           <a-tooltip title="后台作业">
@@ -123,7 +124,7 @@ import { dashboardApi } from '@/apis/dashboard_api'
 import { useBackgroundJobsStore } from '@/modules/background-jobs/model/jobs'
 import { useThemeStore } from '@/shared/model/theme'
 import { useUserStore } from '@/modules/identity/model/user'
-import { ClipboardList, Settings, Sun, Moon } from '@lucide/vue'
+import { ClipboardList, Settings, Sun, Moon, Monitor } from '@lucide/vue'
 
 // 导入子组件
 import PageHeader from '@/shared/ui/PageHeader.vue'
