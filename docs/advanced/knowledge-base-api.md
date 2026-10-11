@@ -87,10 +87,10 @@ yuxi kb find --kb-id <kb-id> --file-id <file-id> --pattern "年假"
 
 ## 验证入口
 
-- [知识库路由](https://github.com/xerrors/Yuxi/blob/main/backend/server/routers/knowledge_router.py)
-- [外部查询路由](https://github.com/xerrors/Yuxi/blob/main/backend/server/routers/external_kb_router.py)
-- [知识库权限解析](https://github.com/xerrors/Yuxi/blob/main/backend/package/yuxi/permissions/resource_permission.py)
-- [知识库 HTTP integration](https://github.com/xerrors/Yuxi/blob/main/backend/test/integration/api/test_knowledge_router.py)
-- [外部知识库 integration](https://github.com/xerrors/Yuxi/blob/main/backend/test/integration/api/test_knowledge_external_router.py)
+- 知识库路由：`backend/server/routers/knowledge_router.py`
+- 外部查询路由：`backend/server/routers/external_kb_router.py`
+- 知识库权限解析：`backend/package/yuxi/permissions/resource_permission.py`
+- 知识库 HTTP integration：`backend/test/integration/api/test_knowledge_router.py`
+- 外部知识库 integration：`backend/test/integration/api/test_knowledge_external_router.py`
 
 修改导入、权限或查询接口时，运行真实 HTTP integration，并从 PostgreSQL、MinIO、Milvus 或 Neo4j 回读最终结果。

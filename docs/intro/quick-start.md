@@ -15,7 +15,7 @@
 仓库当前默认配置对应 `v0.7.3`。用于重要数据前，请先阅读[生产部署与升级](../advanced/deployment.md)中的备份和迁移说明。
 
 ```bash
-git clone --branch v0.7.3 --depth 1 https://github.com/xerrors/Yuxi.git
+git clone --branch v0.7.3 --depth 1 https://example.com/your-fork/Yuxi.git
 cd Yuxi
 ```
 

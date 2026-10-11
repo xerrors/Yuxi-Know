@@ -33,10 +33,6 @@
             </div>
           </a-menu-item>
           <a-menu-divider />
-          <a-menu-item key="docs" @click="openDocs">
-            <template #icon><BookOpen :size="16" /></template>
-            <span class="menu-text">文档中心</span>
-          </a-menu-item>
           <a-menu-item key="theme" @click="toggleTheme">
             <template #icon>
               <Sun v-if="themeStore.isDark" :size="16" />
@@ -76,7 +72,7 @@ import { useUserStore } from '@/stores/user'
 import { useInfoStore } from '@/stores/info'
 import DebugComponent from '@/components/DebugComponent.vue'
 import { message } from 'ant-design-vue'
-import { BookOpen, Sun, Moon, LogOut, Settings, Terminal } from '@lucide/vue'
+import { Sun, Moon, LogOut, Settings, Terminal } from '@lucide/vue'
 import { useThemeStore } from '@/stores/theme'
 import { generatePixelAvatar } from '@/utils/pixelAvatar'
 import FallbackAvatar from '@/components/common/FallbackAvatar.vue'
@@ -128,10 +124,6 @@ const logout = () => {
 // 前往登录页
 const goToLogin = () => {
   router.push('/login')
-}
-
-const openDocs = () => {
-  window.open('https://xerrors.github.io/Yuxi/', '_blank', 'noopener,noreferrer')
 }
 
 const toggleTheme = () => {

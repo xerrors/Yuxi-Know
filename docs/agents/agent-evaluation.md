@@ -80,4 +80,4 @@ evaluation_experiment_name=<experiment-name>
 - 大量超时：降低 `--max-concurrency`，检查模型响应时间、worker 健康状态和沙盒创建耗时。
 - 实验部分成功：不要只看命令退出前的汇总，回到 Langfuse 检查每条 item 是否都有结果；CLI 会在成功写入数量与 Dataset 总数不一致时报告错误。
 
-实现入口见 [Agent Eval 路由](https://github.com/xerrors/Yuxi/blob/main/backend/server/routers/agent_invocation_eval_router.py)、[CLI 实验](https://github.com/xerrors/Yuxi/blob/main/packages/yuxi-cli/src/yuxi_cli/agent_eval.py) 和 [Langfuse 集成](../advanced/langfuse-integration.md)。
+实现入口见 Agent Eval 路由 (`backend/server/routers/agent_invocation_eval_router.py`)、CLI 实验 (`packages/yuxi-cli/src/yuxi_cli/agent_eval.py`) 和 [Langfuse 集成](../advanced/langfuse-integration.md)。

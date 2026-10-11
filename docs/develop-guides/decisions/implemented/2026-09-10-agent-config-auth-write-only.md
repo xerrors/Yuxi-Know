@@ -36,4 +36,4 @@ auth 不再提供保密语义，新增 Context 字段不得把凭据放在此配
 - `python3 scripts/verify_engineering_contracts.py` 与 `python3 -m unittest scripts.test_verify_engineering_contracts`：通过，后者 62 tests。
 - `cd docs && pnpm run build`：通过。
 
-实现和验证入口分别由 [Context 配置](https://github.com/xerrors/Yuxi/blob/main/backend/package/yuxi/agents/context.py)、[HTTP 写入服务](https://github.com/xerrors/Yuxi/blob/main/backend/package/yuxi/services/agent_config_service.py)、[权限集成测试](https://github.com/xerrors/Yuxi/blob/main/backend/test/integration/api/test_agent_config_resource_authorization.py) 和 [确定性运行 E2E](https://github.com/xerrors/Yuxi/blob/main/backend/test/e2e/test_deterministic_agent_path_e2e.py) 拥有。配置使用说明见[配置智能体](../../../agents/agents-config.md)。
+实现和验证入口分别由 `backend/package/yuxi/agents/context.py`、`backend/package/yuxi/services/agent_config_service.py`、`backend/test/integration/api/test_agent_config_resource_authorization.py` 和 `backend/test/e2e/test_deterministic_agent_path_e2e.py` 拥有。配置使用说明见[配置智能体](../../../agents/agents-config.md)。

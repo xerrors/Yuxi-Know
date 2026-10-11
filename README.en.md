@@ -2,15 +2,9 @@
 
 Yuxi is a self-hosted, multi-tenant knowledge agent platform. It brings knowledge base retrieval, knowledge graphs, LangGraph multi-agent orchestration, MCP/Skills, sandbox tools, and access control into one workspace.
 
-[![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=ffffff)](https://github.com/xerrors/Yuxi/blob/main/docker-compose.yml)
-[![Release](https://img.shields.io/github/v/release/xerrors/Yuxi?color=046A82)](https://github.com/xerrors/Yuxi/releases/latest)
-[![License](https://img.shields.io/github/license/xerrors/Yuxi.svg?logo=github)](https://github.com/xerrors/Yuxi/blob/main/LICENSE)
-[![DeepWiki](https://img.shields.io/badge/DeepWiki-blue.svg)](https://deepwiki.com/xerrors/Yuxi)
 [![Bilibili](https://img.shields.io/badge/Knowledge_Base_Demo-00A1D6?logo=bilibili&logoColor=fff)](https://www.bilibili.com/video/BV1erE26iEgv/)
 
-<a href="https://trendshift.io/repositories/24335" target="_blank"><img src="https://trendshift.io/api/badge/repositories/24335" alt="xerrors%2FYuxi | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
-
-[Project home](https://xerrors.github.io/Yuxi/) · [Quick start](https://xerrors.github.io/Yuxi/intro/quick-start) · [Demo video](https://www.bilibili.com/video/BV1erE26iEgv/) · [Releases](https://github.com/xerrors/Yuxi/releases) · [中文](README.md)
+[Demo video](https://www.bilibili.com/video/BV1erE26iEgv/) · [中文](README.md)
 
 ## What Yuxi Can Do
 
@@ -41,7 +35,7 @@ Install [Docker Engine](https://docs.docker.com/get-docker/) and Docker Compose,
 ### 1. Get the Code and Initialize
 
 ```bash
-git clone --branch v0.7.3 --depth 1 https://github.com/xerrors/Yuxi.git
+git clone --branch v0.7.3 --depth 1 https://example.com/your-fork/Yuxi.git
 cd Yuxi
 
 # Linux/macOS
@@ -72,13 +66,13 @@ When upgrading from v0.7.1 or v0.7.2 to the current version, do not run `docker 
 
 ## Documentation
 
-- [Project overview](https://xerrors.github.io/Yuxi/intro/project-overview): Capabilities, concepts, and system boundaries.
-- [Quick start](https://xerrors.github.io/Yuxi/intro/quick-start): Set up a local environment from scratch.
-- [Model configuration](https://xerrors.github.io/Yuxi/intro/model-config): Connect chat, embedding, and rerank models.
-- [Knowledge base tutorial](https://xerrors.github.io/Yuxi/intro/knowledge-base): Create knowledge bases and verify retrieval.
-- [Agent development](https://xerrors.github.io/Yuxi/agents/agents-config): Configure agents, tools, and extensions.
-- [Production deployment](https://xerrors.github.io/Yuxi/advanced/deployment): Deployment, upgrades, backups, and troubleshooting.
-- [Changelog](https://xerrors.github.io/Yuxi/develop-guides/changelog): Published changes.
+- [Project overview](docs/intro/project-overview.md): Capabilities, concepts, and system boundaries.
+- [Quick start](docs/intro/quick-start.md): Set up a local environment from scratch.
+- [Model configuration](docs/intro/model-config.md): Connect chat, embedding, and rerank models.
+- [Knowledge base tutorial](docs/intro/knowledge-base.md): Create knowledge bases and verify retrieval.
+- [Agent development](docs/agents/agents-config.md): Configure agents, tools, and extensions.
+- [Production deployment](docs/advanced/deployment.md): Deployment, upgrades, backups, and troubleshooting.
+- [Changelog](docs/develop-guides/changelog.md): Published changes.
 
 ## Feature Showcase
 
@@ -313,10 +307,6 @@ Issues, documentation improvements, bug fixes, and new features are welcome. See
 
 Thanks to all contributors for supporting this project!
 
-<a href="https://github.com/xerrors/Yuxi/contributors">
-  <img src="https://contrib.rocks/image?repo=xerrors/Yuxi&max=100&columns=10" />
-</a>
-
 ---
 
 Yuxi's implementation and documentation draw on the following excellent open-source projects:
@@ -331,5 +321,3 @@ Yuxi's implementation and documentation draw on the following excellent open-sou
 ## License
 
 Yuxi itself is licensed under the MIT License. See [LICENSE](LICENSE) for details. Third-party components included through Docker Compose retain their own licenses. Before redistribution or commercial deployment, check the upstream licenses and source-code obligations for the actual image versions you use; see the [production deployment guide](docs/advanced/deployment.md) for the relevant boundaries.
-
-[![Give Yuxi a Star](https://xerrors.oss-cn-shanghai.aliyuncs.com/posts/2026/08/20260818-184409-image-da91658b.png)](https://github.com/xerrors/Yuxi)

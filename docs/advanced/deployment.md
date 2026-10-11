@@ -181,7 +181,7 @@ worker 的 Compose 健康检查通过 `python -m yuxi.services.worker_health` �
 
 `all` profile 下还有两个可选 OCR 服务：`mineru-api`（30001，`/file_parse` 接口）和 `paddlex`（8080，PP-Structure-V3）。etcd 只在 Compose 网络内供 Milvus 使用，没有发布到宿主机。
 
-PostgreSQL、Redis、MinIO、Milvus 和 Neo4j 的端口只绑定 `127.0.0.1`，不要把它们暴露到公网；Web 与 API 发布到所有接口。各端口可用环境变量覆盖（`YUXI_WEB_PORT`、`YUXI_API_PORT`、`YUXI_NEO4J_HTTP_PORT`、`YUXI_MINIO_API_PORT`、`YUXI_MILVUS_PORT`、`YUXI_POSTGRES_PORT`、`YUXI_REDIS_PORT`），完整映射以 [docker-compose.yml](https://github.com/xerrors/Yuxi/blob/main/docker-compose.yml) 为准。
+PostgreSQL、Redis、MinIO、Milvus 和 Neo4j 的端口只绑定 `127.0.0.1`，不要把它们暴露到公网；Web 与 API 发布到所有接口。各端口可用环境变量覆盖（`YUXI_WEB_PORT`、`YUXI_API_PORT`、`YUXI_NEO4J_HTTP_PORT`、`YUXI_MINIO_API_PORT`、`YUXI_MILVUS_PORT`、`YUXI_POSTGRES_PORT`、`YUXI_REDIS_PORT`），完整映射以仓库根目录的 [docker-compose.yml](../../docker-compose.yml) 为准。
 
 常用入口：Web <http://localhost:5173>，API 文档 <http://localhost:5050/docs>，Neo4j <http://localhost:7474>，沙盒 provisioner <http://localhost:8002/health>。health 与 ready 接口的语义见上方「验证部署」。
 

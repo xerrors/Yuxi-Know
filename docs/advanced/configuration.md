@@ -22,7 +22,7 @@ docker compose up -d --force-recreate api worker
 
 ## 管理员系统配置
 
-管理员在“设置 → 基本设置”中修改系统配置。当前配置项由 [`options.py`](https://github.com/xerrors/Yuxi/blob/main/backend/package/yuxi/config/options.py) 定义，包含默认对话模型、快速响应模型、嵌入模型、重排模型和默认 OCR 解析引擎。
+管理员在“设置 → 基本设置”中修改系统配置。当前配置项由 [`backend/package/yuxi/config/options.py`](../../backend/package/yuxi/config/options.py) 定义，包含默认对话模型、快速响应模型、嵌入模型、重排模型和默认 OCR 解析引擎。
 
 系统配置保存到 PostgreSQL 的 `config_options` 表。API 和 worker 通过 Redis 保存短期缓存；保存成功后缓存会失效，下一次读取从数据库取得新值。Redis 不可用时，读取路径回源 PostgreSQL，不把缓存当作最终事实。
 

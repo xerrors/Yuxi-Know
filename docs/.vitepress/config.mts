@@ -10,7 +10,7 @@ export default defineConfig({
   base: '/Yuxi/',
   srcExclude: ['vibe/**'],
   sitemap: {
-    hostname: 'https://xerrors.github.io/Yuxi/'
+    hostname: '/'
   },
   head: [
     ['link', { rel: 'icon', href: '/Yuxi/favicon.svg' }],
@@ -21,13 +21,9 @@ export default defineConfig({
     ['meta', { property: 'og:site_name', content: 'Yuxi' }],
     ['meta', { property: 'og:title', content: 'Yuxi · 让知识真正参与每一次行动' }],
     ['meta', { property: 'og:description', content: '可私有部署的多租户知识智能体平台，统一知识、工具、多智能体执行与团队治理。' }],
-    ['meta', { property: 'og:image', content: 'https://xerrors.oss-cn-shanghai.aliyuncs.com/github/yuxi/docs/home/yuxi-web-og-1200x630-v1.0.0.png' }],
-    ['meta', { property: 'og:image:width', content: '1200' }],
-    ['meta', { property: 'og:image:height', content: '630' }],
-    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+    ['meta', { name: 'twitter:card', content: 'summary' }],
     ['meta', { name: 'twitter:title', content: 'Yuxi · Self-hosted knowledge agent platform' }],
-    ['meta', { name: 'twitter:description', content: 'RAG, knowledge graphs, multi-agent execution, MCP/Skills, sandboxed artifacts, and access control in one workspace.' }],
-    ['meta', { name: 'twitter:image', content: 'https://xerrors.oss-cn-shanghai.aliyuncs.com/github/yuxi/docs/home/yuxi-web-og-1200x630-v1.0.0.png' }]
+    ['meta', { name: 'twitter:description', content: 'RAG, knowledge graphs, multi-agent execution, MCP/Skills, sandboxed artifacts, and access control in one workspace.' }]
   ],
   ignoreDeadLinks: [
     /localhost/
@@ -137,8 +133,7 @@ export default defineConfig({
     ],
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/xerrors/Yuxi' },
-      { icon: { svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10zM2 12h20"/></svg>' }, link: 'https://github.com/xerrors/Yuxi/blob/main/README.en.md', ariaLabel: 'English' }
+      { icon: { svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10zM2 12h20"/></svg>' }, link: '/README.en.md', ariaLabel: 'English' }
     ],
 
     footer: {
@@ -146,10 +141,7 @@ export default defineConfig({
       copyright: 'Copyright © 2025-present Yuxi'
     },
 
-    editLink: {
-      pattern: 'https://github.com/xerrors/Yuxi/edit/main/docs/:path',
-      text: '在 GitHub 上编辑此页'
-    },
+    editLink: undefined,
 
     lastUpdated: {
       text: '最后更新时间',

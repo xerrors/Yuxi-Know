@@ -93,4 +93,4 @@
 
 历史 `task` 消息仍可查看，新模型不再获得该工具。升级前完成或取消旧版本的活跃 Run，并在智能体管理中将已保存的深度研究 Agent 及自定义提示词中的 `task` 指令改为先 `subagent_start`、再 `subagent_await`；已有配置不会被新的默认提示词覆盖。历史 checkpoint 中尚未执行的 `task` 调用会明确返回未知工具错误，不会被自动重放为新的子任务。父 Run 终态仍按原有策略取消活跃后代，派发与等待分离不改变此边界。
 
-实现入口见 [子智能体 middleware](https://github.com/xerrors/Yuxi/blob/main/backend/package/yuxi/agents/middlewares/subagent_task.py)、[SubAgentBackend](https://github.com/xerrors/Yuxi/blob/main/backend/package/yuxi/agents/buildin/subagent/graph.py) 和 [AgentRun 服务](https://github.com/xerrors/Yuxi/blob/main/backend/package/yuxi/services/agent_run_service.py)。
+实现入口见子智能体 middleware (`backend/package/yuxi/agents/middlewares/subagent_task.py`)、SubAgentBackend (`backend/package/yuxi/agents/buildin/subagent/graph.py`) 和 AgentRun 服务 (`backend/package/yuxi/services/agent_run_service.py`)。

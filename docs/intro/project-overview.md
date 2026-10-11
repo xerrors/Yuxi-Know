@@ -61,7 +61,7 @@ PostgreSQL 保存状态，前端通过 SSE 获取过程
 
 开发环境和单机部署使用 Docker Compose，默认启动知识库、图谱和评估所需的完整拓扑。应用通过 `sandbox-provisioner` 访问动态沙盒，底层可以使用 Docker 或 Kubernetes；沙盒规格与生产部署边界见[生产部署](../advanced/deployment.md)与[沙盒配置与运维](../advanced/sandbox-operations.md)。
 
-开发环境和默认服务拓扑以仓库根目录的 [ARCHITECTURE.md](https://github.com/xerrors/Yuxi/blob/main/ARCHITECTURE.md) 与 [docker-compose.yml](https://github.com/xerrors/Yuxi/blob/main/docker-compose.yml) 为准。
+开发环境和默认服务拓扑以仓库根目录的 [ARCHITECTURE.md](../../ARCHITECTURE.md) 与 [docker-compose.yml](../../docker-compose.yml) 为准。
 
 ## 技术栈
 

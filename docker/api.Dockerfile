@@ -23,9 +23,9 @@ RUN npm config set registry https://registry.npmmirror.com --global \
 RUN set -ex \
     # (A) 设置时区
     && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone \
-    # (B) 替换清华源 (针对 Debian Bookworm 的新版格式)
-    && sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
-    && sed -i 's|security.debian.org/debian-security|mirrors.tuna.tsinghua.edu.cn/debian-security|g' /etc/apt/sources.list.d/debian.sources \
+    # (B) 替换阿里云镜像源 (针对 Debian Bookworm 的新版格式)
+    && sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources \
+    && sed -i 's|security.debian.org/debian-security|mirrors.aliyun.com/debian-security|g' /etc/apt/sources.list.d/debian.sources \
     # (C) 安装必要的系统库
     && apt-get update \
     && apt-get install -y --no-install-recommends --fix-missing \
@@ -52,7 +52,7 @@ COPY backend/uv.lock /app/uv.lock
 # 先复制 package 目录，因为 pyproject.toml 中 yuxi = { path = "package", editable = true }
 COPY backend/package /app/package
 
-# 如果网络还是不好，可以在后面添加 --index-url https://pypi.tuna.tsinghua.edu.cn/simple
+# 如果网络还是不好，可以在后面添加 --index-url https://mirrors.aliyun.com/pypi/simple/
 RUN uv sync --no-cache --group test --no-dev --frozen
 
 # 复制 server 代码

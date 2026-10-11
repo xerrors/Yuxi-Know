@@ -61,7 +61,7 @@ MCP 配置从 PostgreSQL 读取，工具对象按配置哈希缓存。修改连�
 
 内置 DeepWiki 使用 `deepwiki-official` 标识，通过 `https://mcp.deepwiki.com/mcp` 提供 Streamable HTTP 服务，无需认证即可查询公开 GitHub 仓库。详见 [DeepWiki 官方文档](https://docs.devin.ai/work-with-devin/deepwiki-mcp)。
 
-开发者在 [`builtin.py`](https://github.com/xerrors/Yuxi/blob/main/backend/package/yuxi/agents/mcp/builtin.py) 的 `BUILTIN_MCP_SERVERS` 中添加固定远程定义：
+开发者在 [`backend/package/yuxi/agents/mcp/builtin.py`](../../backend/package/yuxi/agents/mcp/builtin.py) 的 `BUILTIN_MCP_SERVERS` 中添加固定远程定义：
 
 ```python
 BUILTIN_MCP_SERVERS = {

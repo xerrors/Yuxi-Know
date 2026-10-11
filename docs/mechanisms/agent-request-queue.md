@@ -122,4 +122,4 @@ intake、resume、continue 和自动接力会在同一线程的 Conversation 行
 
 当前不支持强制终止正在执行的模型或工具、多个 Steer 的合并与排序、通用优先级、失败后的自动回滚，以及把多个请求合并成一次 Run。
 
-实现入口见 [Agent 路由](https://github.com/xerrors/Yuxi/blob/main/backend/server/routers/agent_router.py)、[请求队列服务](https://github.com/xerrors/Yuxi/blob/main/backend/package/yuxi/services/agent_request_queue_service.py) 和[运行 worker](https://github.com/xerrors/Yuxi/blob/main/backend/package/yuxi/services/run_worker.py)。
+实现入口见 Agent 路由 (`backend/server/routers/agent_router.py`)、请求队列服务 (`backend/package/yuxi/services/agent_request_queue_service.py`) 和运行 worker (`backend/package/yuxi/services/run_worker.py`)。

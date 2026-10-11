@@ -40,21 +40,21 @@ class BumpVersionScriptTests(unittest.TestCase):
             + "\n",
             "README.md": (
                 "当前仓库默认配置对应 `v0.7.2.beta1`。\n"
-                "git clone --branch v0.7.2.beta1 --depth 1 https://github.com/xerrors/Yuxi.git\n"
+                "git clone --branch v0.7.2.beta1 --depth 1 https://example.com/your-fork/Yuxi.git\n"
             ),
             "README.en.md": (
-                "git clone --branch v0.7.2.beta1 --depth 1 https://github.com/xerrors/Yuxi.git\n"
+                "git clone --branch v0.7.2.beta1 --depth 1 https://example.com/your-fork/Yuxi.git\n"
             ),
             "docs/intro/quick-start.md": (
                 "仓库当前默认配置对应 `v0.7.2.beta1`。\n"
-                "git clone --branch v0.7.2.beta1 --depth 1 https://github.com/xerrors/Yuxi.git\n"
+                "git clone --branch v0.7.2.beta1 --depth 1 https://example.com/your-fork/Yuxi.git\n"
             ),
             "docs/advanced/deployment.md": (
                 "从 v0.7.1 升级到当前 `v0.7.2.beta1`。\n"
                 "git checkout v0.7.2.beta1\n"
             ),
             "docs/.vitepress/theme/components/YuxiHome.vue": (
-                "git clone --branch v0.7.2.beta1 --depth 1 https://github.com/xerrors/Yuxi.git\n"
+                "git clone --branch v0.7.2.beta1 --depth 1 https://example.com/your-fork/Yuxi.git\n"
             ),
             "docs/develop-guides/changelog.md": "## v0.7.2.beta1 (历史记录)\n",
         }

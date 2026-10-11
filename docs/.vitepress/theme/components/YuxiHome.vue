@@ -2,7 +2,6 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { withBase } from 'vitepress'
 
-const GITHUB = 'https://github.com/xerrors/Yuxi'
 const DEMO = 'https://www.bilibili.com/video/BV1erE26iEgv/'
 const OSS_ASSET_BASE = 'https://xerrors.oss-cn-shanghai.aliyuncs.com/github/yuxi/docs/home'
 const MASCOT_IMAGE = `${OSS_ASSET_BASE}/yuxi-mascot-cutout.png`
@@ -490,7 +489,6 @@ onBeforeUnmount(() => {
           <p>把团队知识、工具与多智能体执行接进一个可私有部署的工作台。</p>
           <div class="yx-actions">
             <a class="yx-button yx-button--primary" :href="withBase('/intro/quick-start')">开始部署</a>
-            <a class="yx-button yx-button--secondary" :href="GITHUB" target="_blank" rel="noreferrer">查看 GitHub</a>
           </div>
         </div>
 
@@ -690,7 +688,7 @@ onBeforeUnmount(() => {
             </div>
             <pre><code><span># 获取当前发布版本</span>
 git clone --branch v0.7.3 --depth 1 \
-  https://github.com/xerrors/Yuxi.git
+  https://example.com/your-fork/Yuxi.git
 cd Yuxi
 
 <span># 初始化并启动</span>
@@ -701,37 +699,11 @@ docker compose up --build -d</code></pre>
       </section>
 
       <section class="yx-community">
-        <div class="yx-shell yx-community__inner">
-          <header v-reveal class="yx-heading yx-heading--wide">
-            <h2>由开源社区共同构建</h2>
-            <p>感谢每一位参与代码、文档、测试和讨论的贡献者。</p>
-          </header>
-
-          <a
-            v-reveal
-            class="yx-contributors"
-            :href="`${GITHUB}/graphs/contributors`"
-            target="_blank"
-            rel="noreferrer"
-          >
-            <img
-              src="https://contrib.rocks/image?repo=xerrors/Yuxi&max=60&columns=12"
-              alt="Yuxi 贡献者头像墙"
-              width="812"
-              height="268"
-              loading="lazy"
-            >
-          </a>
-
-          <div v-reveal class="yx-community__footer">
-            <div>
-            <h2>继续探索，也欢迎一起构建</h2>
-            <p>查看演示、提交 Issue，或从贡献指南开始参与 Yuxi。</p>
-            </div>
-            <div class="yx-community__actions">
-              <a class="yx-button yx-button--primary" :href="DEMO" target="_blank" rel="noreferrer">观看演示</a>
-              <a class="yx-button yx-button--secondary" :href="withBase('/develop-guides/contributing')">参与贡献</a>
-            </div>
+        <div v-reveal class="yx-community__inner">
+            <header v-reveal class="yx-heading yx-heading--wide">
+              <h2>由开源社区共同构建</h2>
+              <p>感谢每一位参与代码、文档、测试和讨论的贡献者。</p>
+            </header>
           </div>
         </div>
       </section>

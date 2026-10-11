@@ -109,11 +109,11 @@ worker 和主动压缩在执行入口显式调用 `prepare_agent_runtime_context
 
 ## 源码和测试
 
-- [BaseAgent](https://github.com/xerrors/Yuxi/blob/main/backend/package/yuxi/agents/base.py)
-- [Context](https://github.com/xerrors/Yuxi/blob/main/backend/package/yuxi/agents/context.py)
-- [Chatbot graph](https://github.com/xerrors/Yuxi/blob/main/backend/package/yuxi/agents/buildin/chatbot/graph.py)
-- [执行后端显式注册](https://github.com/xerrors/Yuxi/blob/main/backend/package/yuxi/agents/buildin/__init__.py)
-- [Agent unit tests](https://github.com/xerrors/Yuxi/tree/main/backend/test/unit/agents)
-- [Agent integration/E2E](https://github.com/xerrors/Yuxi/tree/main/backend/test/e2e)
+- BaseAgent：`backend/package/yuxi/agents/base.py`
+- Context：`backend/package/yuxi/agents/context.py`
+- Chatbot graph：`backend/package/yuxi/agents/buildin/chatbot/graph.py`
+- 执行后端显式注册：`backend/package/yuxi/agents/buildin/__init__.py`
+- Agent unit tests：`backend/test/unit/agents`
+- Agent integration/E2E：`backend/test/e2e`
 
 改变持久配置、权限、模型可见输入、Run 生命周期或文件边界时，先按 [Yuxi Spec Loop](../develop-guides/spec-loop.md) 建立相应的决策和验证范围。

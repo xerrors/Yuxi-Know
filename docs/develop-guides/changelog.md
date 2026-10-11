@@ -28,10 +28,10 @@
 - 支持空闲线程主动压缩上下文；达到预算 85% 时提示操作。自动压缩统一使用一个阈值，大工具结果保留完整文件及模型可读摘要，检索预览保留来源信息。
 - 完善 Model/Tool 增量审计和按 Run 分组的调试时间线，收紧审计与普通聊天记录的隔离；审计接口返回最新 500 条并明确标记截断，详见[审计接口决策](decisions/archived/0.7.3/10-audit-debug/2026-09-03-unify-message-audit-read-api.md)。
 - 修复硅基流动、OpenCode 与 GLM Coding Plan 推理内容在流式输出和历史回读中的丢失；旧记录仅恢复已保存内容。OpenCode/Go 请求补齐稳定会话头，修复 `MissingSessionID`；同时修复首块工具调用不显示及处理过程布局。配置差异见[推理适配决策](decisions/archived/0.7.3/14-frontend-ux/2026-09-07-provider-reasoning-adapter.md)。
-- 修复普通 HTTP 环境创建 API Key 无响应（[#998](https://github.com/xerrors/Yuxi/issues/998)），重试沿用同一幂等请求 ID；公网部署仍须配置 HTTPS。
-- 修复知识库统计刷新命中过期缓存（[#997](https://github.com/xerrors/Yuxi/issues/997)）及带时区字段处理错误（[#988](https://github.com/xerrors/Yuxi/issues/988)）。
+- 修复普通 HTTP 环境创建 API Key 无响应，重试沿用同一幂等请求 ID；公网部署仍须配置 HTTPS。
+- 修复知识库统计刷新命中过期缓存及带时区字段处理错误。
 - 修复共享智能体编辑时误删不可见的既有资源选择；运行时仍只使用当前用户有权访问的资源。新建托管 Project 使用可读目录名，既有 UUID 目录保持有效。
-- 修复子智能体禁用工具后仍可调用后端执行的问题；禁用状态在执行端拒绝工具访问（[#1001](https://github.com/xerrors/Yuxi/pull/1001)）。
+- 修复子智能体禁用工具后仍可调用后端执行的问题；禁用状态在执行端拒绝工具访问。
 - 修复书籍分块偶发遗漏短文档标题、将不同节错误合并的问题；标题识别使用无放回抽样，短文档保留全部段落。
 - 修复 PDF 预览偶发误报「无法加载 PDF 文件或文件格式受损」：生产 Nginx 为 `.mjs` 静态资源补充 JavaScript MIME，pdf.js Worker 不再被浏览器拒绝；前端区分渲染组件、网络与文件损坏错误，并修复快速切换文件时的过期加载竞态；CMap 字体映射改为随应用本地发布，不再依赖 jsDelivr CDN。
 
@@ -469,9 +469,9 @@ v0.7.2.beta1 包含不可逆的数据与文件布局迁移，主要影响历史�
 - 将工具与知识库解耦，在 context 中就完成解耦，虽然最终都是在 Agent 中的 get_tools 中获取
 - 优化chunk逻辑，移除 QA 分割，集成到普通分块中，并优化可视化逻辑
 - 重构知识库处理逻辑，分为 上传—解析—入库 三个阶段
-- 重构 MCP 相关配置，使用数据库来控制 [#469](https://github.com/xerrors/Yuxi/pull/469)
+- 重构 MCP 相关配置，使用数据库来控制
 - 使用 docling 解析 office 文件（docx/xlsx/pptx）
-- 优化后端的依赖，减少镜像体积 [#428](https://github.com/xerrors/Yuxi/issues/428)
+- 优化后端的依赖，减少镜像体积
 - 优化 liaghtrag 的知识库调用结果，提供 content/graph/both 多个选项
 - 优化数据库查询工具，可通过设计环境变量添加描述，让模型更好的调用
 - 优化任务组件，改用 postgresql 存储，并新增删除任务的接口
@@ -481,9 +481,9 @@ v0.7.2.beta1 包含不可逆的数据与文件布局迁移，主要影响历史�
 
 - 修复文件上传弹窗中 OCR 下拉选项展开时不会自动检查服务状态的问题
 - 修复知识图谱上传的向量配置错误，并新增模型选择以及 batch size 选择
-- 修复部分场景下获取工具列表报错 [#470](https://github.com/xerrors/Yuxi/pull/470)
-- 修改方法备注信息 [#478](https://github.com/xerrors/Yuxi/pull/478)
-- 修复多次 human-in-the-loop 的渲染解析问题 [#453](https://github.com/xerrors/Yuxi/issues/453) [#475](https://github.com/xerrors/Yuxi/pull/475)
+- 修复部分场景下获取工具列表报错
+- 修改方法备注信息
+- 修复多次 human-in-the-loop 的渲染解析问题
 - 修复沙盒后端接入回归：补齐 composite backend 的 `sandbox_backend` 参数、限制 `/api/sandbox/prepare` 仅允许访问当前用户线程、确保 `release()` 之后的 `destroy()` 会真正停止热池容器，并恢复 docker-compose 的完整模式默认值
 - 重构沙盒为 deer-flow 风格的 AIO provider：切换为 thread-local sandbox、统一 `/home/gem/user-data/{workspace,uploads,outputs}` 固定路径、移除公开 `/api/sandbox/*` 生命周期接口，并补充 lite 模式下的 provider 生命周期、filesystem API 与 sandbox 复用/隔离 E2E 验证
 - 调整聊天附件存储链路：线程附件改为直接落盘到 `saves/threads/<thread_id>/user-data/uploads`，解析成功后额外生成 `uploads/attachments/*.md`，不再依赖 MinIO 或显式上传到 sandbox
@@ -492,19 +492,19 @@ v0.7.2.beta1 包含不可逆的数据与文件布局迁移，主要影响历史�
 ## v0.4
 
 ### 新增
-- 新增对于上传附件的智能体中间件，详见[智能体配置文档](https://xerrors.github.io/Yuxi/agents/agents-config)
-- 新增多模态模型支持（当前仅支持图片），详见[智能体配置文档](https://xerrors.github.io/Yuxi/agents/agents-config)
+- 新增对于上传附件的智能体中间件，详见[智能体配置文档](../agents/agents-config.md)
+- 新增多模态模型支持（当前仅支持图片），详见[智能体配置文档](../agents/agents-config.md)
 - 新建 DeepAgents 智能体（深度分析智能体），支持 todo，files 等渲染，支持文件的下载。
-- 新增基于知识库文件生成思维导图功能（[#335](https://github.com/xerrors/Yuxi/pull/335#issuecomment-3530976425)）
-- 新增基于知识库文件生成示例问题功能（[#335](https://github.com/xerrors/Yuxi/pull/335#issuecomment-3530976425)）
-- 新增知识库支持文件夹/压缩包上传的功能（[#335](https://github.com/xerrors/Yuxi/pull/335#issuecomment-3530976425)）
+- 新增基于知识库文件生成思维导图功能
+- 新增基于知识库文件生成示例问题功能
+- 新增知识库支持文件夹/压缩包上传的功能
 - 新增自定义模型支持、新增 dashscope rerank/embeddings 模型的支持
 - 新增文档解析的图片支持，已支持 MinerU Officical、Docs、Markdown Zip格式
-- 新增暗色模式支持并调整整体 UI（[#343](https://github.com/xerrors/Yuxi/pull/343)）
-- 新增知识库评估功能，支持导入评估基准或者自动构建评估基准（目前仅支持Milvus类型知识库）详见[知识库评估文档](https://xerrors.github.io/Yuxi/intro/evaluation)
+- 新增暗色模式支持并调整整体 UI
+- 新增知识库评估功能，支持导入评估基准或者自动构建评估基准（目前仅支持Milvus类型知识库）详见[知识库评估文档](../intro/evaluation.md)
 - 新增同名文件处理逻辑：遇到同名文件则在上传区域提示，是否删除旧文件
 - 新增生产环境部署脚本，固定 python 依赖版本，提升部署稳定性
-- 优化图谱可视化方式，统一图谱数据结构，统一使用基于 G6 的可视化方式，同时支持上传带属性的图谱文件，详见[知识库文档](https://xerrors.github.io/Yuxi/intro/knowledge-base)
+- 优化图谱可视化方式，统一图谱数据结构，统一使用基于 G6 的可视化方式，同时支持上传带属性的图谱文件，详见[知识库文档](../intro/knowledge-base.md)
 - 优化 DBManager / ConversationManager，支持异步操作
 - 优化 知识库详情页面，更加简洁清晰，增强文件下载功能
 

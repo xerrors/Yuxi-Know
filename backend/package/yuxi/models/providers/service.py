@@ -332,9 +332,8 @@ def _validate_user_uid_header(provider_type: str, include_user_uid: bool) -> Non
         raise ValueError("Gemini 供应商暂不支持请求携带用户 ID")
     if not (os.getenv(USER_UID_SIGNATURE_SECRET_ENV) or "").strip():
         raise ValueError(
-            f"开启“请求携带用户 ID”前，需要先在 API/worker 环境变量配置 {USER_UID_SIGNATURE_SECRET_ENV}"
-            "（专用随机密钥，勿复用 JWT_SECRET_KEY）；配置方法详见"
-            "https://xerrors.github.io/Yuxi/intro/model-config"
+            f"开启「请求携带用户 ID」前，需要先在 API/worker 环境变量配置 {USER_UID_SIGNATURE_SECRET_ENV}"
+            "（专用随机密钥，勿复用 JWT_SECRET_KEY）；配置方法详见系统配置文档。"
         )
 
 

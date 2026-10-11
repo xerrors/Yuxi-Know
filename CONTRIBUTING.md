@@ -1,12 +1,9 @@
 # 参与贡献
 
-感谢你关注 Yuxi。欢迎提交 Issue、修复 Bug、补充测试、改进文档或贡献新功能。
+感谢你关注 Yuxi。欢迎提交 Bug 修复、补充测试、改进文档或贡献新功能。
 
 ## 开始前
 
-- 先搜索 [Issues](https://github.com/xerrors/Yuxi/issues)，避免重复工作。
-- 较大的功能、公开接口、权限或架构变化，先在 Issue 或 [Discussions](https://github.com/xerrors/Yuxi/discussions) 讨论范围和方案。
-- 一个 PR 只解决一个明确问题，不混入无关重构、格式化或顺手优化。
 - 修改不熟悉的模块前，先阅读 [ARCHITECTURE.md](ARCHITECTURE.md)。
 
 完整的 Fork、开发、测试、Review 和 PR 说明见[开发贡献指南](docs/develop-guides/contributing.md)。文档改动请同时阅读[文档编写与维护规范](docs/develop-guides/documentation-guidelines.md)。
@@ -50,5 +47,4 @@ git push -u origin docs/improve-guides
 
 ## 问题反馈
 
-- Bug 和功能建议：[GitHub Issues](https://github.com/xerrors/Yuxi/issues)
-- 方案讨论：[GitHub Discussions](https://github.com/xerrors/Yuxi/discussions)
+请通过仓库维护者公开的反馈渠道提交 Bug 与功能建议，或在团队内部通讯中讨论方案。仓库 `docs/develop-guides/contributing.md` 中维护了最新的反馈与协作入口。

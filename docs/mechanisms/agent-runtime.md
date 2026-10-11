@@ -76,13 +76,13 @@ Viewer、附件和 artifact API 通过持久化 Workspace/Workdir 读取文件�
 
 ## 源码和验证入口
 
-- [Context 与资源归一化](https://github.com/xerrors/Yuxi/blob/main/backend/package/yuxi/agents/context.py)
-- [BaseAgent](https://github.com/xerrors/Yuxi/blob/main/backend/package/yuxi/agents/base.py)
-- [Chatbot graph](https://github.com/xerrors/Yuxi/blob/main/backend/package/yuxi/agents/buildin/chatbot/graph.py)
-- [SubAgent graph](https://github.com/xerrors/Yuxi/blob/main/backend/package/yuxi/agents/buildin/subagent/graph.py)
-- [Memory middleware](https://github.com/xerrors/Yuxi/blob/main/backend/package/yuxi/agents/middlewares/memory.py)
-- [运行时上下文 unit](https://github.com/xerrors/Yuxi/tree/main/backend/test/unit/agents)
-- [Agent 主链路 E2E](https://github.com/xerrors/Yuxi/tree/main/backend/test/e2e)
+- Context 与资源归一化：`backend/package/yuxi/agents/context.py`
+- BaseAgent：`backend/package/yuxi/agents/base.py`
+- Chatbot graph：`backend/package/yuxi/agents/buildin/chatbot/graph.py`
+- SubAgent graph：`backend/package/yuxi/agents/buildin/subagent/graph.py`
+- Memory middleware：`backend/package/yuxi/agents/middlewares/memory.py`
+- 运行时上下文 unit：`backend/test/unit/agents`
+- Agent 主链路 E2E：`backend/test/e2e`
 
 修改配置、权限、模型可见输入、文件作用域或恢复语义时，同时验证对应的 unit、integration 或 E2E，并回读最终 state、消息、文件或协议结果。
 

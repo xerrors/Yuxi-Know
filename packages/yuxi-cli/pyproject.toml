@@ -30,11 +30,6 @@ dependencies = [
     "typer>=0.16",
 ]
 
-[project.urls]
-Homepage = "https://github.com/xerrors/Yuxi"
-Repository = "https://github.com/xerrors/Yuxi"
-Issues = "https://github.com/xerrors/Yuxi/issues"
-
 [project.scripts]
 yuxi = "yuxi_cli.main:app"
 

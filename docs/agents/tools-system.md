@@ -80,7 +80,7 @@ DOUBAO_SEARCH_API_KEY=<your-doubao-key>
 
 工具在 API 和 worker 进程加载时注册，修改环境变量后需要 `docker compose up -d --force-recreate api worker`。验证方式：在智能体详情确认工具列表出现「网页搜索」，用一个需要最新信息的问题发起真实对话，并检查工具调用返回的 URL、标题和摘要。没有该工具时检查 `WEB_SEARCH_PROVIDER` 拼写、对应 Key 是否存在以及容器是否已重建。
 
-实现入口：[网页搜索工具](https://github.com/xerrors/Yuxi/blob/main/backend/package/yuxi/agents/toolkits/buildin/tools.py)。
+实现入口：网页搜索工具 (`backend/package/yuxi/agents/toolkits/buildin/tools.py`)。
 
 ## 工具组装流程
 
