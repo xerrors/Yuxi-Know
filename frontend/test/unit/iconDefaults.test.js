@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { createSSRApp, h } from 'vue'
+import { createSSRApp, h, onUnmounted, ref } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { compileScript, parse } from 'vue/compiler-sfc'
 import { Clock, Hourglass, CircleHelp, Database, setLucideProps } from '@lucide/vue'
@@ -13,9 +13,11 @@ const executable = compileScript(descriptor, { id: 'icon-defaults' }).content
   .replace('export default', 'return')
 
 test('根组件让未指定尺寸的状态、帮助和按钮图标随字号缩放，保留显式尺寸', async () => {
-  const component = new Function('useThemeStore', 'setLucideProps', executable)(
+  const component = new Function('useThemeStore', 'setLucideProps', 'useRouter', 'ref', 'onUnmounted', executable)(
     () => ({ currentTheme: {} }),
-    setLucideProps
+    setLucideProps,
+    () => ({ currentRoute: { value: { matched: [{}] } }, beforeEach: () => () => {}, onError: () => () => {}, afterEach: () => () => {} }),
+    ref, onUnmounted
   )
   component.render = () => h('div', [
     h(Clock), h(Hourglass), h(CircleHelp), h(Database),
