@@ -124,7 +124,7 @@
           </a-select>
         </a-form-item>
         <a-form-item label="调用来源" :required="createForm.access_level === 'agents'">
-          <a-input v-model:value="createForm.app_id" maxlength="64" placeholder="如：customer-service" />
+          <a-input v-model:value="createForm.app_id" :maxlength="64" placeholder="如：customer-service" />
         </a-form-item>
         <a-alert
           v-if="createForm.access_level === 'full'"
@@ -159,7 +159,7 @@
           </a-select>
         </a-form-item>
         <a-form-item label="调用来源" :required="editForm.access_level === 'agents'">
-          <a-input v-model:value="editForm.app_id" maxlength="64" placeholder="如：customer-service" />
+          <a-input v-model:value="editForm.app_id" :maxlength="64" placeholder="如：customer-service" />
         </a-form-item>
         <a-alert
           v-if="editForm.access_level === 'full'"

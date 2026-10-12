@@ -39,7 +39,7 @@
 
       <span v-if="hasTokenUsageMetrics" class="token-usage-card-metrics">
         <span v-if="tokenUsageThreadTotalLabel !== null">
-          <small>当前对话累计</small>
+          <small title="已上报模型调用的输入与输出 Token 总量">累计模型用量</small>
           <strong>{{ tokenUsageThreadTotalLabel }}</strong>
         </span>
         <span v-if="tokenUsageCacheHitLabel !== null">
@@ -219,7 +219,7 @@ const tokenUsageThreadTotal = computed(() => {
   return total === null ? null : Math.max(total, 0)
 })
 const tokenUsageThreadTotalLabel = computed(() => {
-  if (tokenUsageThreadTotal.value === null) return null
+  if (!tokenUsageThreadTotal.value) return null
   return formatTokenCount(tokenUsageThreadTotal.value)
 })
 const tokenUsageCacheHitLabel = computed(() => {

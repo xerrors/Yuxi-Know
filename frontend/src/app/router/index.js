@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import BlankLayout from '@/app/layouts/BlankLayout.vue'
 import { useUserStore } from '@/modules/identity/model/user'
 import { sanitizeRedirect } from '@/modules/identity/model/oidcAutoStart'
+import { message } from 'ant-design-vue'
 
 const AppLayout = () => import('@/app/layouts/AppLayout.vue')
 
@@ -204,6 +205,7 @@ router.beforeEach(async (to) => {
   }
 
   if ((requiresAdmin && !isAdmin) || (requiresSuperAdmin && !isSuperAdmin)) {
+    message.warning(to.path === '/dashboard' ? '无权访问数据总览' : '无权访问此页面')
     return '/agent'
   }
 

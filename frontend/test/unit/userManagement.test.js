@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import test from 'node:test'
 import { compileScript, parse } from 'vue/compiler-sfc'
-import { computed, reactive } from 'vue'
+import { computed, reactive, ref } from 'vue'
 
 test('用户类型默认排除 APP 身份，切换类型回到第一页并保留搜索条件', async () => {
   const source = await fs.readFile(
@@ -15,7 +15,7 @@ test('用户类型默认排除 APP 身份，切换类型回到第一页并保留
   const watches = []
   let unmount
   const deps = {
-    reactive, computed,
+    reactive, computed, ref,
     watch: (read, run) => watches.push({ read, run }),
     onMounted() {}, onUnmounted: (run) => { unmount = run },
     useUserStore: () => ({ isSuperAdmin: true, userId: 1 }),

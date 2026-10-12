@@ -169,6 +169,7 @@
           @loading-change="pickerLoading = $event"
           @folder-created="handleFolderCreated"
         />
+        <small>所选目录即项目工作区，文件直接保存在该目录中，不会另建同名文件夹。</small>
       </div>
     </div>
   </a-modal>

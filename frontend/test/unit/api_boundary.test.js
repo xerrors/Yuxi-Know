@@ -64,6 +64,29 @@ test('公开登录 401 保留服务端错误且不清理当前会话', async () 
   })
 })
 
+test('注销文案仅映射公开登录 403，其他权限拒绝继续脱敏', async () => {
+  await withServer(async (server) => {
+    storageValues.set('user_token', 'fixture-token')
+    globalThis.__apiBoundaryMessages = []
+    globalThis.fetch = async () => new Response(JSON.stringify({ detail: 'private account data' }), {
+      status: 403, headers: { 'content-type': 'application/json' }
+    })
+    const { authApi } = await server.ssrLoadModule('/src/apis/auth_api.js')
+    const { apiGet } = await server.ssrLoadModule('/src/apis/base.js')
+    await assert.rejects(authApi.login({ loginId: 'fixture', password: 'wrong' }), {
+      message: '账号已注销，请联系管理员', status: 403
+    })
+    for (const [path, authenticated] of [['/api/users', true], ['/api/other-public', false], ['/api/auth/token', true]]) {
+      await assert.rejects(apiGet(path, {}, authenticated), (error) => {
+        assert.equal(error.message, '没有权限执行此操作')
+        assert.deepEqual(error.response.data, { detail: '没有权限执行此操作' })
+        return true
+      })
+    }
+    assert.deepEqual(globalThis.__apiBoundaryMessages, [])
+  })
+})
+
 test('创建有 ZIP 使用 multipart，其余保持 JSON，均只发送一次请求', async () => {
   await withServer(async (server) => {
     storageValues.set('user_token', 'fixture-token')

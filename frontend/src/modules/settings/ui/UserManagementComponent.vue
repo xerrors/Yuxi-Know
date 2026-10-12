@@ -102,7 +102,7 @@
                       </template>
                       <button type="button" class="user-meta" aria-label="查看完整用户信息">
                         <span class="user-name">{{ record.username }}</span>
-                        <span v-if="record.uid" class="user-uid">ID: {{ record.uid }}</span>
+                        <span v-if="record.uid" class="user-uid">{{ record.user_kind === 'end_user' ? '终端用户 ID' : '登录 ID' }}：{{ record.uid }}</span>
                       </button>
                     </a-popover>
                   </div>
@@ -195,18 +195,24 @@
         <a-form-item label="用户名" required class="form-item">
           <a-input
             v-model:value="userManagement.form.username"
-            placeholder="请输入用户名（2-20个字符）"
+            ref="usernameInputRef"
+            placeholder="2-20 个字符，支持中文、英文、数字和下划线"
+            :status="userManagement.form.usernameError ? 'error' : undefined"
+            :aria-invalid="Boolean(userManagement.form.usernameError)"
+            aria-describedby="username-help username-error"
             @blur="validateAndGenerateUid"
             :maxlength="20"
           />
-          <div v-if="userManagement.form.usernameError" class="yuxi-form-error">
+          <div id="username-error" v-if="userManagement.form.usernameError" class="yuxi-form-error" role="alert">
             {{ userManagement.form.usernameError }}
           </div>
           <div
-            v-if="userManagement.form.generatedUid && !userManagement.editMode"
+            id="username-help"
             class="yuxi-form-help"
           >
-            登录ID：{{ userManagement.form.generatedUid }}，此ID将用于登录，根据用户名自动生成
+            <template v-if="userManagement.editMode">登录 ID：{{ userManagement.form.generatedUid }}，修改用户名不会改变登录 ID。</template>
+            <template v-else-if="userManagement.form.generatedUid">登录 ID：{{ userManagement.form.generatedUid }}，将用于登录。</template>
+            <template v-else>登录 ID（UID）将根据用户名自动生成，用于登录；同名用户的登录 ID 各不相同。</template>
           </div>
         </a-form-item>
 
@@ -273,7 +279,7 @@
 </template>
 
 <script setup>
-import { reactive, onMounted, onUnmounted, watch, computed } from 'vue'
+import { reactive, ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { message, Modal } from 'ant-design-vue'
 import { useUserStore } from '@/modules/identity/model/user'
 import { authApi, departmentApi } from '@/apis'
@@ -386,17 +392,30 @@ const fetchDepartments = async () => {
   }
 }
 
+const usernameInputRef = ref(null)
+
+/** 提示后端允许的用户名格式，最终校验仍由后端执行。 */
+const getUsernameError = (username) => {
+  if (!username) return '用户名不能为空'
+  if (username.length < 2 || username.length > 20) return '用户名长度必须在 2-20 个字符之间'
+  if (!/^[一-龥a-zA-Z0-9_]+$/.test(username)) return '用户名只能包含中文、英文、数字和下划线'
+  return ''
+}
+
 // 添加验证用户名并生成uid的函数
 const validateAndGenerateUid = async () => {
   const username = userManagement.form.username.trim()
 
   // 清空之前的错误和生成的ID
   userManagement.form.usernameError = ''
-  userManagement.form.generatedUid = ''
+  if (!userManagement.editMode) userManagement.form.generatedUid = ''
 
   if (!username) {
     return
   }
+
+  userManagement.form.usernameError = getUsernameError(username)
+  if (userManagement.form.usernameError) return
 
   // 在编辑模式下，不需要重新生成uid
   if (userManagement.editMode) {
@@ -405,8 +424,10 @@ const validateAndGenerateUid = async () => {
 
   try {
     const result = await userStore.validateUsernameAndGenerateUid(username)
+    if (userManagement.editMode || username !== userManagement.form.username.trim()) return
     userManagement.form.generatedUid = result.uid
   } catch (error) {
+    if (userManagement.editMode || username !== userManagement.form.username.trim()) return
     userManagement.form.usernameError = error.message || '用户名验证失败'
   }
 }
@@ -572,17 +593,10 @@ const showEditUserModal = (user) => {
 const handleUserFormSubmit = async () => {
   try {
     // 简单验证
-    if (!userManagement.form.username.trim()) {
-      message.error('用户名不能为空')
-      return
-    }
-
-    // 验证用户名长度
-    if (
-      userManagement.form.username.trim().length < 2 ||
-      userManagement.form.username.trim().length > 20
-    ) {
-      message.error('用户名长度必须在 2-20 个字符之间')
+    userManagement.form.usernameError = getUsernameError(userManagement.form.username.trim())
+    if (userManagement.form.usernameError) {
+      message.error(userManagement.form.usernameError)
+      usernameInputRef.value?.focus()
       return
     }
 

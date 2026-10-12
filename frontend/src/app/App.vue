@@ -10,6 +10,21 @@ const themeStore = useThemeStore()
 </script>
 <template>
   <a-config-provider :theme="themeStore.currentTheme" :locale="zhCN" :render-empty="renderEmpty">
-    <router-view />
+    <router-view v-slot="{ Component }">
+      <component :is="Component" v-if="Component" />
+      <main v-else class="route-loading" role="status" aria-label="正在加载页面">
+        <a-skeleton active :paragraph="{ rows: 4 }" />
+        <span>正在加载页面…</span>
+      </main>
+    </router-view>
   </a-config-provider>
 </template>
+
+<style scoped>
+.route-loading {
+  min-height: 100vh;
+  padding: 48px 24px;
+  background: var(--gray-0);
+  color: var(--color-text-secondary);
+}
+</style>

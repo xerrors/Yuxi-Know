@@ -11,7 +11,9 @@ async (page) => {
   await page.screenshot({ path: '/tmp/yuxi-session-context-panel.png', animations: 'disabled' })
 
   await page.evaluate(async () => {
-    const { createApp, h, reactive } = await import('/node_modules/.vite/deps/vue.js')
+    const mainSource = await (await fetch('/src/app/main.js')).text()
+    const vueUrl = mainSource.match(/from "([^"]*\/vue\.js[^"]*)"/)[1]
+    const { createApp, h, reactive } = await import(vueUrl)
     const { default: Panel } = await import('/src/modules/session/ui/ContextUsagePanel.vue')
     const state = reactive({
       usage: { next_llm_input_tokens: 90, llm_input_tokens: 60, summary_trigger_tokens: 100,
@@ -38,8 +40,11 @@ async (page) => {
   await card.click()
   check(await fixture.getByRole('progressbar').getAttribute('aria-valuenow') === '90', '未使用下一轮压力')
   const metrics = fixture.locator('.token-usage-card-metrics > span')
-  check(await metrics.filter({ hasText: '当前对话累计' }).locator('strong').innerText() === '2K', '1024 Token 展示单位改变')
+  check(await metrics.filter({ hasText: '累计模型用量' }).locator('strong').innerText() === '2K', '1024 Token 展示单位改变')
   check(await metrics.filter({ hasText: '累计缓存命中率' }).locator('strong').innerText() === '50%', '累计缓存命中率错误')
+  await page.evaluate(() => { window.__contextFixture.state.usage.thread.total.total_tokens = 0 })
+  check(await fixture.getByText('累计模型用量', { exact: true }).count() === 0, '零累计用量不应显示为已采集指标')
+  await page.evaluate(() => { window.__contextFixture.state.usage.thread.total.total_tokens = 2048 })
   check((await fixture.locator('.token-usage-model-stats .is-cache strong').textContent()).trim() === '50 · 50%', '模型缓存统计错误')
   const compress = fixture.getByRole('button', { name: '压缩上下文', exact: true })
   await page.evaluate(() => { window.__contextFixture.state.compressionDisabled = true })

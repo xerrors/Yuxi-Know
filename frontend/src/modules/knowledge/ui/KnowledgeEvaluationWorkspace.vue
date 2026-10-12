@@ -97,6 +97,9 @@
                   <span class="evaluation-row-description">
                     {{ dataset.description || '暂无描述' }}
                   </span>
+                  <span v-if="getDatasetStatus(dataset) === 'failed'" class="evaluation-row-description" role="alert">
+                    {{ getDatasetBuildMessage(dataset) }}
+                  </span>
                   <span v-if="isDatasetBuilding(dataset)" class="evaluation-row-progress">
                     <a-progress
                       :percent="getDatasetProgress(dataset)"

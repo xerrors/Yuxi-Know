@@ -176,7 +176,7 @@
 
         <section v-else class="flow-section" aria-live="polite">
           <div class="result-heading">
-            <strong>{{ resultTitle }}</strong>
+            <strong>{{ resultTitle }}：</strong>
             <span
               >成功 {{ successfulInstallCount }} 个，失败 {{ failedInstallItems.length }} 个</span
             >

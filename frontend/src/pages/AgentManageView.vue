@@ -78,7 +78,8 @@ onBeforeRouteUpdate((to) => canChangeTab(normalizeTab(to.query.tab)))
       <template #info>
         <div v-if="activeTab === 'agents'" class="summary-strip">
           <span>{{ activeStats.total || 0 }} 个智能体</span>
-          <span>{{ activeStats.manageable || 0 }} 个可管理</span>
+          <span>{{ activeStats.manageable || 0 }} 个可编辑</span>
+          <span v-if="!activeStats.manageable">可新建私有智能体</span>
         </div>
         <div v-else-if="activeTab === 'providers'" class="summary-strip">
           <span>{{ activeStats.enabled || 0 }} 个启用</span>
