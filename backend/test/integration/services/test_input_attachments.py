@@ -19,7 +19,7 @@ from yuxi.modules.agents.repositories.attachments import AttachmentRepository
 from yuxi.modules.agents.repositories.input import AgentInputRepository
 from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.agents.services import attachments, inputs, runs, scheduler, threads
-from yuxi.modules.agents.services.input_messages import build_chat_input_message
+from yuxi.modules.agents.input_messages import build_chat_input_message
 from yuxi.modules.workspace.filesystem import Workspace
 from yuxi.modules.workspace.models import Project
 from yuxi.modules.workspace.paths import ensure_user_workspace

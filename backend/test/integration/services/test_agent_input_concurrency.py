@@ -33,7 +33,7 @@ from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.modules.agents.repositories.input_receipt import AgentInputReceiptRepository
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.repositories.sessions import SessionRepository
-from yuxi.modules.agents.services.scope import ActorScope
+from yuxi.modules.agents.scope import ActorScope
 from yuxi.shared.errors import StateConflictError
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]

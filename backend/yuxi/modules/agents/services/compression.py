@@ -13,7 +13,8 @@ from yuxi.infrastructure.observability.logging import logger
 from yuxi.modules.agents.models.inputs import AgentInput
 from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.modules.agents.repositories.definitions import AgentRepository
-from yuxi.modules.agents.repositories.sessions import SessionRepository
+from yuxi.modules.agents.services.thread_access import require_thread
+from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.agents.repositories.state import AgentStateRepository
 from yuxi.modules.agents.runtime.agent_backends import AgentBackendNotFoundError, get_agent_backend
 from yuxi.modules.agents.runtime.context import DEFAULT_SUMMARY_THRESHOLD_K, BaseContext, prepare_agent_runtime_context
@@ -37,13 +38,8 @@ async def compress_thread_context(
 ) -> dict[str, Any]:
     """在线程空闲时压缩 checkpoint；同线程新请求由 Session 行锁串行化。"""
     uid = str(current_user.uid)
-    agent_session = await SessionRepository(db).lock_session_by_thread_id(thread_id)
-    if (
-        agent_session is None
-        or agent_session.uid != uid
-        or getattr(agent_session, "app_id", None) != app_id
-        or agent_session.status != "active"
-    ):
+    agent_session = await require_thread(db=db, scope=ActorScope(uid=uid, app_id=app_id), thread_id=thread_id, lock=True)
+    if agent_session.status != "active":
         raise ResourceNotFoundError("对话线程不存在")
 
     agent_slug = agent_session.agent_id

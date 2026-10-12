@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.api.dependencies.auth import get_db, get_required_user
 from yuxi.modules.agents.services.references import annotate_turn_references, get_turn_references
-from yuxi.modules.agents.services.scope import ActorScope
+from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.identity.models import User
 
 reference_router = APIRouter(prefix="/agent/threads", tags=["agent"], include_in_schema=False)

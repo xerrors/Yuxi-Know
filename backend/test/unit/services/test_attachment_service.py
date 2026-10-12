@@ -356,7 +356,7 @@ def test_webp_requires_explicit_capable_engine():
 @pytest.mark.asyncio
 async def test_binding_rejects_input_owned_by_other_scope():
     """替代调用不能把同用户其他 APP 的 Input 用作绑定目标。"""
-    from yuxi.modules.agents.services.scope import ActorScope
+    from yuxi.modules.agents.scope import ActorScope
 
     with pytest.raises(ValueError, match="身份不一致"):
         await service.stage_input_attachments(

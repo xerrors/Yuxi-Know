@@ -7,7 +7,7 @@ from pydantic import ValidationError
 from yuxi.api.routers.public_v1.agents import public_agents_router
 from yuxi.api.routers.public_v1.agents.events import public_stream_response
 from yuxi.api.routers.public_v1.agents.schemas import SessionCreate, SessionEventCreate, SessionUpdate, input_messages_to_domain
-from yuxi.modules.agents.services.scope import ActorScope
+from yuxi.modules.agents.scope import ActorScope
 from yuxi.shared.errors import InvalidInputError
 
 
@@ -202,7 +202,7 @@ def test_turn_http_core_matches_terminal_event_and_preserves_cancelling():
     """相同终态事实生成相同核心，取消清理不能提前投影终态。"""
     from datetime import UTC, datetime
     from types import SimpleNamespace
-    from yuxi.modules.agents.services.events import _turn_event
+    from yuxi.modules.agents.services.subscriptions import _turn_event
     from yuxi.modules.agents.services.public_resources import turn_core
 
     timestamp = datetime(2026, 10, 9, tzinfo=UTC)

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from yuxi.modules.agents.repositories.runs import AgentRunRepository
+
 import json
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock
@@ -9,6 +11,8 @@ import pytest_asyncio
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from yuxi.modules.agents.services.memory_history import MemoryHistoryService
+from yuxi.modules.agents.repositories.messages import MessageRepository
 from yuxi.modules.agents.repositories.sessions import SessionRepository, MAX_SESSION_TITLE_LENGTH
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.turns import AgentTurn
@@ -16,7 +20,7 @@ from yuxi.infrastructure.postgres.base import Base
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.models.messages import Message, ToolCall
 from yuxi.shared.datetime import utc_now
-from yuxi.modules.agents.repositories.sessions import MEMORY_HISTORY_READ_RESPONSE_MAX_BYTES
+from yuxi.modules.agents.services.memory_history import MEMORY_HISTORY_READ_RESPONSE_MAX_BYTES
 from test.support.sqlite import create_utc_sqlite_engine
 
 pytestmark = pytest.mark.unit
@@ -89,7 +93,7 @@ async def test_list_agent_runs_for_trace_returns_latest_bounded_window_in_order(
         )
     await session.commit()
 
-    runs, truncated = await SessionRepository(session).list_agent_runs_for_trace(
+    runs, truncated = await AgentRunRepository(session).list_agent_runs_for_trace(
         agent_session.id,
         limit=2,
     )
@@ -216,14 +220,13 @@ async def test_model_audit_messages_are_hidden_from_history_and_message_count(se
     session.add_all([visible_message, audit_message, tool_audit])
     await session.commit()
 
-    repo = SessionRepository(session)
-    messages = await repo.get_messages(agent_session.id)
+    messages = await MessageRepository(session).get_messages(agent_session.id)
 
     assert [message.content for message in messages] == ["visible"]
 
     previous_updated_at = agent_session.updated_at
-    await repo.publish_assistant_output(audit_message)
-    published_messages = await repo.get_messages(agent_session.id)
+    await MessageRepository(session).publish_assistant_output(audit_message)
+    published_messages = await MessageRepository(session).get_messages(agent_session.id)
 
     assert [message.content for message in published_messages] == ["visible", "hidden intermediate"]
     assert audit_message.message_type == "text"
@@ -231,8 +234,6 @@ async def test_model_audit_messages_are_hidden_from_history_and_message_count(se
 
 
 @pytest.mark.asyncio
-
-
 @pytest.mark.asyncio
 async def test_session_page_includes_different_sources(session):
     normal, scheduled, public_api, _ = _seed_source_filter_sessions()
@@ -595,7 +596,7 @@ async def test_memory_search_includes_public_source_and_excludes_hidden_messages
     )
     await session.commit()
 
-    result = await SessionRepository(session).search_memory_messages(uid="user-1", query="needle")
+    result = await MemoryHistoryService(session).search_memory_messages(uid="user-1", query="needle")
 
     assert {item["thread_id"]: item["content"] for item in result["items"]} == {
         "visible": "needle visible",
@@ -642,10 +643,9 @@ async def test_memory_read_uses_allowlist_and_only_explicit_toolcall_table(sessi
         )
     )
     await session.commit()
-    repository = SessionRepository(session)
 
-    default_result = await repository.read_memory_messages(uid="user-1", thread_id="visible")
-    explicit_result = await repository.read_memory_messages(
+    default_result = await MemoryHistoryService(session).read_memory_messages(uid="user-1", thread_id="visible")
+    explicit_result = await MemoryHistoryService(session).read_memory_messages(
         uid="user-1",
         thread_id="visible",
         include_tools=True,
@@ -690,7 +690,7 @@ async def test_memory_read_enforces_utf8_and_final_response_budget(session):
     )
     await session.commit()
 
-    result = await SessionRepository(session).read_memory_messages(uid="user-1", thread_id="large")
+    result = await MemoryHistoryService(session).read_memory_messages(uid="user-1", thread_id="large")
     encoded = json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
 
     assert len(encoded) <= MEMORY_HISTORY_READ_RESPONSE_MAX_BYTES
@@ -782,13 +782,12 @@ async def test_memory_tools_exclude_unproven_or_active_model_audits(session):
     )
     await session.commit()
 
-    repository = SessionRepository(session)
-    history = await repository.get_messages(agent_session.id)
+    history = await MessageRepository(session).get_messages(agent_session.id)
 
     assert [message.content for message in history] == ["proven"]
     assert history[0].tool_calls[0].langgraph_tool_call_id == "call-proven"
 
-    result = await repository.read_memory_messages(
+    result = await MemoryHistoryService(session).read_memory_messages(
         uid="user-1",
         thread_id="audits",
         include_tools=True,

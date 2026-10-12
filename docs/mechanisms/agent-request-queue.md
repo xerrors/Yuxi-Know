@@ -56,6 +56,14 @@ ARQ 投递只发生在 owning transaction 提交后。持久 `pending` Run 可�
 
 Thread SSE 把输入接收、Input 消费、Run 结束、Turn 结束和短期增量分开通知。断线时按 `Last-Event-ID` 续订，并重读 Input、Turn、Run 和历史的持久事实；Redis 的短期事件不是业务终态。
 
+## 事务与消息归属
+
+接收、配置治理、交互恢复和 checkpoint 结算各由所属 service 提交或回滚，仓储只查询、锁定或 flush。幂等指纹保留接收时的规范 JSON 字节；同命令同意图才重放，用户、APP、Thread 和键的唯一约束仍由 PG 拥有。锁前快速重放与锁后复查保留在各命令入口，权限和资源删除语义由所属用例决定。Run 创建在已有 Thread 锁内固定当前 Turn、冻结配置、Input 与恢复 Message；提交后通过 scheduler 投递同一个 Run。
+
+[Message 仓储](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/repositories/messages.py)拥有正式消息与兼容 ToolCall 的共同写入和读取；Input 消费、模型/工具审计与公开 item 仓储分别拥有原始来源投影、执行事实与公开快照的原子更新。[checkpoint 消息结算](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/services/checkpoint_messages.py)在同一事务对账这些事实并结算 Run/Turn，最终回答由 `result_run_id` 明确绑定。终态提交后释放运行清理责任，再发布公开事件；协作通知与业务状态在同一 PG 事务写入，观察与恢复可补读。[事件订阅](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/services/subscriptions.py)消费持久生命周期和 Redis 投影，[审计读取](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/services/message_audits.py)只组装已授权持久事实。
+
+Memory 历史仓储负责用户与消息可见性查询，历史服务负责输入范围、预览、工具数量与 UTF-8 响应预算。重复默认定义和环境内容读取保持持久身份与修订时间，重复查看同一终态 Run 不再次提交。运行准备在进入模型流前结束读取事务，禁用追踪时也使用相同边界。协作树和沙盒回收共用[运行锁键](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/runtime_locks.py)，保留已部署键字节；行锁次序由消费、输出和恢复仓储拥有，Input 行锁先于 Run 终态更新。
+
 ## 权限、源码与验证
 
 Public 身份在 HTTP 边界变为包含 `uid`、`app_id` 的作用域；接收、查询及副作用用例在 Thread 和相关记录上再次校验。归档 Thread 拒绝活跃 Turn 或待处理 Input，并保留历史。Project 删除在同一事务检查这些条件后归档所属 Thread，不修改 Workdir 字节。

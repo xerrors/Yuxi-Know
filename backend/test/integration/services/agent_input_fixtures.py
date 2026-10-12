@@ -22,9 +22,9 @@ from yuxi.modules.agents.repositories.input_receipt import AgentInputReceiptRepo
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.agents.services import input_config, scheduler, threads, turns
-from yuxi.modules.agents.services.input_messages import build_chat_input_message, serialize_input_message
+from yuxi.modules.agents.input_messages import build_chat_input_message, serialize_input_message
 from yuxi.modules.agents.services import inputs
-from yuxi.modules.agents.services.scope import ActorScope
+from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.workspace.services.bindings import WorkdirBinding
 
 SCOPE = ActorScope(uid="input-user", app_id=None)

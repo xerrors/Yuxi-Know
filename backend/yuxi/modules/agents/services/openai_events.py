@@ -214,22 +214,10 @@ class OpenAIEventAdapter:
         # 原生 tool-error 也可能是 GraphInterrupt；结局由已提交 Run 决定。
         if kind != "tool-finished":
             return []
-        output = data.get("output")
-        failed = isinstance(output, dict) and output.get("status") == "error"
-        content = output.get("content") if isinstance(output, dict) else output
-        if isinstance(content, list):
-            # LangChain 的工具 content 不是官方 input content；仅透传合法文本/图片块。
-            if all(isinstance(part, dict) and part.get("type") == "text" and isinstance(part.get("text"), str) for part in content):
-                content = [{"type": "input_text", "text": part["text"]} for part in content]
-            elif not all(isinstance(part, dict) and part.get("type") in {"input_text", "input_image"} for part in content):
-                import json
-
-                content = json.dumps(content, ensure_ascii=False)
-        if content is not None and not isinstance(content, str | list):
-            import json
-
-            content = json.dumps(content, ensure_ascii=False)
-        error = str(data.get("message") or content or "工具执行失败") if failed else None
+        result = data["result"]
+        content = result.public_content
+        error = result.error
+        failed = error is not None
         item = await self._save(
             call_id,
             "tool",

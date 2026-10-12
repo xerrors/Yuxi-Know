@@ -32,6 +32,30 @@ class AgentRunRepository:
         result = await self.db.execute(select(AgentRun).where(AgentRun.id == run_id))
         return result.scalar_one_or_none()
 
+    async def list_agent_runs_for_trace(self, session_record_id: int, *, limit: int) -> tuple[list[AgentRun], bool]:
+        """按创建顺序返回有界 AgentRun 调试事实。"""
+        result = await self.db.execute(
+            select(AgentRun)
+            .where(AgentRun.session_record_id == session_record_id)
+            .order_by(AgentRun.created_at.desc(), AgentRun.id.desc())
+            .limit(limit + 1)
+        )
+        runs = list(result.scalars().all())
+        truncated = len(runs) > limit
+        return list(reversed(runs[:limit])), truncated
+
+    async def get_for_scope(self, *, run_id: str, thread_id: str, turn_id: str, uid: str, app_id: str | None) -> AgentRun | None:
+        """按完整执行绑定读取 Run，不从相邻执行推断。"""
+        return await self.db.scalar(
+            select(AgentRun).where(
+                AgentRun.id == run_id,
+                AgentRun.thread_id == thread_id,
+                AgentRun.turn_id == turn_id,
+                AgentRun.uid == uid,
+                AgentRun.app_id == app_id,
+            )
+        )
+
     async def get_run_for_user(self, run_id: str, uid: str) -> AgentRun | None:
         result = await self.db.execute(select(AgentRun).where(and_(AgentRun.id == run_id, AgentRun.uid == str(uid))))
         return result.scalar_one_or_none()
@@ -727,9 +751,7 @@ class AgentRunRepository:
         if delivery_status is None:
             return
         await self.db.execute(
-            update(Message)
-            .where(Message.run_id == run.id, Message.role == "user")
-            .values(delivery_status=delivery_status)
+            update(Message).where(Message.run_id == run.id, Message.role == "user").values(delivery_status=delivery_status)
         )
 
     async def record_run_manifest(

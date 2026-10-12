@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.modules.agents.models.definitions import Agent
-from yuxi.modules.agents.repositories.definitions import user_can_access_agent, user_can_manage_agent
+from yuxi.modules.agents.permissions import user_can_access_agent, user_can_manage_agent
 from yuxi.modules.extensions.skills.content import commit_skill_content, content_path
 from yuxi.modules.extensions.skills.install_draft import prepared_uploaded_skill
 from yuxi.modules.extensions.skills.models import Skill

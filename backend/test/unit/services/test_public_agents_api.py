@@ -9,7 +9,7 @@ from pydantic import ValidationError
 from yuxi.api.routers.public_v1.agents.schemas import InputMessage, SessionEventCreate, input_messages_to_domain
 from yuxi.api.routers.public_v1.agents.auth import require_public_context
 from yuxi.modules.agents.services.inputs import _accepted, thread_id_for_creation
-from yuxi.modules.agents.services.scope import ActorScope
+from yuxi.modules.agents.scope import ActorScope
 
 
 def test_creation_key_is_stable_and_isolated_by_app():

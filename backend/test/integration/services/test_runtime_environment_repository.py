@@ -33,6 +33,7 @@ async def test_sync_provider_matches_repository_after_replace_and_delete(monkeyp
                 repo = AgentEnvRepository(db)
                 for value in ({"AUDIT_VALUE": "first", "EMPTY": ""}, {"AUDIT_VALUE": "replaced"}):
                     await repo.upsert(uid="env-owner", env=value, updated_at=utc_now())
+                    await db.commit()
                     async with sessions() as oracle:
                         persisted = await AgentEnvRepository(oracle).get_by_uid("env-owner")
                         assert await asyncio.to_thread(load_user_agent_env, "env-owner") == persisted.env == value

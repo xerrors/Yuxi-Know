@@ -8,6 +8,8 @@ from datetime import datetime
 
 from sqlalchemy import or_, select, text
 
+from yuxi.modules.agents.services.cooperation_notifications import notify_turn_state
+from yuxi.modules.agents.runtime_locks import cooperation_lock_key, sandbox_release_lock_key
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.agents.models.runs import AgentRun
@@ -46,7 +48,7 @@ async def release_runtime_if_idle(run: AgentRun) -> bool:
             return True
         await db.execute(
             text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
-            {"key": f"cooperation:{current.runtime_scope_id}"},
+            {"key": cooperation_lock_key(current.runtime_scope_id)},
         )
         current.runtime_cleanup_pending = False
         active = await db.scalar(
@@ -107,7 +109,7 @@ async def _release_idle_sandbox(root_id: str, cutoff: datetime) -> None:
     async with pg_manager.get_async_session_context() as db:
         if not await db.scalar(
             text("SELECT pg_try_advisory_xact_lock(hashtextextended(:key, 0))"),
-            {"key": f"sandbox-release:{root_id}"},
+            {"key": sandbox_release_lock_key(root_id)},
         ):
             return
         runtime = await db.get(CooperationRuntime, root_id, populate_existing=True)
@@ -225,6 +227,7 @@ async def reconcile_expired_run_leases(*, now: datetime | None = None) -> list[s
                 )
                 if turn is None:
                     raise ValueError("失联 Run 的根 Turn 不存在")
+                # 恢复使用相同 Input→Run 锁序；返回行无需参与失联状态裁决。
                 await AgentInputRepository(db).get_pending_steer(thread_id=root_thread_id, uid=uid, app_id=app_id)
                 run = await repo.reconcile_expired_lease(run_id, now=now)
                 if run is None:
@@ -232,7 +235,6 @@ async def reconcile_expired_run_leases(*, now: datetime | None = None) -> list[s
                 if turn.current_run_id == run.id:
                     agent_session.queue_paused = True
                     await AgentTurnRepository(db).set_terminal(turn, status="failed")
-                    from yuxi.modules.agents.services.cooperation import notify_turn_state
 
                     await notify_turn_state(db, run)
                     terminal_turn_ids.append(turn.id)

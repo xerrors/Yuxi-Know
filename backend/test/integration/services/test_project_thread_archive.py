@@ -11,8 +11,8 @@ from yuxi.modules.agents.models.inputs import AgentInput
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.models.turns import AgentTurn
-from yuxi.modules.agents.services.input_messages import build_chat_input_message, serialize_input_message
-from yuxi.modules.agents.services.scope import ActorScope
+from yuxi.modules.agents.input_messages import build_chat_input_message, serialize_input_message
+from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.agents.services.threads import archive_thread
 from yuxi.modules.identity.models import User
 from yuxi.modules.workspace.models import Project

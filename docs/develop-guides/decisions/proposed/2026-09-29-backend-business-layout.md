@@ -339,7 +339,7 @@ backend/yuxi/
 | `Y/utils/logging_config.py`、`S/utils/common_utils.py` | 合并到 `infrastructure/observability/logging.py`，保留现有 logger 导出与 setup_logging 入口，由 bootstrap 显式调用。 | 保留应用 logger 与 Uvicorn/标准 logging 的各自配置，不借合并替换日志库或修改输出格式。 |
 | `Y/services/task_registry.py` | `modules/background_jobs/registry.py` 保留 JobDefinition、解析版本与加载行为；`bootstrap/background_job_handlers.py` 保留实际业务 handler 注册表，API/worker 初始化时显式注册。 | 任务 type/version 不变；模块路径随迁移更新，handler 继续惰性加载。registry 未完成装配时显式报错，不能以空表伪装可用。 |
 | `Y/__init__.py`、`Y/config/__init__.py` | 根 initializer 保留版本查询；dotenv 加载进入 bootstrap/environment；进程环境与运行目录配置进入 infrastructure/runtime_settings；持久系统配置进入 system/options，用户配置进入 identity/preferences。 | API、worker、schema-init 在导入会读取配置的模块前加载环境；保留当前环境覆盖语义。生产 metadata 仍能正确返回 Yuxi 版本。 |
-| `Y/utils/sse_utils.py` | format_sse、format_heartbeat 进入 `api/sse.py`；使用中的 SSE_HEARTBEAT_SECONDS、SSE_MAX_CONNECTION_MINUTES 由 `modules/agents/services/events.py` 拥有。 | SSE 编码仍只在 HTTP 边界发生一次；无人使用的轮询配置不再导出。 |
+| `Y/utils/sse_utils.py` | format_sse、format_heartbeat 进入 `api/sse.py`；使用中的 SSE_HEARTBEAT_SECONDS、SSE_MAX_CONNECTION_MINUTES 由 `modules/agents/services/subscriptions.py` 拥有。 | SSE 编码仍只在 HTTP 边界发生一次；无人使用的轮询配置不再导出。 |
 
 拆分的直接检查点来自 worker（`backend/package/yuxi/services/run_worker.py`）、解析配置入口（`backend/package/yuxi/services/ocr_service.py`）、parser（`backend/package/yuxi/knowledge/parser/unified.py`）、Skills 授权与投影（`backend/package/yuxi/agents/skills/service.py`） 和 数据库 manager（`backend/package/yuxi/storage/postgres/manager.py`）。这些路径记录迁移前来源；当前 Owner 由目标树与 ARCHITECTURE.md 指定。
 

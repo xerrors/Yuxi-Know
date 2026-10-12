@@ -21,7 +21,7 @@ from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.modules.agents.runtime.middlewares.authorization import AgentExecutionRevoked
 from yuxi.modules.agents.services.feedback import list_feedback, mark_run_for_improvement, remove_user_feedback, save_user_feedback
-from yuxi.modules.agents.services.scope import ActorScope
+from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.identity.models import User
 from yuxi.modules.workspace.models import Project
 from yuxi.shared.datetime import utc_now

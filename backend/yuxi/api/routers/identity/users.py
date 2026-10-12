@@ -1,6 +1,5 @@
 """用户级配置与凭据路由"""
 
-import re
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
@@ -10,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from yuxi.api.dependencies.auth import get_current_user, get_db, get_required_user
 from yuxi.api.uploads import read_upload_with_limit
 from yuxi.infrastructure.minio import upload_image_to_minio
-from yuxi.modules.agents.repositories.environment import AgentEnvRepository
+from yuxi.modules.agents.services.environment import read_agent_env, write_agent_env
 from yuxi.modules.identity.models import User
 from yuxi.modules.identity.preferences import UserConfig, UserConfigSchema
 from yuxi.modules.identity.repositories.api_keys import (
@@ -20,14 +19,10 @@ from yuxi.modules.identity.repositories.api_keys import (
     APIKeySubjectUnavailable,
 )
 from yuxi.modules.identity.security import AuthUtils
-from yuxi.shared.datetime import coerce_any_to_utc_datetime, format_utc_datetime, utc_now
+from yuxi.shared.datetime import coerce_any_to_utc_datetime, format_utc_datetime
 
 user_router = APIRouter(prefix="/user", tags=["user"])
 
-ENV_KEY_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-MAX_ENV_COUNT = 200
-MAX_ENV_KEY_LENGTH = 128
-MAX_ENV_VALUE_LENGTH = 32768
 MAX_USER_IMAGE_SIZE_BYTES = 5 * 1024 * 1024
 
 
@@ -259,10 +254,8 @@ async def get_agent_env(
     current_user: User = Depends(get_required_user),
     db: AsyncSession = Depends(get_db),
 ):
-    agent_env = await AgentEnvRepository(db).get_by_uid(current_user.uid)
-    if agent_env is None:
-        return AgentEnvResponse(env={})
-    return AgentEnvResponse(env=agent_env.env or {}, updated_at=format_utc_datetime(agent_env.updated_at))
+    result = await read_agent_env(db, uid=current_user.uid)
+    return AgentEnvResponse(env=result.env, updated_at=format_utc_datetime(result.updated_at))
 
 
 @user_router.put("/agent-env", response_model=AgentEnvResponse)
@@ -271,35 +264,8 @@ async def update_agent_env(
     current_user: User = Depends(get_required_user),
     db: AsyncSession = Depends(get_db),
 ):
-    env = validate_agent_env(data.env)
-    now = utc_now()
-    result = await AgentEnvRepository(db).upsert(uid=current_user.uid, env=env, updated_at=now)
+    result = await write_agent_env(db, uid=current_user.uid, env=data.env)
     return AgentEnvResponse(env=result.env, updated_at=format_utc_datetime(result.updated_at))
-
-
-def validate_agent_env(env: dict[str, Any]) -> dict[str, str]:
-    if len(env) > MAX_ENV_COUNT:
-        raise HTTPException(status_code=400, detail=f"环境变量数量不能超过 {MAX_ENV_COUNT} 个")
-
-    normalized: dict[str, str] = {}
-    for key, value in env.items():
-        if not isinstance(key, str):
-            raise HTTPException(status_code=400, detail="环境变量名必须是字符串")
-        name = key.strip()
-        if not name:
-            raise HTTPException(status_code=400, detail="环境变量名不能为空")
-        if len(name) > MAX_ENV_KEY_LENGTH:
-            raise HTTPException(status_code=400, detail=f"环境变量名长度不能超过 {MAX_ENV_KEY_LENGTH}")
-        if not ENV_KEY_PATTERN.match(name):
-            raise HTTPException(status_code=400, detail=f"环境变量名 {name} 格式不正确")
-        if name in normalized:
-            raise HTTPException(status_code=400, detail=f"环境变量名 {name} 重复")
-        if not isinstance(value, str):
-            raise HTTPException(status_code=400, detail=f"环境变量 {name} 的值必须是字符串")
-        if len(value) > MAX_ENV_VALUE_LENGTH:
-            raise HTTPException(status_code=400, detail=f"环境变量 {name} 的值过长")
-        normalized[name] = value
-    return normalized
 
 
 async def get_accessible_api_key(repository: APIKeyRepository, api_key_id: int, current_user: User):

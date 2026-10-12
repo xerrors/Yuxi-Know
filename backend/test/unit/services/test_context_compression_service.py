@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from yuxi.modules.agents.services import thread_access
 from types import SimpleNamespace
 
 import pytest
@@ -51,6 +52,7 @@ async def test_compress_thread_context_uses_locked_idle_thread(
     events = []
     agent_session = SimpleNamespace(
         uid="user-1",
+        app_id=None,
         status="active",
         agent_id="assistant",
         config_snapshot=config_snapshot,
@@ -104,7 +106,7 @@ async def test_compress_thread_context_uses_locked_idle_thread(
         events.append(("compress", kwargs["context"].model))
         return {"status": "completed", "after_tokens": 300}
 
-    monkeypatch.setattr(service, "SessionRepository", SessionRepo)
+    monkeypatch.setattr(thread_access, "SessionRepository", SessionRepo)
     monkeypatch.setattr(service, "AgentRepository", AgentRepo)
     monkeypatch.setattr(service, "_ensure_thread_idle", idle)
     monkeypatch.setattr(service, "ensure_session_workdir_available", workdir)
@@ -149,7 +151,7 @@ async def test_compress_rejects_same_user_from_other_app(monkeypatch: pytest.Mon
         async def lock_session_by_thread_id(self, _thread_id):
             return SimpleNamespace(uid="user-1", app_id="app-a", status="active")
 
-    monkeypatch.setattr(service, "SessionRepository", SessionRepo)
+    monkeypatch.setattr(thread_access, "SessionRepository", SessionRepo)
     with pytest.raises(DomainError) as exc:
         await service.compress_thread_context(thread_id="thread-1", current_user=SimpleNamespace(uid="user-1"), db=object(), app_id="app-b")
     assert isinstance(exc.value, ResourceNotFoundError)

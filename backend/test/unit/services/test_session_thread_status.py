@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from yuxi.modules.agents.services import thread_access
 from types import SimpleNamespace
 
 import pytest
@@ -16,7 +17,7 @@ from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.modules.agents.repositories.sessions import UNVIEWED_RUN_MARKER, SessionRepository
-from yuxi.modules.agents.services.scope import ActorScope
+from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.agents.services.threads import (
     archive_thread,
     get_session_resource,
@@ -236,7 +237,7 @@ async def test_read_side_effect_rejects_same_user_other_app(monkeypatch):
         async def lock_session_by_thread_id(self, _thread_id):
             return SimpleNamespace(uid="user-1", app_id="app-a", status="active")
 
-    monkeypatch.setattr(thread_service, "SessionRepository", Repository)
+    monkeypatch.setattr(thread_access, "SessionRepository", Repository)
     with pytest.raises(DomainError) as exc:
         await thread_service.mark_thread_viewed(
             db=object(),

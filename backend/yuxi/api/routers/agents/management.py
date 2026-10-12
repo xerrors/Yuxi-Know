@@ -8,22 +8,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.api.dependencies.auth import get_db, get_required_user, get_superadmin_user
 from yuxi.api.uploads import read_upload_with_limit
-from yuxi.modules.agents.repositories.definitions import (
-    AgentRepository,
-    is_builtin_agent,
-    user_can_access_agent,
-    user_can_manage_agent,
-)
+from yuxi.modules.agents.repositories.definitions import AgentRepository
+from yuxi.modules.agents.permissions import is_builtin_agent, user_can_access_agent, user_can_manage_agent
 from yuxi.modules.agents.runtime.agent_backends import (
     AgentBackendNotFoundError,
     get_agent_backend,
     list_agent_backend_info,
 )
-from yuxi.modules.agents.runtime.context import filter_declared_config
 from yuxi.modules.agents.services.definitions import (
     create_agent_definition,
     delete_agent_definition,
     update_agent_definition,
+    serialize_agent_definition,
+    ensure_default_agent_definition,
+    set_default_agent_definition,
 )
 from yuxi.modules.extensions.skills.bound import (
     create_agent_bound_skill,
@@ -61,14 +59,8 @@ class AgentUpdate(BaseModel):
     share_config: dict | None = None
 
 
-def _filter_agent_config_json(backend_id: str, config_json: dict | None) -> dict:
-    backend = get_agent_backend(backend_id)
-    context_schema = backend.context_schema
-    return filter_declared_config(config_json or {}, context_schema=context_schema)
-
-
 async def _serialize_agent(
-    repo: AgentRepository,
+    db,
     item,
     user: User,
     *,
@@ -76,13 +68,13 @@ async def _serialize_agent(
     backend_info_cache: dict[tuple[str, bool, str], dict] | None = None,
 ) -> dict:
     try:
-        data = await repo.serialize(
+        data = await serialize_agent_definition(
+            db,
             item,
             user=user,
             include_configurable_items=include_configurable_items,
             backend_info_cache=backend_info_cache,
         )
-        data["config_json"] = _filter_agent_config_json(item.backend_id, data.get("config_json"))
     except AgentBackendNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return data
@@ -123,20 +115,19 @@ async def list_agents(
     db: AsyncSession = Depends(get_db),
 ):
     repo = AgentRepository(db)
-    await repo.ensure_default_agent()
+    await ensure_default_agent_definition(db)
     items = await repo.list_visible(user=current_user)
     backend_info_cache: dict[tuple[str, bool, str], dict] = {}
-    agents = [await _serialize_agent(repo, item, current_user, backend_info_cache=backend_info_cache) for item in items]
+    agents = [await _serialize_agent(db, item, current_user, backend_info_cache=backend_info_cache) for item in items]
     return {"agents": agents}
 
 
 @agent_router.get("/default")
 async def get_default_agent(current_user: User = Depends(get_required_user), db: AsyncSession = Depends(get_db)):
-    repo = AgentRepository(db)
-    item = await repo.ensure_default_agent()
+    item = await ensure_default_agent_definition(db)
     if not item or not user_can_access_agent(current_user, item):
         raise HTTPException(status_code=404, detail="默认智能体不可访问")
-    return {"agent": await _serialize_agent(repo, item, current_user, include_configurable_items=True)}
+    return {"agent": await _serialize_agent(db, item, current_user, include_configurable_items=True)}
 
 
 @agent_router.post("")
@@ -168,7 +159,6 @@ async def create_agent_with_skill(
 
 async def _create_agent_response(db, user, payload, *, skill_upload=None):
     """将同一创建用例的领域错误与结果映射到 HTTP。"""
-    repo = AgentRepository(db)
     try:
         item = await create_agent_definition(db, operator=user, skill_upload=skill_upload, **payload.model_dump())
     except AgentBackendNotFoundError as exc:
@@ -179,7 +169,7 @@ async def _create_agent_response(db, user, payload, *, skill_upload=None):
         # YAML parser 的后续行含文件片段；只展示失败原因，不回显内容。
         detail = {"code": "agent_creation_invalid", "message": str(exc).splitlines()[0]}
         raise HTTPException(status_code=422, detail=detail) from exc
-    return {"agent": await _serialize_agent(repo, item, user, include_configurable_items=True)}
+    return {"agent": await _serialize_agent(db, item, user, include_configurable_items=True)}
 
 
 @agent_router.get("/{agent_id}")
@@ -189,7 +179,7 @@ async def get_agent(agent_id: str, current_user: User = Depends(get_required_use
     item = await repo.get_visible_by_slug(slug=agent_slug, user=current_user, for_run=False)
     if not item:
         raise HTTPException(status_code=404, detail="智能体不存在")
-    return {"agent": await _serialize_agent(repo, item, current_user, include_configurable_items=True)}
+    return {"agent": await _serialize_agent(db, item, current_user, include_configurable_items=True)}
 
 
 @agent_router.put("/{agent_id}")
@@ -228,7 +218,7 @@ async def update_agent(
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return {"agent": await _serialize_agent(repo, updated, current_user, include_configurable_items=True)}
+    return {"agent": await _serialize_agent(db, updated, current_user, include_configurable_items=True)}
 
 
 @agent_router.delete("/{agent_id}")
@@ -265,10 +255,10 @@ async def set_agent_default(
     if not item:
         raise HTTPException(status_code=404, detail="智能体不存在")
     try:
-        updated = await repo.set_default(agent=item, updated_by=str(current_user.uid))
+        updated = await set_default_agent_definition(db, agent=item, operator=current_user)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return {"agent": await _serialize_agent(repo, updated, current_user, include_configurable_items=True)}
+    return {"agent": await _serialize_agent(db, updated, current_user, include_configurable_items=True)}
 
 
 @agent_router.get("/{agent_id}/self-skill")

@@ -26,9 +26,9 @@ from yuxi.modules.agents.runtime.callbacks.model_request_timing import FirstMode
 from yuxi.modules.agents.runtime.context import BaseContext
 from yuxi.modules.agents.runtime.state import AgentStatePayload
 from yuxi.modules.agents.services.attachments import serialize_attachment
-from yuxi.modules.agents.services.input_messages import AgentRunInputMessage
+from yuxi.modules.agents.input_messages import AgentRunInputMessage
 from yuxi.modules.agents.services.message_recorder import RunMessageRecorder
-from yuxi.modules.agents.services.messages import save_messages_from_langgraph_state, save_partial_message
+from yuxi.modules.agents.services.checkpoint_messages import save_messages_from_langgraph_state, save_partial_message
 from yuxi.modules.agents.services.openai_events import OpenAIEventAdapter
 from yuxi.modules.agents.services.preparation import PreparedRunExecution
 from yuxi.modules.agents.services.tracing import (
@@ -110,7 +110,11 @@ async def _persist_agent_run_langfuse_trace(*, db, meta: dict, run_context: Lang
     """按 Thread→Turn→Run 顺序固定跨执行段的 trace 与观察身份。"""
     run_id = meta.get("run_id")
     worker_id = meta.get("worker_id")
-    if not run_id or not worker_id or not run_context.trace_id:
+    if not run_id or not worker_id:
+        return
+    if not run_context.trace_id:
+        # 禁用追踪时也在模型流前结束 runtime/附件读取事务。
+        await db.commit()
         return
 
     try:
@@ -386,72 +390,15 @@ class RunExecutionResult:
     error_message: str | None = None
 
 
-async def stream_agent_chat(
-    *,
-    agent_slug: str,
-    thread_id: str,
-    meta: dict,
-    input_messages: list[AgentRunInputMessage],
-    current_user,
-    db,
-    prepared_execution: PreparedRunExecution,
-    on_prepared: Callable[[], Awaitable[None]] | None = None,
-    model_request_recorder: FirstModelRequestRecorder | None = None,
-) -> AsyncIterator[dict[str, Any] | RunExecutionResult]:
-    """以持久 Input 执行当前会话 Run。"""
-    stream = _stream_agent_execution(
-        thread_id=thread_id,
-        meta=meta,
-        current_user=current_user,
-        db=db,
-        prepared_execution=prepared_execution,
-        on_prepared=on_prepared,
-        model_request_recorder=model_request_recorder,
-        agent_slug=agent_slug,
-        input_messages=input_messages,
-    )
-    async with aclosing(stream):
-        async for event in stream:
-            yield event
-
-
-async def stream_agent_resume(
+async def stream_agent_execution(
     *,
     thread_id: str,
-    resume_input: Any,
     meta: dict,
     current_user,
     db,
     prepared_execution: PreparedRunExecution,
     on_prepared: Callable[[], Awaitable[None]] | None = None,
     model_request_recorder: FirstModelRequestRecorder | None = None,
-) -> AsyncIterator[dict[str, Any] | RunExecutionResult]:
-    """以已验证的等待点控制输入恢复同一 Turn。"""
-    stream = _stream_agent_execution(
-        thread_id=thread_id,
-        meta=meta,
-        current_user=current_user,
-        db=db,
-        prepared_execution=prepared_execution,
-        on_prepared=on_prepared,
-        model_request_recorder=model_request_recorder,
-        resume_input=resume_input,
-        is_resume=True,
-    )
-    async with aclosing(stream):
-        async for event in stream:
-            yield event
-
-
-async def _stream_agent_execution(
-    *,
-    thread_id: str,
-    meta: dict,
-    current_user,
-    db,
-    prepared_execution: PreparedRunExecution,
-    on_prepared: Callable[[], Awaitable[None]] | None,
-    model_request_recorder: FirstModelRequestRecorder | None,
     agent_slug: str | None = None,
     input_messages: list[AgentRunInputMessage] | None = None,
     resume_input: Any = None,
@@ -494,7 +441,8 @@ async def _stream_agent_execution(
                 for position, message in enumerate(input_messages):
                     own_id = message.extra_metadata["message_id"]
                     visible = [
-                        attachment for attachment in authorized_attachments
+                        attachment
+                        for attachment in authorized_attachments
                         if attachment["message_id"] == own_id
                         or (position == len(input_messages) - 1 and attachment["message_id"] not in message_ids)
                     ]
@@ -511,7 +459,6 @@ async def _stream_agent_execution(
             meta=meta,
         )
         await _persist_agent_run_langfuse_trace(db=db, meta=meta, run_context=langfuse_run)
-        await db.commit()
         trace_info = get_trace_info(langfuse_run)
         callbacks = list(langfuse_run.callbacks)
         if model_request_recorder is not None:
@@ -545,26 +492,10 @@ async def _stream_agent_execution(
                     # 同 Run 续图时，序号在公开投影与审计之前统一为递增序列。
                     event = {**event, "seq": sequence_offset + event["seq"]}
                     last_sequence = event["seq"]
-                    method = event["method"]
-                    params = event["params"]
-                    if method == "values" and not params.get("namespace"):
-                        state = extract_agent_state(params["data"])
-                        signature = _agent_state_signature(state)
-                        if signature != state_signature:
-                            state_signature = signature
-                            yield adapter.extension("turn.state", f"state:{event['seq']}", agent_state=state)
-                        continue
-                    if method == "custom":
-                        payload = params["data"]
-                        if isinstance(payload, dict) and payload.get("type") == "yuxi.context_compression":
-                            yield adapter.extension(
-                                "turn.context_compression",
-                                f"compression:{event['seq']}",
-                                compression=payload,
-                            )
-                        continue
-                    event = await recorder.consume(event)
-                    for public_event in await adapter.consume(event):
+                    public_events, state_signature = await _project_graph_event(
+                        event, recorder=recorder, adapter=adapter, state_signature=state_signature
+                    )
+                    for public_event in public_events:
                         if public_event["type"] == "agent.session.turn.output_text.delta":
                             accumulated_content.append(public_event["delta"])
                         yield public_event
@@ -649,3 +580,21 @@ async def _stream_agent_execution(
         if langfuse_run is not None:
             finish_run_observation(langfuse_run)
         await _flush_langfuse_best_effort()
+
+
+async def _project_graph_event(event, *, recorder, adapter, state_signature: str) -> tuple[list[dict], str]:
+    """将单个原生事件投影到公开协议，审计在公开输出之前完成。"""
+    method, params = event["method"], event["params"]
+    if method == "values" and not params.get("namespace"):
+        state = extract_agent_state(params["data"])
+        signature = _agent_state_signature(state)
+        if signature != state_signature:
+            return [adapter.extension("turn.state", f"state:{event['seq']}", agent_state=state)], signature
+        return [], state_signature
+    if method == "custom":
+        payload = params["data"]
+        if isinstance(payload, dict) and payload.get("type") == "yuxi.context_compression":
+            return [adapter.extension("turn.context_compression", f"compression:{event['seq']}", compression=payload)], state_signature
+        return [], state_signature
+    event = await recorder.consume(event)
+    return await adapter.consume(event), state_signature

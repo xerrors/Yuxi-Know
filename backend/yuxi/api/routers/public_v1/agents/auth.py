@@ -6,7 +6,7 @@ from fastapi import Depends, Header, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.api.dependencies.auth import get_db, get_required_user
-from yuxi.modules.agents.services.scope import ActorScope
+from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.identity.models import APIKey, User
 from yuxi.modules.identity.services.public_auth import InvalidEndUserId, PublicIdentityDenied, resolve_public_user
 

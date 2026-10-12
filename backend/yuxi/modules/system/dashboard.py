@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.modules.agents.repositories.sessions import SessionRepository
+from yuxi.modules.agents.repositories.messages import MessageRepository
 from yuxi.modules.system.repositories.dashboard import DashboardRepository
 from yuxi.shared.datetime import format_utc_datetime
 
@@ -85,7 +86,7 @@ class DashboardService:
         if not agent_session:
             return None
 
-        messages = await self.session_repo.get_messages(agent_session.id)
+        messages = await MessageRepository(self.db).get_messages(agent_session.id)
         audit_metadata = await self.repo.get_session_audit_metadata(agent_session)
         message_list = []
         for message in messages:

@@ -200,11 +200,11 @@ Turn 的最终回答必须来自 `result_run_id` 指向 Run 的 `output_message_
 
 子任务拥有独立 Thread/Turn/Run，自身承担结果、等待、恢复和执行租约，通过委派关系关联父 Run。指定子 Run 的阅读先以 `getAgentRun(childThreadId, runId)` 或 History 的 runs 定位 childTurnId，再通过 `getThreadTurn(childThreadId, childTurnId)` 读取该轮的状态、结果和等待点。恢复后的后续 Run 仍属于同一个 child Turn；子任务的其他 Turn 不能替代指定轮的结果。父完成或失败不结束子任务，父取消只沿对应委派关系处理在途子 Turn。统一会话模块共享传输、归属和展示基础，观察目标始终保留明确的 Thread/Turn/Run 身份。[Run 快照服务](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/services/runs.py)拥有此读取契约。
 
-相关事实 Owner：[History 投影](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/services/messages.py)、[Thread 快照](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/services/threads.py)、[Turn 结果与等待点](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/services/turns.py)。普通用户可见 History 与受限 Model/Tool audits 继续分离，调试模型中间消息不能成为普通历史的备用数据源。
+相关事实 Owner：[History 投影](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/services/checkpoint_messages.py)、[Thread 快照](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/services/threads.py)、[Turn 结果与等待点](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/services/turns.py)。普通用户可见 History 与受限 Model/Tool audits 继续分离，调试模型中间消息不能成为普通历史的备用数据源。
 
 SSE transport 只负责鉴权、字节解码、事件边界、取消和协议错误，前端业务 reducer 负责归属与更新。Thread 观察覆盖后继 Turn 和队列领取，不随一个 Run 或 Turn 结束就永久停止观察。Run 过滤只改变阅读范围，共享传输仍按 Thread 管理。未消费的事件不通过叶子组件决定 Thread 归属。
 
-Thread cursor 是后端拥有的复合游标，客户端保存原值并通过 Last-Event-ID 传回；公开事件的 event_id 用于逻辑去重，与 Thread cursor 和 Redis sequence 分别处理。游标过期或 `yuxi.session.resync` 触发回读持久状态，恢复成功后再更新连接提示。损坏事件显示可观察的协议错误并尝试快照恢复，禁止把解析异常包装成业务完成。[SSE 协议说明](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events)支持事件 id 与多行 data，项目 cursor 结构以[后端事件服务](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/services/events.py)为准。
+Thread cursor 是后端拥有的复合游标，客户端保存原值并通过 Last-Event-ID 传回；公开事件的 event_id 用于逻辑去重，与 Thread cursor 和 Redis sequence 分别处理。游标过期或 `yuxi.session.resync` 触发回读持久状态，恢复成功后再更新连接提示。损坏事件显示可观察的协议错误并尝试快照恢复，禁止把解析异常包装成业务完成。[SSE 协议说明](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events)支持事件 id 与多行 data，项目 cursor 结构以[后端事件服务](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/services/subscriptions.py)为准。
 
 历史读取与订阅之间的竞态是单独的验收项。当前 History 没有提供与自身读取原子对应的恢复 cursor，不能直接宣称“取历史再开流”无遗漏。先验证订阅后缓冲、回读、按明确来源去重及终态再回读的组合；若协议无法证明重放增量的身份和顺序，需由事件服务提供快照与恢复位置契约。后端契约未闭合前，不验收为可靠流式重构。
 

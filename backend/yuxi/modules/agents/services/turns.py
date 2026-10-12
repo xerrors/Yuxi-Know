@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import uuid
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from yuxi.modules.agents.services.thread_access import require_thread
+from yuxi.modules.agents.services.cooperation_notifications import notify_user_intervention, notify_turn_state
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.manager import pg_manager
+from yuxi.modules.agents.receipts import input_intent_hash, require_idempotency_key, require_receipt_replay
+from yuxi.modules.agents.services.run_creation import create_resume_run
 from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.turns import AgentTurn
@@ -18,8 +20,7 @@ from yuxi.modules.agents.repositories.input_receipt import AgentInputReceiptRepo
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 from yuxi.modules.agents.services.scheduler import Dispatch, deliver
-from yuxi.modules.agents.services.scope import ActorScope
-from yuxi.modules.agents.services.threads import require_thread
+from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.agents.services.tracing import finish_turn_observation_if_terminal
 from yuxi.modules.agents.services.transport import publish_cancel_signals
 from yuxi.modules.workspace.services.bindings import resolve_session_workdir_binding
@@ -37,13 +38,13 @@ async def resume_turn(
     idempotency_key: str,
 ) -> dict:
     """一次性消费明确等待点，在同一 Turn 建立下一段恢复 Run。"""
-    _check_key(idempotency_key)
+    require_idempotency_key(idempotency_key)
     event_type = "yuxi.session.input.resume"
-    intent_hash = _hash_intent(event_type, turn_id, waitpoint_id, response)
+    intent_hash = input_intent_hash(event_type, turn_id, waitpoint_id, response)
     receipt_repo = AgentInputReceiptRepository(db)
     existing = await receipt_repo.get_for_scope(uid=scope.uid, app_id=scope.app_id, thread_id=thread_id, idempotency_key=idempotency_key)
     if existing is not None:
-        _require_replay(existing, event_type, intent_hash)
+        require_receipt_replay(existing, event_type, intent_hash)
         return _accepted(existing)
 
     agent_session = await require_thread(db=db, scope=scope, thread_id=thread_id)
@@ -72,7 +73,7 @@ async def resume_turn(
         raise ResourceNotFoundError("Turn 不存在")
     existing = await receipt_repo.get_for_scope(uid=scope.uid, app_id=scope.app_id, thread_id=thread_id, idempotency_key=idempotency_key)
     if existing is not None:
-        _require_replay(existing, event_type, intent_hash)
+        require_receipt_replay(existing, event_type, intent_hash)
         return _accepted(existing)
     waitpoint = turn.waitpoint
     if turn.status != "waiting" or not waitpoint or waitpoint.get("id") != waitpoint_id:
@@ -83,13 +84,14 @@ async def resume_turn(
     resume_value = _validate_resume_response(waitpoint, response)
     binding = await resolve_session_workdir_binding(agent_session=agent_session, uid=scope.uid, db=db)
 
-    run_id = str(uuid.uuid4())
-    message = Message(
-        session_record_id=agent_session.id,
-        role="user",
-        content=json.dumps(response, ensure_ascii=False),
-        message_type="resume",
-        extra_metadata={
+    run = await create_resume_run(
+        db=db,
+        agent_session=agent_session,
+        turn=turn,
+        previous=previous,
+        api_key_id=scope.api_key_id,
+        response=response,
+        metadata={
             "resume": resume_value,
             "waitpoint_id": waitpoint_id,
             "rejected_tool_calls": [
@@ -98,33 +100,8 @@ async def resume_turn(
                 if decision["type"] == "reject"
             ],
         },
-        delivery_status="dispatched",
-        turn_id=turn.id,
-        run_id=run_id,
     )
-    db.add(message)
-    await db.flush()
-    await AgentRunRepository(db).create_run(
-        run_id=run_id,
-        thread_id=thread_id,
-        runtime_scope_id=previous.runtime_scope_id,
-        agent_slug=previous.agent_slug,
-        uid=scope.uid,
-        turn_id=turn.id,
-        app_id=scope.app_id,
-        api_key_id=scope.api_key_id,
-        input_payload=previous.input_payload or {},
-        source=previous.source,
-        channel=previous.channel,
-        external_id=previous.external_id,
-        origin_metadata=previous.origin_metadata or {},
-        session_record_id=agent_session.id,
-        resume_from_run_id=previous.id,
-        run_type="resume",
-        created_by_run_id=previous.created_by_run_id,
-    )
-    await AgentRunRepository(db).set_input_message(run_id, message.id)
-    await turn_repo.set_current(turn, run_id=run_id)
+    run_id = run.id
     receipt = await receipt_repo.create(
         receipt_id=str(uuid.uuid4()),
         idempotency_key=idempotency_key,
@@ -136,7 +113,6 @@ async def resume_turn(
         turn_id=turn.id,
         run_id=run_id,
     )
-    from yuxi.modules.agents.services.cooperation import notify_user_intervention
 
     await notify_user_intervention(db, agent_session, key=receipt.id, action="resume")
     await db.commit()
@@ -155,19 +131,19 @@ async def cancel_turn(
     notify_parent: bool = True,
 ) -> dict:
     """取消指定轮次，保留已产生副作用与待消费输入。"""
-    _check_key(idempotency_key)
+    require_idempotency_key(idempotency_key)
     event_type = "agent.session.input.cancel"
-    intent_hash = _hash_intent(event_type, turn_id, expected_run_id)
+    intent_hash = input_intent_hash(event_type, turn_id, expected_run_id)
     receipt_repo = AgentInputReceiptRepository(db)
     existing = await receipt_repo.get_for_scope(uid=scope.uid, app_id=scope.app_id, thread_id=thread_id, idempotency_key=idempotency_key)
     if existing is not None:
-        _require_replay(existing, event_type, intent_hash)
+        require_receipt_replay(existing, event_type, intent_hash)
         return _accepted(existing)
 
     agent_session = await require_thread(db=db, scope=scope, thread_id=thread_id, lock=True)
     existing = await receipt_repo.get_for_scope(uid=scope.uid, app_id=scope.app_id, thread_id=thread_id, idempotency_key=idempotency_key)
     if existing is not None:
-        _require_replay(existing, event_type, intent_hash)
+        require_receipt_replay(existing, event_type, intent_hash)
         return _accepted(existing)
     turn_repo = AgentTurnRepository(db)
     turn = (
@@ -216,7 +192,6 @@ async def cancel_turn(
         turn_id=turn.id,
         run_id=turn.current_run_id,
     )
-    from yuxi.modules.agents.services.cooperation import notify_turn_state, notify_user_intervention
 
     if terminal_changed:
         await notify_turn_state(db, run)
@@ -369,7 +344,6 @@ async def settle_waiting_cancel(*, thread_id: str, turn_id: str, uid: str, app_i
         if not agent_session.queue_paused:
             raise ValueError("等待取消未保持队列暂停")
         await AgentTurnRepository(db).set_terminal(turn, status="cancelled")
-        from yuxi.modules.agents.services.cooperation import notify_turn_state
 
         await notify_turn_state(db, run)
     await finish_turn_observation_if_terminal(turn_id)
@@ -410,7 +384,6 @@ async def reconcile_cancelling_turns() -> list[str]:
                     )
                     if turn is not None and turn.status == "cancelling":
                         await AgentTurnRepository(db).set_terminal(turn, status="cancelled")
-                        from yuxi.modules.agents.services.cooperation import notify_turn_state
 
                         await notify_turn_state(db, run)
                         settled.append(candidate.id)
@@ -493,24 +466,6 @@ def _validate_resume_response(waitpoint: dict, response: dict) -> dict:
         return {"decisions": [{"type": item["decision"]} for item in decisions]}
 
     raise StateConflictError("等待点类型无效")
-
-
-def _check_key(key: str) -> None:
-    """在控制边界校验 Idempotency-Key。"""
-    if not isinstance(key, str) or not 1 <= len(key) <= 128:
-        raise InvalidInputError("Idempotency-Key 长度必须为 1 至 128")
-
-
-def _hash_intent(*parts) -> str:
-    """为等待点或取消命令生成稳定意图指纹。"""
-    value = json.dumps(parts, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
-    return hashlib.sha256(value.encode()).hexdigest()
-
-
-def _require_replay(receipt, event_type: str, intent_hash: str) -> None:
-    """只允许同一命令和相同目标重放。"""
-    if receipt.event_type != event_type or receipt.intent_hash != intent_hash:
-        raise StateConflictError("Idempotency-Key 已用于其他输入")
 
 
 def _accepted(receipt) -> dict:

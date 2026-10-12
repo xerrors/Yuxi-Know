@@ -621,7 +621,7 @@ async def test_resource_field_declarations_drive_write_runtime_and_schema(monkey
     """新增声明自动参与写入校验和展开，普通列表保持原样。"""
     from types import SimpleNamespace
 
-    from yuxi.modules.agents.repositories.definitions import merge_agent_config_json
+    from yuxi.modules.agents.services.configuration import merge_agent_config_json
     from yuxi.modules.agents.services.configuration import prepare_agent_config_write
 
     async def options(names, **kwargs):

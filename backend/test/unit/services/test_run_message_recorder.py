@@ -564,10 +564,7 @@ async def test_collector_projects_tool_start_and_successful_finish(monkeypatch):
 
 def test_tool_output_without_content_does_not_enter_compatibility_projection():
     """原始 lifecycle envelope 不得作为普通 ToolCall 输出。"""
-    assert (
-        service._tool_output_content({"type": "tool", "status": "success", "private_lifecycle_field": "audit-only"})
-        == ""
-    )
+    assert service.normalize_tool_result({"type": "tool", "status": "success", "private_lifecycle_field": "audit-only"}).audit_content == ""
 
 
 @pytest.mark.asyncio

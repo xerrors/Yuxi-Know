@@ -9,7 +9,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
-import yuxi.modules.agents.services.state as svc
+import yuxi.modules.agents.services.checkpoint_state as svc
 from yuxi.modules.agents.repositories.public_items import PublicItemRepository
 from yuxi.modules.agents.runtime.agent_backends.chatbot.state import ChatBotState
 from yuxi.shared.errors import DomainError, ResourceNotFoundError

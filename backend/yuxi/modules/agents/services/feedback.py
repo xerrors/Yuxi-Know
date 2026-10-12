@@ -5,11 +5,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.agents.models.runs import AgentRun
-from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.modules.agents.repositories.definitions import AgentRepository
 from yuxi.modules.agents.repositories.feedback import AgentFeedbackRepository
-from yuxi.modules.agents.services.scope import ActorScope
-from yuxi.modules.agents.services.threads import require_thread
+from yuxi.modules.agents.repositories.turn import AgentTurnRepository
+from yuxi.modules.agents.repositories.runs import AgentRunRepository
+from yuxi.modules.agents.scope import ActorScope
+from yuxi.modules.agents.services.thread_access import require_thread
 from yuxi.modules.identity.models import User
 from yuxi.shared.datetime import utc_now
 from yuxi.shared.errors import InvalidInputError, InvalidOperationError, PermissionDeniedError, ResourceNotFoundError, StateConflictError
@@ -92,19 +93,9 @@ async def list_feedback(*, db: AsyncSession, scope: ActorScope, thread_id: str |
 async def require_feedback_target(*, db: AsyncSession, scope: ActorScope, thread_id: str, turn_id: str, run_id: str) -> None:
     """锁定拥有者会话，验证评价针对显式绑定的最终助手输出。"""
     agent_session = await require_thread(db=db, scope=scope, thread_id=thread_id, lock=True)
-    turn = await db.scalar(
-        select(AgentTurn).where(
-            AgentTurn.id == turn_id, AgentTurn.thread_id == thread_id, AgentTurn.uid == scope.uid, AgentTurn.app_id == scope.app_id
-        )
-    )
-    run = await db.scalar(
-        select(AgentRun).where(
-            AgentRun.id == run_id,
-            AgentRun.thread_id == thread_id,
-            AgentRun.turn_id == turn_id,
-            AgentRun.uid == scope.uid,
-            AgentRun.app_id == scope.app_id,
-        )
+    turn = await AgentTurnRepository(db).get_for_scope(turn_id=turn_id, thread_id=thread_id, uid=scope.uid, app_id=scope.app_id)
+    run = await AgentRunRepository(db).get_for_scope(
+        run_id=run_id, turn_id=turn_id, thread_id=thread_id, uid=scope.uid, app_id=scope.app_id
     )
     if turn is None or run is None:
         raise ResourceNotFoundError("Turn 或 Run 不存在")

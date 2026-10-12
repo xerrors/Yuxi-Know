@@ -37,9 +37,9 @@ from yuxi.modules.agents.repositories.input import AgentInputRepository
 from yuxi.modules.agents.repositories.input_receipt import AgentInputReceiptRepository
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.repositories.sessions import SessionRepository
-from yuxi.modules.agents.services import input_config, inputs, messages, runs, scheduler, threads, turns
-from yuxi.modules.agents.services.input_messages import build_chat_input_message
-from yuxi.modules.agents.services.scope import ActorScope
+from yuxi.modules.agents.services import input_config, inputs, checkpoint_messages as messages, runs, scheduler, threads, turns
+from yuxi.modules.agents.input_messages import build_chat_input_message
+from yuxi.modules.agents.scope import ActorScope
 from yuxi.shared.errors import DomainError, StateConflictError
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
@@ -308,11 +308,11 @@ async def test_safe_handoff_consumes_batch_in_same_turn_with_current_config(sess
         await SessionRepository(db).lock_session_by_thread_id("input-thread")
         run = await db.get(AgentRun, current.id)
         settled = await runs.settle_checkpoint(db=db, run=run, worker_id="owner", status="completed", token_usage=None)
-        assert settled.status == "yielded" and settled.next_run_id
+        assert settled.status == "yielded" and settled.next_dispatch.run_id
         await db.commit()
     async with sessions() as db:
         old = await db.get(AgentRun, current.id)
-        next_run = await db.get(AgentRun, settled.next_run_id)
+        next_run = await db.get(AgentRun, settled.next_dispatch.run_id)
         assert old.status == "yielded"
         assert next_run.turn_id == current.turn_id and next_run.resume_from_run_id == current.id
         assert next_run.input_payload == current.input_payload
@@ -416,13 +416,14 @@ async def test_steer_before_first_model_is_saved_as_yielded_not_failed(sessions,
                 idempotency_key="cancel-S3",
             )
 
-    async def dispatch(run_id):
+    async def dispatch(target):
+        run_id = target.run_id
         """投递时验证接续 Run 已提交，避免用通知冒充消费事实。"""
         async with sessions() as db:
             run = await db.get(AgentRun, run_id)
             assert run.status == "pending" and (await db.get(AgentInput, steer["input_id"])).consumed_run_id == run.id
 
-    monkeypatch.setattr(messages, "enqueue_agent_run", dispatch)
+    monkeypatch.setattr(messages, "deliver", dispatch)
     async with sessions() as db:
         status = await messages.save_messages_from_langgraph_state(
             state=SimpleNamespace(values={"messages": []}),
@@ -541,7 +542,7 @@ async def test_cancelled_steer_continuation_preserves_wire_ids_and_audit_order(s
     async with sessions() as db:
         events = [
             event
-            async for event in execution.stream_agent_chat(
+            async for event in execution.stream_agent_execution(
                 agent_slug="main",
                 input_messages=[build_chat_input_message("message-0")],
                 thread_id="input-thread",

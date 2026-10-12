@@ -28,7 +28,7 @@ from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.workspace.models import Project
 from yuxi.modules.schedules.models import ScheduledAgentJob, ScheduledAgentRun
 from yuxi.modules.identity.models import User
-from yuxi.modules.agents.services.input_messages import build_chat_input_message, serialize_input_message
+from yuxi.modules.agents.input_messages import build_chat_input_message, serialize_input_message
 from yuxi.shared.datetime import utc_now
 
 pytestmark = [pytest.mark.integration, pytest.mark.self_managed_resources]

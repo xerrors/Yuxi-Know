@@ -30,8 +30,8 @@ from yuxi.modules.agents.services.event_writer import (
     flush_writer_best_effort,
     publish_run_settlement,
 )
-from yuxi.modules.agents.services.execution import RunExecutionResult, stream_agent_chat, stream_agent_resume
-from yuxi.modules.agents.services.input_messages import restore_chat_input_message
+from yuxi.modules.agents.services.execution import RunExecutionResult, stream_agent_execution
+from yuxi.modules.agents.input_messages import restore_chat_input_message
 from yuxi.modules.agents.services.leases import (
     WORKER_ID,
     mark_run_running,
@@ -48,7 +48,7 @@ from yuxi.modules.agents.services.preparation import (
 )
 from yuxi.modules.agents.services.runs import settle_checkpoint
 from yuxi.modules.agents.services.scheduler import dispatch_next_input
-from yuxi.modules.agents.services.state import get_agent_state_view
+from yuxi.modules.agents.services.checkpoint_state import get_agent_state_view
 from yuxi.modules.agents.services.titles import start_session_title
 from yuxi.modules.agents.services.tracing import finish_turn_observation_if_terminal
 from yuxi.modules.agents.services.transport import (
@@ -263,6 +263,7 @@ async def mark_run_terminal(
             )
             if turn is None or turn.current_run_id != run.id:
                 raise ValueError("Run 不是当前 Turn 的执行段")
+            # 这里只取得 Input 行锁，保持 Session→Turn→Input→Run 的终态锁序。
             await AgentInputRepository(db).get_pending_steer(
                 thread_id=run.thread_id,
                 uid=run.uid,
@@ -425,6 +426,15 @@ def _run_owner_token(ctx) -> str:
     return f"{_worker_identity(ctx)}:{uuid.uuid4().hex}"
 
 
+async def _publish_committed_terminal(
+    run: AgentRun | None, *, run_id: str, status: str, thread_id: str | None, publish_end: bool = True
+) -> None:
+    """已提交的状态释放运行资源后才发布；状态核对由执行结果边界负责。"""
+    await _release_runtime_before_terminal_event(run)
+    if publish_end:
+        await publish_run_settlement(run_id, status, thread_id=thread_id)
+
+
 async def _finish_run(
     run_id: str,
     status: str,
@@ -457,9 +467,9 @@ async def _finish_run(
     )
     if transition.status in TERMINAL_RUN_STATUSES:
         committed_run = await _get_run(run_id)
-        await _release_runtime_before_terminal_event(committed_run or run)
-    if publish_end and transition.changed and transition.status:
-        await publish_run_settlement(run_id, transition.status, thread_id=thread_id)
+        await _publish_committed_terminal(
+            committed_run, run_id=run_id, status=transition.status, thread_id=thread_id, publish_end=publish_end and transition.changed
+        )
     return transition
 
 
@@ -491,9 +501,8 @@ async def _finish_user_cancel(
         token_usage=state_token_usage or {"available": False},
         worker_id=worker_id,
     )
-    await _release_runtime_before_terminal_event(run)
-    if transition.changed:
-        await publish_run_settlement(run_id, "cancelled", thread_id=thread_id)
+    if transition.status in TERMINAL_RUN_STATUSES:
+        await _publish_committed_terminal(run, run_id=run_id, status=transition.status, thread_id=thread_id, publish_end=transition.changed)
     return transition
 
 
@@ -662,6 +671,7 @@ async def process_agent_run(ctx, run_id: str):
             return
 
         resume_input = None
+        normalized_input_messages = []
         if run_type == "resume":
             resume_input = input_metadata.get("resume")
             if resume_input is None:
@@ -765,31 +775,19 @@ async def process_agent_run(ctx, run_id: str):
         terminal_set = False
         first_output_observed = bool(getattr(run, "first_output_at", None))
         async with pg_manager.get_async_session_context() as db:
-            if run_type == "resume":
-                stream = stream_agent_resume(
-                    thread_id=thread_id,
-                    resume_input=resume_input,
-                    meta=meta,
-                    current_user=user,
-                    db=db,
-                    prepared_execution=prepared_execution,
-                    on_prepared=record_prepared,
-                    model_request_recorder=model_request_recorder,
-                )
-            elif run_type == "chat":
-                stream = stream_agent_chat(
-                    agent_slug=agent_slug,
-                    thread_id=thread_id,
-                    meta=meta,
-                    input_messages=normalized_input_messages,
-                    current_user=user,
-                    db=db,
-                    prepared_execution=prepared_execution,
-                    on_prepared=record_prepared,
-                    model_request_recorder=model_request_recorder,
-                )
-            else:
-                raise RuntimeError(f"unsupported run_type after validation: {run_type}")
+            stream = stream_agent_execution(
+                thread_id=thread_id,
+                meta=meta,
+                current_user=user,
+                db=db,
+                prepared_execution=prepared_execution,
+                on_prepared=record_prepared,
+                model_request_recorder=model_request_recorder,
+                agent_slug=agent_slug,
+                input_messages=normalized_input_messages,
+                resume_input=resume_input,
+                is_resume=run_type == "resume",
+            )
 
             async with aclosing(_consume_stream_with_cancel(stream, run_ctx)) as events:
                 async for event in events:
@@ -833,8 +831,7 @@ async def process_agent_run(ctx, run_id: str):
                     committed_run = await _get_run(run_id)
                     if committed_run is None or committed_run.status != event.status:
                         raise RuntimeError("执行结果与 PostgreSQL 终态不一致")
-                    await _release_runtime_before_terminal_event(committed_run)
-                    await publish_run_settlement(run_id, event.status, thread_id=thread_id)
+                    await _publish_committed_terminal(committed_run, run_id=run_id, status=event.status, thread_id=thread_id)
                     terminal_set = True
         await writer.flush()
         if not terminal_set:
@@ -935,6 +932,4 @@ async def process_agent_run(ctx, run_id: str):
 async def _load_run_input_messages(run: AgentRun) -> list[Message]:
     """按已消费 Input 顺序恢复本段消息；控制和子执行使用单条输入。"""
     async with pg_manager.get_async_session_context() as db:
-        return list(await db.scalars(
-            select(Message).where(Message.run_id == run.id, Message.role == "user").order_by(Message.id)
-        ))
+        return list(await db.scalars(select(Message).where(Message.run_id == run.id, Message.role == "user").order_by(Message.id)))

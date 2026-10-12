@@ -23,8 +23,8 @@ from yuxi.modules.agents.services.attachments import (
 )
 from yuxi.modules.agents.services.compression import compress_thread_context as compress_context
 from yuxi.modules.agents.services.cooperation import get_cooperation_summary
-from yuxi.modules.agents.services.state import get_agent_state_view
-from yuxi.modules.agents.services.threads import require_thread
+from yuxi.modules.agents.services.checkpoint_state import get_agent_state_view
+from yuxi.modules.agents.services.thread_access import require_thread
 
 router = APIRouter(dependencies=[Depends(require_public_context)], responses=PUBLIC_ERRORS)
 

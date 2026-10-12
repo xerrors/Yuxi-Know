@@ -28,7 +28,7 @@ from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.agents.services.cooperation import SessionCooperationService, recover_cooperation_waits
 from yuxi.modules.agents.services.runs import settle_checkpoint
-from yuxi.modules.agents.services.scope import ActorScope
+from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.identity.models import User
 from yuxi.shared.datetime import utc_now
 from yuxi.shared.errors import DomainError, StateConflictError
@@ -616,7 +616,7 @@ async def test_same_call_id_in_new_turn_creates_new_work(tree):
 
 async def test_cancel_parent_preserves_descendants(tree, monkeypatch):
     """取消父轮次只取消指定 Run，后代的独立队列继续保留。"""
-    from yuxi.modules.agents.services.scope import ActorScope
+    from yuxi.modules.agents.scope import ActorScope
     from yuxi.modules.agents.services.turns import cancel_turn
 
     monkeypatch.setattr("yuxi.modules.agents.services.turns.publish_cancel_signals", AsyncMock())
@@ -645,7 +645,7 @@ async def test_old_stop_scan_cannot_repause_continued_tree(tree, monkeypatch):
     from yuxi.modules.agents.models.cooperation import CooperationRuntime
     from yuxi.modules.agents.repositories.sessions import SessionRepository
     from yuxi.modules.agents.services.cooperation import control_tree, reconcile_stopped_trees
-    from yuxi.modules.agents.services.scope import ActorScope
+    from yuxi.modules.agents.scope import ActorScope
 
     factory, run_id, root_id, uid = tree
     async with factory() as db:
@@ -918,7 +918,7 @@ async def test_resume_call_cannot_change_target_session(tree, monkeypatch, opera
 
 async def test_child_status_notification_preserves_self_and_parent_recipients(tree):
     """同一次子轮次状态分别进入自身和父收件箱，重复通知仍各只有一条。"""
-    from yuxi.modules.agents.services.cooperation import notify_turn_state
+    from yuxi.modules.agents.services.cooperation_notifications import notify_turn_state
 
     factory, _, root_id, _ = tree
     member = await child(tree)

@@ -5,7 +5,8 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.modules.agents.models.definitions import Agent
-from yuxi.modules.agents.repositories.definitions import AgentRepository, user_can_run_agent
+from yuxi.modules.agents.repositories.definitions import AgentRepository
+from yuxi.modules.agents.permissions import user_can_run_agent
 from yuxi.modules.identity.models import User
 from yuxi.shared.errors import ResourceNotFoundError
 

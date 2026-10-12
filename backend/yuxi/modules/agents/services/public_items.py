@@ -26,7 +26,7 @@ async def list_session_items(
 ) -> dict:
     """按授权会话的稳定公开 item 身份读取分页，不暴露内部消息审计。"""
     from yuxi.modules.agents.repositories.public_items import PublicItemRepository
-    from yuxi.modules.agents.services.threads import require_thread
+    from yuxi.modules.agents.services.thread_access import require_thread
 
     await require_thread(db=db, scope=scope, thread_id=thread_id)
     if turn_id is not None:

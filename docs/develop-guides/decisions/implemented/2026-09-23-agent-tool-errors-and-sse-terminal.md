@@ -6,7 +6,7 @@ Owner：backend/yuxi/modules/agents/runtime/middlewares/tool_error_guard.py
 
 ## 问题
 
-工具执行体的普通异常可打断整次 Agent Run，模型无法读取工具错误并给出后续回答。数据库补发 SSE `end` 复用普通事件 ID 时会被前端去重丢弃。工具调用包装由 `backend/yuxi/modules/agents/runtime/middlewares/tool_error_guard.py` 拥有，Run SSE 由 `backend/yuxi/modules/agents/services/events.py` 拥有对应边界。
+工具执行体的普通异常可打断整次 Agent Run，模型无法读取工具错误并给出后续回答。数据库补发 SSE `end` 复用普通事件 ID 时会被前端去重丢弃。工具调用包装由 `backend/yuxi/modules/agents/runtime/middlewares/tool_error_guard.py` 拥有，Run SSE 由 `backend/yuxi/modules/agents/services/subscriptions.py` 拥有对应边界。
 
 ## 决策
 

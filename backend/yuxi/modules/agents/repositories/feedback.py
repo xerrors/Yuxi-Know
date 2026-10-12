@@ -1,13 +1,15 @@
 """反馈的作用域查询与当前值写入。"""
 
-from sqlalchemy import delete, select, tuple_
+from yuxi.modules.agents.repositories.pagination import order_page
+
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.modules.agents.models.definitions import Agent
 from yuxi.modules.agents.models.feedback import AgentFeedbackRecord
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.sessions import Session
-from yuxi.modules.agents.services.scope import ActorScope
+from yuxi.modules.agents.scope import ActorScope
 from yuxi.shared.datetime import utc_now
 
 
@@ -92,16 +94,14 @@ class AgentFeedbackRepository:
                 statement = statement.where(column == value)
         if run_ids is not None:
             statement = statement.where(AgentFeedbackRecord.run_id.in_(run_ids))
+        anchor = None
         if after is not None:
             cursor = (await self.db.execute(statement.where(AgentFeedbackRecord.id == after))).first()
             if cursor is None:
                 raise ValueError("after 不属于当前反馈查询")
-            statement = statement.where(
-                tuple_(AgentFeedbackRecord.created_at, AgentFeedbackRecord.id) < tuple_(cursor[0].created_at, cursor[0].id)
-            )
-        rows = (
-            await self.db.execute(statement.order_by(AgentFeedbackRecord.created_at.desc(), AgentFeedbackRecord.id.desc()).limit(limit + 1))
-        ).all()
+            anchor = (cursor[0].created_at, cursor[0].id)
+        statement = order_page(statement, columns=(AgentFeedbackRecord.created_at, AgentFeedbackRecord.id), anchor=anchor)
+        rows = (await self.db.execute(statement.limit(limit + 1))).all()
         items = [
             {**record.to_dict(), "agent_id": slug, "agent_name": name, "session_id": thread, "turn_id": turn, "run_status": status}
             for record, slug, name, thread, turn, status in rows[:limit]

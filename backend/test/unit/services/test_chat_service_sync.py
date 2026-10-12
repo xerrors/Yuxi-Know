@@ -11,7 +11,7 @@ from yuxi.modules.agents.runtime import context as agent_context
 from yuxi.modules.workspace import paths as workspace_paths
 from test.unit.support.agent_context_fixtures import prepared_execution
 import yuxi.modules.agents.services.execution as svc
-import yuxi.modules.agents.services.messages as message_svc
+import yuxi.modules.agents.services.checkpoint_messages as message_svc
 import yuxi.modules.agents.services.runs as lifecycle_runs
 
 
@@ -107,6 +107,7 @@ def owning_turn_boundary(monkeypatch):
         async def get_pending_steer(self, **kwargs):
             return None
 
+    monkeypatch.setattr(message_svc, "MessageRepository", lambda db: db.message_repository)
     monkeypatch.setattr(message_svc, "AgentTurnRepository", TurnRepo)
     monkeypatch.setattr(message_svc, "AgentInputRepository", InputRepo)
     monkeypatch.setattr(message_svc, "AttachmentRepository", lambda db: SimpleNamespace(has_unready=AsyncMock(return_value=False)))
@@ -121,7 +122,7 @@ def owning_turn_boundary(monkeypatch):
             error_type=kwargs.get("error_type"),
             error_message=kwargs.get("error_message"),
         )
-        return SimpleNamespace(status=kwargs["status"], changed=changed, next_run_id=None)
+        return SimpleNamespace(status=kwargs["status"], changed=changed, next_dispatch=None)
 
     monkeypatch.setattr(message_svc, "settle_checkpoint", settle)
 
@@ -156,6 +157,7 @@ class _FakeRunRepoBase:
 class _FakeConvRepo:
     def __init__(self, _db):
         self.db = _db
+        _db.message_repository = self
         self.saved_messages: list[dict] = []
         self.tool_calls: list[dict] = []
         self.sessions: dict[str, SimpleNamespace] = {}
@@ -189,7 +191,6 @@ class _FakeConvRepo:
         image_content: str | None = None,
         run_id: str | None = None,
         turn_id: str | None = None,
-        commit: bool = True,
     ):
         self.saved_messages.append(
             {
@@ -201,7 +202,6 @@ class _FakeConvRepo:
                 "image_content": image_content,
                 "run_id": run_id,
                 "turn_id": turn_id,
-                "commit": commit,
             }
         )
         return SimpleNamespace(
@@ -235,7 +235,6 @@ class _FakeConvRepo:
         tool_input: dict | None = None,
         status: str = "pending",
         langgraph_tool_call_id: str | None = None,
-        commit: bool = True,
     ):
         self.tool_calls.append(
             {
@@ -244,7 +243,6 @@ class _FakeConvRepo:
                 "tool_input": tool_input,
                 "status": status,
                 "langgraph_tool_call_id": langgraph_tool_call_id,
-                "commit": commit,
             }
         )
         return SimpleNamespace(id=len(self.tool_calls))
@@ -281,7 +279,6 @@ async def test_error_output_and_failed_run_commit_together(monkeypatch):
             steps.append("rollback")
 
     class FakeRunRepo(_FakeRunRepoBase):
-
         async def lock_output_persistence(self, *_args, **_kwargs):
             return SimpleNamespace(id="run-1", run_type="chat", input_message_id=None)
 
@@ -311,7 +308,6 @@ async def test_error_output_and_failed_run_commit_together(monkeypatch):
         error_type="stream_error",
     )
     assert message.id == 1
-    assert repo.saved_messages[0]["commit"] is False
     assert steps == ["output", "failed", "commit"]
 
 
@@ -330,7 +326,6 @@ async def test_empty_final_checkpoint_cannot_complete_prior_error_output(monkeyp
             self.rolled_back = True
 
     class FakeRunRepo(_FakeRunRepoBase):
-
         async def lock_output_persistence(self, *_args, **_kwargs):
             return SimpleNamespace(id="run-1", run_type="chat", output_message_id=99)
 
@@ -369,7 +364,6 @@ async def test_steer_before_first_model_yields_without_ai_output(monkeypatch):
             pytest.fail("合法的 steer 让位不应回滚")
 
     class RunRepo(_FakeRunRepoBase):
-
         async def lock_output_persistence(self, *args, **kwargs):
             return run
 
@@ -383,10 +377,10 @@ async def test_steer_before_first_model_yields_without_ai_output(monkeypatch):
     async def settle(**kwargs):
         """模拟已由 PG 专项验证的同事务接管结果。"""
         run.status = "yielded"
-        return SimpleNamespace(status="yielded", changed=True, next_run_id="next-run")
+        return SimpleNamespace(status="yielded", changed=True, next_dispatch=SimpleNamespace(run_id="next-run"))
 
-    async def dispatch(run_id):
-        assert run_id == "next-run" and events == ["commit"]
+    async def dispatch(target):
+        assert target.run_id == "next-run" and events == ["commit"]
         events.append("dispatch")
 
     monkeypatch.setattr(message_svc, "AgentRunRepository", RunRepo)
@@ -394,7 +388,7 @@ async def test_steer_before_first_model_yields_without_ai_output(monkeypatch):
     monkeypatch.setattr(message_svc, "ModelMessageAuditRepository", _EmptyModelAuditRepo)
     monkeypatch.setattr(message_svc, "ToolMessageAuditRepository", _EmptyToolAuditRepo)
     monkeypatch.setattr(message_svc, "settle_checkpoint", settle)
-    monkeypatch.setattr(message_svc, "enqueue_agent_run", dispatch)
+    monkeypatch.setattr(message_svc, "deliver", dispatch)
     repo = _FakeConvRepo(DB())
     status = await message_svc.save_messages_from_langgraph_state(
         state=SimpleNamespace(values={"messages": []}),
@@ -418,7 +412,6 @@ async def test_save_messages_from_langgraph_state_backfills_run_output_message(m
 
         async def commit(self):
             self.commit_count += 1
-
 
     class FakeGraph:
         async def aget_state(self, _config):
@@ -466,7 +459,6 @@ async def test_save_messages_from_langgraph_state_backfills_run_output_message(m
     assert session_repo.saved_messages[0]["content"] == "answer"
     assert session_repo.saved_messages[0]["run_id"] == "run-1"
     assert session_repo.saved_messages[0]["turn_id"] == "req-1"
-    assert session_repo.saved_messages[0]["commit"] is False
     assert session_repo.saved_messages[0]["extra_metadata"]["langfuse_trace_id"] == "trace-1"
     assert captured == {
         "locked": ("run-1", "worker-1", "thread-1"),
@@ -495,7 +487,6 @@ async def test_state_fallback_does_not_rebind_hidden_message_from_previous_run(m
     captured: dict[str, int] = {}
 
     class FakeRunRepo(_FakeRunRepoBase):
-
         async def lock_output_persistence(self, *_args, **_kwargs):
             return object()
 
@@ -564,7 +555,6 @@ async def test_state_reconcile_uses_latest_error_unless_run_is_interrupted(
             )
 
     class FakeRunRepo(_FakeRunRepoBase):
-
         async def lock_output_persistence(self, *_args, **_kwargs):
             return SimpleNamespace(id="run-current", run_type="chat", session_record_id=1)
 
@@ -656,10 +646,8 @@ async def test_model_state_reconcile_uses_latest_message_when_operation_id_is_re
             return audit
 
     class FakeRunRepo(_FakeRunRepoBase):
-
         async def lock_output_persistence(self, *_args, **_kwargs):
             return SimpleNamespace(id="run-1", run_type="chat", input_message_id=None)
-
 
     session_repo = _FakeConvRepo(FakeDB())
     monkeypatch.setattr(message_svc, "AgentRunRepository", FakeRunRepo)
@@ -718,7 +706,6 @@ async def test_completed_run_rejects_unmatched_final_state_message(monkeypatch: 
             return audit_message if operation_id == "known-intermediate" else None
 
     class FakeRunRepo(_FakeRunRepoBase):
-
         async def lock_output_persistence(self, *_args, **_kwargs):
             return SimpleNamespace(id="run-1", run_type="chat", input_message_id=None)
 
@@ -782,7 +769,6 @@ async def test_interrupted_run_does_not_bind_older_reconciled_model_audit(
     output_ids: list[int] = []
 
     class FakeRunRepo(_FakeRunRepoBase):
-
         async def lock_output_persistence(self, *_args, **_kwargs):
             return SimpleNamespace(id="run-1", run_type="chat", input_message_id=None)
 
@@ -859,7 +845,6 @@ async def test_tool_call_interrupt_ignores_historical_same_id_tool_message(monke
     output_ids: list[int] = []
 
     class FakeRunRepo(_FakeRunRepoBase):
-
         async def lock_output_persistence(self, *_args, **_kwargs):
             return SimpleNamespace(id="run-1", run_type="chat", input_message_id=None)
 
@@ -914,7 +899,6 @@ async def test_interrupt_persists_message_and_terminal_status_in_one_commit(
             return SimpleNamespace(values={"messages": [AIMessage(content="waiting")]})
 
     class FakeRunRepo(_FakeRunRepoBase):
-
         async def lock_output_persistence(self, *_args, **_kwargs):
             events.append(("lock",))
             return SimpleNamespace(id="run-1", run_type="chat", input_message_id=None)

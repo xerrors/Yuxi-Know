@@ -1,4 +1,4 @@
-"""持久生命周期与 Redis 公开事件共用 Thread 订阅 cursor。"""
+"""从持久生命周期和 Redis 投影订阅公开事件，共用 Thread cursor。"""
 
 from __future__ import annotations
 
@@ -16,8 +16,8 @@ from yuxi.modules.agents.repositories.runs import TERMINAL_RUN_STATUSES, AgentRu
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 from yuxi.modules.agents.services.openai_events import OpenAIEventAdapter
 from yuxi.modules.agents.services.public_resources import turn_core
-from yuxi.modules.agents.services.scope import ActorScope
-from yuxi.modules.agents.services.threads import require_thread
+from yuxi.modules.agents.scope import ActorScope
+from yuxi.modules.agents.services.thread_access import require_thread
 from yuxi.modules.agents.services.transport import list_recent_run_stream_events, list_run_stream_events
 from yuxi.shared.datetime import utc_now
 from yuxi.shared.errors import InvalidInputError

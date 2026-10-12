@@ -32,7 +32,7 @@ from yuxi.modules.agents.repositories.input import AgentInputRepository
 from yuxi.modules.agents.repositories.input_receipt import AgentInputReceiptRepository
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
-from yuxi.modules.agents.services.input_messages import build_chat_input_message, serialize_input_message
+from yuxi.modules.agents.input_messages import build_chat_input_message, serialize_input_message
 from yuxi.modules.identity.models import User
 from yuxi.modules.workspace.models import Project
 from yuxi.modules.workspace.paths import ensure_bound_user_workdir, user_workdir_host_dir

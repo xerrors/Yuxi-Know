@@ -370,7 +370,7 @@ def _patch_common(monkeypatch: pytest.MonkeyPatch, run_obj: SimpleNamespace):
     monkeypatch.setattr(runner, "_release_runtime_before_terminal_event", fake_cleanup)
     monkeypatch.setattr(runner, "clear_cancel_signal", fake_noop)
     monkeypatch.setattr(runner, "publish_run_settlement", fake_noop)
-    monkeypatch.setattr(runner, "stream_agent_chat", lambda **kwargs: object())
+    monkeypatch.setattr(runner, "stream_agent_execution", lambda **kwargs: object())
     monkeypatch.setattr(runner.RunContext, "start", fake_noop)
     monkeypatch.setattr(runner.RunContext, "close", fake_noop)
     monkeypatch.setattr(runner.RunContext, "is_cancelled", fake_not_cancelled)
@@ -394,14 +394,14 @@ async def test_process_agent_run_rejects_corrupted_runtime_scope_before_executio
         terminal_calls.append({"run_id": run_id, "status": status, "args": args, **kwargs})
         return runner.TerminalTransition(status=status, changed=True)
 
-    def fake_stream_agent_chat(**_kwargs):
+    def fake_stream_agent_execution(**_kwargs):
         nonlocal stream_called
         stream_called = True
         return _ExecutionAsyncIter([])
 
     monkeypatch.setattr(runner, "_validate_run_workdir_binding", reject_binding)
     monkeypatch.setattr(runner, "mark_run_terminal", fake_mark_terminal)
-    monkeypatch.setattr(runner, "stream_agent_chat", fake_stream_agent_chat)
+    monkeypatch.setattr(runner, "stream_agent_execution", fake_stream_agent_execution)
 
     await runner.process_agent_run({"job_try": 1}, run_obj.id)
 
@@ -441,14 +441,14 @@ async def test_process_agent_run_keeps_source_without_legacy_invocation_metadata
         terminal_statuses.append(status)
         return runner.TerminalTransition(status=status, changed=True)
 
-    def fake_stream_agent_chat(**kwargs):
+    def fake_stream_agent_execution(**kwargs):
         captured.update(kwargs)
         run_obj.status = "completed"
         return _ExecutionAsyncIter([_terminal_result()])
 
     monkeypatch.setattr(runner, "_load_run_input_messages", fake_load_run_input_messages)
     monkeypatch.setattr(runner, "mark_run_terminal", fake_mark_terminal)
-    monkeypatch.setattr(runner, "stream_agent_chat", fake_stream_agent_chat)
+    monkeypatch.setattr(runner, "stream_agent_execution", fake_stream_agent_execution)
 
     await runner.process_agent_run({"job_try": 1}, "run-1")
 
@@ -477,7 +477,7 @@ async def test_next_fifo_input_dispatches_before_optional_turn_trace(monkeypatch
     async def trace(_turn_id):
         order.append("trace")
 
-    monkeypatch.setattr(runner, "stream_agent_chat", lambda **_kwargs: stream())
+    monkeypatch.setattr(runner, "stream_agent_execution", lambda **_kwargs: stream())
     monkeypatch.setattr(runner, "dispatch_next_input", dispatch)
     monkeypatch.setattr(runner, "finish_turn_observation_if_terminal", trace)
 
@@ -503,7 +503,7 @@ async def test_terminal_cleanup_failure_keeps_end_event_unpublished(monkeypatch:
         run_obj.status = "completed"
         return _ExecutionAsyncIter([_terminal_result()])
 
-    monkeypatch.setattr(runner, "stream_agent_chat", committed_stream)
+    monkeypatch.setattr(runner, "stream_agent_execution", committed_stream)
 
     with pytest.raises(runner.RuntimeCleanupPendingError):
         await runner.process_agent_run({"job_try": 1}, "run-1")
@@ -530,7 +530,7 @@ async def test_worker_rejects_success_without_final_checkpoint(monkeypatch: pyte
         return runner.TerminalTransition(status=status, changed=True)
 
     monkeypatch.setattr(runner, "mark_run_terminal", mark_terminal)
-    monkeypatch.setattr(runner, "stream_agent_chat", lambda **_kwargs: _ExecutionAsyncIter(events))
+    monkeypatch.setattr(runner, "stream_agent_execution", lambda **_kwargs: _ExecutionAsyncIter(events))
 
     await runner.process_agent_run({"job_try": 1}, run_obj.id)
 
@@ -554,7 +554,7 @@ async def test_worker_rejects_waitpoint_without_postgres_terminal(monkeypatch: p
         committed=False,
     )
     monkeypatch.setattr(runner, "mark_run_terminal", mark_terminal)
-    monkeypatch.setattr(runner, "stream_agent_chat", lambda **_kwargs: _ExecutionAsyncIter([wait_result]))
+    monkeypatch.setattr(runner, "stream_agent_execution", lambda **_kwargs: _ExecutionAsyncIter([wait_result]))
 
     await runner.process_agent_run({"job_try": 1}, run_obj.id)
 
@@ -728,7 +728,7 @@ async def test_redis_event_failure_cannot_block_owned_completed_terminal(monkeyp
     async def fake_close(context):
         closed.append(context.worker_id)
 
-    def fake_stream_agent_chat(**kwargs):
+    def fake_stream_agent_execution(**kwargs):
         del kwargs
         run_obj.status = "completed"
         return _ExecutionAsyncIter([_terminal_result()])
@@ -737,7 +737,7 @@ async def test_redis_event_failure_cannot_block_owned_completed_terminal(monkeyp
     monkeypatch.setattr(runner, "mark_run_terminal", fake_mark_terminal)
     monkeypatch.setattr(runner, "release_run_lease_for_retry", AsyncMock(side_effect=AssertionError("no retry")))
     monkeypatch.setattr(runner.RunContext, "close", fake_close)
-    monkeypatch.setattr(runner, "stream_agent_chat", fake_stream_agent_chat)
+    monkeypatch.setattr(runner, "stream_agent_execution", fake_stream_agent_execution)
 
     await runner.process_agent_run({"worker_id": "worker-events", "job_try": 1}, "run-1")
 
@@ -764,7 +764,7 @@ async def test_durable_cancel_without_redis_signal_never_enters_agent_stream(mon
         raise AssertionError("durably cancelled run must not execute")
 
     monkeypatch.setattr(runner, "mark_run_terminal", fake_mark_terminal)
-    monkeypatch.setattr(runner, "stream_agent_chat", forbidden_stream)
+    monkeypatch.setattr(runner, "stream_agent_execution", forbidden_stream)
 
     async def fake_release_sandbox(_run):
         lifecycle.append("release")
@@ -978,14 +978,14 @@ async def test_process_member_run_uses_own_thread_and_shared_runtime(monkeypatch
         terminal_statuses.append(status)
         return runner.TerminalTransition(status=status, changed=True)
 
-    def fake_stream_agent_chat(**kwargs):
+    def fake_stream_agent_execution(**kwargs):
         captured.update(kwargs)
         run_obj.status = "completed"
         return _ExecutionAsyncIter([_terminal_result(thread_id="child-thread")])
 
     monkeypatch.setattr(event_writer, "append_run_stream_events", fake_append_event)
     monkeypatch.setattr(runner, "mark_run_terminal", fake_mark_terminal)
-    monkeypatch.setattr(runner, "stream_agent_chat", fake_stream_agent_chat)
+    monkeypatch.setattr(runner, "stream_agent_execution", fake_stream_agent_execution)
 
     await runner.process_agent_run({"job_try": 1}, "run-1")
 
@@ -1024,12 +1024,12 @@ async def test_process_agent_run_rejects_unknown_run_type(monkeypatch: pytest.Mo
         )
         return runner.TerminalTransition(status=status, changed=True)
 
-    def fail_stream_agent_chat(**kwargs):
+    def fail_stream_agent_execution(**kwargs):
         del kwargs
         raise AssertionError("unknown run_type must not enter chat stream")
 
     monkeypatch.setattr(runner, "mark_run_terminal", fake_mark_terminal)
-    monkeypatch.setattr(runner, "stream_agent_chat", fail_stream_agent_chat)
+    monkeypatch.setattr(runner, "stream_agent_execution", fail_stream_agent_execution)
 
     await runner.process_agent_run({"job_try": 1}, "run-1")
 
@@ -1073,13 +1073,13 @@ async def test_process_agent_run_rejects_invalid_raw_input_message(monkeypatch: 
         )
         return runner.TerminalTransition(status=status, changed=True)
 
-    def fail_stream_agent_chat(**kwargs):
+    def fail_stream_agent_execution(**kwargs):
         del kwargs
         raise AssertionError("invalid input message must not enter chat stream")
 
     monkeypatch.setattr(runner, "_load_run_input_messages", fake_load_run_input_messages)
     monkeypatch.setattr(runner, "mark_run_terminal", fake_mark_terminal)
-    monkeypatch.setattr(runner, "stream_agent_chat", fail_stream_agent_chat)
+    monkeypatch.setattr(runner, "stream_agent_execution", fail_stream_agent_execution)
 
     await runner.process_agent_run({"job_try": 1}, "run-1")
 
@@ -1191,14 +1191,14 @@ async def test_manifest_persist_failure_fails_run_before_execution(monkeypatch: 
         )
         return runner.TerminalTransition(status=status, changed=True)
 
-    def fake_stream_agent_chat(**kwargs):
+    def fake_stream_agent_execution(**kwargs):
         del kwargs
         stream_called.set()
         return _ExecutionAsyncIter([])
 
     monkeypatch.setattr(runner, "prepare_and_record_run_execution", fake_persist_manifest)
     monkeypatch.setattr(runner, "mark_run_terminal", fake_mark_terminal)
-    monkeypatch.setattr(runner, "stream_agent_chat", fake_stream_agent_chat)
+    monkeypatch.setattr(runner, "stream_agent_execution", fake_stream_agent_execution)
 
     await runner.process_agent_run({"job_try": 1}, "run-1")
 
@@ -1239,7 +1239,7 @@ async def test_cancel_during_manifest_preparation_settles_without_waiting_for_le
     monkeypatch.setattr(runner, "_confirmed_user_cancel", is_cancelled)
     monkeypatch.setattr(runner, "_finish_user_cancel", finish)
     monkeypatch.setattr(runner, "mark_run_terminal", AsyncMock(side_effect=AssertionError("不能转为 failed")))
-    monkeypatch.setattr(runner, "stream_agent_chat", lambda **kwargs: pytest.fail("取消后不能开始执行"))
+    monkeypatch.setattr(runner, "stream_agent_execution", lambda **kwargs: pytest.fail("取消后不能开始执行"))
     await runner.process_agent_run({"job_try": 1}, run.id)
     finish.assert_awaited_once()
     assert finish.call_args.kwargs["run_id"] == run.id
@@ -1264,7 +1264,7 @@ async def test_committed_execution_releases_own_runtime_before_settlement(monkey
         assert run_id == run.id and run.status == actual_status == status
         order.append("published")
 
-    monkeypatch.setattr(runner, "stream_agent_chat", lambda **kw: stream())
+    monkeypatch.setattr(runner, "stream_agent_execution", lambda **kw: stream())
     monkeypatch.setattr(runner, "_release_runtime_before_terminal_event", release)
     monkeypatch.setattr(runner, "publish_run_settlement", publish)
     monkeypatch.setattr(runner, "mark_run_terminal", AsyncMock(side_effect=AssertionError("already committed")))
@@ -1284,7 +1284,7 @@ async def test_worker_rejects_unrouted_public_output(monkeypatch, container):
         container: {"session_id": run.thread_id, "turn_id": run.turn_id, "run_id": run.id},
     }
     monkeypatch.setattr(runner, "mark_run_terminal", terminal)
-    monkeypatch.setattr(runner, "stream_agent_chat", lambda **kw: _ExecutionAsyncIter([output]))
+    monkeypatch.setattr(runner, "stream_agent_execution", lambda **kw: _ExecutionAsyncIter([output]))
     await runner.process_agent_run({"job_try": 1}, run.id)
     assert terminal.await_args.args[:2] == (run.id, "failed")
     assert "明确归属" in terminal.await_args.kwargs["error_message"]
@@ -1313,7 +1313,7 @@ async def test_worker_only_publishes_valid_events_and_never_settles_usage_from_t
     async def append(run_id, events):
         published.extend(events)
 
-    monkeypatch.setattr(runner, "stream_agent_chat", lambda **kw: stream())
+    monkeypatch.setattr(runner, "stream_agent_execution", lambda **kw: stream())
     monkeypatch.setattr(event_writer, "append_run_stream_events", append)
     monkeypatch.setattr(runner, "mark_run_terminal", AsyncMock(side_effect=AssertionError("already committed")))
     await runner.process_agent_run({"job_try": 1}, run.id)
@@ -1338,7 +1338,7 @@ async def test_nonretryable_output_conflict_after_user_cancel_settles_cancelled(
         return cancelled
 
     finish = AsyncMock(return_value=runner.TerminalTransition(status="cancelled", changed=True))
-    monkeypatch.setattr(runner, "stream_agent_chat", lambda **kwargs: stream())
+    monkeypatch.setattr(runner, "stream_agent_execution", lambda **kwargs: stream())
     monkeypatch.setattr(runner, "_confirmed_user_cancel", is_cancelled)
     monkeypatch.setattr(runner, "_finish_user_cancel", finish)
     monkeypatch.setattr(runner, "_finish_run", AsyncMock(side_effect=AssertionError("不能转为 failed")))

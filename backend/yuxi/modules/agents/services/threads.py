@@ -6,19 +6,18 @@ Thread 标识执行线程，沿用 checkpoint、队列和事件订阅身份。
 
 from __future__ import annotations
 
-import hashlib
-import json
 import uuid
 from copy import deepcopy
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from yuxi.modules.agents.receipts import control_intent_hash, require_idempotency_key, require_receipt_replay
 from yuxi.modules.agents.models.runs import AGENT_RUN_TERMINAL_STATUSES
-from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.repositories.attachments import AttachmentRepository
 from yuxi.modules.agents.repositories.input import AgentInputRepository
 from yuxi.modules.agents.repositories.input_receipt import AgentInputReceiptRepository
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
+from yuxi.modules.agents.services.thread_access import require_thread
 from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 from yuxi.modules.agents.services.input_config import (
@@ -27,23 +26,9 @@ from yuxi.modules.agents.services.input_config import (
 )
 from yuxi.modules.agents.services.public_resources import session_resource
 from yuxi.modules.agents.services.scheduler import claim_next_input, deliver
-from yuxi.modules.agents.services.scope import ActorScope
+from yuxi.modules.agents.scope import ActorScope
 from yuxi.shared.datetime import format_utc_datetime, utc_now
 from yuxi.shared.errors import InvalidInputError, InvalidOperationError, ResourceNotFoundError, StateConflictError
-
-
-async def require_thread(*, db: AsyncSession, scope: ActorScope, thread_id: str, lock: bool = False) -> Session:
-    """按用户与 APP 完整作用域读取 Thread，可选择取得调度锁。"""
-    repo = SessionRepository(db)
-    agent_session = await repo.lock_session_by_thread_id(thread_id) if lock else await repo.get_session_by_thread_id(thread_id)
-    if (
-        agent_session is None
-        or agent_session.uid != scope.uid
-        or agent_session.app_id != scope.app_id
-        or agent_session.status not in {"active", "archived"}
-    ):
-        raise ResourceNotFoundError("Thread 不存在")
-    return agent_session
 
 
 async def list_session_page(
@@ -125,7 +110,8 @@ async def mark_thread_viewed(*, db: AsyncSession, scope: ActorScope, thread_id: 
     run_map = await AgentRunRepository(db).get_latest_top_level_runs_for_threads(scope.uid, [thread_id])
     run_id, run_status = run_map.get(thread_id, (None, None))
     if run_id and run_status in AGENT_RUN_TERMINAL_STATUSES:
-        await SessionRepository(db).mark_thread_viewed(thread_id, run_id)
+        if await SessionRepository(db).mark_thread_viewed(thread_id, run_id):
+            await db.commit()
 
 
 async def update_thread(
@@ -220,19 +206,19 @@ async def get_queue_snapshot(*, db: AsyncSession, scope: ActorScope, thread_id: 
 
 async def continue_queue(*, db: AsyncSession, scope: ActorScope, thread_id: str, idempotency_key: str) -> dict:
     """显式解除失败或取消后的暂停，并在同一事务领取优先队头。"""
-    check_control_key(idempotency_key)
+    require_idempotency_key(idempotency_key)
     event_type = "yuxi.session.input.continue"
-    intent_hash = hash_control_intent(event_type)
+    intent_hash = control_intent_hash(event_type)
     receipt_repo = AgentInputReceiptRepository(db)
     existing = await receipt_repo.get_for_scope(uid=scope.uid, app_id=scope.app_id, thread_id=thread_id, idempotency_key=idempotency_key)
     if existing is not None:
-        require_control_replay(existing, event_type, intent_hash)
+        require_receipt_replay(existing, event_type, intent_hash)
         return control_accepted(existing)
 
     agent_session = await require_thread(db=db, scope=scope, thread_id=thread_id, lock=True)
     existing = await receipt_repo.get_for_scope(uid=scope.uid, app_id=scope.app_id, thread_id=thread_id, idempotency_key=idempotency_key)
     if existing is not None:
-        require_control_replay(existing, event_type, intent_hash)
+        require_receipt_replay(existing, event_type, intent_hash)
         return control_accepted(existing)
     if not agent_session.queue_paused:
         raise StateConflictError("队列未暂停")
@@ -261,19 +247,19 @@ async def continue_queue(*, db: AsyncSession, scope: ActorScope, thread_id: str,
 
 async def cancel_input(*, db: AsyncSession, scope: ActorScope, thread_id: str, input_id: str, idempotency_key: str) -> dict:
     """取消未领取的 Input，不伪造尚未存在的 Turn。"""
-    check_control_key(idempotency_key)
+    require_idempotency_key(idempotency_key)
     event_type = "yuxi.session.input.cancel_input"
-    intent_hash = hash_control_intent(event_type, input_id)
+    intent_hash = control_intent_hash(event_type, input_id)
     receipt_repo = AgentInputReceiptRepository(db)
     existing = await receipt_repo.get_for_scope(uid=scope.uid, app_id=scope.app_id, thread_id=thread_id, idempotency_key=idempotency_key)
     if existing is not None:
-        require_control_replay(existing, event_type, intent_hash)
+        require_receipt_replay(existing, event_type, intent_hash)
         return control_accepted(existing)
 
     await require_thread(db=db, scope=scope, thread_id=thread_id, lock=True)
     existing = await receipt_repo.get_for_scope(uid=scope.uid, app_id=scope.app_id, thread_id=thread_id, idempotency_key=idempotency_key)
     if existing is not None:
-        require_control_replay(existing, event_type, intent_hash)
+        require_receipt_replay(existing, event_type, intent_hash)
         return control_accepted(existing)
     input_repo = AgentInputRepository(db)
     input_item = await input_repo.get_for_scope(input_id=input_id, thread_id=thread_id, uid=scope.uid, app_id=scope.app_id, for_update=True)
@@ -298,9 +284,9 @@ async def cancel_input(*, db: AsyncSession, scope: ActorScope, thread_id: str, i
 
 async def promote_input(*, db: AsyncSession, scope: ActorScope, thread_id: str, input_id: str, idempotency_key: str) -> dict:
     """在 Session 锁内提升未消费输入，暂停状态保持不变。"""
-    check_control_key(idempotency_key)
+    require_idempotency_key(idempotency_key)
     event_type = "yuxi.session.input.promote"
-    intent_hash = hash_control_intent(event_type, input_id)
+    intent_hash = control_intent_hash(event_type, input_id)
     agent_session = await require_thread(db=db, scope=scope, thread_id=thread_id, lock=True)
     receipt_repo = AgentInputReceiptRepository(db)
     existing = await receipt_repo.get_for_scope(
@@ -310,7 +296,7 @@ async def promote_input(*, db: AsyncSession, scope: ActorScope, thread_id: str, 
         idempotency_key=idempotency_key,
     )
     if existing is not None:
-        require_control_replay(existing, event_type, intent_hash)
+        require_receipt_replay(existing, event_type, intent_hash)
         return control_accepted(existing)
     item = await AgentInputRepository(db).get_for_scope(
         input_id=input_id,
@@ -341,7 +327,7 @@ async def promote_input(*, db: AsyncSession, scope: ActorScope, thread_id: str, 
         input_id=input_id,
     )
     if changed:
-        from yuxi.modules.agents.services.cooperation import notify_user_intervention
+        from yuxi.modules.agents.services.cooperation_notifications import notify_user_intervention
 
         await notify_user_intervention(db, agent_session, key=receipt.id, action="steer")
     await db.commit()
@@ -350,24 +336,6 @@ async def promote_input(*, db: AsyncSession, scope: ActorScope, thread_id: str, 
 
         await dispatch_next_input(uid=scope.uid, agent_slug=agent_session.agent_id, thread_id=thread_id)
     return control_accepted(receipt)
-
-
-def check_control_key(key: str) -> None:
-    """校验控制命令的幂等键。"""
-    if not isinstance(key, str) or not 1 <= len(key) <= 128:
-        raise InvalidInputError("Idempotency-Key 长度必须为 1 至 128")
-
-
-def hash_control_intent(*parts) -> str:
-    """对控制命令建立跨协议别名一致的意图指纹。"""
-    encoded = json.dumps(parts, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(encoded.encode()).hexdigest()
-
-
-def require_control_replay(receipt, event_type: str, intent_hash: str) -> None:
-    """拒绝同一键改变控制命令或目标。"""
-    if receipt.event_type != event_type or receipt.intent_hash != intent_hash:
-        raise StateConflictError("Idempotency-Key 已用于其他输入")
 
 
 def control_accepted(receipt) -> dict:

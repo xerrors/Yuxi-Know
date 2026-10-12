@@ -12,8 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.agents.repositories.references import TurnReferenceRepository
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
-from yuxi.modules.agents.services.scope import ActorScope
-from yuxi.modules.agents.services.threads import require_thread
+from yuxi.modules.agents.scope import ActorScope
+from yuxi.modules.agents.services.thread_access import require_thread
 from yuxi.modules.knowledge.services.access import visible_knowledge_bases
 from yuxi.modules.models.chat import load_chat_model
 from yuxi.shared.datetime import format_utc_datetime, utc_now

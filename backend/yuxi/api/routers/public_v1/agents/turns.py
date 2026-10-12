@@ -17,7 +17,7 @@ from yuxi.api.routers.public_v1.agents.schemas import (
     TurnResponse,
 )
 from yuxi.modules.agents.services.inputs import get_input_snapshot, get_receipt_snapshot
-from yuxi.modules.agents.services.messages import get_thread_audits
+from yuxi.modules.agents.services.message_audits import get_thread_audits
 from yuxi.modules.agents.services.public_items import list_session_items
 from yuxi.modules.agents.services.public_resources import event_receipt
 from yuxi.modules.agents.services.runs import get_run_snapshot

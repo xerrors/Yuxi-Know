@@ -19,9 +19,9 @@ from yuxi.modules.agents.models.attachments import AgentAttachment
 from yuxi.modules.agents.repositories.attachments import AttachmentRepository
 from yuxi.modules.agents.repositories.input import AgentInputRepository
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
-from yuxi.modules.agents.repositories.sessions import SessionRepository
+from yuxi.modules.agents.services.thread_access import require_thread
 from yuxi.modules.agents.runtime.sandbox.paths import runtime_path_for_workdir_scope, workdir_scope_from_runtime_path
-from yuxi.modules.agents.services.scope import ActorScope
+from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.system.options import system_options
 from yuxi.modules.workspace.filesystem import Workspace
 from yuxi.modules.workspace.paths import ensure_user_workspace
@@ -29,7 +29,6 @@ from yuxi.modules.workspace.workdir import Workdir
 from yuxi.shared.datetime import format_utc_datetime
 from yuxi.shared.errors import DomainError, InvalidInputError, InvalidOperationError, ResourceNotFoundError, StateConflictError
 
-ATTACHMENT_ALLOWED_EXTENSIONS: tuple[str, ...] = ()
 MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024
 TMP_ATTACHMENT_PREFIX = "tmp/chat_attachments"
 TMP_ATTACHMENT_PARSE_EXTENSIONS = (*PDF_FILE_EXTENSIONS, *IMAGE_FILE_EXTENSIONS)
@@ -256,12 +255,12 @@ async def cleanup_prepared_sources(*, db, thread_id: str) -> None:
 
 async def list_thread_attachments_view(*, thread_id: str, db: AsyncSession, current_uid: str, app_id: str | None = None) -> dict:
     """附件列表直接读取该 Session 的附件关系。"""
-    await _require_user_session(SessionRepository(db), thread_id, str(current_uid), app_id)
+    await require_thread(db=db, scope=ActorScope(uid=str(current_uid), app_id=app_id), thread_id=thread_id)
     attachments = await AttachmentRepository(db).list_for_thread(thread_id, str(current_uid), app_id)
     return {
         "attachments": [serialize_attachment(item, thread_id=thread_id) for item in attachments],
         "limits": {
-            "allowed_extensions": sorted(ATTACHMENT_ALLOWED_EXTENSIONS),
+            "allowed_extensions": [],  # 上传不按后缀限制；解析能力在实际解析入口校验。
             "max_size_bytes": MAX_ATTACHMENT_SIZE_BYTES,
         },
     }
@@ -271,8 +270,7 @@ async def delete_thread_attachment_view(
     *, thread_id: str, file_id: str, db: AsyncSession, current_uid: str, app_id: str | None = None
 ) -> dict:
     """在 Session 与附件行锁内检查执行边界，再删除正式文件和附件关系。"""
-    session_repo = SessionRepository(db)
-    agent_session = await _require_user_session(session_repo, thread_id, str(current_uid), app_id, lock=True)
+    agent_session = await require_thread(db=db, scope=ActorScope(uid=str(current_uid), app_id=app_id), thread_id=thread_id, lock=True)
     attachment = await AttachmentRepository(db).get_for_scope(file_id, str(current_uid), app_id, lock=True)
     if attachment is None or attachment.input_id is None:
         raise ResourceNotFoundError("附件不存在或已被删除")
@@ -311,14 +309,6 @@ async def delete_thread_attachment_view(
         except OSError:
             logger.exception("附件记录已删除，Workdir 内容清理失败: session=%s scope=%s", thread_id, scope)
     return {"message": "附件已删除"}
-
-
-async def _require_user_session(session_repo, thread_id, uid, app_id=None, *, lock=False):
-    """附件副作用在实际 Session 用户与 APP 边界校验。"""
-    agent_session = await (session_repo.lock_session_by_thread_id(thread_id) if lock else session_repo.get_session_by_thread_id(thread_id))
-    if not agent_session or agent_session.uid != uid or agent_session.app_id != app_id or agent_session.status == "deleted":
-        raise ResourceNotFoundError("对话线程不存在")
-    return agent_session
 
 
 async def _require_draft(db, file_id, scope, *, lock=False) -> AgentAttachment:

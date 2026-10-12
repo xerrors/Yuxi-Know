@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import re
 import uuid
 from datetime import datetime, timedelta
@@ -19,13 +18,14 @@ from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.agents.repositories.definitions import AgentRepository
 from yuxi.modules.agents.runtime.agent_backends import AgentBackendNotFoundError, get_agent_backend
 from yuxi.modules.agents.runtime.tool_approval import normalize_tool_approval_mode
-from yuxi.modules.agents.services.input_messages import build_chat_input_message
+from yuxi.modules.agents.input_messages import build_chat_input_message
 from yuxi.modules.agents.services.inputs import create_thread
-from yuxi.modules.agents.services.scope import ActorScope
+from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.identity.models import User
 from yuxi.modules.schedules.models import ScheduledAgentJob, ScheduledAgentRun
 from yuxi.modules.schedules.repository import ScheduledAgentRepository
 from yuxi.modules.workspace.repositories.projects import ProjectRepository
+from yuxi.shared.hashing import json_intent_hash
 from yuxi.shared.datetime import format_utc_datetime, utc_now
 from yuxi.shared.errors import DomainError, InvalidInputError, ResourceNotFoundError, StateConflictError
 
@@ -50,8 +50,7 @@ def _normalize_request_id(value: str) -> str:
 
 def _intent_hash(data: dict) -> str:
     """为规范化创建意图生成稳定摘要。"""
-    serialized = json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(serialized.encode()).hexdigest()
+    return json_intent_hash(data)
 
 
 def validate_schedule(cron_expression: str, timezone: str) -> tuple[str, str]:

@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from yuxi.modules.agents.services import inputs, turns
+from yuxi.modules.agents.receipts import require_receipt_replay
 from yuxi.modules.workspace.services import projects
 from yuxi.shared.errors import DomainError, StateConflictError
 
@@ -33,9 +33,9 @@ def test_idempotency_rejection_is_a_protocol_free_conflict(owner):
     """异意图重放供 HTTP 与 worker 消费同一领域冲突类型。"""
     with pytest.raises(StateConflictError) as caught:
         if owner == "inputs":
-            inputs.require_input_replay(SimpleNamespace(event_type="message", intent_hash="old"), "message", "new")
+            require_receipt_replay(SimpleNamespace(event_type="message", intent_hash="old"), "message", "new")
         elif owner == "turns":
-            turns._require_replay(SimpleNamespace(event_type="cancel", intent_hash="old"), "cancel", "new")
+            require_receipt_replay(SimpleNamespace(event_type="cancel", intent_hash="old"), "cancel", "new")
         else:
             projects._require_matching_creation_intent(
                 SimpleNamespace(status="active", name="old", directory_mode="linked", workdir_path="projects/test"),

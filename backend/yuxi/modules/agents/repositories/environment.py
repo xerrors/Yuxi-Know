@@ -19,6 +19,7 @@ class AgentEnvWriteResult:
 
     env: dict[str, str]
     updated_at: datetime | None
+    changed: bool = False
 
 
 class AgentEnvRepository:
@@ -53,7 +54,7 @@ class AgentEnvRepository:
 
     async def get_by_uid(self, uid: str) -> AgentEnv | None:
         """读取指定用户的 Agent 环境变量。"""
-        result = await self.db_session.execute(select(AgentEnv).where(AgentEnv.uid == uid))
+        result = await self.db_session.execute(select(AgentEnv).where(AgentEnv.uid == uid).execution_options(populate_existing=True))
         return result.scalar_one_or_none()
 
     async def upsert(self, *, uid: str, env: dict[str, str], updated_at: datetime) -> AgentEnvWriteResult:
@@ -71,5 +72,4 @@ class AgentEnvRepository:
             )
         )
         await self.db_session.execute(statement)
-        await self.db_session.commit()
-        return AgentEnvWriteResult(env=env, updated_at=updated_at)
+        return AgentEnvWriteResult(env=env, updated_at=updated_at, changed=True)

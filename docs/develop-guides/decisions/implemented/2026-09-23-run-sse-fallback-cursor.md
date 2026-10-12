@@ -2,7 +2,7 @@
 
 状态：implemented
 类型：bug-fix
-Owner：backend/yuxi/modules/agents/services/events.py
+Owner：backend/yuxi/modules/agents/services/subscriptions.py
 
 ## 问题
 

@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from yuxi.modules.agents.services.events import _Cursor, _parse_cursor
+from yuxi.modules.agents.services.subscriptions import _Cursor, _parse_cursor
 from yuxi.modules.agents.services.scheduler import Dispatch, deliver
 from yuxi.modules.agents.services.turns import _summarize_turn_usage, _validate_resume_response
 from yuxi.shared.errors import DomainError, InvalidInputError

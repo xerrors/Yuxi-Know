@@ -17,10 +17,11 @@ from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.modules.agents.repositories.input import AgentInputRepository
 from yuxi.modules.agents.repositories.public_items import PublicItemRepository
-from yuxi.modules.agents.services.input_messages import build_chat_input_message, serialize_input_message
+from yuxi.modules.agents.input_messages import build_chat_input_message, serialize_input_message
 from yuxi.modules.agents.services.public_items import serialize_public_items
-from yuxi.modules.agents.services.scope import ActorScope
-from yuxi.modules.agents.services.threads import get_queue_snapshot, require_thread
+from yuxi.modules.agents.scope import ActorScope
+from yuxi.modules.agents.services.threads import get_queue_snapshot
+from yuxi.modules.agents.services.thread_access import require_thread
 from yuxi.modules.workspace.models import Project
 from yuxi.shared.errors import DomainError, ResourceNotFoundError
 
