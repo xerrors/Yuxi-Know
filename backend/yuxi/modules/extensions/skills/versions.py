@@ -9,7 +9,7 @@ from yuxi.modules.extensions.skills.content import commit_skill_content, content
 from yuxi.modules.extensions.skills.models import Skill
 from yuxi.modules.extensions.skills.package import compute_skill_directory_hash, validated_shared_skill_parts
 from yuxi.modules.extensions.skills.repository import SkillRepository
-from yuxi.modules.extensions.skills.shared import get_manageable_skill_or_raise, get_management_readable_skill_or_raise
+from yuxi.modules.extensions.skills.access import get_manageable_skill_or_raise, get_management_readable_skill_or_raise
 from yuxi.modules.identity.models import User
 
 

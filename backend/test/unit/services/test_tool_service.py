@@ -6,7 +6,6 @@ from yuxi.modules.extensions.tools import catalog as tool_service
 
 
 def test_get_tool_metadata_includes_config_guide(monkeypatch):
-    tool_service._metadata_cache.clear()
 
     fake_tool = SimpleNamespace(
         name="demo_tool",
@@ -44,5 +43,3 @@ def test_get_tool_metadata_includes_config_guide(monkeypatch):
             "config_guide": "请先配置 DEMO_API_KEY",
         }
     ]
-
-    tool_service._metadata_cache.clear()

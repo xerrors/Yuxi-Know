@@ -26,7 +26,8 @@ async def test_department_member_update_rechecks_after_concurrent_promotion(acto
         for _ in range(100):
             await db.execute("SELECT pg_stat_clear_snapshot()")
             if await db.fetchval(
-                "SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE wait_event_type='Lock' AND query LIKE '%users%' AND pid<>pg_backend_pid())"
+                "SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE wait_event_type='Lock' AND query LIKE '%users%' "
+                "AND pid<>pg_backend_pid())"
             ):
                 break
             await asyncio.sleep(0.02)
@@ -372,7 +373,7 @@ async def test_each_skill_install_transaction_revalidates_live_managers(actors):
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
     from yuxi.modules.extensions.skills.shared import confirm_skill_install_draft
     from yuxi.infrastructure.runtime_settings import get_skill_data_dir
-    from yuxi.modules.extensions.skills.draft import get_skill_drafts_root_dir
+    from yuxi.modules.extensions.skills.install_draft import get_skill_drafts_root_dir
     from yuxi.modules.identity.models import User
 
     admin, manager = (actors["identities"][key] for key in ("admin0", "admin1"))

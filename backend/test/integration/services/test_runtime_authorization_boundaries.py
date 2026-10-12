@@ -26,6 +26,7 @@ from yuxi.modules.agents.runtime.middlewares.authorization import (
 )
 from yuxi.modules.extensions.skills import projection
 from yuxi.modules.extensions.skills.models import Skill
+from yuxi.modules.extensions.tools.runtime import resolve_configured_runtime_tools
 from yuxi.modules.identity.models import User
 from yuxi.modules.workspace.models import Project
 
@@ -99,7 +100,8 @@ async def authorized_context(tmp_path, monkeypatch):
             preload_skills=["live-skill"],
         )
         await prepare_agent_runtime_context(context)
-        yield SimpleNamespace(context=context, sessions=sessions, engine=manager.async_engine, source=source)
+        tools = await resolve_configured_runtime_tools(context)
+        yield SimpleNamespace(context=context, sessions=sessions, engine=manager.async_engine, source=source, tools=tools)
 
 
 async def test_shipping_model_round_syncs_projection_once_and_checks_identity_after_return(authorized_context, monkeypatch):
@@ -124,7 +126,7 @@ async def test_shipping_model_round_syncs_projection_once_and_checks_identity_af
     try:
         # 使用正式 factory 的授权、Skill、重试和审批装配；摘要模型为本地可观察模型。
         middlewares = await chatbot_graph._build_middlewares(fixture.context, backend, cleanup_model=model)
-        graph = create_agent(model=model, middleware=middlewares)
+        graph = create_agent(model=model, tools=fixture.tools, middleware=middlewares)
         result = await graph.ainvoke({"messages": [HumanMessage(content="hello")]}, context=fixture.context)
     finally:
         event.remove(fixture.engine.sync_engine, "before_cursor_execute", record_sql)
@@ -148,7 +150,9 @@ async def test_summary_threshold_counts_authorized_preloaded_root(authorized_con
     model = CapturingModel()
     workdir = fixture.source.parent / "workdir"
     backend = CompositeBackend(default=FilesystemBackend(root_dir=workdir, virtual_mode=True), routes={})
-    graph = create_agent(model=model, middleware=await chatbot_graph._build_middlewares(fixture.context, backend, cleanup_model=model))
+    graph = create_agent(
+        model=model, tools=fixture.tools, middleware=await chatbot_graph._build_middlewares(fixture.context, backend, cleanup_model=model)
+    )
     result = await graph.ainvoke(
         {"messages": [HumanMessage(content="old question"), AIMessage(content="old answer"), HumanMessage(content="new question")]},
         context=fixture.context,
@@ -194,11 +198,11 @@ async def test_refresh_preserves_prepared_bound_root_but_reads_current_shared_ro
         preload_skills=["live-skill"],
     )
     await prepare_agent_runtime_context(context)
-    assert context._skill_runtime_snapshot["preloaded_skill_contents"]["bound-skill"] == "# PREPARED_BOUND_ROOT\n"
+    assert context.skill_runtime_snapshot["preloaded_skill_contents"]["bound-skill"] == "# PREPARED_BOUND_ROOT\n"
     (bound_source / "SKILL.md").write_text("# UPDATED_BOUND_ROOT\n")
     (fixture.source / "SKILL.md").write_text("# UPDATED_SHARED_ROOT\n")
     await refresh_execution_authorization(context)
-    contents = context._skill_runtime_snapshot["preloaded_skill_contents"]
+    contents = context.skill_runtime_snapshot["preloaded_skill_contents"]
     assert contents["bound-skill"] == "# PREPARED_BOUND_ROOT\n"
     assert contents["live-skill"] == "# UPDATED_SHARED_ROOT\n"
     assert (projection.get_user_skills_root_dir("caller") / "bound-skill/SKILL.md").read_text() == "# UPDATED_BOUND_ROOT\n"
@@ -207,7 +211,7 @@ async def test_refresh_preserves_prepared_bound_root_but_reads_current_shared_ro
 async def test_skill_prompt_is_built_after_current_request_authorization(authorized_context):
     """已准备 Skill 被撤销时，实际模型请求不能携带旧的预加载正文。"""
     fixture = authorized_context
-    assert "CURRENT_AUTHORIZED_SKILL" in fixture.context._skill_runtime_snapshot["preloaded_skill_contents"]["live-skill"]
+    assert "CURRENT_AUTHORIZED_SKILL" in fixture.context.skill_runtime_snapshot["preloaded_skill_contents"]["live-skill"]
     async with fixture.sessions() as db:
         skill = await db.scalar(select(Skill).where(Skill.slug == "live-skill"))
         skill.share_config = {"version": 2, "read_scope": None, "manage_scope": None}
@@ -215,7 +219,7 @@ async def test_skill_prompt_is_built_after_current_request_authorization(authori
     model = CapturingModel()
     backend = CompositeBackend(default=StateBackend, routes={})
     middlewares = await chatbot_graph._build_middlewares(fixture.context, backend, cleanup_model=model)
-    graph = create_agent(model=model, middleware=middlewares)
+    graph = create_agent(model=model, tools=fixture.tools, middleware=middlewares)
     result = await graph.ainvoke({"messages": [HumanMessage(content="hello")]}, context=fixture.context)
     assert result["messages"][-1].content == "AUTHORIZATION_OK"
     assert len(model.requests) == 1
@@ -259,7 +263,9 @@ async def test_model_return_checks_permission_before_approval_interrupt(authoriz
 
     model = ApprovalModel()
     backend = CompositeBackend(default=StateBackend, routes={})
-    graph = create_agent(model=model, middleware=await chatbot_graph._build_middlewares(fixture.context, backend, cleanup_model=model))
+    graph = create_agent(
+        model=model, tools=fixture.tools, middleware=await chatbot_graph._build_middlewares(fixture.context, backend, cleanup_model=model)
+    )
     if revoke:
         with pytest.raises(AgentExecutionRevoked, match="Agent 使用权限已撤销"):
             await graph.ainvoke({"messages": [HumanMessage(content="request approval")]}, context=fixture.context)

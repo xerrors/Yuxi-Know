@@ -217,7 +217,7 @@ def test_create_summary_middleware_uses_deepagents_with_yuxi_outputs_root() -> N
 
 
 @pytest.mark.unit
-def test_create_summary_middleware_passes_custom_summary_prompt() -> None:
+async def test_create_summary_middleware_passes_custom_summary_prompt() -> None:
     model = _RecordingModel()
     middleware = create_summary_middleware(
         model=model,
@@ -228,7 +228,7 @@ def test_create_summary_middleware_passes_custom_summary_prompt() -> None:
         trim_tokens_to_summarize=None,
     )
 
-    assert middleware._create_summary(_tool_messages()) == "summary"
+    assert await middleware._acreate_summary(_tool_messages()) == "summary"
 
     prompt = model.prompts[0]
     assert prompt.startswith("CUSTOM SUMMARY PROMPT")
@@ -237,7 +237,7 @@ def test_create_summary_middleware_passes_custom_summary_prompt() -> None:
 
 
 @pytest.mark.unit
-def test_wrap_model_call_ignores_provider_reported_usage_for_token_trigger() -> None:
+async def test_wrap_model_call_ignores_provider_reported_usage_for_token_trigger() -> None:
     backend = _MemoryBackend()
     model = _RecordingModel()
     messages = [
@@ -258,12 +258,12 @@ def test_wrap_model_call_ignores_provider_reported_usage_for_token_trigger() -> 
     )
     captured_messages: list | None = None
 
-    def handler(request: ModelRequest) -> ModelResponse:
+    async def handler(request: ModelRequest) -> ModelResponse:
         nonlocal captured_messages
         captured_messages = request.messages
         return ModelResponse(result=[AIMessage(content="ok")])
 
-    result = middleware.wrap_model_call(_model_request(messages), handler)
+    result = await middleware.awrap_model_call(_model_request(messages), handler)
 
     assert not isinstance(result, ExtendedModelResponse)
     assert captured_messages == messages
@@ -633,7 +633,7 @@ async def test_force_summary_reports_persisted_uncompacted_tail_tokens() -> None
         ),
     ],
 )
-def test_wrap_model_call_offloads_large_tool_results(scenario: dict) -> None:
+async def test_wrap_model_call_offloads_large_tool_results(scenario: dict) -> None:
     """大工具结果先生成可恢复视图，仍超阈值时再生成摘要。"""
     backend = _MemoryBackend()
     model = _RecordingModel()
@@ -662,12 +662,12 @@ def test_wrap_model_call_offloads_large_tool_results(scenario: dict) -> None:
     middleware._large_tool_results_prefix = VIRTUAL_PATH_LARGE_TOOL_RESULTS
     captured_messages: list | None = None
 
-    def handler(request: ModelRequest) -> ModelResponse:
+    async def handler(request: ModelRequest) -> ModelResponse:
         nonlocal captured_messages
         captured_messages = request.messages
         return ModelResponse(result=[AIMessage(content="ok")])
 
-    result = middleware.wrap_model_call(_model_request(messages), handler)
+    result = await middleware.awrap_model_call(_model_request(messages), handler)
 
     assert isinstance(result, ExtendedModelResponse) is scenario["expect_extended"]
     assert len(model.prompts) == scenario["expect_summary_count"]
@@ -688,7 +688,7 @@ def test_wrap_model_call_offloads_large_tool_results(scenario: dict) -> None:
 
 
 @pytest.mark.unit
-def test_wrap_model_call_does_not_sanitize_without_summary_trigger() -> None:
+async def test_wrap_model_call_does_not_sanitize_without_summary_trigger() -> None:
     backend = _MemoryBackend()
     messages = [
         *_tool_messages(),
@@ -703,12 +703,12 @@ def test_wrap_model_call_does_not_sanitize_without_summary_trigger() -> None:
     )
     captured_messages: list | None = None
 
-    def handler(request: ModelRequest) -> ModelResponse:
+    async def handler(request: ModelRequest) -> ModelResponse:
         nonlocal captured_messages
         captured_messages = request.messages
         return ModelResponse(result=[AIMessage(content="ok")])
 
-    result = middleware.wrap_model_call(_model_request(messages), handler)
+    result = await middleware.awrap_model_call(_model_request(messages), handler)
 
     assert isinstance(result, ModelResponse)
     assert captured_messages is not None
@@ -719,20 +719,12 @@ def test_wrap_model_call_does_not_sanitize_without_summary_trigger() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize(
-    ("async_call", "summary_triggered"),
-    [
-        pytest.param(True, False, id="async-tool-result-offload-only"),
-        pytest.param(False, True, id="sync-summary"),
-        pytest.param(True, True, id="async-summary"),
-    ],
-)
+@pytest.mark.parametrize("summary_triggered", [False, True], ids=["tool-result-offload-only", "summary"])
 async def test_compression_emits_started_and_completed(
     compression_events: list[dict],
-    async_call: bool,
     summary_triggered: bool,
 ) -> None:
-    """同步和异步压缩均发送完成事件，并区分摘要触发与仅卸载工具结果。"""
+    """异步压缩发送完成事件，并区分摘要触发与仅卸载工具结果。"""
     backend = _MemoryBackend()
     captured_messages: list | None = None
 
@@ -767,10 +759,7 @@ async def test_compression_emits_started_and_completed(
     async def async_handler(request: ModelRequest) -> ModelResponse:
         return handler(request)
 
-    if async_call:
-        result = await middleware.awrap_model_call(_model_request(messages), async_handler)
-    else:
-        result = middleware.wrap_model_call(_model_request(messages), handler)
+    result = await middleware.awrap_model_call(_model_request(messages), async_handler)
 
     assert [event["status"] for event in compression_events] == ["started", "completed"]
     if summary_triggered:
@@ -789,7 +778,7 @@ async def test_compression_emits_started_and_completed(
 
 
 @pytest.mark.unit
-def test_wrap_model_call_truncates_large_write_file_args_only_in_compacted_view() -> None:
+async def test_wrap_model_call_truncates_large_write_file_args_only_in_compacted_view() -> None:
     backend = _MemoryBackend()
     large_content = "x" * 5000
     raw_arguments = '{"file_path": "/tmp/a.txt", "content": "' + large_content + '"}'
@@ -828,12 +817,12 @@ def test_wrap_model_call_truncates_large_write_file_args_only_in_compacted_view(
     )
     captured_messages: list | None = None
 
-    def handler(request: ModelRequest) -> ModelResponse:
+    async def handler(request: ModelRequest) -> ModelResponse:
         nonlocal captured_messages
         captured_messages = request.messages
         return ModelResponse(result=[AIMessage(content="ok")])
 
-    result = middleware.wrap_model_call(_model_request(messages), handler)
+    result = await middleware.awrap_model_call(_model_request(messages), handler)
 
     assert not isinstance(result, ExtendedModelResponse)
     assert captured_messages is not None
@@ -848,7 +837,7 @@ def test_wrap_model_call_truncates_large_write_file_args_only_in_compacted_view(
 
 
 @pytest.mark.unit
-def test_summary_event_reuses_original_preserved_window_on_later_calls() -> None:
+async def test_summary_event_reuses_original_preserved_window_on_later_calls() -> None:
     backend = _MemoryBackend()
     old_result = "SAFE\n" + ("PRESERVED_TOOL_RESULT_SHOULD_STAY_INLINE\n" * 200)
     new_result = "NEW_TOOL_RESULT_MUST_STAY_INLINE"
@@ -872,11 +861,11 @@ def test_summary_event_reuses_original_preserved_window_on_later_calls() -> None
     middleware._large_tool_results_prefix = VIRTUAL_PATH_LARGE_TOOL_RESULTS
     captured: list[str] = []
 
-    def handler(request: ModelRequest) -> ModelResponse:
+    async def handler(request: ModelRequest) -> ModelResponse:
         captured.append(get_buffer_string(request.messages))
         return ModelResponse(result=[AIMessage(content="ok")])
 
-    result = middleware.wrap_model_call(_model_request(messages), handler)
+    result = await middleware.awrap_model_call(_model_request(messages), handler)
 
     assert isinstance(result, ExtendedModelResponse)
     assert "[Tool result saved]" in captured[-1]
@@ -900,7 +889,7 @@ def test_summary_event_reuses_original_preserved_window_on_later_calls() -> None
         state={"messages": state_messages, "_summarization_event": event},
     )
 
-    later_result = middleware.wrap_model_call(later_request, handler)
+    later_result = await middleware.awrap_model_call(later_request, handler)
 
     assert isinstance(later_result, ModelResponse)
     assert "[Tool result saved]" not in captured[-1]
@@ -909,7 +898,7 @@ def test_summary_event_reuses_original_preserved_window_on_later_calls() -> None
 
 
 @pytest.mark.unit
-def test_create_summary_uses_sanitized_messages() -> None:
+async def test_create_summary_uses_sanitized_messages() -> None:
     backend = _MemoryBackend()
     model = _RecordingModel()
     middleware = YuxiSummarizationMiddleware(
@@ -925,7 +914,7 @@ def test_create_summary_uses_sanitized_messages() -> None:
 
     compacted_messages = middleware._compact_messages(_tool_messages())
 
-    assert middleware._create_summary(compacted_messages) == "summary"
+    assert await middleware._acreate_summary(compacted_messages) == "summary"
 
     prompt = model.prompts[0]
     assert "Tool calls omitted from summary input" not in prompt
@@ -993,7 +982,6 @@ def _compressing_messages(large_result: str) -> list:
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("async_call", [False, True], ids=["sync", "async"])
 @pytest.mark.parametrize(
     ("backend_type", "model_type", "error_match", "expected_prompt_count", "history_saved"),
     [
@@ -1011,7 +999,6 @@ def _compressing_messages(large_result: str) -> list:
 )
 async def test_auto_summary_propagates_failure_and_keeps_run_open(
     compression_events: list[dict],
-    async_call: bool,
     backend_type,
     model_type,
     error_match: str,
@@ -1034,10 +1021,7 @@ async def test_auto_summary_propagates_failure_and_keeps_run_open(
         return handler(request)
 
     with pytest.raises(RuntimeError, match=error_match):
-        if async_call:
-            await middleware.awrap_model_call(_model_request(messages), async_handler)
-        else:
-            middleware.wrap_model_call(_model_request(messages), handler)
+        await middleware.awrap_model_call(_model_request(messages), async_handler)
 
     assert handler_calls == 0
     assert len(model.prompts) == expected_prompt_count
@@ -1122,3 +1106,14 @@ async def test_awrap_model_call_emits_failed_when_handler_raises_after_started(
     statuses = [event["status"] for event in compression_events]
     assert statuses == ["started", "failed"]
     assert "model boom" in compression_events[-1]["error"]
+
+
+@pytest.mark.unit
+def test_summary_sync_entry_rejects_before_any_io() -> None:
+    """同步调用明确拒绝，避免跨事件循环使用授权连接池。"""
+    backend = _MemoryBackend()
+    middleware, large_result = _make_compressing_middleware(backend)
+    with pytest.raises(RuntimeError, match="仅支持异步调用"):
+        middleware.wrap_model_call(_model_request(_compressing_messages(large_result)), lambda _: None)
+    assert backend.writes == []
+    assert middleware.model.prompts == []

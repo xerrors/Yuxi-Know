@@ -10,6 +10,9 @@ from typing import Any, Protocol
 from yuxi.infrastructure.observability.logging import logger
 
 
+ADMIN_ROLES = frozenset({"admin", "superadmin"})
+
+
 class ResourcePermission(StrEnum):
     """资源权限等级，数值顺序用于判断权限是否足够。"""
 

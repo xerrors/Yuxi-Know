@@ -7,7 +7,7 @@ from langchain_core.tools import tool as langchain_tool
 from pydantic import BaseModel, Field
 
 from yuxi.infrastructure.observability.logging import logger
-from yuxi.modules.extensions.tools.registry import ToolExtraMetadata, _all_tool_instances, _extra_registry
+from yuxi.modules.extensions.tools.registry import ToolExtraMetadata, register_tool
 
 _DOUBAO_SEARCH_URL = "https://open.feedcoopapi.com/search_api/web_search"
 
@@ -162,8 +162,7 @@ def _register_web_search_tool() -> None:
         return
 
     _, create_tool, display_name = _WEB_SEARCH_PROVIDERS[provider]
-    _extra_registry["web_search"] = ToolExtraMetadata(category="builtin", tags=["搜索"], display_name=display_name)
-    _all_tool_instances.append(create_tool())
+    register_tool(create_tool(), ToolExtraMetadata(category="builtin", tags=["搜索"], display_name=display_name))
 
 
 def _resolve_web_search_provider() -> str | None:

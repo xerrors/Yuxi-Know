@@ -89,7 +89,7 @@ async def test_mcp_wire_failure_reaches_agent_and_management(monkeypatch, transp
                 context = SimpleNamespace(tools=[], mcps=[server.slug])
                 with pytest.raises(RuntimeError, match="MCP.*failed-remote.*失败"):
                     await resolve_configured_runtime_tools(context)
-                assert context._mcp_tool_servers == {}
+                assert context.mcp_tool_servers == {}
                 with pytest.raises(ExceptionGroup):
                     await inspect_mcp_server_tools(server)
             finally:

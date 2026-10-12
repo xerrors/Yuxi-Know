@@ -405,7 +405,7 @@ async def test_binding_added_after_preparation_waits_for_next_context(test_clien
         async with factory() as db:
             user = await db.scalar(select(User).where(User.uid == me.json()["uid"]))
             current = ChatBotContext(uid=user.uid, agent_slug=slug, skills=[], preload_skills=[])
-            current._skill_runtime_snapshot = await resolve_runtime_skills_for_context(current, db=db, user=user)
+            current.skill_runtime_snapshot = await resolve_runtime_skills_for_context(current, db=db, user=user)
         bound = await test_client.post(f"/api/agent/{slug}/self-skill", headers=admin_headers)
         assert bound.status_code == 200, bound.text
         skill_slug = bound.json()["skill"]["slug"]

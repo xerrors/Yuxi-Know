@@ -4,7 +4,39 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
+
+
+class RuntimeSkill(TypedDict):
+    """模型可用的 Skill 提示与依赖信息。"""
+
+    name: str
+    description: str
+    path: str
+    tools: list[str]
+    mcps: list[str]
+    skills: list[str]
+
+
+class SkillRuntimeMetadata(TypedDict):
+    """首次解析与实际刷新对应的来源修订。"""
+
+    source_scope: str
+    version: str | None
+    content_hash: str | None
+
+
+class SkillRuntimeSnapshot(TypedDict):
+    """当前权限派生的运行选择、依赖及预加载正文。"""
+
+    capability_limited: bool
+    context_skills: list[str]
+    context_preload_skills: list[str]
+    effective_skills: list[str]
+    runtime_skills: dict[str, RuntimeSkill]
+    skill_metadata: dict[str, SkillRuntimeMetadata]
+    preloaded_skills: list[str]
+    preloaded_skill_contents: dict[str, str]
 
 
 @dataclass(frozen=True, slots=True)

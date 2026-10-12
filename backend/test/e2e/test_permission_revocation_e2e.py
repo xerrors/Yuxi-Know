@@ -576,7 +576,7 @@ async def test_runless_forced_summary_uses_current_thread_agent_permission(actor
         pg_manager.initialize()
         try:
             with pytest.raises(AgentExecutionRevoked, match="权限已撤销"):
-                await compressor._acreate_summary_or_raise([HumanMessage(content="Private history")])
+                await compressor._acreate_summary([HumanMessage(content="Private history")], forced=True)
             assert replay["requests"] == []
         finally:
             await pg_manager.close()

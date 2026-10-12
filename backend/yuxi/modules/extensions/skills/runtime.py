@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,20 +15,9 @@ from yuxi.modules.agents.runtime.sandbox.paths import VIRTUAL_PERSONAL_SKILLS_PA
 from yuxi.modules.extensions.skills.package import normalize_string_list
 from yuxi.modules.extensions.skills.personal import list_personal_skills
 from yuxi.modules.extensions.skills.projection import refresh_user_skill_projection_async
-from yuxi.modules.extensions.skills.shared import lock_accessible_shared_skills_for_runtime, resolved_shared_skill
-from yuxi.modules.extensions.tools import get_all_tool_instances
+from yuxi.modules.extensions.skills.resolved import RuntimeSkill, SkillRuntimeSnapshot
+from yuxi.modules.extensions.skills.access import lock_accessible_shared_skills_for_runtime, resolved_shared_skill
 from yuxi.modules.identity.models import User
-
-
-class RuntimeSkill(TypedDict):
-    """单个 Skill 的运行时信息。"""
-
-    name: str
-    description: str
-    path: str
-    tools: list[str]
-    mcps: list[str]
-    skills: list[str]
 
 
 async def sync_agent_context_skills(context) -> None:
@@ -48,7 +37,7 @@ async def resolve_runtime_skills_for_context(
     db: AsyncSession,
     user: User,
     agent=None,
-) -> dict:
+) -> SkillRuntimeSnapshot:
     """合并已选共享与全部个人 Skill，派生运行范围和预加载快照。"""
     selected = normalize_string_list(getattr(context, "skills", None))
     personal_items = await list_personal_skills(str(user.uid))
@@ -64,7 +53,7 @@ async def resolve_runtime_skills_for_context(
         if agent is None:
             raise PermissionError("智能体不存在或无权限访问")
         bound = await SkillRepository(db).get_by_bound_agent_id(agent.id)
-        previous = getattr(context, "_skill_runtime_snapshot", None)
+        previous = getattr(context, "skill_runtime_snapshot", None)
         if bound is not None and previous is not None:
             prepared_bound = {slug for slug, metadata in previous["skill_metadata"].items() if metadata["source_scope"] == "agent_bound"}
             # 执行边界只复核已准备绑定；中途新增绑定在下一 Run 生效。
@@ -170,19 +159,6 @@ def expand_skill_closure(
     for root in ordered_roots:
         dfs(root, set())
     return result
-
-
-def resolve_skill_gated_tools(context) -> list:
-    """解析所有可见 Skill 依赖且需注册到 ToolNode 的本地工具。"""
-    runtime_skills = getattr(context, "_skill_runtime_snapshot", {}).get("runtime_skills", {}) or {}
-    effective_skills = getattr(context, "_skill_runtime_snapshot", {}).get("effective_skills", []) or []
-    tool_names: set[str] = set()
-    for slug in effective_skills:
-        node = runtime_skills.get(slug) or {}
-        tool_names.update(node.get("tools", []))
-    if not tool_names:
-        return []
-    return [tool for tool in get_all_tool_instances() if tool.name in tool_names]
 
 
 def build_dependency_bundle(

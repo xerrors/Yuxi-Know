@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 
 import pytest
-from yuxi.modules.extensions.skills import draft as skill_draft
+from yuxi.modules.extensions.skills import install_draft as skill_draft
 from yuxi.modules.extensions.skills.package import copy_skill_tree_no_symlinks, validated_shared_skill_parts
 from yuxi.modules.identity.models import User
 

@@ -22,7 +22,7 @@ from yuxi.modules.agents.services.transport import (
     publish_worker_health,
 )
 from yuxi.modules.extensions.mcp.service import ensure_builtin_mcp_servers_in_db
-from yuxi.modules.extensions.skills.shared import init_builtin_skills
+from yuxi.modules.extensions.skills.builtin.sync import init_builtin_skills
 from yuxi.modules.identity.security import AuthUtils
 from yuxi.modules.schedules.service import claim_and_dispatch_due_jobs, recover_scheduled_dispatches
 from yuxi.workers.background_jobs import reconcile_and_publish_jobs

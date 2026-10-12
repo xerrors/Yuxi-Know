@@ -37,7 +37,7 @@ class Skill(Base):
     skill_dependencies = Column(JSON, nullable=False, default=list, comment="依赖的其他 skill slug 列表")
     dir_path = Column(String(512), nullable=False, comment="共享技能目录路径（相对 Skill 数据根目录）")
     version = Column(String(64), nullable=True, comment="技能版本（内置 skill 使用语义化版本）")
-    content_hash = Column(String(128), nullable=True, comment="技能目录内容哈希（内置 skill 安装时计算）")
+    content_hash = Column(String(128), nullable=True, comment="技能当前完整目录的统一 SHA256 内容摘要")
     share_config = Column(JSON_VALUE, nullable=False, comment="共享权限配置")
     enabled = Column(Boolean, nullable=False, default=True, comment="是否启用")
     created_by = Column(String(64), nullable=True)

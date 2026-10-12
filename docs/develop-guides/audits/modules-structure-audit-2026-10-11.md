@@ -48,29 +48,31 @@
 - **【待处理】** **"幂等预检 → 锁 → 锁后复查" 调用点级样板**在 agents 全部入口重复约 13 处（复核新增）——这不是抽 helper 能解决的，是入口协议没有抽象表达。
 - **【待处理】** **终态收敛序列三份**：`_finish_run`（runner.py:428）与 `_finish_user_cancel`（:466）之外，`process_agent_run` 的 committed 路径（:815-838）还有第三份内联副本，且内联版独有终态一致性断言（复核新增）。
 
-### 【待处理】模式 3：分层方向倒置与跨域循环
+### 【部分已完成】模式 3：分层方向倒置与跨域循环
 
 文件级真实 import 环仅 2 个（均在 options 聚合家族），但域级概念环遍布：
 
 - **【待处理】** **repositories 反向依赖 services**：`agents/repositories/input.py:14`、`feedback.py:10`、`definitions.py:364`（函数内引真实用例逻辑，构成实质倒置）；`knowledge/repositories/bases.py:8` 同型。未成环仅因被依赖模块恰是纯叶子。
-- **【待处理】** **靠函数内延迟 import 维持的环**：agents 域 14 处（cooperation ↔ inputs/turns/threads 双向）；knowledge 域 graphs ↔ implementations/milvus.py；skills 包内 shared ↔ content，skills ↔ tools 双向。新人无法区分"解环"与"惰性加载"——复核确认 agents 域 10+ 处延迟 import 中只有 1 处是真实解环。
+- **【待处理】** **靠函数内延迟 import 维持的环**：agents 域 14 处（cooperation ↔ inputs/turns/threads 双向）；knowledge 域 graphs ↔ implementations/milvus.py；**【已收敛】skills 包内 shared ↔ content，Skill 快照运行模块反向依赖工具注册；访问契约拆分与工具门控归属调整消除目标环**。新人无法区分"解环"与"惰性加载"——复核确认 agents 域 10+ 处延迟 import 中只有 1 处是真实解环。
 - **【待处理】** **modules → 进程适配层反向依赖**：`background_jobs/registry.py:46` import bootstrap 的 JOB_DEFINITIONS（纯字符串表，可直接放 registry）；`system/readiness.py:20`、`agents/services/transport.py:11` import `yuxi.workers.health` 的健康键常量；另 3 处 TYPE_CHECKING 引用。
 - **【待处理】** **平级域互相穿透**：`background_jobs/dispatch.py:8` 取 agents 域的 `get_arq_pool`（本质是 infrastructure 级 ARQ 池访问器）；`identity/repositories/users.py:112-115` 直接 DELETE schedules 域的 ORM 表（软删使 DB 级联永不触发，应用层删除确属必要，但删除策略被两域共同拥有）；`system/repositories/dashboard.py:10-14` 直接 select agents ORM 并跨域构造 AgentRepository。
 
-### 【待处理】模式 4：下划线私有属性构成跨域公共契约
+### 【已修复】模式 4：下划线私有属性构成跨域公共契约
 
 `BaseContext` 的真实运行时契约由 **12 个未声明的动态私有属性**构成，散布 6 个文件：`_skill_runtime_snapshot`（skills→agents 3 域消费，字符串 key 取裸 dict）、`_mcp_tool_servers`/`_registered_builtin_tool_names`（tools/runtime 写、skills 中间件防御性重写、authorization 读——**`getattr` 默认空值意味着属性缺失时工具检查静默放行（fail-open）**，复核加重的加重项）、`_enabled_mcps`（**命名与语义相反，存的是 disabled_tools 集合**，复核新增）。测试直接手工构造这些属性，证明它们已是事实上的公开契约。
 
-### 【待处理】模式 5：同名异义与命名失真
+**修复结果：运行派生字段在 Context 中声明且排除用户配置，Skill 快照具有类型；本地、middleware 和 MCP 来源显式登记。缺装配与未知工具拒绝，禁用集合更名为 `disabled_mcp_tools`，动态 MCP 沿用同一来源记录。**
 
-- **【待处理】** `KnowledgeBase` 同名三义（抽象执行器 / ORM 表 / 声明式基类）；`MilvusGraphService` 主体是 Neo4j Cypher；`modules/models` 域名与全仓 "models=ORM" 惯例撞车（ORM 被迫叫 tables.py，bootstrap 注册表 18 项里它是唯一例外）；`catalog`/`runtime` 在 extensions 两个子域与 agents.runtime 三方撞名，工具门控实现住在 skills/runtime.py 却被 tools/runtime.py 反向调用；`skills/draft.py` 是"安装暂存"不是"编辑草稿"；`events.py` 是读取端而 `event_writer.py` 才写 Redis；`messages.py` docstring 说"读取"但 2/3 是 Run 结算写路径；`skills` 域 `revision` 一词三种互不兼容语义（整目录哈希 / 单文件 sha256 / 根文件 SKILL.md sha256），router 层统一 409 不区分。
+### 【部分已完成】模式 5：同名异义与命名失真
+
+- **【待处理】** `KnowledgeBase` 同名三义（抽象执行器 / ORM 表 / 声明式基类）；`MilvusGraphService` 主体是 Neo4j Cypher；`modules/models` 域名与全仓 "models=ORM" 惯例撞车（ORM 被迫叫 tables.py，bootstrap 注册表 18 项里它是唯一例外）；`catalog`/`runtime` 在 extensions 两个子域与 agents.runtime 三方撞名，**【已收敛】工具门控归 tools/runtime，catalog/runtime 各自保留域命名空间；安装暂存更名 skills/install_draft.py**；`events.py` 是读取端而 `event_writer.py` 才写 Redis；`messages.py` docstring 说"读取"但 2/3 是 Run 结算写路径；**【复核保留】Skill 修订对应整包/单文件/根说明接口各自比较对象，目录算法已统一；409 是 HTTP 适配，领域冲突由服务返回，当前字段消费者与比较对象见 Skills 管理**。
 - **【待处理】** 16 个 repository 与 services 存在 4 对同名文件（definitions/public_items/references/state）；`repositories/state.py` 是唯一不接收 AsyncSession 的"仓储"（LangGraph checkpoint 包装）。
 
-### 【待处理】模式 6：路径与校验规则多处漂移
+### 【已收敛并复核保留】模式 6：路径与校验规则多处漂移
 
-- **【待处理】** 沙盒绝对路径规整三处实现宽严不一（`tool_approval.py:56` 拒 `..`/`\\`/`://`，`sandbox/backend.py:96` 仅拒 `..`，`sandbox/paths.py:47` 全拒）。
-- **【待处理】** workspace 路径校验 4 处各自实现（`://` 只有两处检查；子目录名校验三种机制三种错误类型；ELOOP 被翻译成两种异常）。
-- **【待处理】** **"用户可见路径" allowlist 三处手写且已漂移**（复核修正）：`present_artifacts.py` 缺 `..` 检查、`agents/services/artifacts.py` 缺 workdir 空值守卫、异常类型各异——`paths.py:88` 的 `is_runtime_path()` 已存在但无人复用。
+- **【已修复】** 沙盒绝对路径规整三处实现宽严不一（`tool_approval.py:56` 拒 `..`/`\\`/`://`，`sandbox/backend.py:96` 仅拒 `..`，`sandbox/paths.py:47` 全拒）。 **结果：共用 runtime 路径校验，直接 backend 与审批一致拒绝 `..`、URL、反斜杠和 NUL。**
+- **【已收敛并复核保留】** workspace 路径校验 4 处各自实现（`://` 只有两处检查；子目录名校验三种机制三种错误类型；ELOOP 被翻译成两种异常）。 **结果：scope 与目录名按 owning 文件边界共用；目录 fd 原语保留 ELOOP，普通文件与远端 wire 映射权限异常，差异见 [沙盒机制](../../mechanisms/sandbox.md#挂载和文件-owner)。**
+- **【已修复】** **"用户可见路径" allowlist 三处手写且已漂移**（复核修正）：`present_artifacts.py` 缺 `..` 检查、`agents/services/artifacts.py` 缺 workdir 空值守卫、异常类型各异——`paths.py:88` 的 `is_runtime_path()` 已存在但无人复用。 **结果：产物发布/读取共用 normalize_artifact_path，拒绝跳转与空绑定，保留 HTTP 领域异常和工具 ValueError 的入口表达。**
 
 ### 【部分已完成】模式 7：同一数据/契约的多份表示
 
@@ -132,13 +134,17 @@
 
 API Key 创建整个用例在 `api/routers/identity/users.py:150-200` 路由内（derive/commit/异常翻译），而 CLI 同构用例却由 `services/cli_auth.py:151-193` 拥有事务——同一"创建派生 API Key"两个 Owner；api_keys repository 的 update/delete 又自带 commit。部门 update、UserConfig.save 同型。**复核补充：`auth.py` 的用户 CRUD 全套（create_user :444-533、update_user、delete_user、update_profile、upload_avatar）同样整体无 service Owner**，规模大于原发现点名之和。对照域内 `administration.py`（正确示范）风格分裂。
 
-### 【待处理】H6. tools/runtime 与 skills 中间件的私有属性契约含 fail-open 缺口【复核确认高并加重】
+### 【已修复】H6. tools/runtime 与 skills 中间件的私有属性契约含 fail-open 缺口【复核确认高并加重】
 
 见模式 4。`authorization.py:73,76` 的 `getattr(context, "_mcp_tool_servers", {})` 默认值意味着任何绕过 `resolve_configured_runtime_tools` 构造 context 的路径，工具检查会**静默放行**而非拒绝。生产路径因初始化无条件执行而当前安全，但契约没有结构保证。
 
-### 【待处理】H7. skills/shared.py 是 633 行、6 类职责的依赖中心【复核确认高】
+**修复结果：工具检查要求来源与 Skill 快照完成装配；替代 Context 缺失字段或值为 None 均拒绝，已注册框架工具继续可用。**
+
+### 【已收敛并复核保留】H7. skills/shared.py 是 633 行、6 类职责的依赖中心【复核确认高】
 
 共享 Skill 用例、内置同步、运行时锁、权限原语、依赖校验、读取入口、路径工具全部在一个文件，且是包内依赖中心（与其他 15 个文件互相纠缠）；包内唯一没有模块 docstring 的文件之一。"内置 Skill 同步"在 `builtin/` 目录里找不到——在 shared.py 里。
+
+**收敛结果：access 拥有权限、依赖及带锁读取，builtin/sync 拥有内置同步，shared 保留共享安装与治理用例，content 拥有不可变内容发布；包内消费者直接使用职责 Owner。现有扩展/测试的 shared 显式导出保留，依据见 [Skills 管理](../../agents/skills-management.md#运行时文件行为)。**
 
 ### 【待处理】H8. knowledge 图层复制了实现层的存储装配知识【复核确认高并扩展】
 
@@ -182,10 +188,10 @@ API Key 创建整个用例在 `api/routers/identity/users.py:150-200` 路由内�
 - **【待处理】** `repositories/` 事务归属两种模型并存（12 处自行 commit vs 13 文件绑定调用方事务）；`commit: bool = True` 默认值当前零使用（三个调用点都显式传 False）——未引爆的脚枪；`mark_thread_viewed`/`ensure_default_agent` 在用例/路由流程中真实内部提交。
 - **【待处理】** repositories 之间内联互构（`definitions.py:350,416` 构造 UserRepository、两个 audit repository 各自构造 AgentRunRepository、sessions/public_items 方法内构造他仓储），锁序契约无静态表达。
 - **【待处理】** cooperation 与核心生命周期双向依赖、14 处延迟 import；`_stream_agent_execution`（execution.py:446-651）约 200 行混合事件路由/steer 循环/checkpoint 提取/收尾，是本域可读性最差单点。
-- **【待处理】** `middlewares/summary.py` sync/async 两份 65 行压缩流程（复核否定了"框架固有权衡"辩护：其他中间件同步份只有 3-6 行；且 sync 版生产不可达、缺授权调用）；三个近似摘要函数仅一词之差。
-- **【待处理】** `sandbox/provider.py` 绕过 AgentEnvRepository 裸 psycopg 读 agent_envs（同步上下文约束可辩护，但同表两条读取路径 + 连接串规整两份属实）。
+- **【已收敛】** `middlewares/summary.py` sync/async 两份 65 行压缩流程（复核否定了"框架固有权衡"辩护：其他中间件同步份只有 3-6 行；且 sync 版生产不可达、缺授权调用）；三个近似摘要函数仅一词之差。 **结果：正式自动/主动/溢出链路共用异步摘要请求与授权；同步入口明确拒绝，原测试消费者迁移后保留原业务断言。**
+- **【已收敛】** 沙盒同步配置读取归到 AgentEnvRepository，provider 消费仓储结果；异步 API 与同步沙盒保留各自执行方式，读取同一 PG 用户记录。连接串驱动转换由 PostgreSQL 基础设施拥有，三种 URL 的缺失、替换、删除和失败已真实验证。
 - **【待处理】** `Workspace` 与 `ProvisionerSandboxBackend` 平行实现同名 `*_authorized_*` 五组契约，签名各异、无共享协议；`extensions/tools/knowledge/tools.py:262` 直接实例化他域 backend。
-- **【待处理】** `BaseContext` 12 个动态私有属性（模式 4）。
+- **【已修复】** `BaseContext` 12 个动态私有属性（模式 4）；运行字段已声明，快照类型及初始化规则明确。
 - **【待处理】** `run_type` 校验后残留不可达 else；`stream_agent_chat/resume` 纯透传双胞胎；连续两次空 commit；用户加载四种写法两种过滤口径（inputs.py:93 **与 ：343** 均无 is_deleted 过滤）；投递 ARQ 两条惯例（messages.py:580 绕过 deliver）；游标分页骨架 4 份复制。
 - **【待处理】** events/messages 命名错位（"events.py 只读、event_writer 才写 Redis"这一误解正是任务下发时分析者自己踩的坑——命名误导的直接证据）。
 
@@ -204,9 +210,9 @@ API Key 创建整个用例在 `api/routers/identity/users.py:150-200` 路由内�
 
 **extensions 域**
 
-- **【待处理】** skills：shared↔content 循环、skills↔tools 双向依赖（第二处环，复核新增）；`_skill_runtime_snapshot` 无类型 dict 契约；ResolvedSkill 来源三重表述 + 方向相反的双布尔；投影刷新"按 slug 删除却按 uid 全量重建"的粒度不对称（吞异常侧有文档化补偿机制，属有意取舍）；两套目录哈希算法同写 `content_hash` 列且列注释失实；远程安装双管线；"临时目录+原子 rename"五处手写回滚语义各异；ADMIN_ROLES 四处定义。
-- **【部分已完成】** tools：**【已清理】`tools/utils.py` 整文件**（活版本在 catalog）；debug/ 空壳目录以"自动注册"名义被导入；**【已完成复核与清理】MCP 无消费入口与导出**（单服务器工具加载有当前消费者，保留）；web_search 绕过 @tool 直改注册表私有全局（且 `get_all_tool_instances()` 返回可变全局活引用——复核新增的根因）；`get_common_kb_tools` 及 KB 工具包级导出零消费；同包两套 sandbox scope 解析回退语义不同；catalog 缓存版/现算版两套读模型；`mark_for_improvement` 的 category="runtime" 无任何后端过滤、前端将裸渲染标签。
-- **【待处理】** mcp：runtime docstring 声称的参数不存在；"Global Cache & State"注释段无实体；同一 warning 文案三处。
+- **【已收敛并复核保留】** skills：shared↔content 与 Skill 运行快照→工具注册的反向依赖已消除；SkillRuntimeSnapshot/RuntimeSkill 声明契约；内置与包 content_hash 共用目录/可执行位算法并修正注释；ADMIN_ROLES 使用身份权限叶子常量；安装暂存更名 install_draft。ResolvedSkill 来源字段和两张卡片的覆盖标记、uid 全集合投影补偿、不同发布点的覆盖/撤权回滚规则保留，均有当前消费者。远程安装和草稿已经共用 download_remote_skills，双下载管线结论不成立。来源/修订比较对象与保留理由见 [Skills 管理](../../agents/skills-management.md#运行时文件行为)。
+- **【部分已完成】** tools：**【已清理】tools/utils.py、debug 空壳注册导入与确认无消费者的 MCP 导出**；**【已修复】web_search 通过 registry 公共注册、返回容器/元数据独立、catalog 现读注册单一来源**；**【已修复】sandbox scope 只读取 Context，共用身份解析**；**【复核保留】get_common_kb_tools 与知识库包导出**（[工具系统](../../agents/tools-system.md#知识库工具)拥有正式 Python 扩展消费者）；**【待处理，Step 9】mark_for_improvement 的 runtime category 展示。**
+- **【已清理】** mcp：工具加载 docstring 与真实参数一致，删除没有实体的 Global Cache & State 注释，缺失/停用 warning 由客户端加载边界统一表达。
 
 **workspace + identity 域**
 
@@ -214,8 +220,8 @@ API Key 创建整个用例在 `api/routers/identity/users.py:150-200` 路由内�
 - **【部分已完成】** identity/oidc.py：**【已修复】6 处领域 HTTPException**（模式 1）；service 平铺顶层及 import 时固化配置单例仍待处理（复核修正：services/oidc.py 拥有事务与登录编排，剩余问题是用例归属 :95；异常风格已统一）。
 - **【待处理】** 登录响应三处手写、avatar 归一化分歧（影响面：OIDC 登录且已设头像用户，复核降为中）。
 - **【待处理】** `verify_api_key` 内联重写 `APIKey.is_valid()` 三条判断（Public API 安全路径）。
-- **【待处理】** 三种跨层路径之外存在第四种表示（UserWorkspace scope 绝对路径），DB 相对路径→Workdir scope→workspace scope→runtime 虚拟路径四次形态转换；Workdir 15 个方法 12 个单行转发而个人工作区服务完全绕过它；`relative_path`/`root_path`/`workdir_path` 同值三名。
-- **【待处理】** 路径/子目录名校验 4-5 处漂移（模式 6）；files.py/viewer.py 重复异常翻译 18 处、条目组装与二次排序各两份。
+- **【复核保留】** 四种路径表示分别对应 DB 相对标识、Workdir 浏览、uid Workspace 与 runtime 虚拟空间，转换由路径 Owner 明确提供；Workdir 转发将已绑定根附加到每次文件操作，Viewer 使用受限 capability，个人工作区使用 uid 根。relative_path/root_path/workdir_path 分别指相对标识、浏览根与持久绑定，不能混用；依据见 [沙盒机制](../../mechanisms/sandbox.md#挂载和文件-owner)。
+- **【已收敛并复核保留】** 路径与子目录名共用 owning 校验；files/viewer 条目共同字段和目录优先排序共用 file_entries。异常表达保留用例差异：个人树缺失返回空列表、已绑定 Viewer 缺失返回 404；上传批次回滚、冲突和预览策略由各 service 拥有。不同物理文件协议不新增无人消费的统一抽象。
 - **【待处理】** OIDC state/login_code 存进程内存 dict（当前单 uvicorn 进程，扩多 worker 即静默失效）；`exchange_code_for_token` 方法名遮蔽导入函数。
 - **【待处理】** resource_ownership.py 让基础身份域反向编排三个资源域（方向问题，非明文违规）。
 
@@ -286,13 +292,13 @@ API Key 创建整个用例在 `api/routers/identity/users.py:150-200` 路由内�
 | 2 | 已完成 | D1–D9：复核与必要修复，`1432b719`；D1 不成立，D9 成因更正 |
 | 3 | 已完成 | 模式 1：领域异常与 HTTP 表达分离，`a17c1503` |
 | 4 | 已完成 | H1/H2：资源准备与刷新共用、投影成本收敛，`f088bc28` |
-| 5 | 待处理 | 运行与扩展边界：Context、授权、路径、摘要、Skill、工具及沙盒配置读取 |
+| 5 | 已完成 | 运行与扩展边界：Context、授权、路径、摘要、Skill、工具及沙盒配置读取 |
 | 6 | 待处理 | Agent 事务与生命周期：幂等、Run 创建/恢复/终态、消息与用例分层 |
 | 7 | 待处理 | 身份用例：API Key、用户/部门/配置、登录/OIDC 与事务归属 |
 | 8 | 待处理 | 知识链路：存储装配、数据表示、管理/删除/统计、图谱/评估/分块与性能 |
 | 9 | 待处理 | 共享技术与跨域依赖：进程适配、模型/缓存、剩余命名及整份审计闭合 |
 
-### Step 5：【待处理】运行、Skill 与工具边界一起收敛
+### Step 5：【已完成】运行、Skill 与工具边界一起收敛
 
 覆盖 H6/H7、模式 4/6，以及 agents/extensions/workspace 对同一运行契约的重复实现。声明 Skill 快照、工具来源、注册集合和 MCP 禁用集合的初始化与消费规则，缺失必要装配时拒绝执行；一起处理 `_enabled_mcps` 命名、注册表可变活引用、web_search 私有注册、catalog 两套读模型及 MCP 的失实注释/重复文案。H1/H2 已保留的输入、实际请求与返回身份检查继续有效。
 
@@ -301,6 +307,10 @@ API Key 创建整个用例在 `api/routers/identity/users.py:150-200` 路由内�
 路径部分覆盖 runtime 与 UserWorkspace 的各自校验、子目录名、异常翻译、文件条目组装/排序、Workspace/Provisioner 文件协议、sandbox scope、产物发布/读取及 Workdir 转发。各路径空间在其 owning boundary 校验，通过明确转换连接；同时核对 `..`、URL、空绑定、符号链接、ELOOP。沙盒 provider 的裸 psycopg 读取、AgentEnvRepository 归属与连接串规整一起处理，保留同步消费者所需的执行边界。相关的 runtime/catalog/draft 命名、空 facade、死参数及文档在此组收尾。
 
 验收：真实 HTTP/PG/文件与正式图、worker、Docker 沙盒验证合法工具、动态 Skill/MCP、未注册/未激活/禁用工具、替代 Context 缺失装配、撤权与路径隔离。回读主动/自动摘要、溢出与撤权边界的历史/checkpoint，以及安装失败回滚、编辑冲突和投影字节；provider 用真实 PG 对照 AgentEnvRepository，验证不同连接 URL、缺失/删除配置与同步启动行为；同步/删除入口核对消费者，修订比较对象明确，目录读取不能修改全局注册结果。新拒绝边界有能恢复目标缺陷的负例。
+
+完成结果：H6、Context 与路径缺口已修复；Skill 职责/目录哈希/工具来源与读目录收敛；有当前消费者的来源、修订、投影、文件协议和回滚差异已逐项写明保留依据。实现与取舍见[运行扩展边界决定](../decisions/implemented/2026-10-12-runtime-extension-contracts.md)。
+
+验证：隔离 Compose 的完整 non-slow unit **2700 passed、60 skipped**；相关真实 PG/HTTP integration **93 passed**；worker、Docker 沙盒、撤权与专属 Skill E2E **15 passed**，个人 Skill 的确定性真实读取 E2E 单独复验 **1 passed**。个人场景原先依赖环境默认模型，没有产生输出；测试改为明确注册本地 HTTP 回放，保留最终输出、Run 清单、来源字节与无共享投影的独立断言。六组隔离缺陷恢复各自在业务断言上变红，恢复修复后 22 项通过。工程契约与 64 项 unit、变更 Python Ruff、相对链接/docs build 和 diff 检查通过；全新独立 Review 在提交前核对最终候选。真实远程源故障恢复、Kubernetes 与生产部署未运行，unit skip 不记为通过。
 
 ### Step 6：【待处理】Agent 事务与生命周期一起收敛
 

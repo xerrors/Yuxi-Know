@@ -14,7 +14,6 @@ from deepagents.middleware.summarization import (
     ContextOverflowError,
     SummarizationMiddleware,
     _aclip_overflow_tail,
-    _clip_overflow_tail,
 )
 from langchain.agents.middleware.summarization import ContextSize
 from langchain.agents.middleware.types import ExtendedModelResponse, ModelRequest, ModelResponse
@@ -69,20 +68,8 @@ class YuxiSummarizationMiddleware(SummarizationMiddleware):
         request: ModelRequest,
         handler: Callable[[ModelRequest], ModelResponse],
     ) -> ModelResponse:
-        """同步执行单阈值压缩流程。"""
-        compression_state: dict[str, bool] = {"started": False}
-        compression_token = _SUMMARY_COMPRESSION_STATE.set(compression_state)
-        try:
-            try:
-                result = self._wrap_model_call_with_compaction(request, handler)
-            except Exception as exc:
-                if compression_state["started"]:
-                    _emit_compression("failed", error=repr(exc))
-                raise
-            self._emit_completed(result)
-            return result
-        finally:
-            _SUMMARY_COMPRESSION_STATE.reset(compression_token)
+        """同步入口不能执行依赖异步授权池的摘要流程。"""
+        raise RuntimeError("Yuxi 摘要仅支持异步调用，请使用 awrap_model_call")
 
     async def awrap_model_call(
         self,
@@ -132,7 +119,7 @@ class YuxiSummarizationMiddleware(SummarizationMiddleware):
         file_path = await self._aoffload_to_backend(self._backend, offloaded_messages, session_id)
         if file_path is None:
             raise RuntimeError("主动压缩无法保存可恢复的对话历史")
-        summary = await self._acreate_summary_or_raise(offloaded_messages)
+        summary = await self._acreate_summary(offloaded_messages, forced=True)
         if failed_media:
             logger.warning(
                 "Conversation history offloaded to %s, but %d media block(s) could not be offloaded.",
@@ -159,72 +146,6 @@ class YuxiSummarizationMiddleware(SummarizationMiddleware):
             "compressed_messages": cutoff_index,
             "file_path": file_path,
         }
-
-    def _wrap_model_call_with_compaction(
-        self,
-        request: ModelRequest,
-        handler: Callable[[ModelRequest], ModelResponse],
-    ) -> ModelResponse | ExtendedModelResponse:
-        effective_messages = self._get_effective_messages(request)
-        total_tokens = self._count_tokens(effective_messages, request.system_message, request.tools)
-        truncated_messages, _ = self._truncate_args(effective_messages, total_tokens)
-        should_compact = self._should_summarize(truncated_messages, total_tokens)
-
-        overflow_triggered = False
-        if not should_compact:
-            try:
-                return handler(request.override(messages=truncated_messages))
-            except ContextOverflowError:
-                overflow_triggered = True
-
-        compacted_messages = self._compact_messages(truncated_messages)
-        if should_compact:
-            _emit_compression_started_once()
-
-        compacted_tokens = self._count_tokens(compacted_messages, request.system_message, request.tools)
-        pressure_threshold = self._entry_trigger_tokens()
-        should_summarize = overflow_triggered or pressure_threshold is None or compacted_tokens >= pressure_threshold
-        if not should_summarize:
-            try:
-                response = handler(request.override(messages=compacted_messages))
-            except ContextOverflowError:
-                overflow_triggered = True
-            else:
-                _emit_compression("completed")
-                return response
-
-        cutoff_index = self._determine_cutoff_index(compacted_messages)
-        if cutoff_index <= 0:
-            response = handler(request.override(messages=compacted_messages))
-            if should_compact:
-                _emit_compression("completed")
-            return response
-
-        messages_to_summarize, preserved_messages = self._partition_messages(compacted_messages, cutoff_index)
-        new_state_tail: list[AnyMessage] = []
-        if overflow_triggered:
-            preserved_messages, new_state_tail = _clip_overflow_tail(
-                preserved_messages,
-                self._backend,
-                keep=self._lc_helper.keep,
-                max_input_tokens=self._get_profile_limits(),
-                token_counter=self.token_counter,
-                large_tool_results_prefix=self._large_tool_results_prefix,
-            )
-
-        offloaded_messages, failed_media = self._offload_inline_media(self._backend, messages_to_summarize)
-        session_id = self._get_session_id(request.state)
-        file_path = self._offload_to_backend(self._backend, offloaded_messages, session_id)
-        self._require_offload_result(file_path, failed_media)
-
-        summary = self._create_summary(offloaded_messages)
-        new_messages = self._build_new_messages_with_path(summary, file_path)
-        new_event = self._build_summary_event(request.state, cutoff_index, new_messages[0], file_path)
-        response = handler(request.override(messages=[*new_messages, *preserved_messages]))
-        return ExtendedModelResponse(
-            model_response=response,
-            command=Command(update=self._build_state_update(new_event, session_id, new_state_tail)),
-        )
 
     async def _awrap_model_call_with_compaction(
         self,
@@ -355,30 +276,11 @@ class YuxiSummarizationMiddleware(SummarizationMiddleware):
             return None
         return self._lc_helper.summary_prompt.format(messages=get_buffer_string(trimmed, format="xml")).rstrip()
 
-    def _create_summary(self, messages: list[AnyMessage]) -> str:
+    async def _acreate_summary(self, messages: list[AnyMessage], *, forced: bool = False) -> str:
+        """共用实际摘要请求，保留主动与自动入口的空历史提示。"""
         prompt = self._build_summary_prompt(messages) if messages else None
         if prompt is None:
-            raise RuntimeError("没有可供自动压缩的对话历史")
-        summary = self.model.invoke(prompt, config=self._SUMMARY_INVOKE_CONFIG).text.strip()
-        if not summary:
-            raise RuntimeError("摘要模型返回空内容")
-        return summary
-
-    async def _acreate_summary(self, messages: list[AnyMessage]) -> str:
-        prompt = self._build_summary_prompt(messages) if messages else None
-        if prompt is None:
-            raise RuntimeError("没有可供自动压缩的对话历史")
-        await self._authorize_summary_request()
-        response = await self.model.ainvoke(prompt, config=self._SUMMARY_INVOKE_CONFIG)
-        summary = response.text.strip()
-        if not summary:
-            raise RuntimeError("摘要模型返回空内容")
-        return summary
-
-    async def _acreate_summary_or_raise(self, messages: list[AnyMessage]) -> str:
-        prompt = self._build_summary_prompt(messages) if messages else None
-        if prompt is None:
-            raise RuntimeError("没有可供主动压缩的对话历史")
+            raise RuntimeError("没有可供主动压缩的对话历史" if forced else "没有可供自动压缩的对话历史")
         await self._authorize_summary_request()
         response = await self.model.ainvoke(prompt, config=self._SUMMARY_INVOKE_CONFIG)
         summary = response.text.strip()

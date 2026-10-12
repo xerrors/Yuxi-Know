@@ -1,17 +1,19 @@
-"""迁移后的职责模块。"""
+"""装配当前运行可执行的本地、Skill 与 MCP 工具及来源。"""
 
 from typing import Any
 
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.modules.extensions.tools.builtin import BASE_TOOL_NAMES
 from yuxi.modules.extensions.tools.catalog import get_tool_instances_by_category
+from yuxi.modules.extensions.tools.registry import get_all_tool_instances
 
 
 async def resolve_configured_runtime_tools(context) -> list[Any]:
+    """构图前装配工具并记录授权检查使用的真实来源。"""
     from yuxi.modules.extensions.mcp.service import get_enabled_mcp_tools
 
-    context._mcp_tool_servers = {}
-    context._registered_builtin_tool_names = set()
+    context.mcp_tool_servers = {}
+    context.registered_builtin_tool_names = set()
     selected_tools = []
     selected_tool_names: set[str] = set()
     selected_tool_sources: dict[str, str] = {}
@@ -27,7 +29,7 @@ async def resolve_configured_runtime_tools(context) -> list[Any]:
         selected_tools.append(tool)
         selected_tool_names.add(tool_name)
         selected_tool_sources[tool_name] = "local"
-        context._registered_builtin_tool_names.add(tool_name)
+        context.registered_builtin_tool_names.add(tool_name)
 
     # 去重后的 MCP server 列表(保持配置顺序)
     selected_mcp_servers: set[str] = set()
@@ -58,13 +60,11 @@ async def resolve_configured_runtime_tools(context) -> list[Any]:
             selected_tools.append(tool)
             selected_tool_names.add(tool.name)
             selected_tool_sources[tool.name] = f"MCP '{server_name}'"
-            context._mcp_tool_servers[tool.name] = server_name
+            context.mcp_tool_servers[tool.name] = server_name
 
     # Skill 依赖的本地工具：必须随基础工具一起注册进 create_agent 的 ToolNode 才可执行，
     # 否则 Skill 激活后模型虽能发起调用，执行器仍报 "not a valid tool"。
     # 默认绑定给模型的可见性由 SkillsMiddleware 按 Skill 激活状态门控（保持按需加载）。
-    from yuxi.modules.extensions.skills.runtime import resolve_skill_gated_tools
-
     for tool in resolve_skill_gated_tools(context):
         if tool.name in selected_tool_names:
             if selected_tool_sources[tool.name] != "local":
@@ -74,6 +74,19 @@ async def resolve_configured_runtime_tools(context) -> list[Any]:
         selected_tools.append(tool)
         selected_tool_names.add(tool.name)
         selected_tool_sources[tool.name] = "local"
-        context._registered_builtin_tool_names.add(tool.name)
+        context.registered_builtin_tool_names.add(tool.name)
 
     return selected_tools
+
+
+def resolve_skill_gated_tools(context) -> list:
+    """解析所有可见 Skill 依赖且需注册到 ToolNode 的本地工具。"""
+    runtime_skills = (getattr(context, "skill_runtime_snapshot", None) or {}).get("runtime_skills", {}) or {}
+    effective_skills = (getattr(context, "skill_runtime_snapshot", None) or {}).get("effective_skills", []) or []
+    tool_names: set[str] = set()
+    for slug in effective_skills:
+        node = runtime_skills.get(slug) or {}
+        tool_names.update(node.get("tools", []))
+    if not tool_names:
+        return []
+    return [tool for tool in get_all_tool_instances() if tool.name in tool_names]

@@ -16,7 +16,6 @@ from yuxi.infrastructure.office_conversion import (
     is_office_pdf_convertible,
 )
 from yuxi.modules.agents.runtime.sandbox.paths import (
-    VIRTUAL_PATH_PREFIX,
     VIRTUAL_SKILLS_PATH,
     is_runtime_path,
     runtime_user_data_path,
@@ -24,9 +23,10 @@ from yuxi.modules.agents.runtime.sandbox.paths import (
 )
 from yuxi.modules.extensions.skills.edit import open_shared_skill_dir
 from yuxi.modules.extensions.skills.models import Skill
-from yuxi.modules.extensions.skills.shared import lock_accessible_shared_skill_for_file
+from yuxi.modules.extensions.skills.access import lock_accessible_shared_skill_for_file
 from yuxi.modules.identity.repositories.users import UserRepository
 from yuxi.modules.workspace.errors import FileTransferLimitError
+from yuxi.modules.agents.runtime.sandbox.paths import normalize_artifact_path
 from yuxi.modules.workspace.services.bindings import resolve_authorized_workdir
 from yuxi.shared.errors import (
     ContentTooLargeError,
@@ -44,15 +44,11 @@ DEFAULT_ARTIFACT_DESTINATION = "/saved_artifacts"
 
 
 def _normalize_artifact_path(workdir_path: str, path: str) -> str:
-    raw = str(path or "").strip()
-    normalized = str(PurePosixPath(raw if raw.startswith("/") else f"/{raw}"))
-    if ".." in PurePosixPath(raw).parts:
-        raise PermissionDeniedError("access denied")
-    allowed = normalized.startswith(f"{workdir_path}/") or normalized.startswith(f"{VIRTUAL_PATH_PREFIX.rstrip('/')}/")
-    allowed = allowed or normalized.startswith(f"{VIRTUAL_SKILLS_PATH}/")
-    if not allowed:
-        raise PermissionDeniedError("artifact is outside the current user's visible roots")
-    return normalized
+    """以共同 runtime 规则验证产物，领域层保留拒绝契约。"""
+    try:
+        return normalize_artifact_path(workdir_path, path)
+    except ValueError as exc:
+        raise PermissionDeniedError(str(exc)) from exc
 
 
 async def _require_skill_artifact_access(*, normalized_path: str, current_uid: str, db) -> tuple[Skill, str] | None:

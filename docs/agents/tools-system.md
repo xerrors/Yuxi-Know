@@ -21,6 +21,8 @@ def example_tool(text: str) -> str:
 - `display_name` 是给用户看的名称，工具 ID 是给代码和模型协议使用的稳定名称；
 - 内置工具模块由 `yuxi.modules.extensions.tools.builtin` 包显式导入，装饰器在进程加载时执行注册。
 
+供应商或已构造的 BaseTool 使用 registry 的 `register_tool(tool, ToolExtraMetadata(...))` 登记。registry 返回独立的列表和附加元数据，catalog 每次从当前注册派生独立目录；后续注册立即可见。列表内的 BaseTool 仍是执行实例，读取者不得修改它的执行配置。
+
 工具的注册不等于授权。产生文件、网络或数据库副作用的工具必须在执行边界再次校验当前用户和目标资源。
 
 ## 当前内置能力

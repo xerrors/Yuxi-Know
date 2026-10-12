@@ -24,6 +24,7 @@ from yuxi.modules.identity.permissions import ResourcePermission, normalize_perm
 from yuxi.modules.identity.repositories.users import UserRepository
 from yuxi.modules.identity.services.resource_grants import validate_shared_grants
 from yuxi.shared.datetime import utc_now
+from yuxi.modules.identity.permissions.resource_permission import ADMIN_ROLES
 
 DEFAULT_AGENT_SLUG = DEFAULT_AGENT.slug
 DEFAULT_AGENT_NAME = DEFAULT_AGENT.name
@@ -34,8 +35,6 @@ DEFAULT_SHARE_CONFIG = {
     "read_scope": {"access_level": "global", "department_ids": [], "user_uids": []},
     "manage_scope": None,
 }
-
-ADMIN_ROLES = {"admin", "superadmin"}
 
 
 def is_builtin_agent(agent: Agent) -> bool:

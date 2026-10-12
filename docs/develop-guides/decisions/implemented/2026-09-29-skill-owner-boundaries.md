@@ -12,7 +12,7 @@ Owner：backend/yuxi/modules/extensions/skills/projection.py
 
 ### 实现方案
 
-个人 Skill 的草稿确认、列举、安装、读取与删除由 `backend/yuxi/modules/extensions/skills/personal.py` 负责，用户工作区根由 `modules/workspace/paths.py` 提供。个人安装沿用包内 slug，不查询或分配共享数据库 slug。共享 Skill 的业务索引和安装保留在 `backend/yuxi/modules/extensions/skills/shared.py`；包格式解析位于 `backend/yuxi/modules/extensions/skills/package.py`，上传与远程暂存位于 `backend/yuxi/modules/extensions/skills/draft.py`，草稿读取与筛选位于 `backend/yuxi/modules/extensions/skills/draft.py`。
+个人 Skill 的草稿确认、列举、安装、读取与删除由 `backend/yuxi/modules/extensions/skills/personal.py` 负责，用户工作区根由 `modules/workspace/paths.py` 提供。个人安装沿用包内 slug，不查询或分配共享数据库 slug。共享 Skill 的业务索引和安装保留在 `backend/yuxi/modules/extensions/skills/shared.py`；包格式解析位于 `backend/yuxi/modules/extensions/skills/package.py`，上传与远程暂存位于 `backend/yuxi/modules/extensions/skills/install_draft.py`，草稿读取与筛选位于 `backend/yuxi/modules/extensions/skills/install_draft.py`。
 
 共享文件入口由 `backend/yuxi/modules/extensions/skills/edit.py` 持有：先锁定共享数据库行并重查权限，再从可信根逐层 no-follow 打开目录和普通文件。文件、依赖与节点 HTTP 写入保留已公开的修订契约，全部交给 content.py 准备完整不可变包并提交数据库引用；失败不会修改当前包，不再暂存节点或恢复原文件。内容提交的职责与清理由[完整内容提交决定](./2026-10-05-skill-content-commit.md)拥有。Artifact 下载只使用已授权的共享行定位文件，不经个人同名覆盖。
 

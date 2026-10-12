@@ -1,9 +1,8 @@
+from yuxi.modules.extensions.tools.registry import _all_tool_instances, _extra_registry
 from unittest.mock import MagicMock, patch
 
 from yuxi.modules.extensions.tools.builtin.web_search import (
-    _all_tool_instances,
     _create_doubao_search,
-    _extra_registry,
     _register_web_search_tool,
 )
 

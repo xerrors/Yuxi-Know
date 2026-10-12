@@ -30,7 +30,7 @@ from yuxi.modules.extensions.skills.package import (
     validated_skill_file_parts,
 )
 from yuxi.modules.extensions.skills.repository import SkillRepository
-from yuxi.modules.extensions.skills.shared import (
+from yuxi.modules.extensions.skills.access import (
     get_manageable_skill_or_raise,
     is_builtin_skill,
     validate_skill_dependencies,

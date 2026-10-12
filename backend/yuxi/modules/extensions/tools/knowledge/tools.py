@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.modules.agents.runtime.sandbox import ProvisionerSandboxBackend
+from yuxi.modules.extensions.tools.builtin.sandbox_scope import resolve_runtime_sandbox_scope, runtime_scope_value
 from yuxi.modules.extensions.tools.registry import tool
 from yuxi.modules.knowledge.schemas import FindInputSchema, OpenInputSchema, SearchFileInput, SearchInputSchema
 from yuxi.modules.knowledge.services import tools as knowledge_tools
@@ -332,21 +333,12 @@ def _find_query_target(
 
 def _runtime_sandbox_scope(runtime: ToolRuntime | None) -> tuple[str, str, str, str] | None:
     """返回知识库下载使用的 runtime、用户和 Workdir 路径。"""
-    context = getattr(runtime, "context", None) if runtime else None
-    if context is None:
+    try:
+        runtime_id, uid, relative_path = resolve_runtime_sandbox_scope(runtime)
+    except ValueError:
         return None
-    runtime_thread_id = getattr(context, "runtime_scope_id", None) or getattr(context, "thread_id", None)
-    uid = getattr(context, "uid", None)
-    workdir_relative_path = getattr(context, "workdir_relative_path", None)
-    workdir_path = getattr(context, "workdir_path", None)
-    if not runtime_thread_id or not uid or not workdir_relative_path or not workdir_path:
-        return None
-    return (
-        str(runtime_thread_id),
-        str(uid),
-        str(workdir_relative_path),
-        str(workdir_path),
-    )
+    workdir_path = runtime_scope_value(runtime, "workdir_path")
+    return (runtime_id, uid, relative_path, workdir_path) if workdir_path else None
 
 
 def _resolve_download_output_path(

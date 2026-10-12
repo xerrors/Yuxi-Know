@@ -276,7 +276,7 @@ async def test_empty_selected_config_stays_frozen_when_target_changes(tree, monk
     async def prepare(context):
         """隔离工作区和 Skill 解析，保留真实执行配置装配。"""
         context._runtime_prepared = True
-        context._skill_runtime_snapshot = {"preloaded_skills": [], "preloaded_skill_contents": {}, "skill_metadata": {}}
+        context.skill_runtime_snapshot = {"preloaded_skills": [], "preloaded_skill_contents": {}, "skill_metadata": {}}
         return context
 
     monkeypatch.setattr("yuxi.modules.agents.services.preparation.prepare_agent_runtime_context", prepare)

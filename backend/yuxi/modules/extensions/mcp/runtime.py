@@ -69,7 +69,7 @@ async def get_mcp_tools(
 
     Args:
         server_slug: Server slug
-        additional_servers: Additional server configurations
+        server_config: 当前服务器的远端配置
         disabled_tools: List of tool names to filter out from the RETURN value (does not affect cache)
         cache: Whether to use/update the cache (default: True)
         force_refresh: Whether to force a refresh from the server (default: False)

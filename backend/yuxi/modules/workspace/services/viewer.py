@@ -15,6 +15,7 @@ from yuxi.modules.workspace.errors import FileTransferLimitError
 from yuxi.modules.workspace.preview import preview_workspace_file
 from yuxi.modules.workspace.services.bindings import AuthorizedWorkdir, resolve_authorized_workdir
 from yuxi.shared.datetime import utc_isoformat_from_timestamp
+from yuxi.modules.workspace.services.file_entries import file_entry, sort_file_entries
 from yuxi.shared.errors import ContentTooLargeError, InvalidOperationError, PermissionDeniedError, ResourceNotFoundError, StateConflictError
 from yuxi.shared.files import MAX_FILE_PREVIEW_BYTES, FileInput, PreparedFile, PreviewResult, detect_media_type
 
@@ -46,16 +47,10 @@ def _entry(access: AuthorizedWorkdir, parent_scope: str, item: dict) -> dict:
     scope = f"{parent_scope.rstrip('/')}/{item['name']}"
     if not scope.startswith("/"):
         scope = f"/{scope}"
-    is_dir = bool(item.get("is_dir"))
+    entry = file_entry(scope, item)
     runtime_path = runtime_path_for_workdir_scope(access.workdir_path, scope)
-    return {
-        "path": f"{scope}/" if is_dir else scope,
-        "name": str(item["name"]),
-        "is_dir": is_dir,
-        "size": int(item.get("size") or 0),
-        "modified_at": utc_isoformat_from_timestamp(float(item.get("modified_at") or 0)) or "",
-        "artifact_url": (None if is_dir else f"/api/v1/agents/sessions/{access.thread_id}/artifacts/{runtime_path.lstrip('/')}"),
-    }
+    entry["artifact_url"] = None if entry["is_dir"] else f"/api/v1/agents/sessions/{access.thread_id}/artifacts/{runtime_path.lstrip('/')}"
+    return entry
 
 
 async def _list_directory(access: AuthorizedWorkdir, scope: str) -> list[dict]:
@@ -68,10 +63,7 @@ async def _list_directory(access: AuthorizedWorkdir, scope: str) -> list[dict]:
         raise PermissionDeniedError("Access denied") from exc
     except (FileNotFoundError, NotADirectoryError, ValueError) as exc:
         raise ResourceNotFoundError("目录不存在") from exc
-    return sorted(
-        (_entry(access, scope, item) for item in items),
-        key=lambda item: (not item["is_dir"], item["name"].lower()),
-    )
+    return sort_file_entries(_entry(access, scope, item) for item in items)
 
 
 async def list_viewer_filesystem_tree(*, thread_id: str, path: str, current_user, db) -> dict:

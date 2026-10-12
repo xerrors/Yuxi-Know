@@ -12,14 +12,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from yuxi.modules.agents.models.definitions import Agent
 from yuxi.modules.agents.repositories.definitions import user_can_access_agent, user_can_manage_agent
 from yuxi.modules.extensions.skills.content import commit_skill_content, content_path
-from yuxi.modules.extensions.skills.draft import prepared_uploaded_skill
+from yuxi.modules.extensions.skills.install_draft import prepared_uploaded_skill
 from yuxi.modules.extensions.skills.models import Skill
 from yuxi.modules.extensions.skills.package import SkillEditConflict, parse_skill_dir_metadata
 from yuxi.modules.extensions.skills.projection import (
     compute_skill_directory_hash,
 )
 from yuxi.modules.extensions.skills.repository import SkillRepository
-from yuxi.modules.extensions.skills.shared import get_skills_root_dir
+from yuxi.modules.extensions.skills.access import get_skills_root_dir
 from yuxi.modules.identity.models import User
 from yuxi.modules.identity.permissions import resolve_agent_permission
 from yuxi.modules.identity.repositories.users import UserRepository

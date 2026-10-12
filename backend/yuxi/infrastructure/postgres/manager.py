@@ -8,6 +8,7 @@ from psycopg_pool import AsyncConnectionPool
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from yuxi.infrastructure.observability.logging import logger
+from yuxi.infrastructure.postgres.connection import postgres_conninfo
 from yuxi.infrastructure.runtime_settings import get_int_env
 from yuxi.shared.singleton import SingletonMeta
 
@@ -61,7 +62,7 @@ class PostgresManager(metaclass=SingletonMeta):
             # ⚠️ 注意：psycopg 不认识 "+asyncpg" 这样的 SQLAlchemy 方言标识。
             # 如果你的 db_url 是 "postgresql+asyncpg://user:pwd@host/db"，
             # 需要把它清洗成标准的 "postgresql://user:pwd@host/db"
-            langgraph_db_url = db_url.replace("+asyncpg", "").replace("+psycopg", "")
+            langgraph_db_url = postgres_conninfo(db_url)
 
             # 创建 LangGraph 专属连接池
             self.langgraph_pool = AsyncConnectionPool(

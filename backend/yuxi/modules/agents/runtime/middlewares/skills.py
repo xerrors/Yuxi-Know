@@ -17,7 +17,8 @@ from yuxi.infrastructure.observability.logging import logger
 from yuxi.modules.agents.runtime.sandbox.paths import VIRTUAL_PERSONAL_SKILLS_PATH, VIRTUAL_SKILLS_PATH
 from yuxi.modules.extensions.mcp.service import get_enabled_mcp_tools
 from yuxi.modules.extensions.skills.package import is_valid_skill_slug, normalize_string_list
-from yuxi.modules.extensions.skills.runtime import RuntimeSkill, build_dependency_bundle
+from yuxi.modules.extensions.skills.resolved import RuntimeSkill
+from yuxi.modules.extensions.skills.runtime import build_dependency_bundle
 from yuxi.modules.extensions.tools import get_all_tool_instances
 from yuxi.modules.extensions.tools.builtin import BASE_TOOL_NAMES
 
@@ -68,7 +69,7 @@ class SkillsMiddleware(AgentMiddleware):
         runtime_context = request.runtime.context
 
         if self.enable_skills_prompt:
-            effective_skills = getattr(runtime_context, "_skill_runtime_snapshot", {}).get("effective_skills", None)
+            effective_skills = (getattr(runtime_context, "skill_runtime_snapshot", None) or {}).get("effective_skills", None)
             if isinstance(effective_skills, list):
                 effective_skills = normalize_string_list(effective_skills)
                 preloaded_skills = self._get_preloaded_skills(runtime_context)
@@ -119,7 +120,7 @@ class SkillsMiddleware(AgentMiddleware):
             if existing is not None and existing is not tool:
                 raise RuntimeError(f"Skill MCP 工具名冲突：{tool.name}")
             active_mcp_tools_by_name[tool.name] = tool
-        setattr(runtime_context, "_active_skill_mcp_tools", active_mcp_tools_by_name)
+        setattr(runtime_context, "active_skill_mcp_tools", active_mcp_tools_by_name)
 
         existing_tool_names = {t.name for t in model_tools}
         for t in enabled_tools:
@@ -159,8 +160,8 @@ class SkillsMiddleware(AgentMiddleware):
         import asyncio
 
         # 显式 MCP 已在 Graph 基础工具中注册，这里只加载 Skill 新增依赖。
-        if not hasattr(context, "_mcp_tool_servers"):
-            context._mcp_tool_servers = {}
+        if getattr(context, "mcp_tool_servers", None) is None:
+            raise RuntimeError("MCP 工具来源尚未装配")
         configured_mcps = set(normalize_string_list(getattr(context, "mcps", None)))
         all_mcp_names: list[str] = []
         for server_name in extra_mcps or []:
@@ -182,7 +183,7 @@ class SkillsMiddleware(AgentMiddleware):
         selected_tools = []
         for server_name, tools in zip(unique_mcp_names, results, strict=True):
             for tool in tools:
-                context._mcp_tool_servers[tool.name] = server_name
+                context.mcp_tool_servers[tool.name] = server_name
             selected_tools.extend(tools)
 
         return selected_tools
@@ -252,7 +253,7 @@ class SkillsMiddleware(AgentMiddleware):
         if request.tool is not None:
             return request
         context = request.runtime.context
-        active_tools = getattr(context, "_active_skill_mcp_tools", {})
+        active_tools = getattr(context, "active_skill_mcp_tools", {})
         if not isinstance(active_tools, dict):
             return request
         tool = active_tools.get(request.tool_call.get("name"))
@@ -276,22 +277,22 @@ class SkillsMiddleware(AgentMiddleware):
         return None
 
     def _get_effective_skills(self, runtime_context) -> set[str]:
-        selected = getattr(runtime_context, "_skill_runtime_snapshot", {}).get("effective_skills", [])
+        selected = (getattr(runtime_context, "skill_runtime_snapshot", None) or {}).get("effective_skills", [])
         return set(normalize_string_list(selected if isinstance(selected, list) else []))
 
     def _get_runtime_skills(self, runtime_context) -> dict[str, RuntimeSkill]:
-        runtime_skills = getattr(runtime_context, "_skill_runtime_snapshot", {}).get("runtime_skills", {})
+        runtime_skills = (getattr(runtime_context, "skill_runtime_snapshot", None) or {}).get("runtime_skills", {})
         return runtime_skills if isinstance(runtime_skills, dict) else {}
 
     def _get_preloaded_skills(self, runtime_context) -> list[str]:
-        selected = getattr(runtime_context, "_skill_runtime_snapshot", {}).get("preloaded_skills", [])
+        selected = (getattr(runtime_context, "skill_runtime_snapshot", None) or {}).get("preloaded_skills", [])
         effective = self._get_effective_skills(runtime_context)
         return [slug for slug in normalize_string_list(selected if isinstance(selected, list) else []) if slug in effective]
 
     def _build_preloaded_skills_section(self, slugs: list[str], runtime_context) -> str:
         """构建已预加载 Skill 的完整系统提示段。"""
 
-        contents = getattr(runtime_context, "_skill_runtime_snapshot", {}).get("preloaded_skill_contents", {})
+        contents = (getattr(runtime_context, "skill_runtime_snapshot", None) or {}).get("preloaded_skill_contents", {})
         if not isinstance(contents, dict):
             contents = {}
         sections = ["# Preloaded Skills", "The following Skill instructions are already loaded and active."]

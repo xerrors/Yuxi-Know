@@ -445,10 +445,10 @@ async def test_prepare_agent_runtime_context_filters_resources_and_derives_runti
     assert prepared.skills == ["skill-a"]
     assert prepared.preload_skills == ["skill-a"]
     assert not hasattr(prepared, "_visible_knowledge_bases")
-    assert prepared._skill_runtime_snapshot.get("effective_skills", []) == ["skill-a", "skill-b"]
-    assert prepared._skill_runtime_snapshot.get("runtime_skills", {})["skill-a"]["name"] == "Skill A"
-    assert prepared._skill_runtime_snapshot.get("runtime_skills", {})["skill-a"]["skills"] == ["skill-b"]
-    assert prepared._skill_runtime_snapshot.get("preloaded_skills", []) == ["skill-a", "skill-b"]
+    assert prepared.skill_runtime_snapshot.get("effective_skills", []) == ["skill-a", "skill-b"]
+    assert prepared.skill_runtime_snapshot.get("runtime_skills", {})["skill-a"]["name"] == "Skill A"
+    assert prepared.skill_runtime_snapshot.get("runtime_skills", {})["skill-a"]["skills"] == ["skill-b"]
+    assert prepared.skill_runtime_snapshot.get("preloaded_skills", []) == ["skill-a", "skill-b"]
 
     # 已准备对象保留同次执行内容，后续构图不得重新读取配置或 Skill。
     monkeypatch.setattr(

@@ -7,6 +7,7 @@ from typing import Any, Literal, get_origin, get_type_hints
 
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.modules.agents.runtime.tool_approval import DEFAULT_TOOL_APPROVAL_MODE
+from yuxi.modules.extensions.skills.resolved import SkillRuntimeSnapshot
 from yuxi.modules.system.options import system_options
 from yuxi.modules.workspace.filesystem import Workspace
 
@@ -195,6 +196,21 @@ class BaseContext:
     )
 
     agent_slug: str | None = field(default=None, metadata={"configurable": False, "hide": True})
+
+    skill_runtime_snapshot: SkillRuntimeSnapshot | None = field(default=None, repr=False, metadata={"configurable": False, "hide": True})
+    mcp_tool_servers: dict[str, str] | None = field(default=None, repr=False, metadata={"configurable": False, "hide": True})
+    registered_builtin_tool_names: set[str] | None = field(default=None, repr=False, metadata={"configurable": False, "hide": True})
+    middleware_tool_names: set[str] = field(default_factory=set, repr=False, metadata={"configurable": False, "hide": True})
+    disabled_mcp_tools: dict[str, set[str]] = field(default_factory=dict, repr=False, metadata={"configurable": False, "hide": True})
+    active_skill_mcp_tools: dict[str, Any] = field(default_factory=dict, repr=False, metadata={"configurable": False, "hide": True})
+    _runtime_prepared: bool = field(default=False, repr=False, metadata={"configurable": False, "hide": True})
+    _resource_selections: dict[str, ResourceSelection] | None = field(
+        default=None, repr=False, metadata={"configurable": False, "hide": True}
+    )
+    _capability_limited: bool = field(default=False, repr=False, metadata={"configurable": False, "hide": True})
+    _capability_warning_sent: bool = field(default=False, repr=False, metadata={"configurable": False, "hide": True})
+    _authorization_turn_id: str | None = field(default=None, repr=False, metadata={"configurable": False, "hide": True})
+    _cooperation_config_snapshot: dict[str, Any] | None = field(default=None, repr=False, metadata={"configurable": False, "hide": True})
 
     system_prompt: str = field(
         default="You are a helpful assistant.",
@@ -524,12 +540,12 @@ async def refresh_agent_context_resources(context: BaseContext, *, db, user, age
     for name in resource_fields:
         setattr(context, name, normalized[name])
 
-    previous = getattr(context, "_skill_runtime_snapshot", {})
+    previous = context.skill_runtime_snapshot or {}
     current = await resolve_runtime_skills_for_context(context, db=db, user=user, agent=agent)
     for slug, metadata in previous.get("skill_metadata", {}).items():
         if metadata.get("source_scope") == "agent_bound" and slug in current["preloaded_skill_contents"]:
             current["preloaded_skill_contents"][slug] = previous["preloaded_skill_contents"][slug]
-    context._skill_runtime_snapshot = current
+    context.skill_runtime_snapshot = current
     context.skills = current["context_skills"]
     context.preload_skills = current["context_preload_skills"]
     context._capability_limited = any(

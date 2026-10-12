@@ -13,6 +13,8 @@ from yuxi.modules.extensions.skills import edit as edit_service
 from yuxi.modules.extensions.skills import content as content_service
 from yuxi.modules.extensions.skills import projection as projection_service
 from yuxi.modules.extensions.skills import shared as skill_service
+from yuxi.modules.extensions.skills import access as skill_access
+from yuxi.modules.extensions.skills.package import parse_skill_markdown
 from yuxi.modules.extensions.skills.models import Skill
 from yuxi.modules.identity.models import User
 
@@ -95,9 +97,11 @@ def _setup_shared_skill(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(content_service, "prune_skill_content", prune)
     monkeypatch.setattr(edit_service, "SkillRepository", FakeRepo)
     monkeypatch.setattr(skill_service, "SkillRepository", FakeRepo)
+    monkeypatch.setattr(skill_access, "SkillRepository", FakeRepo)
     monkeypatch.setattr(FakeRepo, "list_enabled_readable", accessible, raising=False)
     monkeypatch.setattr(tool_service, "get_tool_metadata", lambda: [])
     monkeypatch.setattr(skill_service, "get_enabled_mcp_server_slugs", mcps)
+    monkeypatch.setattr(skill_access, "get_enabled_mcp_server_slugs", mcps)
     return skill_dir, item, content
 
 
@@ -333,7 +337,10 @@ async def test_dependency_form_updates_root_file_and_index(tmp_path, monkeypatch
 async def test_dependency_edit_accepts_unquoted_multiline_description(tmp_path, monkeypatch):
     """预览可识别的多行描述也必须能保存依赖。"""
     skill_dir, item, _old = _setup_shared_skill(tmp_path, monkeypatch)
-    original = '---\nname: demo\nslug: demo\ndescription:\n  Use this skill for PDFs.\n  CREATE (from scratch): "make a PDF".\nlicense: MIT\n---\n# Body\n'
+    original = (
+        "---\nname: demo\nslug: demo\ndescription:\n  Use this skill for PDFs."
+        '\n  CREATE (from scratch): "make a PDF".\nlicense: MIT\n---\n# Body\n'
+    )
     (skill_dir / "SKILL.md").write_text(original, encoding="utf-8")
 
     result, revision = await edit_service.edit_shared_skill_dependencies(
@@ -349,7 +356,7 @@ async def test_dependency_edit_accepts_unquoted_multiline_description(tmp_path, 
     saved = content_service.content_path(item).joinpath("SKILL.md").read_text(encoding="utf-8")
     assert result is item
     assert item.description == 'Use this skill for PDFs. CREATE (from scratch): "make a PDF".'
-    assert skill_service.parse_skill_markdown(saved)[2] == item.description
+    assert parse_skill_markdown(saved)[2] == item.description
     assert revision == hashlib.sha256(saved.encode()).hexdigest()
 
 

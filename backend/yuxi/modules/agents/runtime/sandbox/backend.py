@@ -31,13 +31,14 @@ from deepagents.backends.sandbox import MAX_BINARY_BYTES, BaseSandbox
 from deepagents.backends.utils import _get_file_type
 
 from yuxi.infrastructure.observability.logging import logger
-from yuxi.modules.agents.runtime.sandbox.paths import VIRTUAL_PATH_PREFIX, VIRTUAL_SKILLS_PATH, runtime_workdir_path
+from yuxi.modules.agents.runtime.sandbox.paths import VIRTUAL_PATH_PREFIX, VIRTUAL_SKILLS_PATH, normalize_runtime_path, runtime_workdir_path
 from yuxi.modules.agents.runtime.sandbox.provider import (
     get_sandbox_provider,
     sandbox_id_for_thread,
     sandbox_provisioner_token,
 )
 from yuxi.modules.workspace.errors import FileTransferLimitError
+from yuxi.modules.workspace.paths import validate_directory_name
 
 if TYPE_CHECKING:
     from yuxi.modules.agents.runtime.context import BaseContext
@@ -94,15 +95,8 @@ def _read_window(offset: int, limit: int | None) -> tuple[int, int | None]:
 
 
 def _normalize_path(path: str) -> str:
-    raw = str(path or "").strip()
-    if not raw:
-        raise ValueError("path is required")
-    if not raw.startswith("/"):
-        raise ValueError("path must start with /")
-    pure = PurePosixPath(raw)
-    if ".." in pure.parts:
-        raise ValueError("path traversal is not allowed")
-    return str(pure)
+    """复用 Sandbox 路径 Owner 的规范化。"""
+    return normalize_runtime_path(path)
 
 
 def _is_same_or_child(path: str, root: str) -> bool:
@@ -1025,8 +1019,7 @@ finally:
 
     def create_authorized_directory(self, parent_path: str, name: str, *, root: str) -> str:
         """在授权根内以 dir-fd 创建一个单层目录。"""
-        if not name or name in {".", ".."} or "/" in name or "\\" in name:
-            raise ValueError("directory name must be one path component")
+        validate_directory_name(name)
         normalized_parent = _normalize_path(parent_path)
         normalized_root = _normalize_path(root)
         if normalized_parent != normalized_root and not _is_same_or_child(normalized_parent, normalized_root):

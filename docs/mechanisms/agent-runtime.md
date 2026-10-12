@@ -58,7 +58,9 @@ completed Turn 的最终回答存在有效知识库或网页检索内容时，We
 | LangGraph state | Graph 执行和中间件 | 当前 checkpoint thread |
 | PostgreSQL Input/Receipt/Turn/Run/Message | 接收服务、调度器和 worker 提交 | 业务接收、执行与最终结果 |
 
-`_skill_runtime_snapshot` 中的授权 Skill、依赖和预加载内容在 Context 准备时派生；中间件在运行期间维护 token 等状态。身份与运行标记由 worker 注入，持久 Agent 配置通过 `update_config` 仅装载 configurable 字段。接入和执行使用同一装载规则。运行事件的模型、审批与 Workdir 元数据从准备后的 Context 投影。
+`skill_runtime_snapshot` 中的授权 Skill、依赖和预加载内容在 Context 准备时派生；中间件在运行期间维护 token 等状态。身份与运行标记由 worker 注入，持久 Agent 配置通过 `update_config` 仅装载 configurable 字段。接入和执行使用同一装载规则。运行事件的模型、审批与 Workdir 元数据从准备后的 Context 投影。
+
+Context 在 dataclass 中声明 Skill 快照、MCP 来源、本地和 middleware 注册集合及 MCP 禁用集合，均不进入可配置 schema 或接收快照。`resolve_configured_runtime_tools` 完成本地及 MCP 来源装配，shipping graph 收集 middleware 工具名；动态 Skill MCP 加载延续同一来源记录。模型与工具执行只接受已记录且当前获授权的来源，缺失装配和未知工具名均拒绝。`disabled_mcp_tools` 保存服务器当前禁用的工具名。
 
 会话创建时保存完整可配置 Context，模型依次取创建显式值、Agent 配置和系统默认，空会话也验证有效模型。保存的 Agent 与系统默认值修改不改变已有会话。每个时点以完整 `context_snapshot` 为唯一配置来源；执行拒绝缺失快照，不从 metadata 或最新 Agent 补值。Session 更新与输入接收共用会话锁，后接收的 Input 复制更新后的配置，已接收输入保持原快照。单次 follow-up 覆盖随消息原子持久化；活动 steer 与等待恢复继承当前 Run 的配置；空闲 steer 合批采用首个 Input 的冻结配置和来源，其他 Input 配置只保留审计。运行身份不进入快照，`all` 或固定列表保存资源选择意图，实际资源授权在准备和执行时解析。协作会话继承派发方实际模型和能力配置，显式选择其他 Agent 时保存目标配置；模型历史、checkpoint 和附件上下文各自独立。
 

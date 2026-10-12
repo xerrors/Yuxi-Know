@@ -8,11 +8,11 @@ from yuxi.modules.agents.repositories.definitions import AgentRepository
 from yuxi.modules.agents.runtime.agent_backends import get_agent_backend
 from yuxi.modules.agents.services.configuration import prepare_agent_config_write
 from yuxi.modules.extensions.skills.bound import publish_bound_skill
-from yuxi.modules.extensions.skills.draft import prepared_uploaded_skill
+from yuxi.modules.extensions.skills.install_draft import prepared_uploaded_skill
 from yuxi.modules.extensions.skills.package import parse_skill_dir_metadata
 from yuxi.modules.extensions.skills.projection import invalidate_skill_projections, refresh_committed_skill_projections
 from yuxi.modules.extensions.skills.repository import SkillRepository
-from yuxi.modules.extensions.skills.shared import validate_skill_dependencies
+from yuxi.modules.extensions.skills.access import validate_skill_dependencies
 from yuxi.modules.identity.repositories.users import UserRepository
 
 

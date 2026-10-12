@@ -13,10 +13,10 @@ from yuxi.modules.agents.runtime.sandbox.paths import runtime_user_data_path
 from yuxi.modules.identity.models import User
 from yuxi.modules.workspace.errors import FileTransferLimitError
 from yuxi.modules.workspace.filesystem import Workspace
-from yuxi.modules.workspace.paths import ensure_user_workspace
+from yuxi.modules.workspace.paths import ensure_user_workspace, normalize_workspace_scope, validate_directory_name
 from yuxi.modules.workspace.preview import preview_workspace_file
 from yuxi.modules.workspace.repositories.projects import ProjectRepository
-from yuxi.shared.datetime import utc_isoformat_from_timestamp
+from yuxi.modules.workspace.services.file_entries import file_entry, sort_file_entries
 from yuxi.shared.errors import (
     ContentTooLargeError,
     DomainError,
@@ -344,10 +344,10 @@ def _normalize_workspace_path(path: str | None) -> PurePosixPath:
     raw_path = (path or "/").strip() or "/"
     if not raw_path.startswith("/"):
         raw_path = f"/{raw_path}"
-    normalized = PurePosixPath(raw_path)
-    if ".." in normalized.parts:
-        raise PermissionDeniedError("Access denied")
-    return normalized
+    try:
+        return PurePosixPath(normalize_workspace_scope(raw_path))
+    except ValueError as exc:
+        raise PermissionDeniedError("Access denied") from exc
 
 
 def _workspace_path(path: str | None) -> str:
@@ -358,33 +358,21 @@ def _validate_child_name(name: str, *, field_name: str) -> str:
     clean_name = str(name or "").strip()
     if not clean_name:
         raise InvalidInputError(f"{field_name} 不能为空")
-    if clean_name in {".", ".."} or "/" in clean_name or "\\" in clean_name:
-        raise InvalidInputError(f"{field_name} 不能包含路径分隔符")
-    if PurePosixPath(clean_name).name != clean_name:
-        raise InvalidInputError(f"{field_name} 不能包含路径分隔符")
+    try:
+        validate_directory_name(clean_name)
+    except ValueError as exc:
+        raise InvalidInputError(f"{field_name} 不能包含路径分隔符") from exc
     return clean_name
 
 
 def _entry_from_metadata(workspace_path: str, item: dict) -> dict:
-    is_dir = bool(item["is_dir"])
-    display_path = PurePosixPath(workspace_path).as_posix()
-    if is_dir and display_path != "/" and not display_path.endswith("/"):
-        display_path = f"{display_path}/"
-    virtual_path = runtime_user_data_path(display_path)
-    if is_dir and display_path != "/":
-        virtual_path = f"{virtual_path}/"
-    return {
-        "path": display_path,
-        "virtual_path": virtual_path,
-        "name": PurePosixPath(display_path.rstrip("/")).name or "工作区",
-        "is_dir": is_dir,
-        "size": 0 if is_dir else int(item.get("size") or 0),
-        "modified_at": utc_isoformat_from_timestamp(float(item.get("modified_at") or 0)) or "",
-    }
-
-
-def _sort_entries(entries: list[dict]) -> list[dict]:
-    return sorted(entries, key=lambda item: (not bool(item.get("is_dir")), str(item.get("name") or "").lower()))
+    entry = file_entry(workspace_path, item)
+    entry["virtual_path"] = runtime_user_data_path(workspace_path)
+    if entry["is_dir"]:
+        entry["size"] = 0
+        if entry["path"] != "/":
+            entry["virtual_path"] += "/"
+    return entry
 
 
 def _list_workspace_directory(
@@ -399,7 +387,7 @@ def _list_workspace_directory(
         child_path = f"{target.rstrip('/')}/{child['name']}"
         if not files_only or not child["is_dir"]:
             entries.append(_entry_from_metadata(child_path, child))
-    return _sort_entries(entries)
+    return sort_file_entries(entries)
 
 
 async def _write_workspace_upload(file: FileInput, backend: Workspace, target: str) -> dict:

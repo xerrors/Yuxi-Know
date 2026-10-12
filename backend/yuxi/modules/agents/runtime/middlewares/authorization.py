@@ -63,17 +63,23 @@ class RuntimeAuthorizationMiddleware(AgentMiddleware):
 
 def tool_allowed(context, name: str, state: dict) -> bool:
     """按当前资源和已授权 Skill 依赖检查已注册工具。"""
+    servers = getattr(context, "mcp_tool_servers", None)
+    registered = getattr(context, "registered_builtin_tool_names", None)
+    snapshot = getattr(context, "skill_runtime_snapshot", None)
+    if servers is None or registered is None or snapshot is None:
+        return False
     allowed_mcps = set(context.mcps)
     allowed_tools = set(context.tools) | set(BASE_TOOL_NAMES)
-    snapshot = context._skill_runtime_snapshot
     active = set(state.get("activated_skills", [])) | set(snapshot["preloaded_skills"])
     for slug in active & set(snapshot["effective_skills"]):
         allowed_tools.update(snapshot["runtime_skills"][slug]["tools"])
         allowed_mcps.update(snapshot["runtime_skills"][slug]["mcps"])
-    server = getattr(context, "_mcp_tool_servers", {}).get(name)
+    server = servers.get(name)
     if server:
-        return server in allowed_mcps and server in context._enabled_mcps and name not in context._enabled_mcps[server]
-    return name not in getattr(context, "_registered_builtin_tool_names", set()) or name in allowed_tools
+        return server in allowed_mcps and server in context.disabled_mcp_tools and name not in context.disabled_mcp_tools[server]
+    if name in registered:
+        return name in allowed_tools
+    return name in getattr(context, "middleware_tool_names", set())
 
 
 async def refresh_execution_authorization(context) -> None:
@@ -88,7 +94,7 @@ async def _refresh_execution_resources(context) -> None:
         user, agent, run = await _require_execution_actor(context, db=db)
         await refresh_agent_context_resources(context, db=db, user=user, agent=agent)
         rows = await db.execute(select(MCPServer.slug, MCPServer.disabled_tools).where(MCPServer.enabled == 1))
-        context._enabled_mcps = {slug: set(disabled or []) for slug, disabled in rows}
+        context.disabled_mcp_tools = {slug: set(disabled or []) for slug, disabled in rows}
         if context._capability_limited and not getattr(context, "_capability_warning_sent", False) and run is not None:
             await append_run_event_best_effort(
                 run.id,
