@@ -47,6 +47,7 @@ async def resolve_runtime_skills_for_context(
     *,
     db: AsyncSession,
     user: User,
+    agent=None,
 ) -> dict:
     """合并已选共享与全部个人 Skill，派生运行范围和预加载快照。"""
     selected = normalize_string_list(getattr(context, "skills", None))
@@ -58,7 +59,8 @@ async def resolve_runtime_skills_for_context(
         from yuxi.modules.agents.repositories.definitions import AgentRepository
         from yuxi.modules.extensions.skills.repository import SkillRepository
 
-        agent = await AgentRepository(db).get_visible_by_slug(slug=agent_slug, user=user)
+        if agent is None:
+            agent = await AgentRepository(db).get_visible_by_slug(slug=agent_slug, user=user)
         if agent is None:
             raise PermissionError("智能体不存在或无权限访问")
         bound = await SkillRepository(db).get_by_bound_agent_id(agent.id)

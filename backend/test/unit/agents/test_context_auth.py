@@ -339,6 +339,7 @@ async def test_prepare_agent_runtime_context_filters_resources_and_derives_runti
         *,
         db=None,
         user=None,
+        agent=None,
     ):
         del db
         assert user.uid == "u1"

@@ -92,6 +92,7 @@ async def test_network_retry_rechecks_before_each_model_request(monkeypatch, con
             raise authorization.AgentExecutionRevoked("revoked")
 
     monkeypatch.setattr(authorization, "refresh_execution_authorization", check)
+    monkeypatch.setattr(authorization, "_refresh_execution_resources", check)
     graph = create_agent(
         model=ReplayModel(),
         middleware=[
@@ -176,6 +177,7 @@ async def test_context_overflow_does_not_send_summary_after_revocation(monkeypat
             raise authorization.AgentExecutionRevoked("revoked")
 
     monkeypatch.setattr(authorization, "refresh_execution_authorization", check)
+    monkeypatch.setattr(authorization, "_refresh_execution_resources", check)
     summary = summary_module.YuxiSummarizationMiddleware(
         model=SummaryModel(),
         backend=CompositeBackend(default=MemoryBackend(), routes={}, artifacts_root="/outputs"),

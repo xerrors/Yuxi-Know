@@ -488,14 +488,11 @@ async def prepare_agent_runtime_context(
     """为单次运行解析资源与 Skill；同一对象再次构图时复用准备结果。"""
     if getattr(context, "_runtime_prepared", False):
         return context
-    schema = type(context)
-    resource_fields = schema.get_resource_fields()
     uid = str(getattr(context, "uid", "") or "").strip()
     if not uid:
         return context
 
     from yuxi.infrastructure.postgres.manager import pg_manager
-    from yuxi.modules.extensions.skills.runtime import resolve_runtime_skills_for_context
     from yuxi.modules.identity.repositories.users import UserRepository
 
     await _append_workspace_agent_prompt(context)
@@ -507,29 +504,37 @@ async def prepare_agent_runtime_context(
         if user is None or user.is_deleted:
             raise PermissionError("执行账号已失效")
 
-        raw_resources = {field_name: getattr(context, field_name, None) for field_name in resource_fields}
-        normalized = await normalize_agent_context_config(
-            raw_resources,
-            db=db,
-            user=user,
-            context_schema=schema,
-        )
-        context._resource_selections = raw_resources
-        context._capability_limited = any(
-            isinstance(raw_resources[name], list) and set(raw_resources[name]) - set(normalized[name]) for name in resource_fields
-        )
-        for field_name in resource_fields:
-            setattr(context, field_name, normalized[field_name])
-
-        skill_scope = await resolve_runtime_skills_for_context(context, db=db, user=user)
-        context._capability_limited = context._capability_limited or skill_scope.get("capability_limited", False)
-        setattr(context, "_skill_runtime_snapshot", skill_scope)
-        context.skills = skill_scope["context_skills"]
-        context.preload_skills = skill_scope["context_preload_skills"]
+        await refresh_agent_context_resources(context, db=db, user=user)
 
     context._runtime_prepared = True
 
     return context
+
+
+async def refresh_agent_context_resources(context: BaseContext, *, db, user, agent=None) -> None:
+    """共用当前资源解析，保留原选择与本 Run 已注入的专属根文本。"""
+    from yuxi.modules.extensions.skills.runtime import resolve_runtime_skills_for_context
+
+    resource_fields = type(context).get_resource_fields()
+    selections = getattr(context, "_resource_selections", None)
+    if selections is None:
+        selections = {name: getattr(context, name) for name in resource_fields}
+        context._resource_selections = selections
+    normalized = await normalize_agent_context_config(selections, db=db, user=user, context_schema=type(context))
+    for name in resource_fields:
+        setattr(context, name, normalized[name])
+
+    previous = getattr(context, "_skill_runtime_snapshot", {})
+    current = await resolve_runtime_skills_for_context(context, db=db, user=user, agent=agent)
+    for slug, metadata in previous.get("skill_metadata", {}).items():
+        if metadata.get("source_scope") == "agent_bound" and slug in current["preloaded_skill_contents"]:
+            current["preloaded_skill_contents"][slug] = previous["preloaded_skill_contents"][slug]
+    context._skill_runtime_snapshot = current
+    context.skills = current["context_skills"]
+    context.preload_skills = current["context_preload_skills"]
+    context._capability_limited = any(
+        isinstance(selections[name], list) and set(selections[name]) - set(normalized[name]) for name in resource_fields
+    ) or current.get("capability_limited", False)
 
 
 def validate_resource_selection(field_name: str, value: Any) -> ResourceSelection:
