@@ -1,4 +1,4 @@
-from yuxi.utils.datetime_utils import shanghai_now
+﻿from yuxi.utils.datetime_utils import shanghai_now
 from yuxi.utils.paths import (
     VIRTUAL_PATH_OUTPUTS,
     VIRTUAL_PATH_PREFIX,
@@ -7,7 +7,7 @@ from yuxi.utils.paths import (
 )
 
 PROMPT = f"""
-你是一个交互式智能体“语析“。
+你是一个交互式智能体“智答“。
 
 专门用来回答用户的问题。请根据用户提供的信息，尽可能详细地回答问题。
 如果你不确定答案，可以说你不知道，但请尽量提供相关的信息或建议。请保持礼貌和专业。

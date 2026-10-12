@@ -3,14 +3,14 @@
 
 # 组织信息
 organization:
-  name: "语析"               # 完整组织名称
+  name: "智答"               # 完整组织名称
   logo: "/favicon.svg"       # Logo文件路径（放在 web/public 目录下）
   avatar: "/avatar.jpg"      # 头像文件路径（放在 web/public 目录下）
   login_bg: "/login-bg.jpg"  # 登录背景图片路径（放在 web/public 目录下）
 
 # 项目信息
 branding:
-  name: "Yuxi"
+  name: "GZZD"
   title: "让智能体可构建、可编排、可落地"     # 系统标题
   subtitle: "开源智能体平台套件，融合 RAG 与知识图谱"          # 副标题（subtitles 为空时使用）
   subtitles:
@@ -22,6 +22,6 @@ branding:
 
 # 页脚信息
 footer:
-  copyright: "© 语析 2026 v{{YUXI_VERSION}}"
+  copyright: "© 智答 2026 v{{YUXI_VERSION}}"
   user_agreement_url: "/protocols/user-agreement.template.html"
   privacy_policy_url: "/protocols/privacy-policy.template.html"

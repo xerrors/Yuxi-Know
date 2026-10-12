@@ -1,5 +1,5 @@
 <div align="center">
-<h1>语析 Yuxi</h1>
+<h1>智答 GZZD</h1>
 
 <p><strong>多租户 Harness + 企业知识库</strong><br/>让企业知识可被智能体检索、推理与交付</p>
 
@@ -20,7 +20,7 @@
 
 ## 简介
 
-语析（Yuxi）是一个基于大模型的智能知识库与知识图谱智能体开发平台。它把 **RAG 检索**、**Milvus 知识库内知识图谱** 与 **LangGraph 多智能体编排** 整合进统一的多租户工作台：管理员配置知识库、模型与权限，用户在类 ChatGPT 的界面中与可挂载 Skills、MCP、子智能体和沙盒工具的智能体对话，并获得带引用来源、知识图谱推理与可交付产物的回答。
+智答（GZZD）是一个基于大模型的智能知识库与知识图谱智能体开发平台。它把 **RAG 检索**、**Milvus 知识库内知识图谱** 与 **LangGraph 多智能体编排** 整合进统一的多租户工作台：管理员配置知识库、模型与权限，用户在类 ChatGPT 的界面中与可挂载 Skills、MCP、子智能体和沙盒工具的智能体对话，并获得带引用来源、知识图谱推理与可交付产物的回答。
 
 导航：[项目介绍](https://xerrors.github.io/Yuxi/) ｜ [快速开始](https://xerrors.github.io/Yuxi/intro/quick-start) ｜ [开发路线图](https://xerrors.github.io/Yuxi/develop-guides/roadmap) | [0.7 版本特性](http://xhslink.com/o/5Y6QWnmjF2d)；最新开发动态，详见 [changelog](https://xerrors.github.io/Yuxi/develop-guides/changelog)。
 

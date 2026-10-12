@@ -17,7 +17,7 @@ export const brandIcons = {
 
 export const getKbTypeLabel = (type) => {
   const labels = {
-    milvus: 'Yuxi',
+    milvus: 'GZZD',
     dify: 'Dify',
     notion: 'Notion'
   }
