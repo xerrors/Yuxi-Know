@@ -12,6 +12,7 @@ from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
 import httpx
+from pydantic import ValidationError
 from deepagents.backends import CompositeBackend
 from deepagents.backends.protocol import (
     ASYNC_GREP_TIMEOUT,
@@ -143,6 +144,14 @@ def _raise_authorized_path_operation_error(output: str | None, path: str, fallba
 
 
 def _describe_read_error(file_path: str, exc: Exception) -> str:
+    """将文件响应边界的解析错误转换为模型可理解的稳定语义。"""
+    if isinstance(exc, ValidationError):
+        for error in exc.errors(include_url=False, include_context=False):
+            payload = error.get("input")
+            if isinstance(payload, dict) and (payload.get("error") == "FileNotFoundError" or payload.get("error_type") == "not_found"):
+                return f"Error: File '{file_path}' not found"
+        logger.warning(f"沙盒文件响应格式异常: path={file_path} error_type={type(exc).__name__}")
+        return f"Error: Failed to read '{file_path}': invalid sandbox response"
     if isinstance(exc, FileNotFoundError):
         return f"Error: File '{file_path}' not found"
     if isinstance(exc, IsADirectoryError):

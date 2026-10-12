@@ -210,6 +210,13 @@ async def test_sessions_use_public_state_and_shared_sandbox(e2e_client, e2e_head
         assert connection is not None
         assert await asyncio.to_thread(provider.get, child["thread_id"], uid=uid, workdir_path=root["workdir_path"]) is None
         backend = ProvisionerSandboxBackend(thread_id=thread_id, uid=uid, workdir_path=root["workdir_path"])
+        missing_path = path + ".missing.txt"
+        for read_result in [await asyncio.to_thread(backend.read, missing_path), await backend.aread(missing_path)]:
+            assert read_result.error == f"File '{missing_path}' not found"
+            assert "ResponseFileReadResult" not in read_result.error and "validation errors" not in read_result.error
+        assert (await asyncio.to_thread(backend.write, missing_path, "write then read verified")).error is None
+        for read_result in [await asyncio.to_thread(backend.read, missing_path), await backend.aread(missing_path)]:
+            assert read_result.error is None and read_result.file_data["content"] == "write then read verified"
         temporary = f"/tmp/cooperation-{uuid.uuid4().hex}"
         assert (await asyncio.to_thread(backend.execute, f"printf transient > {temporary}")).exit_code == 0
         # 压缩维护不能释放共享环境；根与成员均保留同一 /tmp 事实。
@@ -464,3 +471,72 @@ async def _assert_thread_activity(client, headers, thread_id, expected):
     assert listed.status_code == 200, listed.text
     thread = next(item for item in listed.json()["data"] if item["id"] == thread_id)
     assert thread["status"] == expected, thread
+
+
+@pytest.fixture
+async def cooperation_depth_two(e2e_client, e2e_headers):
+    """显式设置测试深度并恢复原值，不依赖管理员当前配置。"""
+    current = await e2e_client.get("/api/system/config", headers=e2e_headers)
+    assert current.status_code == 200, current.text
+    previous = current.json()["max_cooperation_depth"]
+    try:
+        changed = await e2e_client.post("/api/system/config/update", headers=e2e_headers, json={"max_cooperation_depth": 2})
+        assert changed.status_code == 200, changed.text
+        yield
+    finally:
+        restored = await e2e_client.post("/api/system/config/update", headers=e2e_headers, json={"max_cooperation_depth": previous})
+        assert restored.status_code == 200, restored.text
+
+
+async def test_worker_rejects_third_cooperation_depth_and_commits_only_allowed_members(e2e_client, e2e_headers, cooperation_depth_two):
+    """真实 API、worker 与工具执行拒绝第三层，回读会话和输入确认无副作用。"""
+    me = (await e2e_client.get("/api/auth/me", headers=e2e_headers)).json()
+    await _provider(e2e_client, e2e_headers, base_url="http://api:8766/v1", provider_id="cooperation-replay")
+    slug = await _agent(e2e_client, e2e_headers, me["uid"], model_spec=MODEL, tools=[])
+    thread_id = turn_id = None
+    conn = await asyncpg.connect(postgres_dsn())
+    try:
+        created = await e2e_client.post(
+            "/api/v1/agents/sessions",
+            headers={**e2e_headers, "Idempotency-Key": str(uuid.uuid4())},
+            json={"agent_id": slug, "title": make_test_session_title("cooperation-depth"), "tool_approval_mode": "always_trust"},
+        )
+        assert created.status_code == 201, created.text
+        thread_id = created.json()["id"]
+        accepted = await e2e_client.post(
+            f"/api/v1/agents/sessions/{thread_id}/events",
+            headers={**e2e_headers, "Idempotency-Key": str(uuid.uuid4())},
+            json={"events": [{"type": "agent.session.input.message", "input": [_message(f"{OUTPUT} COOP_DEPTH:0")]}]},
+        )
+        assert accepted.status_code == 202, accepted.text
+        turn_id = (await wait_for_consumed_input(e2e_client, e2e_headers, accepted.json()))["turn_id"]
+        async with asyncio.timeout(180):
+            while True:
+                turn = (await e2e_client.get(f"/api/v1/agents/sessions/{thread_id}/turns/{turn_id}", headers=e2e_headers)).json()
+                if turn["status"] in {"completed", "failed", "cancelled"}:
+                    break
+                await asyncio.sleep(0.5)
+        assert turn["status"] == "completed", turn
+        assert output_text(turn["yuxi"]["output"]) == OUTPUT
+        rows = await conn.fetch("SELECT thread_id, cooperation_path FROM sessions WHERE tree_root_thread_id=$1", thread_id)
+        assert {row["cooperation_path"] for row in rows} == {"/root", "/root/depth-1", "/root/depth-1/depth-2"}
+        count = await conn.fetchval("SELECT count(*) FROM agent_inputs WHERE thread_id=ANY($1::text[])", [row["thread_id"] for row in rows])
+        assert count == 3
+        statuses = await conn.fetch("SELECT status FROM agent_turns WHERE thread_id=ANY($1::text[])", [row["thread_id"] for row in rows])
+        assert {row["status"] for row in statuses} == {"completed"}
+        denied = await conn.fetchval(
+            "SELECT count(*) FROM tool_calls t JOIN messages m ON m.id=t.message_id "
+            "JOIN sessions s ON s.id=m.session_record_id WHERE s.tree_root_thread_id=$1 AND t.tool_name='create_session' "
+            "AND t.status='error' AND coalesce(t.error_message,t.tool_output,'') LIKE '%协作深度 3%'",
+            thread_id,
+        )
+        assert denied == 1
+    finally:
+        await conn.close()
+        if thread_id:
+            state = await e2e_client.get(f"/api/v1/agents/sessions/{thread_id}/state", headers=e2e_headers)
+            for member in state.json()["agent_state"]["cooperation"]["sessions"]:
+                if member["session_id"] != thread_id:
+                    await archive_public_thread(e2e_client, e2e_headers, member["session_id"], turn_id=member["turn_id"])
+            await archive_public_thread(e2e_client, e2e_headers, thread_id, turn_id=turn_id)
+        await delete_agent(e2e_client, e2e_headers, slug)

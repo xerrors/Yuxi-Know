@@ -1496,3 +1496,45 @@ async def _define_target_agent(tree, *, suffix="target", visibility="private", o
         )
         await db.commit()
     return slug
+
+
+@pytest.mark.parametrize("maximum", [0, 1, 2])
+async def test_depth_limit_rejects_creation_without_session_or_input_side_effects(tree, monkeypatch, maximum):
+    """根深度为零，允许边界内派发且超限不能留下会话或输入。"""
+    monkeypatch.setattr(
+        "yuxi.modules.agents.services.cooperation.system_options",
+        SimpleNamespace(get=AsyncMock(return_value={"max_cooperation_depth": maximum})),
+        raising=False,
+    )
+    factory, run_id, root_id, uid = tree
+    for level in range(maximum):
+        async with factory() as db:
+            created = await SessionCooperationService(db, run_id=run_id, uid=uid).create_session(
+                name=f"level-{level}", description="有界协作", call_id=f"create-{level}"
+            )
+            run_id = created["run_id"]
+            _, acquired = await AgentRunRepository(db).mark_running(run_id, worker_id=f"depth-{level}", lease_seconds=120)
+            assert acquired
+            await db.commit()
+    async with factory() as db:
+        before = await db.scalar(select(func.count()).select_from(AgentInput).where(AgentInput.uid == uid))
+    with pytest.raises(DomainError, match="协作深度") as rejected:
+        async with factory() as db:
+            await SessionCooperationService(db, run_id=run_id, uid=uid).create_session(
+                name="too-deep", description="应被拒绝", call_id="too-deep"
+            )
+    assert rejected.value.code == "cooperation_depth_exceeded"
+    async with factory() as db:
+        assert await db.scalar(select(func.count()).select_from(Session).where(Session.tree_root_thread_id == root_id)) == maximum + 1
+        assert await db.scalar(select(func.count()).select_from(AgentInput).where(AgentInput.uid == uid)) == before
+
+
+async def test_existing_creation_replays_after_depth_limit_is_lowered(tree, monkeypatch):
+    """降低深度只限制新副作用，不破坏已经提交的幂等回执。"""
+    created = await child(tree)
+    monkeypatch.setattr(
+        "yuxi.modules.agents.services.cooperation.system_options",
+        SimpleNamespace(get=AsyncMock(return_value={"max_cooperation_depth": 0})),
+        raising=False,
+    )
+    assert await child(tree) == created

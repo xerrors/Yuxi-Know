@@ -34,10 +34,11 @@ from yuxi.modules.agents.services.inputs import accept_locked
 from yuxi.modules.agents.services.scheduler import Dispatch, deliver, dispatch_next_input
 from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.identity.models import User
+from yuxi.modules.system.options import system_options
 from yuxi.modules.workspace.repositories.projects import ProjectRepository
 from yuxi.modules.workspace.services.bindings import resolve_session_workdir_binding
 from yuxi.shared.datetime import format_utc_datetime, utc_now
-from yuxi.shared.errors import StateConflictError
+from yuxi.shared.errors import InvalidOperationError, StateConflictError
 
 
 class SessionCooperationService:
@@ -76,6 +77,12 @@ class SessionCooperationService:
         await self.caller()
         child = await self.db.scalar(select(Session).where(Session.thread_id == child_id))
         if child is None:
+            maximum = (await system_options.get(self.db))["max_cooperation_depth"]
+            depth = path.count("/") - 1
+            if depth > maximum:
+                raise InvalidOperationError(
+                    f"协作深度 {depth} 超过最大协作深度 {maximum}，无法创建新的协作会话", code="cooperation_depth_exceeded"
+                )
             if await self.repo.resolve(caller, path) is not None:
                 raise ValueError("同父 Session 下名称已存在")
             run_snapshot = run.input_payload["context_snapshot"]

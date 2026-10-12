@@ -69,6 +69,10 @@ class Option:
                 resolved[field_key] = stored[field_key]
                 continue
 
+            if field.get("type") == "integer":
+                resolved[field_key] = normalize_option_value(field, stored.get(field_key, field.get("default")))
+                continue
+
             stored_value = stored.get(field_key)
             environment_value = os.getenv(field.get("environment", ""))
             resolved[field_key] = stored_value or environment_value or field.get("default")
@@ -113,6 +117,13 @@ system_options = Option(
                 "label": "默认 Re-Ranker 模型",
                 "type": "model",
                 "default": "siliconflow-cn:Pro/BAAI/bge-reranker-v2-m3",
+            },
+            {
+                "key": "max_cooperation_depth",
+                "label": "最大协作深度",
+                "type": "integer",
+                "min": 0,
+                "default": 2,
             },
             {
                 "key": "default_ocr_engine",
@@ -258,6 +269,12 @@ async def invalidate_option_cache(key: str) -> None:
 
 
 def normalize_option_value(field: dict[str, Any], value: Any) -> Any:
+    """在配置持久化边界解析字段类型与有效范围。"""
+    if field.get("type") == "integer":
+        if type(value) is not int or value < field.get("min", 0):
+            raise ValueError(f"{field['key']} 必须是非负整数")
+        return value
+
     if field.get("type") == "list[str]":
         if not isinstance(value, list):
             raise ValueError("配置值必须是列表")

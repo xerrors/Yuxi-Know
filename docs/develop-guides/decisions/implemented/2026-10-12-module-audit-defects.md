@@ -14,7 +14,7 @@ Owner：backend/yuxi/modules/knowledge/repositories/bases.py
 
 知识库 ORM 与 Schema-init 用部分唯一索引约束未删除记录的 lower(name)，保留名称不区分大小写、已删除名称可复用的规则。repository 把该索引的创建或更新冲突转换为既有名称冲突异常，HTTP 返回 409；其他完整性错误继续传播。knowledge Schema 从 3 升至 4，支持与 business 8→9 反馈升级组合执行，两个域分别提交原子事务。存量重名阻止知识域升级并保留原数据与版本，修正名称后可重跑；部署步骤由[部署参考](../../../advanced/deployment.md#3-数据库与文件目录)拥有。
 
-知识文件失败 hook 在 owning Job 终态事务内按 KB → File 顺序加锁，更新仍由该 Job 拥有的文件错误态，再用既有 PostgreSQL 聚合写回受影响知识库统计。Job、文件与持久统计共同提交或回滚；知识库运行配置缓存不包含统计，详情的短期统计缓存仍按原有 TTL 过期。
+知识文件失败 hook 在 owning Job 终态事务内按 KB → File 顺序加锁，更新仍由该 Job 拥有的文件错误态，再用既有 PostgreSQL 聚合写回受影响知识库统计。Job、文件与持久统计共同提交或回滚；知识库运行配置缓存不包含统计，详情与文件列表的统计读取按[GUI 缺陷修复决策](2026-10-12-gui-report-remaining-defects.md)从 PostgreSQL 查询当前聚合。
 
 Skill permission resolver 拥有内置权限上限，有效 superadmin 可以管理内置 Skill，admin 只读取已启用且可读的内置项。列表、响应和服务消费同一解析结果，已删除身份不能通过管理判断。规则与[Skill 管理](../../../agents/skills-management.md#权限和选择)的权限表一致。
 

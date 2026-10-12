@@ -5,7 +5,7 @@ from typing import Annotated
 
 from deepagents.middleware._utils import append_to_system_message
 from langchain.agents.middleware import AgentMiddleware
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, ToolMessage
 from langchain_core.tools import StructuredTool
 from langgraph.prebuilt.tool_node import ToolRuntime
 from langgraph.types import interrupt
@@ -13,6 +13,7 @@ from pydantic import Field
 
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.agents.repositories.cooperation import CooperationRepository
+from yuxi.shared.errors import InvalidOperationError
 
 PROMPT = (
     "## Session 协作\n"
@@ -80,14 +81,19 @@ class CooperationMiddleware(AgentMiddleware):
             runtime: ToolRuntime,
             agent_id: Annotated[str | None, Field(description="list_agents 返回的配置 id（slug）；省略时继承当前配置。")] = None,
         ) -> dict:
-            return await invoke(
-                runtime,
-                "create_session",
-                name=name,
-                description=description,
-                agent_id=agent_id,
-                call_id=runtime.tool_call_id,
-            )
+            try:
+                return await invoke(
+                    runtime,
+                    "create_session",
+                    name=name,
+                    description=description,
+                    agent_id=agent_id,
+                    call_id=runtime.tool_call_id,
+                )
+            except InvalidOperationError as exc:
+                if exc.code != "cooperation_depth_exceeded":
+                    raise
+                return ToolMessage(content=exc.message, name="create_session", tool_call_id=runtime.tool_call_id, status="error")
 
         async def submit_input(target: str, description: str, runtime: ToolRuntime) -> dict:
             return await invoke(runtime, "submit_input", target=target, description=description, call_id=runtime.tool_call_id)

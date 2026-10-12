@@ -290,7 +290,7 @@ async def test_session_page_bounds_pinned_items_and_uses_stable_cursor(session):
 
 
 @pytest.mark.asyncio
-async def test_search_sessions_by_message_content_filters_user_status_and_tool_messages(session):
+async def test_search_sessions_filters_user_status_and_tool_messages(session):
     now = utc_now()
     active = Session(
         thread_id="thread-active",
@@ -369,7 +369,7 @@ async def test_search_sessions_by_message_content_filters_user_status_and_tool_m
     await session.commit()
 
     repo = SessionRepository(session)
-    items, has_more = await repo.search_sessions_by_message_content(
+    items, has_more = await repo.search_sessions(
         uid="user-a",
         query="大陆",
         limit=20,
@@ -384,7 +384,7 @@ async def test_search_sessions_by_message_content_filters_user_status_and_tool_m
 
 
 @pytest.mark.asyncio
-async def test_search_sessions_by_message_content_includes_different_sources(session):
+async def test_search_sessions_includes_different_sources(session):
     normal, scheduled, public_api, now = _seed_source_filter_sessions()
     session.add_all([normal, scheduled, public_api])
     await session.flush()
@@ -410,7 +410,7 @@ async def test_search_sessions_by_message_content_includes_different_sources(ses
     await session.commit()
 
     repo = SessionRepository(session)
-    items, has_more = await repo.search_sessions_by_message_content(
+    items, has_more = await repo.search_sessions(
         uid="user-a",
         query="导航隐藏检查",
         limit=20,
@@ -422,7 +422,7 @@ async def test_search_sessions_by_message_content_includes_different_sources(ses
 
 
 @pytest.mark.asyncio
-async def test_search_sessions_by_message_content_filters_agent_and_paginates(session):
+async def test_search_sessions_filters_agent_and_paginates(session):
     now = utc_now()
     old = now - timedelta(days=1)
     first = Session(
@@ -485,14 +485,14 @@ async def test_search_sessions_by_message_content_filters_agent_and_paginates(se
     await session.commit()
 
     repo = SessionRepository(session)
-    first_page, has_more = await repo.search_sessions_by_message_content(
+    first_page, has_more = await repo.search_sessions(
         uid="user-a",
         agent_id="agent-a",
         query="大陆",
         limit=1,
         offset=0,
     )
-    second_page, second_has_more = await repo.search_sessions_by_message_content(
+    second_page, second_has_more = await repo.search_sessions(
         uid="user-a",
         agent_id="agent-a",
         query="大陆",
@@ -551,9 +551,7 @@ async def test_search_batches_snippets_without_query_growth(session):
     try:
         for limit in [1, 3]:
             statements.clear()
-            rows, more = await SessionRepository(session).search_sessions_by_message_content(
-                uid="batch-user", query="batch-key", limit=limit, app_id=None
-            )
+            rows, more = await SessionRepository(session).search_sessions(uid="batch-user", query="batch-key", limit=limit, app_id=None)
             assert len(rows) == limit and more is (limit == 1)
             assert len(statements) == 2
             for row in rows:

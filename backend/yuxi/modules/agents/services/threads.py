@@ -70,12 +70,12 @@ async def search_threads(
     limit: int = 20,
     offset: int = 0,
 ) -> dict:
-    """仅搜索当前用户与 APP 命名空间中的历史消息。"""
+    """仅搜索当前用户与 APP 命名空间中的会话标题和可见历史消息。"""
     normalized_query = query.strip()
     if not normalized_query:
         return {"items": [], "has_more": False, "limit": limit, "offset": offset}
 
-    search_items, has_more = await SessionRepository(db).search_sessions_by_message_content(
+    search_items, has_more = await SessionRepository(db).search_sessions(
         uid=scope.uid,
         app_id=scope.app_id,
         agent_id=agent_slug,

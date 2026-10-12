@@ -126,3 +126,53 @@ async def test_merged_steer_receipts_advance_session_activity(test_client, stand
     finally:
         await conn.close()
         await delete_created_threads(session_id)
+
+
+async def test_title_search_finds_empty_sessions_and_preserves_user_scope(test_client, admin_headers, standard_user):
+    """真实 HTTP 按标题检索无消息会话，保持分页、归档和用户隔离。"""
+    prefix = f"GUI标题_{uuid.uuid4().hex}"
+    created = []
+    try:
+        for headers, suffix in [(admin_headers, "甲"), (admin_headers, "乙"), (standard_user["headers"], "他人")]:
+            response = await test_client.post(
+                "/api/v1/agents/sessions",
+                json={"agent_id": "default-chatbot", "title": prefix + suffix},
+                headers={**headers, "Idempotency-Key": str(uuid.uuid4())},
+            )
+            assert response.status_code == 201, response.text
+            created.append(response.json()["id"])
+        response = await test_client.get("/api/v1/agents/sessions/search", params={"q": prefix, "limit": 1}, headers=admin_headers)
+        assert response.status_code == 200, response.text
+        first = response.json()
+        assert first["has_more"] is True
+        assert len(first["items"]) == 1
+        hit = first["items"][0]
+        assert hit["session"]["id"] in created[:2]
+        assert hit["matched_count"] == 0 and hit["snippets"] == [] and hit["message_id"] is None
+        second = (
+            await test_client.get("/api/v1/agents/sessions/search", params={"q": prefix, "limit": 1, "offset": 1}, headers=admin_headers)
+        ).json()
+        assert second["has_more"] is False
+        assert {hit["session"]["id"], second["items"][0]["session"]["id"]} == set(created[:2])
+        await test_client.post(f"/api/v1/agents/sessions/{created[0]}/archive", headers=admin_headers)
+        active = (await test_client.get("/api/v1/agents/sessions/search", params={"q": prefix}, headers=admin_headers)).json()
+        assert [item["session"]["id"] for item in active["items"]] == [created[1]]
+    finally:
+        await delete_created_threads(*created)
+
+
+async def test_cooperation_depth_config_accepts_zero_and_rejects_invalid_values(test_client, admin_headers):
+    """真实配置 HTTP 持久化整数，非法更新不能覆盖原值。"""
+    previous = (await test_client.get("/api/system/config", headers=admin_headers)).json()["max_cooperation_depth"]
+    try:
+        response = await test_client.post("/api/system/config/update", json={"max_cooperation_depth": 0}, headers=admin_headers)
+        assert response.status_code == 200, response.text
+        assert response.json()["max_cooperation_depth"] == 0
+        assert (await test_client.get("/api/system/config", headers=admin_headers)).json()["max_cooperation_depth"] == 0
+        for invalid in [-1, True, 1.5, "2", None]:
+            response = await test_client.post("/api/system/config/update", json={"max_cooperation_depth": invalid}, headers=admin_headers)
+            assert response.status_code == 400, response.text
+            assert (await test_client.get("/api/system/config", headers=admin_headers)).json()["max_cooperation_depth"] == 0
+    finally:
+        restored = await test_client.post("/api/system/config/update", json={"max_cooperation_depth": previous}, headers=admin_headers)
+        assert restored.status_code == 200, restored.text

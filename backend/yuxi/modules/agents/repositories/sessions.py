@@ -6,7 +6,7 @@ import uuid as uuid_lib
 
 from yuxi.modules.agents.repositories.pagination import order_page
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.infrastructure.observability.logging import logger
@@ -184,7 +184,7 @@ class SessionRepository:
                     result[thread_id] = timestamp
         return result
 
-    async def search_sessions_by_message_content(
+    async def search_sessions(
         self,
         *,
         uid: str,
@@ -194,6 +194,7 @@ class SessionRepository:
         offset: int = 0,
         app_id: str | None | object = ALL_APP_SCOPES,
     ) -> tuple[list[dict], bool]:
+        """联合匹配当前作用域的标题与可见消息，片段只来自实际命中消息。"""
         normalized_query = str(query or "").strip()
         if not normalized_query:
             return [], False
@@ -207,6 +208,8 @@ class SessionRepository:
         if app_id is not ALL_APP_SCOPES:
             session_conditions.append(Session.app_id == app_id)
 
+        escaped_title_query = normalized_query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        title_pattern = f"%{escaped_title_query}%"
         message_conditions = message_search_conditions(normalized_query)
         summary = (
             select(
@@ -222,8 +225,15 @@ class SessionRepository:
 
         result = await self.db.execute(
             select(Session, summary.c.matched_count, summary.c.latest_match_at)
-            .join(summary, Session.id == summary.c.session_record_id)
-            .order_by(summary.c.latest_match_at.desc(), Session.updated_at.desc(), Session.id.desc())
+            .outerjoin(summary, Session.id == summary.c.session_record_id)
+            .where(
+                *session_conditions,
+                or_(
+                    Session.title.ilike(title_pattern, escape="\\"),
+                    summary.c.session_record_id.is_not(None),
+                ),
+            )
+            .order_by(func.coalesce(summary.c.latest_match_at, Session.updated_at).desc(), Session.updated_at.desc(), Session.id.desc())
             .limit(limit + 1)
             .offset(offset)
         )

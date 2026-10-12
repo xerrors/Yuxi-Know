@@ -39,7 +39,9 @@ async def test_identity_prompt_uses_persisted_member_and_refreshes_for_new_run(m
     )
     from yuxi.modules.agents.repositories.input import AgentInputRepository
 
-    monkeypatch.setattr(AgentInputRepository, "input_ids_for_runs", AsyncMock(side_effect=[{"run-1": ["input-1"]}, {"run-2": ["input-2", "input-3"]}]))
+    monkeypatch.setattr(
+        AgentInputRepository, "input_ids_for_runs", AsyncMock(side_effect=[{"run-1": ["input-1"]}, {"run-2": ["input-2", "input-3"]}])
+    )
     caller = AsyncMock(
         side_effect=[
             (SimpleNamespace(id="run-1", turn_id="turn-1", input_id="input-1"), root),
@@ -135,3 +137,32 @@ def test_create_session_tool_arguments_accept_local_names(name):
     tool = CooperationMiddleware().tools[0]
     arguments = tool.tool_call_schema.model_validate({"name": name, "description": "完成独立工作"})
     assert arguments.name == name
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("known", [True, False])
+async def test_create_session_exposes_only_owned_depth_denial_as_error_tool_result(monkeypatch, known):
+    """有明确来源的深度拒绝可给模型，其他异常继续由通用保护层脱敏。"""
+    from yuxi.modules.agents.runtime.middlewares import cooperation
+    from yuxi.modules.agents.services.cooperation import SessionCooperationService
+    from yuxi.shared.errors import InvalidOperationError
+
+    @asynccontextmanager
+    async def database():
+        """隔离事务边界，不创建测试之外的持久资源。"""
+        yield object()
+
+    code = "cooperation_depth_exceeded" if known else "untrusted_failure"
+    error = InvalidOperationError("协作深度 3 超过最大协作深度 2" if known else "PRIVATE_ERROR_DETAIL", code=code)
+    monkeypatch.setattr(cooperation.pg_manager, "get_async_session_context", database)
+    monkeypatch.setattr(SessionCooperationService, "create_session", AsyncMock(side_effect=error))
+    runtime = SimpleNamespace(context=SimpleNamespace(run_id="run", uid="user", _cooperation_config_snapshot={}), tool_call_id="create")
+    tool = next(tool for tool in CooperationMiddleware().tools if tool.name == "create_session")
+    if known:
+        result = await tool.coroutine(name="child", description="task", runtime=runtime)
+        assert result.status == "error" and result.tool_call_id == "create"
+        assert result.content == error.message
+    else:
+        with pytest.raises(InvalidOperationError) as rejected:
+            await tool.coroutine(name="child", description="task", runtime=runtime)
+        assert rejected.value is error

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
@@ -9,7 +8,6 @@ from typing import Any
 from sqlalchemy import DateTime, String, case, cast, func, literal, or_, select, union_all, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.background_jobs.models import BackgroundJobRecord
 from yuxi.modules.knowledge.models import KnowledgeBase, KnowledgeFile, KnowledgeProjectionOutbox
@@ -17,9 +15,6 @@ from yuxi.shared.datetime import utc_now
 
 # asyncpg 单条 SQL 参数上限为 32767；按 file_id 批量查询时统一分批。
 SQL_IN_BATCH_SIZE = 10_000
-
-# 文件统计聚合缓存 TTL：列表页高频请求时避免反复全表聚合；文件增删后最多延迟该时长更新
-KB_FILE_STATS_CACHE_TTL = 10
 
 
 class KnowledgeFileRepository:
@@ -540,25 +535,9 @@ class KnowledgeFileRepository:
             return {str(parent_id): int(count or 0) for parent_id, count in result.all() if parent_id}
 
     async def get_kb_file_stats(self, kb_id: str) -> dict[str, int]:
-        """获取知识库文件统计；结果带短 TTL 缓存，避免高频列表请求反复全表聚合。"""
-        from yuxi.infrastructure.redis import get_async_redis_client
-
-        cache_key = f"yuxi:kb_file_stats:{kb_id}"
-        redis_client = await get_async_redis_client()
-        try:
-            cached = await redis_client.get(cache_key)
-            if cached:
-                return json.loads(cached)
-        except Exception as exc:
-            logger.warning(f"Failed to load kb file stats cache {cache_key}: {exc}")
-
+        """从 PostgreSQL 读取当前统计，避免文件提交后列表仍引用旧缓存。"""
         async with pg_manager.get_async_session_context() as session:
-            stats = await self.query_kb_file_stats(kb_id, session=session)
-        try:
-            await redis_client.set(cache_key, json.dumps(stats), ex=KB_FILE_STATS_CACHE_TTL)
-        except Exception as exc:
-            logger.warning(f"Failed to store kb file stats cache {cache_key}: {exc}")
-        return stats
+            return await self.query_kb_file_stats(kb_id, session=session)
 
     async def query_kb_file_stats(self, kb_id: str, *, session: AsyncSession) -> dict[str, int]:
         """在调用方事务中直接聚合文件统计，绕过读取缓存。"""

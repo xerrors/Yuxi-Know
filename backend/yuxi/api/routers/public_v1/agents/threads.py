@@ -121,7 +121,7 @@ async def search_public_threads(
     context: PublicAgentContext = Depends(require_public_context),
     db: AsyncSession = Depends(get_db),
 ):
-    """仅在当前 APP 命名空间搜索历史消息。"""
+    """仅在当前 APP 命名空间搜索会话标题与可见历史消息。"""
     result = await search_threads(
         query=q,
         agent_slug=agent_id,

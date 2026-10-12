@@ -62,6 +62,22 @@ def capacity_calls(messages, results):
     return []
 
 
+def depth_calls(messages, results):
+    """按真实工具回执推进三层派发，第三层必须被执行边界拒绝。"""
+    users = " ".join(str(message["content"]) for message in messages if message["role"] == "user")
+    depth = int(re.search(r"COOP_DEPTH:(\d+)", users).group(1))
+    if "depth-create" not in results:
+        return [("depth-create", "create_session", {"name": f"depth-{depth + 1}", "description": f"{OUTPUT} COOP_DEPTH:{depth + 1}"})]
+    if depth == 2:
+        assert "协作深度 3" in str(results["depth-create"]), "第三层协作没有因深度被拒绝"
+        return []
+    created = json.loads(results["depth-create"])
+    if "depth-wait" not in results:
+        return [("depth-wait", "wait_inputs", {"input_ids": [created["input_id"]], "timeout_seconds": 60})]
+    assert all(item["terminal"] for item in json.loads(results["depth-wait"])["results"])
+    return []
+
+
 class CooperationReplayHandler(BaseHTTPRequestHandler):
     """只接受协作测试声明的模型契约。"""
 
@@ -129,7 +145,9 @@ class CooperationReplayHandler(BaseHTTPRequestHandler):
             return
         results = {m.get("tool_call_id"): m.get("content") for m in messages if m["role"] == "tool"}
         calls = []
-        if "COOP_CAPACITY" in serialized:
+        if "COOP_DEPTH:" in serialized:
+            calls = depth_calls(messages, results)
+        elif "COOP_CAPACITY" in serialized:
             calls = capacity_calls(messages, results)
         else:
             calls = self.shared_sandbox_calls(serialized, child, results)

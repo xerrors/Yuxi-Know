@@ -75,7 +75,7 @@ async def stats_store(monkeypatch):
 
 @pytest.mark.parametrize("fails", [False, True])
 async def test_operation_refresh_ignores_cached_stats(stats_store, tmp_path, fails):
-    """成功与异常收尾都必须写回真实结果，读缓存可继续复用。"""
+    """成功与异常收尾都必须写回真实结果，统计读取返回同一最新事实。"""
     kb_id, sessions, redis = stats_store
     cached = await KnowledgeFileRepository().get_kb_file_stats(kb_id)
     assert cached["pending_index_count"] == 1
@@ -109,7 +109,9 @@ async def test_operation_refresh_ignores_cached_stats(stats_store, tmp_path, fai
     assert len(summaries) == 1
     assert summaries[0].chunk_count == 158
     assert summaries[0].pending_index_count == 0
-    assert await KnowledgeFileRepository().get_kb_file_stats(kb_id) == cached
+    fresh = await KnowledgeFileRepository().get_kb_file_stats(kb_id)
+    assert fresh["chunk_count"] == row.additional_params["stats"]["chunk_count"]
+    assert fresh["pending_index_count"] == 0
 
 
 async def test_refresh_queries_after_acquiring_row_lock(stats_store, tmp_path):
@@ -200,4 +202,28 @@ async def test_knowledge_base_list_returns_fresh_persisted_stats(stats_store, tm
     assert row.additional_params["stats"] == result["stats"]
     assert file.chunk_count == result["stats"]["chunk_count"]
     assert file.token_count == result["stats"]["token_count"]
-    assert await KnowledgeFileRepository().get_kb_file_stats(kb_id) == cached
+    fresh = await KnowledgeFileRepository().get_kb_file_stats(kb_id)
+    assert fresh["chunk_count"] == row.additional_params["stats"]["chunk_count"]
+    assert fresh["pending_index_count"] == 0
+
+
+async def test_second_file_immediately_refreshes_detail_and_file_list_stats(stats_store, tmp_path):
+    """旧统计已经缓存时，第二个文件提交后的详情与列表仍读取两个文件。"""
+    kb_id, sessions, redis = stats_store
+    assert (await KnowledgeFileRepository().get_kb_file_stats(kb_id))["file_count"] == 1
+    await redis.set(f"yuxi:kb_file_stats:{kb_id}", '{"file_count":1,"row_count":1}', ex=300)
+    manager = KnowledgeBaseManager(str(tmp_path))
+
+    async def upload():
+        """提交第二个文件的真实元数据，外部文件接收留在上传 E2E 验证。"""
+        async with sessions.begin() as db:
+            db.add(KnowledgeFile(file_id=kb_id + "-second", kb_id=kb_id, filename="second.md", file_size=6, status="uploaded"))
+
+    await manager._run_with_stats_refresh(kb_id, upload())
+    detail = await manager.get_knowledge_base_info(kb_id)
+    listing = await manager.list_document_files(kb_id)
+    assert detail.file_count == 2
+    assert detail.total_size == 6
+    assert listing["total"] == 2
+    assert listing["stats"]["file_count"] == 2
+    assert listing["stats"]["total_size"] == 6

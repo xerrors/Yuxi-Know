@@ -158,3 +158,17 @@ async def test_first_implicit_option_read_initializes_cache_version(monkeypatch)
 
 async def _async_value(value):
     return value
+
+
+def test_cooperation_depth_defaults_to_two_and_preserves_zero():
+    """整数配置的零值用于禁止新增协作，不可被默认值覆盖。"""
+    assert options.system_options.resolve({})["max_cooperation_depth"] == 2
+    assert options.system_options.resolve({"max_cooperation_depth": 0})["max_cooperation_depth"] == 0
+
+
+@pytest.mark.parametrize("value", [-1, True, 1.5, "2", None])
+def test_cooperation_depth_rejects_non_integer_or_negative_values(value):
+    """配置持久化边界拒绝错误数值，不按字符串或布尔值凑成深度。"""
+    field = {"key": "max_cooperation_depth", "type": "integer", "min": 0}
+    with pytest.raises(ValueError, match="非负整数"):
+        options.normalize_option_value(field, value)

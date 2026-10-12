@@ -51,6 +51,24 @@
         </div>
       </template>
 
+      <div class="section-title">协作限制</div>
+      <div class="settings-panel">
+        <div class="setting-row">
+          <label class="setting-label" for="max-cooperation-depth">最大协作深度</label>
+          <div class="setting-content">
+            <a-input-number
+              id="max-cooperation-depth"
+              aria-describedby="cooperation-depth-help"
+              :value="configStore.config?.max_cooperation_depth ?? 2"
+              :min="0"
+              :precision="0"
+              @change="handleCooperationDepthChange"
+            />
+          </div>
+          <p id="cooperation-depth-help" class="setting-description">根对话为第 0 层，默认允许 2 层协作；设为 0 可关闭新增协作会话。</p>
+        </div>
+      </div>
+
       <SkillSettingsSection :class="{ 'first-section': !userStore.isSuperAdmin }" />
     </template>
 
@@ -138,6 +156,11 @@ const handleChange = (key, e) => {
   configStore.setConfigValue(key, e)
 }
 
+/** 只提交完整的非负整数，清空输入不会修改已保存的限制。 */
+const handleCooperationDepthChange = (value) => {
+  if (Number.isInteger(value) && value >= 0) handleChange('max_cooperation_depth', value)
+}
+
 const handleChatModelSelect = (spec) => {
   if (typeof spec === 'string' && spec) {
     configStore.setConfigValue('default_model', spec)
@@ -184,6 +207,12 @@ const openLink = (url) => {
       gap: 6px;
       min-width: 0;
     }
+  }
+
+  .setting-description {
+    margin: 0;
+    color: var(--color-text-secondary);
+    font-size: 13px;
   }
 
   .setting-label {
