@@ -4,7 +4,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from yuxi.modules.agents.runtime.sandbox.backend import _normalize_path
 from yuxi.modules.agents.runtime.sandbox.paths import normalize_artifact_path, normalize_runtime_path
 from yuxi.modules.agents.runtime.tool_approval import _normalize_runtime_path
 from yuxi.modules.agents.services.artifacts import _normalize_artifact_path
@@ -16,7 +15,7 @@ from yuxi.shared.errors import PermissionDeniedError
 @pytest.mark.parametrize("path", ["/a/../b", "/https://example.invalid/a", "/a\\b", "/a\0b"])
 def test_path_owners_reject_the_same_invalid_bytes(path):
     """校验不能因直接 backend 或产物读取入口不同而放宽。"""
-    for normalize in (normalize_runtime_path, _normalize_path, normalize_workspace_scope):
+    for normalize in (normalize_runtime_path, normalize_workspace_scope):
         with pytest.raises(ValueError):
             normalize(path)
     assert _normalize_runtime_path(path) is None

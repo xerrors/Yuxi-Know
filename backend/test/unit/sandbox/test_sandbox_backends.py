@@ -29,13 +29,9 @@ from yuxi.modules.agents.runtime.sandbox.paths import workdir_runtime_paths
 WORKDIR_RELATIVE_PATH = "projects/11111111-1111-4111-8111-111111111111"
 WORKDIR_PATH = "/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111"
 VIRTUAL_PATH_LARGE_TOOL_RESULTS, VIRTUAL_PATH_CONVERSATION_HISTORY = workdir_runtime_paths(WORKDIR_PATH)
-_UNSUPPORTED_READ_ERROR = (
-    "read_file only supports UTF-8 text and image files. "
-    "This file type is not supported."
-)
+_UNSUPPORTED_READ_ERROR = "read_file only supports UTF-8 text and image files. This file type is not supported."
 _UNSUPPORTED_DOCUMENT_ERROR = (
-    "read_file does not support PDF or Office documents. "
-    "Use ocr_parse_file to convert the file to Markdown first."
+    "read_file does not support PDF or Office documents. Use ocr_parse_file to convert the file to Markdown first."
 )
 
 
@@ -569,7 +565,7 @@ def test_provider_revalidates_runtime_generation_after_keepalive(monkeypatch) ->
             )
 
     provider = _make_provider(FakeClient())
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.provider.load_user_agent_env", lambda _uid: {})
+    monkeypatch.setattr("yuxi.modules.agents.repositories.environment.AgentEnvRepository.load_for_sync_runtime", lambda _uid: {})
     provider.get(
         "root-thread",
         uid="user-1",
@@ -607,7 +603,7 @@ def test_provider_recreates_cross_process_deleted_generation_before_touch_interv
             raise AssertionError("fresh cache must revalidate generation without keepalive touch")
 
     provider = _make_provider(FakeClient())
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.provider.load_user_agent_env", lambda _uid: {})
+    monkeypatch.setattr("yuxi.modules.agents.repositories.environment.AgentEnvRepository.load_for_sync_runtime", lambda _uid: {})
     provider.get(
         "root-thread",
         uid="user-1",
@@ -649,7 +645,7 @@ def test_provider_rejects_project_workdir_drift_after_keepalive(monkeypatch) -> 
             )
 
     provider = _make_provider(FakeClient())
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.provider.load_user_agent_env", lambda _uid: {})
+    monkeypatch.setattr("yuxi.modules.agents.repositories.environment.AgentEnvRepository.load_for_sync_runtime", lambda _uid: {})
     provider.get(
         "root-thread",
         uid="user-1",
@@ -677,7 +673,7 @@ def test_provider_rejects_rebinding_cached_runtime_to_another_workdir(monkeypatc
             )
 
     provider = _make_provider(FakeClient())
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.provider.load_user_agent_env", lambda _uid: {})
+    monkeypatch.setattr("yuxi.modules.agents.repositories.environment.AgentEnvRepository.load_for_sync_runtime", lambda _uid: {})
     provider.get(
         "root-thread",
         uid="user-1",
@@ -734,7 +730,7 @@ def test_provider_uses_distinct_sandbox_scope_for_different_uid(monkeypatch) -> 
             return True
 
     provider = _make_provider(FakeClient())
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.provider.load_user_agent_env", lambda uid: {"A": uid})
+    monkeypatch.setattr("yuxi.modules.agents.repositories.environment.AgentEnvRepository.load_for_sync_runtime", lambda uid: {"A": uid})
 
     sandbox_1 = provider.get(
         "child-thread",
@@ -772,7 +768,7 @@ def test_provider_maps_external_uid_only_at_provisioner_filesystem_boundary(monk
 
     provider = _make_provider(FakeClient())
     logical_uid = "oidc:12345678-1234-1234-1234-123456789abc"
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.provider.load_user_agent_env", lambda uid: {"OWNER": uid})
+    monkeypatch.setattr("yuxi.modules.agents.repositories.environment.AgentEnvRepository.load_for_sync_runtime", lambda uid: {"OWNER": uid})
 
     provider.get("thread-1", uid=logical_uid, create_if_missing=True)
 
@@ -798,7 +794,7 @@ def test_provider_get_create_if_missing_ensures_expected_runtime_scope(monkeypat
             raise AssertionError("create_if_missing should ensure sandbox through provisioner create")
 
     provider = _make_provider(FakeClient())
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.provider.load_user_agent_env", lambda uid: {"A": uid})
+    monkeypatch.setattr("yuxi.modules.agents.repositories.environment.AgentEnvRepository.load_for_sync_runtime", lambda uid: {"A": uid})
 
     connection = provider.get(
         "child-thread",
@@ -833,7 +829,7 @@ def test_provider_can_create_sandbox_without_environment(monkeypatch) -> None:
 
     provider = _make_provider(FakeClient())
     monkeypatch.setattr(
-        "yuxi.modules.agents.runtime.sandbox.provider.load_user_agent_env",
+        "yuxi.modules.agents.repositories.environment.AgentEnvRepository.load_for_sync_runtime",
         lambda _uid: pytest.fail("隔离 Sandbox 不应加载用户环境变量"),
     )
 
@@ -1107,6 +1103,7 @@ async def test_provisioner_read_error_matrix_keeps_sync_and_async_contracts(
 
     if entry_point == "sync":
         if case == "binary-bytes":
+
             def read_binary(file_path, offset=0, limit=None):
                 """返回无法按文本读取的二进制前缀。"""
                 read_calls.append(file_path)
@@ -1114,6 +1111,7 @@ async def test_provisioner_read_error_matrix_keeps_sync_and_async_contracts(
 
             monkeypatch.setattr(backend, "_read_binary", read_binary)
         elif case == "decode-error":
+
             def read_binary(file_path, offset=0, limit=None):
                 """模拟 sandbox 文本端点返回的 UTF-8 解码错误。"""
                 read_calls.append(file_path)
@@ -1132,6 +1130,7 @@ async def test_provisioner_read_error_matrix_keeps_sync_and_async_contracts(
             assert read_calls == [path]
             assert size_calls == []
     else:
+
         async def download_file(*, path, **_kwargs):
             """模拟原生下载端点确认受支持的文件对象存在。"""
             download_calls.append(path)

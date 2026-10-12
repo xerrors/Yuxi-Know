@@ -9,7 +9,7 @@
 - **【已完成】第三阶段：领域异常与 HTTP 协议分离**，提交 `a17c1503`。
 - **【已完成】第四阶段：H1/H2 授权准备与刷新收敛**，提交 `f088bc28`；共用资源用例，按输入准备、实际请求与返回身份拆分工作；依据见[授权执行边界决策](../decisions/implemented/2026-10-12-runtime-authorization-boundaries.md)。
 - **【已完成】第五阶段：运行、Skill 与工具边界收敛**，提交 `af8b6afd`；依据见[运行扩展决策](../decisions/implemented/2026-10-12-runtime-extension-contracts.md)。
-- **【已完成】第六阶段：Agent 事务与生命周期收敛**；依据见[事务与生命周期决策](../decisions/implemented/2026-10-12-agent-transaction-lifecycle.md)。
+- **【已完成】第六阶段：Agent 事务与生命周期收敛**，提交 `660661c4`；依据见[事务与生命周期决策](../decisions/implemented/2026-10-12-agent-transaction-lifecycle.md)。
 - **【待处理】步骤 7–9**：身份、知识存储与业务、共享技术与跨域依赖及剩余条目，范围与验收见第七节。
 
 前六阶段已闭合模式 1/2、模式 8 的逐项复核、D1–D9、H1–H4、H6/H7/H9 及所标明的运行与扩展条目。模式 3–7 的复合剩余项、H5/H8、身份、知识与共享技术条目继续处理；复合行只关闭已标明的子范围。
@@ -325,6 +325,19 @@ API Key 创建整个用例在 `api/routers/identity/users.py:150-200` 路由内�
 验收：真实 HTTP/PG 并发与 worker/SSE E2E 覆盖同键同/异意图、用户/APP 隔离、锁等待变化、回滚、FIFO、steer、回答/审批/协作恢复、成功/失败/取消、重复投递、lease 失效及崩溃恢复。回读 Receipt/Input、唯一 current Run、正确 Message/Turn/Run 绑定、result_run_id、同 Run 结果/用量/错误和终态事件；schedules 软删重放、workspace 删除冲突、公开可见性与预算保留各自契约，不从相邻 Run 猜结果。
 
 结果：上述共同部分、治理事务、消息/Memory、读写命名与执行投影已收敛，必要差异逐项标为复核保留。全量 unit **2707 passed / 60 skipped**；真实 HTTP/PG **207 项独立场景通过**；worker/SSE E2E **32 项通过**。E2E 首轮缺少协作 replay 时两项超时，补齐后两项重跑通过；失败记录保留，不将首轮写为通过。六类隔离缺陷恢复中，五类在业务不变量断言失败、一类在失效用户入口错误归属断言失败；候选恢复后 **9 项 PG oracle 通过**。工程契约及 **64 项工程检查 unit**、变更 Python Ruff/format、相对链接、docs build、diff 与独立 Review 随最终候选完成。正式部署、真实外部模型与 Kubernetes 未验证，skip 不计通过。依据见[事务与生命周期决策](../decisions/implemented/2026-10-12-agent-transaction-lifecycle.md)。
+
+#### 【已优化】Step 5/6 结构审阅的六项后续
+
+- **【已优化】完整 Skill 快照直接消费**：清除中间件、工具注册与刷新中的字典兜底；None 表示未准备，实际授权入口仍拒绝缺失装配，激活范围保持有效 Skill 交集。
+- **【已清理】环境和路径透明转发**：删除无消费者的 normalize_env、load_user_agent_env 及 sandbox._normalize_path；直接调用环境仓储和 owning 路径边界，保留领域错误翻译。
+- **【已优化】Skill 基础读取的导入边界**：MCP service 只在实际依赖校验时加载。
+- **【已优化】模型前事务提交明确归属**：execution 主流程提交 runtime/附件/trace 准备事务；追踪 helper 只写入，失败或取消回滚并结束 observation 后进入既有收敛，图不启动。
+- **【已优化】终态读取与 steer 裁决**：复用同事务已经锁定的 Thread/Turn 和裁决后的 steer；保留 current Run/lease、锁顺序、批次消费与提交后投递。
+- **【已优化】checkpoint 事务参数**：显式传入 AsyncSession，局部复用仓储，移除以 SessionRepository 承载整个事务的转发。
+
+六项合为一个后续提交；决定与边界见[运行结构简化决定](../decisions/implemented/2026-10-12-agent-structure-simplification.md)。Step 7 保持待处理。
+
+验证：完整 non-slow unit **2713 passed / 60 skipped**，相关真实 PG **113 passed**，真实 HTTP **22 passed**，worker/SSE、Docker 沙盒、协作及专属/个人 Skill E2E **34 passed**。协作 **7 项**串行复验及含 checkpoint 的 PG/HTTP **23 项**串行复验均通过，与 PG 113 项合计 **136 个独立 integration 场景**。准备/提交失败及取消的六项负向案例证明图未启动、未提交事务被回滚与 observation 实际结束。完整 unit 曾因授权缺属性拒绝契约失败，保留该授权 guard 后全量通过；扩展 integration 首轮 114 项因跨环境 inventory 清理在 setup 报错，限定本环境 prefix 后重新执行。HTTP/PG checkpoint 测试曾因旧接口接线失败，迁移到 owning checkpointer 后业务断言通过，但与 E2E 重叠的 teardown 清理报错；串行复验 23 项全数通过，清理错误不计通过。ignored provisioner 副本只过滤本环境 inventory，生产代码、业务执行与 oracle 保持候选。工程契约、64 项工程检查 unit、变更 Python Ruff/format、相对链接、docs build、diff 与独立 Review 随最终候选执行；真实外部模型、Kubernetes 与生产部署未验证，skip 不计通过。
 
 ### Step 7：【待处理】身份用例与事务归属一起收敛
 

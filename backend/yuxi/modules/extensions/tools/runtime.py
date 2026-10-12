@@ -81,12 +81,14 @@ async def resolve_configured_runtime_tools(context) -> list[Any]:
 
 def resolve_skill_gated_tools(context) -> list:
     """解析所有可见 Skill 依赖且需注册到 ToolNode 的本地工具。"""
-    runtime_skills = (getattr(context, "skill_runtime_snapshot", None) or {}).get("runtime_skills", {}) or {}
-    effective_skills = (getattr(context, "skill_runtime_snapshot", None) or {}).get("effective_skills", []) or []
+    snapshot = context.skill_runtime_snapshot
+    if snapshot is None:
+        return []
+    runtime_skills = snapshot["runtime_skills"]
+    effective_skills = snapshot["effective_skills"]
     tool_names: set[str] = set()
     for slug in effective_skills:
-        node = runtime_skills.get(slug) or {}
-        tool_names.update(node.get("tools", []))
+        tool_names.update(runtime_skills[slug]["tools"])
     if not tool_names:
         return []
     return [tool for tool in get_all_tool_instances() if tool.name in tool_names]

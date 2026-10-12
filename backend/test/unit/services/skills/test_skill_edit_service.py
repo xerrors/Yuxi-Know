@@ -101,7 +101,7 @@ def _setup_shared_skill(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(FakeRepo, "list_enabled_readable", accessible, raising=False)
     monkeypatch.setattr(tool_service, "get_tool_metadata", lambda: [])
     monkeypatch.setattr(skill_service, "get_enabled_mcp_server_slugs", mcps)
-    monkeypatch.setattr(skill_access, "get_enabled_mcp_server_slugs", mcps)
+    monkeypatch.setattr("yuxi.modules.extensions.mcp.service.get_enabled_mcp_server_slugs", mcps)
     return skill_dir, item, content
 
 

@@ -53,7 +53,7 @@ async def resolve_runtime_skills_for_context(
         if agent is None:
             raise PermissionError("智能体不存在或无权限访问")
         bound = await SkillRepository(db).get_by_bound_agent_id(agent.id)
-        previous = getattr(context, "skill_runtime_snapshot", None)
+        previous = context.skill_runtime_snapshot
         if bound is not None and previous is not None:
             prepared_bound = {slug for slug, metadata in previous["skill_metadata"].items() if metadata["source_scope"] == "agent_bound"}
             # 执行边界只复核已准备绑定；中途新增绑定在下一 Run 生效。

@@ -540,17 +540,19 @@ async def refresh_agent_context_resources(context: BaseContext, *, db, user, age
     for name in resource_fields:
         setattr(context, name, normalized[name])
 
-    previous = context.skill_runtime_snapshot or {}
+    previous = context.skill_runtime_snapshot
     current = await resolve_runtime_skills_for_context(context, db=db, user=user, agent=agent)
-    for slug, metadata in previous.get("skill_metadata", {}).items():
-        if metadata.get("source_scope") == "agent_bound" and slug in current["preloaded_skill_contents"]:
-            current["preloaded_skill_contents"][slug] = previous["preloaded_skill_contents"][slug]
+    if previous is not None:
+        for slug, metadata in previous["skill_metadata"].items():
+            if metadata["source_scope"] == "agent_bound" and slug in current["preloaded_skill_contents"]:
+                current["preloaded_skill_contents"][slug] = previous["preloaded_skill_contents"][slug]
     context.skill_runtime_snapshot = current
     context.skills = current["context_skills"]
     context.preload_skills = current["context_preload_skills"]
-    context._capability_limited = any(
-        isinstance(selections[name], list) and set(selections[name]) - set(normalized[name]) for name in resource_fields
-    ) or current.get("capability_limited", False)
+    context._capability_limited = (
+        any(isinstance(selections[name], list) and set(selections[name]) - set(normalized[name]) for name in resource_fields)
+        or current["capability_limited"]
+    )
 
 
 def validate_resource_selection(field_name: str, value: Any) -> ResourceSelection:

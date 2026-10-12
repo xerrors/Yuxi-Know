@@ -12,6 +12,7 @@ from yuxi.modules.workspace import paths as workspace_paths
 from test.unit.support.agent_context_fixtures import prepared_execution
 import yuxi.modules.agents.services.execution as svc
 import yuxi.modules.agents.services.checkpoint_messages as message_svc
+import yuxi.modules.agents.services.runs as run_svc
 import yuxi.modules.agents.services.runs as lifecycle_runs
 
 
@@ -107,10 +108,11 @@ def owning_turn_boundary(monkeypatch):
         async def get_pending_steer(self, **kwargs):
             return None
 
+    monkeypatch.setattr(message_svc, "SessionRepository", lambda db: db.message_repository)
     monkeypatch.setattr(message_svc, "MessageRepository", lambda db: db.message_repository)
     monkeypatch.setattr(message_svc, "AgentTurnRepository", TurnRepo)
-    monkeypatch.setattr(message_svc, "AgentInputRepository", InputRepo)
-    monkeypatch.setattr(message_svc, "AttachmentRepository", lambda db: SimpleNamespace(has_unready=AsyncMock(return_value=False)))
+    monkeypatch.setattr(run_svc, "AgentInputRepository", InputRepo)
+    monkeypatch.setattr(run_svc, "AttachmentRepository", lambda db: SimpleNamespace(has_unready=AsyncMock(return_value=False)))
 
     async def settle(**kwargs):
         repo = message_svc.AgentRunRepository(kwargs["db"])
@@ -300,7 +302,7 @@ async def test_error_output_and_failed_run_commit_together(monkeypatch):
     monkeypatch.setattr(message_svc, "settle_checkpoint", settle_checkpoint)
     repo = _FakeConvRepo(FakeDB())
     message = await message_svc.save_partial_message(
-        repo,
+        repo.db,
         "thread-1",
         run_id="run-1",
         turn_id="turn-1",
@@ -341,7 +343,7 @@ async def test_empty_final_checkpoint_cannot_complete_prior_error_output(monkeyp
         await message_svc.save_messages_from_langgraph_state(
             state=SimpleNamespace(values={"messages": []}),
             thread_id="thread-1",
-            session_repo=_FakeConvRepo(db),
+            db=_FakeConvRepo(db).db,
             run_id="run-1",
             turn_id="turn-1",
             worker_id="worker-1",
@@ -384,7 +386,7 @@ async def test_steer_before_first_model_yields_without_ai_output(monkeypatch):
         events.append("dispatch")
 
     monkeypatch.setattr(message_svc, "AgentRunRepository", RunRepo)
-    monkeypatch.setattr(message_svc, "AgentInputRepository", InputRepo)
+    monkeypatch.setattr(run_svc, "AgentInputRepository", InputRepo)
     monkeypatch.setattr(message_svc, "ModelMessageAuditRepository", _EmptyModelAuditRepo)
     monkeypatch.setattr(message_svc, "ToolMessageAuditRepository", _EmptyToolAuditRepo)
     monkeypatch.setattr(message_svc, "settle_checkpoint", settle)
@@ -393,7 +395,7 @@ async def test_steer_before_first_model_yields_without_ai_output(monkeypatch):
     status = await message_svc.save_messages_from_langgraph_state(
         state=SimpleNamespace(values={"messages": []}),
         thread_id="thread-1",
-        session_repo=repo,
+        db=repo.db,
         run_id="run-1",
         turn_id="turn-1",
         worker_id="owner",
@@ -449,7 +451,7 @@ async def test_save_messages_from_langgraph_state_backfills_run_output_message(m
     await message_svc.save_messages_from_langgraph_state(
         state=await FakeGraph().aget_state({}),
         thread_id="thread-1",
-        session_repo=session_repo,
+        db=session_repo.db,
         trace_info={"langfuse_trace_id": "trace-1"},
         run_id="run-1",
         turn_id="req-1",
@@ -504,7 +506,7 @@ async def test_state_fallback_does_not_rebind_hidden_message_from_previous_run(m
     await message_svc.save_messages_from_langgraph_state(
         state=await FakeGraph().aget_state({}),
         thread_id="thread-1",
-        session_repo=session_repo,
+        db=session_repo.db,
         run_id="run-current",
         turn_id="request-current",
         worker_id="worker-current",
@@ -592,7 +594,7 @@ async def test_state_reconcile_uses_latest_error_unless_run_is_interrupted(
     await message_svc.save_messages_from_langgraph_state(
         state=await FakeGraph().aget_state({}),
         thread_id="thread-1",
-        session_repo=_FakeConvRepo(fake_db),
+        db=_FakeConvRepo(fake_db).db,
         run_id="run-current",
         turn_id="request-current",
         worker_id="worker-current",
@@ -658,7 +660,7 @@ async def test_model_state_reconcile_uses_latest_message_when_operation_id_is_re
     await message_svc.save_messages_from_langgraph_state(
         state=await FakeGraph().aget_state({}),
         thread_id="thread-1",
-        session_repo=session_repo,
+        db=session_repo.db,
         run_id="run-current",
         turn_id="request-current",
         worker_id="worker-current",
@@ -719,7 +721,7 @@ async def test_completed_run_rejects_unmatched_final_state_message(monkeypatch: 
         await message_svc.save_messages_from_langgraph_state(
             state=await FakeGraph().aget_state({}),
             thread_id="thread-1",
-            session_repo=_FakeConvRepo(fake_db),
+            db=_FakeConvRepo(fake_db).db,
             run_id="run-1",
             turn_id="request-1",
             worker_id="worker-1",
@@ -791,7 +793,7 @@ async def test_interrupted_run_does_not_bind_older_reconciled_model_audit(
     committed = await message_svc.save_messages_from_langgraph_state(
         state=await FakeGraph().aget_state({}),
         thread_id="thread-1",
-        session_repo=session_repo,
+        db=session_repo.db,
         run_id="run-1",
         turn_id="request-1",
         worker_id="worker-1",
@@ -867,7 +869,7 @@ async def test_tool_call_interrupt_ignores_historical_same_id_tool_message(monke
     committed = await message_svc.save_messages_from_langgraph_state(
         state=await FakeGraph().aget_state({}),
         thread_id="thread-1",
-        session_repo=session_repo,
+        db=session_repo.db,
         run_id="run-1",
         turn_id="request-1",
         worker_id="worker-1",
@@ -923,7 +925,7 @@ async def test_interrupt_persists_message_and_terminal_status_in_one_commit(
     terminal_committed = await message_svc.save_messages_from_langgraph_state(
         state=await FakeGraph().aget_state({}),
         thread_id="thread-1",
-        session_repo=_FakeConvRepo(fake_db),
+        db=_FakeConvRepo(fake_db).db,
         run_id="run-1",
         turn_id="request-1",
         worker_id="worker-1",

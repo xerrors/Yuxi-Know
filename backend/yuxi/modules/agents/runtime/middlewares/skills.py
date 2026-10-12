@@ -68,10 +68,10 @@ class SkillsMiddleware(AgentMiddleware):
         """包装模型调用，处理 skills 提示词注入、动态激活和依赖展开"""
         runtime_context = request.runtime.context
 
+        snapshot = runtime_context.skill_runtime_snapshot
         if self.enable_skills_prompt:
-            effective_skills = (getattr(runtime_context, "skill_runtime_snapshot", None) or {}).get("effective_skills", None)
-            if isinstance(effective_skills, list):
-                effective_skills = normalize_string_list(effective_skills)
+            if snapshot is not None:
+                effective_skills = snapshot["effective_skills"]
                 preloaded_skills = self._get_preloaded_skills(runtime_context)
                 preloaded_set = set(preloaded_skills)
                 prompt_sections: list[str] = []
@@ -147,7 +147,7 @@ class SkillsMiddleware(AgentMiddleware):
         base_tool_names.update(BASE_TOOL_NAMES)
         gated: set[str] = set()
         for slug in effective_skills:
-            gated.update(runtime_skills.get(slug, {}).get("tools", []))
+            gated.update(runtime_skills[slug]["tools"])
         return gated - base_tool_names
 
     async def _get_mcp_tools_from_context(
@@ -191,14 +191,7 @@ class SkillsMiddleware(AgentMiddleware):
     def _collect_prompt_metadata(self, slugs: list[str], runtime_context) -> list[RuntimeSkill]:
         """收集指定 slugs 的提示词元数据"""
         runtime_skills = self._get_runtime_skills(runtime_context)
-        result: list[RuntimeSkill] = []
-        for slug in slugs:
-            item = runtime_skills.get(slug)
-            if not item:
-                logger.debug(f"Skill slug not found in prompt metadata, skip: {slug}")
-                continue
-            result.append(dict(item))
-        return result
+        return [dict(runtime_skills[slug]) for slug in slugs]
 
     def _process_tool_call_result(self, result: Any, request: ToolCallRequest) -> Any:
         """处理工具调用结果，检查并处理 skill 动态激活"""
@@ -277,29 +270,31 @@ class SkillsMiddleware(AgentMiddleware):
         return None
 
     def _get_effective_skills(self, runtime_context) -> set[str]:
-        selected = (getattr(runtime_context, "skill_runtime_snapshot", None) or {}).get("effective_skills", [])
-        return set(normalize_string_list(selected if isinstance(selected, list) else []))
+        """读取完整快照的有效 Skill，未准备阶段返回空集合。"""
+        snapshot = runtime_context.skill_runtime_snapshot
+        return set(snapshot["effective_skills"]) if snapshot is not None else set()
 
     def _get_runtime_skills(self, runtime_context) -> dict[str, RuntimeSkill]:
-        runtime_skills = (getattr(runtime_context, "skill_runtime_snapshot", None) or {}).get("runtime_skills", {})
-        return runtime_skills if isinstance(runtime_skills, dict) else {}
+        """读取准备阶段构造的运行信息。"""
+        snapshot = runtime_context.skill_runtime_snapshot
+        return snapshot["runtime_skills"] if snapshot is not None else {}
 
     def _get_preloaded_skills(self, runtime_context) -> list[str]:
-        selected = (getattr(runtime_context, "skill_runtime_snapshot", None) or {}).get("preloaded_skills", [])
-        effective = self._get_effective_skills(runtime_context)
-        return [slug for slug in normalize_string_list(selected if isinstance(selected, list) else []) if slug in effective]
+        """仅保留完整快照内仍有效的预加载 Skill。"""
+        snapshot = runtime_context.skill_runtime_snapshot
+        if snapshot is None:
+            return []
+        effective = set(snapshot["effective_skills"])
+        return [slug for slug in snapshot["preloaded_skills"] if slug in effective]
 
     def _build_preloaded_skills_section(self, slugs: list[str], runtime_context) -> str:
-        """构建已预加载 Skill 的完整系统提示段。"""
-
-        contents = (getattr(runtime_context, "skill_runtime_snapshot", None) or {}).get("preloaded_skill_contents", {})
-        if not isinstance(contents, dict):
-            contents = {}
+        """从完整快照构建预加载提示；未准备阶段没有正文。"""
+        snapshot = runtime_context.skill_runtime_snapshot
+        contents = snapshot["preloaded_skill_contents"] if snapshot is not None else {}
         sections = ["# Preloaded Skills", "The following Skill instructions are already loaded and active."]
         for slug in slugs:
-            content = contents.get(slug)
-            if isinstance(content, str):
-                sections.append(f'<preloaded_skill slug="{slug}">\n{content}\n</preloaded_skill>')
+            content = contents[slug]
+            sections.append(f'<preloaded_skill slug="{slug}">\n{content}\n</preloaded_skill>')
         return "\n\n".join(sections)
 
     def _merge_activated_skill_update(self, result: Any, slug: str):

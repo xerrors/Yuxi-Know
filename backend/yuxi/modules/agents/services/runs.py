@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from yuxi.modules.agents.services.cooperation_notifications import notify_turn_state
 from yuxi.modules.agents.services.run_creation import create_turn_run
 from yuxi.modules.agents.models.runs import AgentRun
+from yuxi.modules.agents.models.inputs import AgentInput
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.modules.agents.repositories.attachments import AttachmentRepository
@@ -58,6 +59,9 @@ async def settle_checkpoint(
     *,
     db: AsyncSession,
     run: AgentRun,
+    agent_session: Session,
+    turn: AgentTurn,
+    pending_steer: AgentInput | None,
     worker_id: str | None,
     status: str,
     token_usage: dict | None,
@@ -65,35 +69,20 @@ async def settle_checkpoint(
     error_type: str | None = None,
     error_message: str | None = None,
 ) -> RunSettlement:
-    """在已锁 Thread 的输出事务内决定 yielded、waiting 或整轮终态。"""
+    """消费同事务已锁的 Session/Turn 和 steer 裁决，更新持久终态。"""
     turn_repo = AgentTurnRepository(db)
-    turn = await turn_repo.get_for_scope(
-        turn_id=run.turn_id,
-        thread_id=run.thread_id,
-        uid=run.uid,
-        app_id=run.app_id,
-        for_update=True,
-    )
-    if turn is None or turn.current_run_id != run.id:
-        raise ValueError("Run 不是目标 Turn 的当前执行段")
-    input_repo = AgentInputRepository(db)
     run_repo = AgentRunRepository(db)
-    agent_session = await SessionRepository(db).get_session_by_thread_id(run.thread_id)
-    if agent_session is None or agent_session.uid != run.uid or agent_session.app_id != run.app_id:
+    if turn.current_run_id != run.id:
+        raise ValueError("Run 不是目标 Turn 的当前执行段")
+    if agent_session.uid != run.uid or agent_session.app_id != run.app_id:
         raise ValueError("Run 的 Thread 归属不一致")
 
-    if status == "completed" and turn.status == "running" and not agent_session.queue_paused:
-        pending = await input_repo.get_pending_steer(
-            thread_id=run.thread_id,
-            uid=run.uid,
-            app_id=run.app_id,
-        )
-        if pending is not None and not await AttachmentRepository(db).has_unready(pending.id):
-            terminal, changed = await run_repo.set_terminal_status(run.id, status="yielded", token_usage=token_usage, worker_id=worker_id)
-            if terminal is None or not changed:
-                raise ValueError("Steer 接管前当前 Run 所有权已失效")
-            next_dispatch = await _consume_steer(db=db, agent_session=agent_session, turn=turn, previous=run, pending=pending)
-            return RunSettlement(status="yielded", changed=True, next_dispatch=next_dispatch)
+    if status == "completed" and pending_steer is not None:
+        terminal, changed = await run_repo.set_terminal_status(run.id, status="yielded", token_usage=token_usage, worker_id=worker_id)
+        if terminal is None or not changed:
+            raise ValueError("Steer 接管前当前 Run 所有权已失效")
+        next_dispatch = await _consume_steer(db=db, agent_session=agent_session, turn=turn, previous=run, pending=pending_steer)
+        return RunSettlement(status="yielded", changed=True, next_dispatch=next_dispatch)
 
     if status == "interrupted" and turn.status == "running":
         if not waitpoint or waitpoint.get("run_id") != run.id:
@@ -143,6 +132,20 @@ async def settle_checkpoint(
         return RunSettlement(status=status, changed=True)
 
     raise ValueError(f"Turn 状态 {turn.status} 不能接受 Run 终态 {status}")
+
+
+async def lock_ready_steer(db: AsyncSession, *, agent_session: Session, turn: AgentTurn) -> AgentInput | None:
+    """在 Thread/Turn 锁之后锁定 steer，裁决附件就绪，再允许取得 Run 锁。"""
+    if turn.status != "running" or agent_session.queue_paused:
+        return None
+    pending = await AgentInputRepository(db).get_pending_steer(
+        thread_id=agent_session.thread_id,
+        uid=agent_session.uid,
+        app_id=agent_session.app_id,
+    )
+    if pending is None or await AttachmentRepository(db).has_unready(pending.id):
+        return None
+    return pending
 
 
 async def get_run_snapshot(*, db: AsyncSession, scope: ActorScope, thread_id: str, run_id: str) -> dict:

@@ -6,7 +6,6 @@ from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.runtime_settings import get_skill_data_dir
-from yuxi.modules.extensions.mcp.service import get_enabled_mcp_server_slugs
 from yuxi.modules.extensions.skills.models import Skill
 from yuxi.modules.extensions.skills.package import is_valid_skill_slug, normalize_string_list, validated_shared_skill_parts
 from yuxi.modules.extensions.skills.repository import SkillRepository
@@ -68,6 +67,7 @@ async def validate_skill_dependencies(
     skills = normalize_string_list(skill_dependencies)
 
     # 验证所有工具（不仅仅是 builtin）
+    from yuxi.modules.extensions.mcp.service import get_enabled_mcp_server_slugs
     from yuxi.modules.extensions.tools.catalog import get_tool_metadata
 
     available_tools = {tool["slug"] for tool in get_tool_metadata()}

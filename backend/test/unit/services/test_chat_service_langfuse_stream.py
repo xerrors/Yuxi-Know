@@ -75,8 +75,8 @@ def _patch_stream_scaffolding(monkeypatch, *, agent, supply_checkpoint=True, **_
     monkeypatch.setattr(svc, "AgentRunRepository", lambda db: SimpleNamespace(get_run=AsyncMock(return_value=None)))
 
     async def persist_trace(*, db, **_kwargs):
-        """预备用例负责关闭进入模型流之前的读取事务。"""
-        await db.commit()
+        """追踪准备不拥有提交。"""
+        return None
 
     monkeypatch.setattr(svc, "_persist_agent_run_langfuse_trace", persist_trace)
     monkeypatch.setattr(svc, "_build_langfuse_run_context", lambda **kw: LangfuseRunContext())
@@ -303,6 +303,63 @@ async def test_prepared_commit_precedes_graph_and_checkpoint_settlement(monkeypa
         assert not any(isinstance(e, dict) and "input" in e["type"] for e in events)
     else:
         assert isinstance(agent.input[0], HumanMessage)
+
+
+@pytest.mark.parametrize("mode", ["chat", "resume"])
+@pytest.mark.parametrize("failure", ["prepare", "commit", "cancel_commit"])
+async def test_preparation_failure_rolls_back_before_graph_and_finishes_observation(monkeypatch, mode, failure):
+    """准备或提交失败不得启动图，事务回滚且真实观察结束。"""
+    agent = FakeAgent(text_events())
+    _patch_stream_scaffolding(monkeypatch, agent=agent)
+
+    class Transaction(_FakeSession):
+        """未提交写入在失败后必须清空。"""
+
+        def __init__(self):
+            super().__init__()
+            self.pending = []
+
+        async def commit(self):
+            raise asyncio.CancelledError() if failure == "cancel_commit" else RuntimeError("commit rejected")
+
+        async def rollback(self):
+            await super().rollback()
+            self.pending.clear()
+
+    class Observation:
+        """保留实际观察的状态与结束结果。"""
+
+        def __init__(self):
+            self.status = None
+            self.ended = False
+
+        def update(self, *, metadata, level):
+            self.status = metadata["status"]
+
+        def end(self):
+            self.ended = True
+
+    db, observation = Transaction(), Observation()
+    context = LangfuseRunContext(run_observation=observation)
+    monkeypatch.setattr(svc, "_build_langfuse_run_context", lambda **kwargs: context)
+
+    async def prepare(**kwargs):
+        db.pending.append("uncommitted trace")
+        if failure == "prepare":
+            raise RuntimeError("preparation rejected")
+
+    monkeypatch.setattr(svc, "_persist_agent_run_langfuse_trace", prepare)
+    if failure == "cancel_commit":
+        with pytest.raises(asyncio.CancelledError):
+            _ = [event async for event in execute(mode, db=db)]
+    else:
+        events = [event async for event in execute(mode, db=db)]
+        assert events[-1].status == "failed"
+    assert agent.input is None
+    assert db.pending == []
+    assert db.rollback_count == 1
+    assert observation.ended and observation.status == "failed"
+    assert context.run_observation is None
 
 
 async def test_execution_forwards_recorded_command_result_to_public_adapter(monkeypatch):
@@ -597,7 +654,7 @@ async def test_service_consumer_cancel_closes_real_graph(monkeypatch, mode):
 
 
 @pytest.mark.asyncio
-async def test_disabled_langfuse_closes_runtime_read_transaction_without_trace_queries(monkeypatch: pytest.MonkeyPatch):
+async def test_disabled_langfuse_does_not_write_or_own_transaction(monkeypatch: pytest.MonkeyPatch):
     db = _FakeSession()
 
     class UnexpectedRepository:
@@ -612,7 +669,7 @@ async def test_disabled_langfuse_closes_runtime_read_transaction_without_trace_q
         run_context=SimpleNamespace(trace_id=None),
     )
 
-    assert db.commit_count == 1
+    assert db.commit_count == 0
     assert db.rollback_count == 0
 
 

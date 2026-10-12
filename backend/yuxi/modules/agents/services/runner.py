@@ -46,7 +46,7 @@ from yuxi.modules.agents.services.preparation import (
     compute_manifest_fingerprint,
     prepare_run_execution,
 )
-from yuxi.modules.agents.services.runs import settle_checkpoint
+from yuxi.modules.agents.services.runs import lock_ready_steer, settle_checkpoint
 from yuxi.modules.agents.services.scheduler import dispatch_next_input
 from yuxi.modules.agents.services.checkpoint_state import get_agent_state_view
 from yuxi.modules.agents.services.titles import start_session_title
@@ -263,15 +263,18 @@ async def mark_run_terminal(
             )
             if turn is None or turn.current_run_id != run.id:
                 raise ValueError("Run 不是当前 Turn 的执行段")
-            # 这里只取得 Input 行锁，保持 Session→Turn→Input→Run 的终态锁序。
-            await AgentInputRepository(db).get_pending_steer(
-                thread_id=run.thread_id,
-                uid=run.uid,
-                app_id=run.app_id,
-            )
+            pending_steer = None
+            if status == "completed":
+                pending_steer = await lock_ready_steer(db, agent_session=agent_session, turn=turn)
+            else:
+                # 非完成终态只取得 Input 行锁，保持 Session→Turn→Input→Run 锁序。
+                await AgentInputRepository(db).get_pending_steer(thread_id=run.thread_id, uid=run.uid, app_id=run.app_id)
             settled = await settle_checkpoint(
                 db=db,
                 run=run,
+                agent_session=agent_session,
+                turn=turn,
+                pending_steer=pending_steer,
                 worker_id=worker_id,
                 status=status,
                 token_usage=token_usage,

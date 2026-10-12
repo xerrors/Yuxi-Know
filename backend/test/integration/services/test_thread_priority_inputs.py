@@ -23,6 +23,7 @@ from test.integration.services.agent_input_fixtures import (
 from test.integration.services.agent_input_fixtures import (
     start_input_run as _start,
 )
+from test.integration.services.agent_run_test_helpers import settle_locked_run
 from yuxi.api.dependencies.auth import get_db
 from yuxi.api.errors import domain_error_handler
 from yuxi.api.routers.public_v1.agents.auth import require_public_context
@@ -139,7 +140,7 @@ async def test_promote_after_completion_opens_next_turn(sessions):
         db.add(output)
         await db.flush()
         run.output_message_id = output.id
-        await runs.settle_checkpoint(db=db, run=run, worker_id="owner", status="completed", token_usage=None)
+        await settle_locked_run(db=db, run=run, worker_id="owner", status="completed", token_usage=None)
         await db.commit()
         accepted = await threads.promote_input(
             db=db, scope=SCOPE, thread_id="input-thread", input_id=queued["input_id"], idempotency_key="next-turn"
@@ -307,7 +308,7 @@ async def test_safe_handoff_consumes_batch_in_same_turn_with_current_config(sess
     async with sessions() as db:
         await SessionRepository(db).lock_session_by_thread_id("input-thread")
         run = await db.get(AgentRun, current.id)
-        settled = await runs.settle_checkpoint(db=db, run=run, worker_id="owner", status="completed", token_usage=None)
+        settled = await settle_locked_run(db=db, run=run, worker_id="owner", status="completed", token_usage=None)
         assert settled.status == "yielded" and settled.next_dispatch.run_id
         await db.commit()
     async with sessions() as db:
@@ -334,7 +335,7 @@ async def test_terminal_failure_preserves_steer_for_explicit_continue(sessions, 
         await SessionRepository(db).lock_session_by_thread_id("input-thread")
         run = await db.get(AgentRun, current.id)
         if status == "failed":
-            await runs.settle_checkpoint(db=db, run=run, worker_id="owner", status=status, token_usage=None)
+            await settle_locked_run(db=db, run=run, worker_id="owner", status=status, token_usage=None)
         else:
             await turns.cancel_turn(
                 db=db,
@@ -428,7 +429,7 @@ async def test_steer_before_first_model_is_saved_as_yielded_not_failed(sessions,
         status = await messages.save_messages_from_langgraph_state(
             state=SimpleNamespace(values={"messages": []}),
             thread_id="input-thread",
-            session_repo=SessionRepository(db),
+            db=db,
             run_id=current.id,
             turn_id=current.turn_id,
             worker_id="owner",
@@ -449,7 +450,7 @@ async def test_steer_before_first_model_is_saved_as_yielded_not_failed(sessions,
             status = await messages.save_messages_from_langgraph_state(
                 state=SimpleNamespace(values={"messages": [AIMessage(content="original task done", id="after-cancel")]}),
                 thread_id="input-thread",
-                session_repo=SessionRepository(db),
+                db=db,
                 run_id=current.id,
                 turn_id=current.turn_id,
                 worker_id="owner",
@@ -597,7 +598,7 @@ async def test_completion_winning_thread_lock_still_accepts_steer(sessions):
             db.add(output)
             await db.flush()
             await AgentRunRepository(db).set_output_message(run.id, output.id, worker_id="owner")
-            settled = await runs.settle_checkpoint(db=db, run=run, worker_id="owner", status="completed", token_usage=None)
+            settled = await settle_locked_run(db=db, run=run, worker_id="owner", status="completed", token_usage=None)
             assert settled.status == "completed"
             await db.commit()
             return output.id

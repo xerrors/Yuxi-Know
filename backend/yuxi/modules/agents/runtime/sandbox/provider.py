@@ -40,17 +40,6 @@ def _sandbox_key(
     return f"{uid}::{runtime_thread_id}"
 
 
-def normalize_env(env: dict | None) -> dict[str, str]:
-    if not isinstance(env, dict):
-        return {}
-    return {str(key): "" if value is None else str(value) for key, value in env.items() if str(key)}
-
-
-def load_user_agent_env(uid: str) -> dict[str, str]:
-    """运行 provider 消费 repository 拥有的同步配置读取。"""
-    return AgentEnvRepository.load_for_sync_runtime(uid)
-
-
 @dataclass(slots=True)
 class SandboxConnection:
     cache_key: str
@@ -173,7 +162,7 @@ class ProvisionerSandboxProvider:
                     sandbox_id,
                     thread_id,
                     workspace_uid_dirname(uid),
-                    load_user_agent_env(uid) if inherit_env else {},
+                    AgentEnvRepository.load_for_sync_runtime(uid) if inherit_env else {},
                     workdir_path=normalized_workdir_path,
                     inherit_env=inherit_env,
                 )

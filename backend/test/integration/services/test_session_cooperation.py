@@ -13,6 +13,7 @@ from agent_run_test_helpers import cleanup_agent_run_threads, create_agent_run
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from test.integration.services.agent_run_test_helpers import settle_locked_run
 from yuxi.bootstrap.models import load_models
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.agents.models.cooperation import CooperationEvent
@@ -27,7 +28,6 @@ from yuxi.modules.agents.repositories.definitions import DEFAULT_SHARE_CONFIG
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.agents.services.cooperation import SessionCooperationService, recover_cooperation_waits
-from yuxi.modules.agents.services.runs import settle_checkpoint
 from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.identity.models import User
 from yuxi.shared.datetime import utc_now
@@ -478,7 +478,7 @@ async def test_cooperation_wait_releases_slot_and_recovers_same_turn(tree):
         wait = await service.wait_updates(targets=[member["session_id"]], after_cursor=0, timeout_seconds=300)
         assert wait["kind"] == "cooperation"
         run = await db.get(AgentRun, run_id)
-        await settle_checkpoint(
+        await settle_locked_run(
             db=db,
             run=run,
             worker_id="root-worker",
@@ -517,7 +517,7 @@ async def test_tool_side_effects_replay_across_resume_runs(tree):
         await db.commit()
         submitted = await service.submit_input(target=member["session_id"], description="FOLLOWUP", call_id="followup")
         wait = await service.wait_updates(targets=[member["session_id"]], after_cursor=0, timeout_seconds=300)
-        await settle_checkpoint(
+        await settle_locked_run(
             db=db,
             run=await db.get(AgentRun, run_id),
             worker_id="root-worker",
@@ -872,7 +872,7 @@ async def test_resume_call_cannot_change_target_session(tree, monkeypatch, opera
         service = SessionCooperationService(db, run_id=run_id, uid=uid)
         original = await invoke(service, first)
         await db.commit()
-        await settle_checkpoint(
+        await settle_locked_run(
             db=db,
             run=await db.get(AgentRun, run_id),
             worker_id="root-worker",
@@ -959,7 +959,7 @@ async def test_cancelling_last_pending_run_starts_tree_idle_timeout(tree, monkey
     member = await child(tree)
     async with factory() as db:
         root_run = await db.get(AgentRun, run_id)
-        await settle_checkpoint(
+        await settle_locked_run(
             db=db,
             run=root_run,
             worker_id="root-worker",
@@ -1059,7 +1059,7 @@ async def test_input_wait_recovers_after_queued_input_cancelled(tree):
         wait = await service.wait_inputs(input_ids=[queued["input_id"]], timeout_seconds=300)
         run = await db.get(AgentRun, run_id)
         turn_id = run.turn_id
-        await settle_checkpoint(
+        await settle_locked_run(
             db=db,
             run=run,
             worker_id="root-worker",
@@ -1262,7 +1262,7 @@ async def test_bad_wait_does_not_block_other_wait_recovery(tree):
         runs = [await db.get(AgentRun, root_run_id), await db.get(AgentRun, member["run_id"])]
         runs.sort(key=lambda run: run.turn_id)
         for index, run in enumerate(runs):
-            await settle_checkpoint(
+            await settle_locked_run(
                 db=db,
                 run=run,
                 worker_id="root-worker" if run.id == root_run_id else "child-wait",
