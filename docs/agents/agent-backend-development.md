@@ -18,7 +18,7 @@ PRESET = AgentPreset(
     backend_id="ChatbotAgent",
     context={
         "system_prompt": "根据用户材料生成结构清晰、来源可核对的报告。",
-        "skills": ["html-preview"],
+        "skills": ["chat-widgets"],
     },
 )
 ```

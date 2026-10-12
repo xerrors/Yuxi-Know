@@ -48,6 +48,8 @@
         :content="message.content"
         :message="message"
         :thread-id="threadId"
+        :widgets-disabled="widgetsDisabled || isProcessing"
+        :widget-action="widgetAction"
       />
 
       <!-- 错误提示块 -->
@@ -140,6 +142,8 @@ import FileTypeIcon from '@/shared/ui/FileTypeIcon.vue'
 import { normalizeToolCalls } from '@/modules/session/ui/tools/toolRegistry'
 
 const props = defineProps({
+  widgetAction: { type: Function, default: null },
+  widgetsDisabled: Boolean,
   threadId: { type: String, default: '' },
   // 消息角色：'user'|'assistant'|'sent'|'received'
   message: {

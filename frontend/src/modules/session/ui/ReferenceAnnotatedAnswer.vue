@@ -2,6 +2,9 @@
   <MarkdownPreview
     :content="content"
     :references="citations"
+    widgets
+    :widgets-disabled="widgetsDisabled"
+    :widget-action="widgetAction"
     code-copy
     class="message-md"
     @open-reference="openReference"
@@ -28,6 +31,8 @@ import FileDetailModal from '@/modules/knowledge/ui/FileDetailModal.vue'
 import { useTurnReferencesStore } from '@/modules/session/model/turnReferences'
 
 const props = defineProps({
+  widgetsDisabled: Boolean,
+  widgetAction: { type: Function, default: null },
   content: { type: String, default: '' },
   threadId: { type: String, default: '' },
   message: { type: Object, required: true }

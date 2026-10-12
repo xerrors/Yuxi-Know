@@ -124,6 +124,8 @@
                       :show-refs="showMsgRefs(displayItem.message, row.group)"
                       :hide-tool-calls="true"
                       :mention="mentionConfig"
+                      :widget-action="composeWidgetDraft"
+                      :widgets-disabled="row.group.status === 'streaming'"
                       @retry="retryMessage(displayItem.message)"
                     >
                     </AgentMessageComponent>
@@ -143,7 +145,9 @@
                       :message-count="displayItem.messageCount"
                       :tool-call-count="displayItem.toolCallCount"
                       :duration-ms="displayItem.durationMs"
+                      :widgets-disabled="row.group.status === 'streaming'"
                       :mention="mentionConfig"
+                      :widget-action="composeWidgetDraft"
                     />
                   </div>
                   <RunFailureNotice
@@ -854,6 +858,13 @@ const threadDraftSession = createThreadDraftSession(threadDraftStore, currentThr
 const userInput = ref(threadDraftStore.read(currentThreadId.value || DRAFT_THREAD_ID))
 watch(userInput, (text) => threadDraftSession.saveInput(text))
 const agentInputAreaRef = ref(null)
+
+/** 组件动作追加到当前草稿，保留用户已输入内容并等待显式发送。 */
+function composeWidgetDraft(text) {
+  userInput.value = [userInput.value, text].filter(Boolean).join('\n\n')
+  nextTick(() => agentInputAreaRef.value?.focus())
+}
+
 const messageInputStageRef = ref(null)
 const cooperationWorkspaceRefs = new Map()
 let workspaceReady = Promise.resolve()

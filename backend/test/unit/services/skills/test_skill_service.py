@@ -621,7 +621,6 @@ def builtin_skill_specs():
     ("slug", "expected"),
     [
         ("image-gen", {"name": "image-gen", "tool_dependencies": ["present_artifacts"]}),
-        ("html-preview", {"name": "html-preview", "tool_dependencies": [], "mcp_dependencies": []}),
         ("deep-research", {"skill_dependencies": []}),
         (
             "knowledge-base",
@@ -647,13 +646,7 @@ def test_builtin_skill_spec_matches_declared_dependencies(builtin_skill_specs, s
         assert spec[field] == value
     assert (spec["source_dir"] / "SKILL.md").exists()
 
-    if slug == "html-preview":
-        content = (spec["source_dir"] / "SKILL.md").read_text(encoding="utf-8")
-        assert "```html:preview" in content
-        assert "\n    ```html:preview" not in content
-        assert "最多只能有 3 个前导空格" in content
-        assert "普通 `html` 代码块" in content
-    elif slug == "mysql-reporter":
+    if slug == "mysql-reporter":
         assert "reporter" not in builtin_skill_specs
         assert "deep-reporter" not in builtin_skill_specs
         for script_name in ("list_tables.py", "describe_table.py", "query.py"):

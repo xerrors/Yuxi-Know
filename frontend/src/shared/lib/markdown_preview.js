@@ -1,3 +1,4 @@
+import { widgetFencePlugin } from './chatWidgets.js'
 import MarkdownIt from 'markdown-it'
 import markdownItKatex from '@vscode/markdown-it-katex'
 import taskLists from 'markdown-it-task-lists'
@@ -7,7 +8,6 @@ import { load as yamlLoad } from 'js-yaml'
 import { escapeHtml } from './html.js'
 import { normalizeCodeLanguage } from './file_preview.js'
 import { renderSvgBlocks } from './svgRenderer.js'
-import { renderHtmlPreviewBlocks } from './htmlPreviewRenderer.js'
 import { createMarkdownRenderCache } from './markdownRenderCache.js'
 
 const markdownKatexPlugin = markdownItKatex.default || markdownItKatex
@@ -27,10 +27,28 @@ const getHighlighter = () => {
   return highlighterPromise
 }
 
-const normalizeHtmlTagQuotes = (content) => {
+/** 修复展示 HTML 的弯引号，保留 widget 围栏内的原始 JSON 字节。 */
+const normalizeHtmlTagQuotes = (content, widgets = false) => {
   const source = String(content || '')
   if (!/[“”]/.test(source)) return source
-  return source.replace(/<[^>]+>/g, (tag) => tag.replaceAll('“', '"').replaceAll('”', '"'))
+  const normalize = (text) =>
+    text.replace(/<[^>]+>/g, (tag) => tag.replaceAll('“', '"').replaceAll('”', '"'))
+  if (!widgets) return normalize(source)
+
+  const lines = source.split('\n')
+  const ranges = new MarkdownIt({ html: true })
+    .parse(source, {})
+    .filter((token) => token.type === 'fence' && token.info.trim() === 'widget')
+  let cursor = 0
+  const result = []
+  for (const token of ranges) {
+    if (cursor < token.map[0])
+      result.push(...normalize(lines.slice(cursor, token.map[0]).join('\n')).split('\n'))
+    result.push(...lines.slice(token.map[0], token.map[1]))
+    cursor = token.map[1]
+  }
+  if (cursor < lines.length) result.push(...normalize(lines.slice(cursor).join('\n')).split('\n'))
+  return result.join('\n')
 }
 
 const renderFrontmatterValue = (value) => {
@@ -143,14 +161,6 @@ const CODE_FENCE_LANGUAGE_RE = /(^|\n) {0,3}(```+|~~~+)[ \t]*([^\s:,`]*)/g
 const normalizeTheme = (theme) => (theme === 'github-dark' ? 'github-dark' : 'github-light')
 const hasCodeFence = (content) => CODE_FENCE_RE.test(content)
 
-const sanitizeHtmlPreviewSrcdoc = (html) =>
-  DOMPurify.sanitize(html, {
-    WHOLE_DOCUMENT: true,
-    ADD_TAGS: ['html', 'head', 'body', 'style', 'link'],
-    FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'input', 'textarea', 'select'],
-    FORBID_ATTR: ['srcdoc', 'sandbox']
-  })
-
 const collectCodeFenceLanguages = (content) => {
   const languages = new Set()
   for (const match of String(content || '').matchAll(CODE_FENCE_LANGUAGE_RE)) {
@@ -196,15 +206,8 @@ const markdownSourceLines = (md) => {
         const fenced = `${token.markup}${token.info}\n${token.content}${token.markup}`
         const language = token.info.trim().toLowerCase()
         if (language === 'svg') html = renderSvgBlocks(fenced)
-        if (language === 'html:preview') {
-          html = renderHtmlPreviewBlocks(fenced, { sanitizeHtml: sanitizeHtmlPreviewSrcdoc })
-        }
       }
       const map = token.map
-      if (env.sourceLines && map && type === 'fence' && token.info.trim().toLowerCase() === 'html:preview') {
-        // iframe 复用要求预览容器继续是根节点的直接子元素。
-        return html.replace('<div ', `<div data-source-start="${map[0] + 1}" data-source-end="${map[1]}" `)
-      }
       return env.sourceLines && map
         ? `<div data-source-start="${map[0] + 1}" data-source-end="${map[1]}">${html}</div>`
         : html
@@ -231,6 +234,7 @@ export const createMarkdownRenderer = ({ themeName, highlighter }) =>
     .use(taskLists, { enabled: false, label: false, labelAfter: false })
     .use(markdownItFrontmatterCard)
     .use(markdownSourceLines)
+    .use(widgetFencePlugin)
 
 const getRenderer = async (theme, needsHighlight) => {
   const themeName = normalizeTheme(theme)
@@ -252,19 +256,14 @@ const getRenderer = async (theme, needsHighlight) => {
 
 export const renderMarkdown = async (
   content,
-  { theme = 'github-light', sourceLines = false } = {}
+  { theme = 'github-light', sourceLines = false, widgets = false } = {}
 ) => {
   try {
-    const normalizedContent = normalizeHtmlTagQuotes(content)
-    const htmlPreviewContent = sourceLines
-      ? normalizedContent
-      : renderHtmlPreviewBlocks(normalizedContent, {
-          sanitizeHtml: sanitizeHtmlPreviewSrcdoc
-        })
-    const svgContent = sourceLines ? htmlPreviewContent : renderSvgBlocks(htmlPreviewContent)
+    const normalizedContent = normalizeHtmlTagQuotes(content, widgets)
+    const svgContent = sourceLines ? normalizedContent : renderSvgBlocks(normalizedContent)
     const themeName = normalizeTheme(theme)
     const needsHighlight = hasCodeFence(svgContent)
-    const cacheKey = `${sourceLines ? 'lines' : 'plain'}\u0000${needsHighlight ? themeName : 'plain'}\u0000${svgContent}`
+    const cacheKey = `${widgets ? 'widgets' : 'text'}\u0000${sourceLines ? 'lines' : 'plain'}\u0000${needsHighlight ? themeName : 'plain'}\u0000${svgContent}`
     const cachedHtml = renderedHtmlCache.get(cacheKey)
     if (cachedHtml !== undefined) return cachedHtml
 
@@ -278,21 +277,24 @@ export const renderMarkdown = async (
     }
 
     const md = await getRenderer(themeName, needsHighlight)
-    const html = DOMPurify.sanitize(md.render(svgContent, { sourceLines }), {
-      ADD_TAGS: ['input'],
-      ADD_ATTR: [
-        'class',
-        'style',
-        'target',
-        'rel',
-        'type',
-        'checked',
-        'disabled',
-        'source',
-        'colspan',
-        'rowspan'
-      ]
-    })
+    const html = DOMPurify.sanitize(
+      md.render(svgContent, { sourceLines, widgets, widgetLines: svgContent.split('\n') }),
+      {
+        ADD_TAGS: ['input'],
+        ADD_ATTR: [
+          'class',
+          'style',
+          'target',
+          'rel',
+          'type',
+          'checked',
+          'disabled',
+          'source',
+          'colspan',
+          'rowspan'
+        ]
+      }
+    )
     renderedHtmlCache.set(cacheKey, html)
     return html
   } catch (error) {

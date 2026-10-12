@@ -99,15 +99,15 @@ async (page) => {
     check(await capsule.evaluate(el => el === document.activeElement), '更新正文后浮层键盘焦点恢复失效')
     check(await page.evaluate(() => window.markdownLayoutProbe.state.clicks > 0), '调用方点击事件未转发')
     check(await page.locator('#markdown-layout-probe .source-line-highlight').count() > 0, '原文行高亮失效')
-    await page.locator('#compact-markdown iframe').first().evaluate(el => { window.markdownLayoutProbe.iframe = el })
+    check(await page.locator('#compact-markdown iframe').count() === 0, '旧HTML围栏不能创建iframe')
     await page.evaluate(() => { window.markdownLayoutProbe.state.content += '\n\n后续正文。' })
     await page.locator('#compact-markdown').getByText('后续正文。', { exact: true }).waitFor()
-    check(await page.locator('#compact-markdown iframe').first().evaluate(el => el === window.markdownLayoutProbe.iframe), '正文更新重建了已有 HTML 预览')
+    check(await page.locator('#compact-markdown iframe').count() === 0, '更新正文仍不能创建旧HTML预览')
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
     await page.locator('#compact-markdown .markdown-code-copy-btn').first().click()
     check(await page.evaluate(() => navigator.clipboard.readText()) === 'print(42)\n', '代码复制内容错误')
     check(errors.length === 0, `浏览器运行异常：${errors.join('; ')}`)
-    return { measurements, fullscreen: true, chunks: true, referenceUpdates: true, codeCopy: true, iframePreserved: true }
+    return { measurements, fullscreen: true, chunks: true, referenceUpdates: true, codeCopy: true, legacyHtmlAsCode: true }
   } finally {
     await page.evaluate(theme => {
       const probe = window.markdownLayoutProbe
