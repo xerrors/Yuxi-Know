@@ -7,7 +7,6 @@ from datetime import timedelta
 
 import pytest
 import pytest_asyncio
-from fastapi import HTTPException
 from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -22,12 +21,13 @@ from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.modules.agents.runtime.middlewares.authorization import AgentExecutionRevoked
 from yuxi.modules.agents.services.feedback import list_feedback, mark_run_for_improvement, remove_user_feedback, save_user_feedback
-from yuxi.modules.agents.services.scope import ActorScope
+from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.identity.models import User
 from yuxi.modules.workspace.models import Project
 from yuxi.shared.datetime import utc_now
+from yuxi.shared.errors import DomainError, InvalidOperationError, PermissionDeniedError, ResourceNotFoundError, StateConflictError
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
+pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -169,9 +169,9 @@ async def test_user_concurrency_replace_and_revoke_read_database(feedback_db):
 )
 async def test_user_feedback_never_uses_admin_or_partial_scope(feedback_db, scope):
     """其他用户、不同 APP 和超级管理员均不能冒用作者。"""
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(DomainError) as exc:
         await save_rating(feedback_db, scope=scope)
-    assert exc.value.status_code == 404
+    assert isinstance(exc.value, ResourceNotFoundError)
     async with feedback_db() as db:
         assert await db.scalar(select(func.count()).select_from(AgentFeedbackRecord)) == 0
 
@@ -187,9 +187,9 @@ async def test_feedback_requires_explicit_final_output(feedback_db, defect):
         else:
             await db.execute(update(Message).values(content=" "))
         await db.commit()
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(DomainError) as exc:
         await save_rating(feedback_db)
-    assert exc.value.status_code == 409
+    assert isinstance(exc.value, StateConflictError)
 
 
 async def test_mark_replay_conflict_and_terminal_retention(feedback_db):
@@ -197,9 +197,9 @@ async def test_mark_replay_conflict_and_terminal_retention(feedback_db):
     await activate_run(feedback_db)
     first, second = await asyncio.gather(mark(feedback_db), mark(feedback_db))
     assert first["id"] == second["id"]
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(DomainError) as exc:
         await mark(feedback_db, reason="改变了内容")
-    assert exc.value.status_code == 409
+    assert isinstance(exc.value, StateConflictError)
     await mark(feedback_db, tool_call_id="another-call")
     async with feedback_db() as db:
         await db.execute(update(AgentRun).values(status="failed", lease_expires_at=None))
@@ -214,8 +214,9 @@ async def test_tool_database_failure_rolls_back_without_success(feedback_db, mon
     """真实数据库拒绝 insert 时工具返回错误，记录不存在且可正常重试。"""
     from contextlib import asynccontextmanager
     from types import SimpleNamespace
-    from yuxi.modules.extensions.tools.builtin.mark_for_improvement import mark_for_improvement
+
     from yuxi.infrastructure.postgres.manager import pg_manager
+    from yuxi.modules.extensions.tools.builtin.mark_for_improvement import mark_for_improvement
 
     await activate_run(feedback_db)
     async with feedback_db() as db:
@@ -316,12 +317,12 @@ async def test_platform_query_guards_cursor_and_deleted_session(feedback_db):
             "turn_id",
             "run_status",
         }
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(DomainError) as exc:
             await list_feedback(db=db, scope=platform, platform=True, source="agent", after=record["id"])
-        assert exc.value.status_code == 400
-        with pytest.raises(HTTPException) as exc:
+        assert isinstance(exc.value, InvalidOperationError)
+        with pytest.raises(DomainError) as exc:
             await list_feedback(db=db, scope=ActorScope(uid="platform", app_id="app", api_key_id=1, is_superadmin=True), platform=True)
-        assert exc.value.status_code == 403
+        assert isinstance(exc.value, PermissionDeniedError)
         await db.execute(update(Session).values(status="deleted"))
         await db.commit()
     async with feedback_db() as db:

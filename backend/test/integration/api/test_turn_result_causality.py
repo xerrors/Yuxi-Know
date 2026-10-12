@@ -11,7 +11,7 @@ from yuxi.bootstrap.models import load_models
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from test.live_api_cleanup import make_test_session_title
-from yuxi.modules.agents.services.scope import ActorScope
+from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.agents.services.turns import get_turn_snapshot
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
@@ -63,7 +63,8 @@ async def test_turn_result_follows_only_its_bound_run(test_client, admin_headers
                     session_record_id,
                 )
                 message_id = await conn.fetchval(
-                    "INSERT INTO messages (session_record_id, role, content, run_id, turn_id, delivery_status) VALUES ($1, 'assistant', $2, $3, $4, 'complete') RETURNING id",
+                    "INSERT INTO messages (session_record_id, role, content, run_id, turn_id, delivery_status) "
+                    "VALUES ($1, 'assistant', $2, $3, $4, 'complete') RETURNING id",
                     session_record_id,
                     content,
                     run_id,

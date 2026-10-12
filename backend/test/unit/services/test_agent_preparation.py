@@ -239,7 +239,7 @@ async def test_manifest_uses_prepared_context_and_persisted_overrides(monkeypatc
         context.skills = ["skill-a"]
         context.preload_skills = ["skill-a"]
         context._runtime_prepared = True
-        context._skill_runtime_snapshot = {
+        context.skill_runtime_snapshot = {
             "preloaded_skills": ["skill-a"],
             "preloaded_skill_contents": {"skill-a": "frozen skill"},
             "skill_metadata": {"skill-a": {"source_scope": "shared", "version": "v1", "content_hash": "hash"}},

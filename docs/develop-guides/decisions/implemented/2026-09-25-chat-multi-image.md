@@ -2,7 +2,7 @@
 
 状态：implemented
 类型：feature
-Owner：backend/yuxi/modules/agents/services/input_messages.py
+Owner：backend/yuxi/modules/agents/input_messages.py
 
 ## 问题
 
@@ -12,7 +12,7 @@ Agent 可以从一条用户消息读取多张图片，但单值图片字段、�
 
 ### 实现方案
 
-Public Thread/Session 的一条输入消息包含有序的文本与 `input_image` 内容块，HTTP Schema 只接受内联 `data:image/...;base64,...` 图片。[输入归一](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/services/input_messages.py)校验每条消息最多 10 张、base64 总量最多 80 MiB；首图保留在 Message 的 `image_content` 投影，完整内容块保存在原始消息中。[历史读取](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/services/messages.py)按原始顺序生成 `image_contents`。Web 的粘贴、选择和拖拽入口汇入同一图片预算与发送路径。
+Public Thread/Session 的一条输入消息包含有序的文本与 `input_image` 内容块，HTTP Schema 只接受内联 `data:image/...;base64,...` 图片。[输入归一](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/input_messages.py)校验每条消息最多 10 张、base64 总量最多 80 MiB；首图保留在 Message 的 `image_content` 投影，完整内容块保存在原始消息中。[历史读取](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/services/checkpoint_messages.py)按原始顺序生成 `image_contents`。Web 的粘贴、选择和拖拽入口汇入同一图片预算与发送路径。
 
 [内置 nginx](https://github.com/xerrors/Yuxi/blob/main/docker/nginx/default.conf)只对 Public Thread/Session 创建及消息事件请求体放宽到 100 MiB，其余 `/api/` 仍为 20 MiB。外层代理需要允许相同大小；后端归一仍以 422 拒绝超出图片限制的请求。
 

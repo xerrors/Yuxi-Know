@@ -14,6 +14,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    func,
     text,
 )
 
@@ -42,6 +43,16 @@ class KnowledgeBase(Base):
     created_by = Column(String(64))
     created_at = Column(DateTime(timezone=True), default=utc_now)
     updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    __table_args__ = (
+        Index(
+            "uq_knowledge_bases_active_name",
+            func.lower(name),
+            unique=True,
+            postgresql_where=deleted_at.is_(None),
+            sqlite_where=deleted_at.is_(None),
+        ),
+    )
 
 
 class KnowledgeFile(Base):

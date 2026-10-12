@@ -34,7 +34,7 @@ Service 按真实角色序列化用户、系统、模型和工具，并按白名
 - `docker compose exec frontend pnpm run lint:check`、`docker compose exec frontend pnpm run test:unit`、`docker compose exec frontend pnpm run build`：Passed，531 个前端测试通过，build 包含已有 CSS 与 chunk warning。
 - `docker compose exec api uv run --no-sync --group test pytest test/unit -m "not slow" -q`：2628 passed、55 skipped；跳过项仍为容器内不可读取的仓库拓扑检查，不计为通过。
 - `python3 scripts/verify_engineering_contracts.py`、`python3 -m unittest scripts.test_verify_engineering_contracts`：Passed，64 个 verifier 测试通过。
-- `uvx ruff check backend/test/integration/api/test_debug_message_projection.py backend/test/integration/api/test_chat_router.py backend/yuxi/modules/agents/services/messages.py backend/yuxi/modules/agents/repositories/sessions.py`：Passed。
+- `uvx ruff check backend/test/integration/api/test_debug_message_projection.py backend/test/integration/api/test_chat_router.py backend/yuxi/modules/agents/services/checkpoint_messages.py backend/yuxi/modules/agents/repositories/sessions.py`：Passed。
 - `cd docs && pnpm run build`：Passed。
 
 常规 `uv run` 在现有容器尝试重新构建 editable 包时因 `yuxi.egg-info` 权限失败；后端验证使用容器已安装的环境加 `--no-sync`。数据库内容读取变更不涉及 worker 执行或模型策略；真实外部模型与 worker E2E 未执行。

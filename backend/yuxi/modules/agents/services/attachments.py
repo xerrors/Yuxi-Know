@@ -7,7 +7,6 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from urllib.parse import quote, unquote
 
-from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.infrastructure.document_parsing import IMAGE_FILE_EXTENSIONS, PDF_FILE_EXTENSIONS
@@ -20,16 +19,16 @@ from yuxi.modules.agents.models.attachments import AgentAttachment
 from yuxi.modules.agents.repositories.attachments import AttachmentRepository
 from yuxi.modules.agents.repositories.input import AgentInputRepository
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
-from yuxi.modules.agents.repositories.sessions import SessionRepository
+from yuxi.modules.agents.services.thread_access import require_thread
 from yuxi.modules.agents.runtime.sandbox.paths import runtime_path_for_workdir_scope, workdir_scope_from_runtime_path
-from yuxi.modules.agents.services.scope import ActorScope
+from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.system.options import system_options
 from yuxi.modules.workspace.filesystem import Workspace
 from yuxi.modules.workspace.paths import ensure_user_workspace
 from yuxi.modules.workspace.workdir import Workdir
 from yuxi.shared.datetime import format_utc_datetime
+from yuxi.shared.errors import DomainError, InvalidInputError, InvalidOperationError, ResourceNotFoundError, StateConflictError
 
-ATTACHMENT_ALLOWED_EXTENSIONS: tuple[str, ...] = ()
 MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024
 TMP_ATTACHMENT_PREFIX = "tmp/chat_attachments"
 TMP_ATTACHMENT_PARSE_EXTENSIONS = (*PDF_FILE_EXTENSIONS, *IMAGE_FILE_EXTENSIONS)
@@ -60,9 +59,9 @@ def serialize_attachment(attachment: AgentAttachment, *, thread_id: str) -> dict
 async def upload_draft_file(*, file_content: bytes, filename: str, content_type: str | None, scope: ActorScope, db) -> dict:
     """上传只保存文件内容与 draft 行，不创建 Session 或 Workdir。"""
     if not filename:
-        raise HTTPException(status_code=400, detail="无法识别的文件名")
+        raise InvalidOperationError("无法识别的文件名")
     if len(file_content) > MAX_ATTACHMENT_SIZE_BYTES:
-        raise HTTPException(status_code=400, detail="附件过大，当前仅支持 5 MB 以内的文件")
+        raise InvalidOperationError("附件过大，当前仅支持 5 MB 以内的文件")
     owner = _tmp_attachment_owner(scope.uid, scope.app_id)
     file_id, object_name = _make_tmp_attachment_object(owner, filename)
     client = get_minio_client()
@@ -158,10 +157,10 @@ async def parse_draft_file(*, file_id: str, parse_method: str | None, scope: Act
             await asyncio.to_thread(workspace.delete_authorized_path, f"/{parsed_directory}", root="/")
         except FileNotFoundError:
             pass
-        if isinstance(exc, (asyncio.CancelledError, HTTPException)):
+        if isinstance(exc, (asyncio.CancelledError, DomainError)):
             raise
         logger.warning("Draft attachment parse failed: id=%s error=%s", file_id, exc)
-        raise HTTPException(status_code=400, detail="附件解析失败") from exc
+        raise InvalidOperationError("附件解析失败") from exc
     return {**_file_response(attachment), "parse_method": method}
 
 
@@ -171,16 +170,16 @@ async def stage_input_attachments(*, db, scope: ActorScope, input_item, file_ids
         raise ValueError("附件绑定目标与接收身份不一致")
     unique_ids = set(file_ids)
     if len(unique_ids) != len(file_ids):
-        raise HTTPException(status_code=422, detail="同一文件不能重复绑定")
+        raise InvalidInputError("同一文件不能重复绑定")
     attachments = await AttachmentRepository(db).lock_for_scope(unique_ids, scope.uid, scope.app_id)
     if len(attachments) != len(unique_ids):
-        raise HTTPException(status_code=404, detail="文件草稿不存在或不可访问")
+        raise ResourceNotFoundError("文件草稿不存在或不可访问")
     client = get_minio_client()
     for attachment in attachments:
         _check_draft(attachment)
         size = await client.astat_file(client.KB_BUCKETS["documents"], attachment.object_name)
         if size != attachment.size_bytes:
-            raise HTTPException(status_code=422, detail="附件草稿内容不存在或已变化")
+            raise InvalidInputError("附件草稿内容不存在或已变化")
         attachment.input_id = input_item.id
         attachment.status = "preparing"
     await db.flush()
@@ -256,12 +255,12 @@ async def cleanup_prepared_sources(*, db, thread_id: str) -> None:
 
 async def list_thread_attachments_view(*, thread_id: str, db: AsyncSession, current_uid: str, app_id: str | None = None) -> dict:
     """附件列表直接读取该 Session 的附件关系。"""
-    await _require_user_session(SessionRepository(db), thread_id, str(current_uid), app_id)
+    await require_thread(db=db, scope=ActorScope(uid=str(current_uid), app_id=app_id), thread_id=thread_id)
     attachments = await AttachmentRepository(db).list_for_thread(thread_id, str(current_uid), app_id)
     return {
         "attachments": [serialize_attachment(item, thread_id=thread_id) for item in attachments],
         "limits": {
-            "allowed_extensions": sorted(ATTACHMENT_ALLOWED_EXTENSIONS),
+            "allowed_extensions": [],  # 上传不按后缀限制；解析能力在实际解析入口校验。
             "max_size_bytes": MAX_ATTACHMENT_SIZE_BYTES,
         },
     }
@@ -271,11 +270,10 @@ async def delete_thread_attachment_view(
     *, thread_id: str, file_id: str, db: AsyncSession, current_uid: str, app_id: str | None = None
 ) -> dict:
     """在 Session 与附件行锁内检查执行边界，再删除正式文件和附件关系。"""
-    session_repo = SessionRepository(db)
-    agent_session = await _require_user_session(session_repo, thread_id, str(current_uid), app_id, lock=True)
+    agent_session = await require_thread(db=db, scope=ActorScope(uid=str(current_uid), app_id=app_id), thread_id=thread_id, lock=True)
     attachment = await AttachmentRepository(db).get_for_scope(file_id, str(current_uid), app_id, lock=True)
     if attachment is None or attachment.input_id is None:
-        raise HTTPException(status_code=404, detail="附件不存在或已被删除")
+        raise ResourceNotFoundError("附件不存在或已被删除")
     input_item = await AgentInputRepository(db).get_for_scope(
         input_id=attachment.input_id,
         thread_id=thread_id,
@@ -283,15 +281,15 @@ async def delete_thread_attachment_view(
         app_id=app_id,
     )
     if input_item is None:
-        raise HTTPException(status_code=404, detail="附件不存在或已被删除")
+        raise ResourceNotFoundError("附件不存在或已被删除")
     if input_item.status == "pending" or attachment.status != "ready":
-        raise HTTPException(status_code=409, detail="附件正在被输入使用，暂时不能删除")
+        raise StateConflictError("附件正在被输入使用，暂时不能删除")
     if await AgentRunRepository(db).get_active_run_by_thread_for_user(
         agent_slug=agent_session.agent_id,
         thread_id=thread_id,
         uid=str(current_uid),
     ):
-        raise HTTPException(status_code=409, detail="对话正在运行，暂时不能删除附件")
+        raise StateConflictError("对话正在运行，暂时不能删除附件")
     from yuxi.modules.workspace.services.bindings import resolve_authorized_session_workdir
 
     binding = await resolve_authorized_session_workdir(agent_session=agent_session, uid=str(current_uid), db=db, app_id=app_id)
@@ -313,19 +311,11 @@ async def delete_thread_attachment_view(
     return {"message": "附件已删除"}
 
 
-async def _require_user_session(session_repo, thread_id, uid, app_id=None, *, lock=False):
-    """附件副作用在实际 Session 用户与 APP 边界校验。"""
-    agent_session = await (session_repo.lock_session_by_thread_id(thread_id) if lock else session_repo.get_session_by_thread_id(thread_id))
-    if not agent_session or agent_session.uid != uid or agent_session.app_id != app_id or agent_session.status == "deleted":
-        raise HTTPException(status_code=404, detail="对话线程不存在")
-    return agent_session
-
-
 async def _require_draft(db, file_id, scope, *, lock=False) -> AgentAttachment:
     """草稿状态来自显式行状态，归属与过期在真实读取边界校验。"""
     attachment = await AttachmentRepository(db).get_for_scope(file_id, scope.uid, scope.app_id, lock=lock)
     if attachment is None:
-        raise HTTPException(status_code=404, detail="文件草稿不存在或不可访问")
+        raise ResourceNotFoundError("文件草稿不存在或不可访问")
     _check_draft(attachment)
     return attachment
 
@@ -333,9 +323,9 @@ async def _require_draft(db, file_id, scope, *, lock=False) -> AgentAttachment:
 def _check_draft(attachment) -> None:
     """已绑定文件不允许再解析、删除草稿或绑定另一输入。"""
     if attachment.status != "draft":
-        raise HTTPException(status_code=409, detail="文件已提交，请重新上传以用于另一条消息")
+        raise StateConflictError("文件已提交，请重新上传以用于另一条消息")
     if attachment.expires_at <= datetime.now(UTC):
-        raise HTTPException(status_code=422, detail="文件草稿已过期，请重新上传")
+        raise InvalidInputError("文件草稿已过期，请重新上传")
 
 
 def _file_response(attachment) -> dict:
@@ -416,7 +406,7 @@ def _normalize_parse_method(file_name: str, parse_method: str | None, default_oc
     """按文件类型确定临时附件解析方式。"""
     suffix = Path(file_name).suffix.lower()
     if suffix not in TMP_ATTACHMENT_PARSE_EXTENSIONS:
-        raise HTTPException(status_code=400, detail="当前仅支持 PDF 和图片附件解析")
+        raise InvalidOperationError("当前仅支持 PDF 和图片附件解析")
 
     allowed_methods = get_ocr_engines_for_extension(suffix)
     if suffix in TMP_ATTACHMENT_IMAGE_EXTENSIONS:
@@ -427,7 +417,7 @@ def _normalize_parse_method(file_name: str, parse_method: str | None, default_oc
 
     if method not in allowed_methods:
         allowed = ", ".join(allowed_methods)
-        raise HTTPException(status_code=400, detail=f"不支持的解析方法: {method}，可选: {allowed}")
+        raise InvalidOperationError(f"不支持的解析方法: {method}，可选: {allowed}")
     return method
 
 

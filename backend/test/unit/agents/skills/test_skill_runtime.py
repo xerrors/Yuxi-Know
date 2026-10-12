@@ -41,6 +41,7 @@ async def test_personal_skills_are_available_independently_of_shared_selection(t
 
     monkeypatch.setattr(paths, "get_user_data_dir", lambda: tmp_path / "user-data")
     monkeypatch.setattr(service, "get_skill_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("yuxi.modules.extensions.skills.access.get_skill_data_dir", lambda: tmp_path)
     shared_dir = tmp_path / "shared" / "extra"
     shared_dir.mkdir(parents=True)
     (shared_dir / "SKILL.md").write_text("# Extra shared body", encoding="utf-8")
@@ -92,6 +93,7 @@ async def test_personal_skills_are_available_independently_of_shared_selection(t
             return next((item for item in (shared, extra) if item.slug == slug), None)
 
     monkeypatch.setattr(service, "SkillRepository", FakeSkillRepository)
+    monkeypatch.setattr("yuxi.modules.extensions.skills.access.SkillRepository", FakeSkillRepository)
     monkeypatch.setattr("yuxi.modules.extensions.skills.repository.SkillRepository", FakeSkillRepository)
     for uid, slug in [("user-a", "personal"), ("user-a", "shared"), ("user-b", "other-user")]:
         directory = user_workspace_dir(uid) / "agents" / "skills" / slug

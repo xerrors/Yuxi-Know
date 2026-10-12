@@ -3,13 +3,16 @@ from __future__ import annotations
 import asyncio
 import json
 import uuid
+import re
+from http.server import BaseHTTPRequestHandler
 from typing import Any
 
 import asyncpg
 import httpx
 import pytest
 
-from test.e2e.e2e_helpers import output_text
+from test.e2e.e2e_helpers import output_text, register_replay_provider
+from test.support.openai_replay_server import send_json_response, send_openai_sse_response, serve_replay_handler
 
 from e2e_helpers import (
     RUN_TIMEOUT_SECONDS,
@@ -29,10 +32,73 @@ from yuxi.modules.workspace.paths import user_workspace_dir
 pytestmark = [pytest.mark.asyncio, pytest.mark.e2e, pytest.mark.slow]
 
 
+@pytest.fixture
+def personal_replay():
+    """固定模型只在真实 read_file 返回标记后给出最终回答。"""
+    scenario = {"requests": []}
+
+    class Handler(BaseHTTPRequestHandler):
+        """验收实际请求中的 Skill 可发现性与读取结果。"""
+
+        def do_POST(self):
+            """先调用文件工具，再消费实际返回的 Skill 正文。"""
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            scenario["requests"].append(body)
+            tools = [item for item in body["messages"] if item["role"] == "tool"]
+            if tools:
+                marker = re.search(r"PERSONAL_SKILL_E2E_[A-F0-9]{10}", json.dumps(tools[-1]["content"]))
+                if marker is None:
+                    send_json_response(self, 400, {"error": {"message": "真实文件读取未返回 Skill 标记"}})
+                    return
+                delta, finish = {"role": "assistant", "content": marker.group()}, "stop"
+            else:
+                names = {item["function"]["name"] for item in body["tools"]}
+                if (
+                    f"/home/gem/user-data/agents/skills/{scenario['slug']}/SKILL.md" not in json.dumps(body["messages"])
+                    or "read_file" not in names
+                ):
+                    send_json_response(self, 400, {"error": {"message": "个人 Skill 或合法文件工具未进入模型请求"}})
+                    return
+                delta = {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "index": 0,
+                            "id": "personal-read",
+                            "type": "function",
+                            "function": {
+                                "name": "read_file",
+                                "arguments": json.dumps({"file_path": f"/home/gem/user-data/agents/skills/{scenario['slug']}/SKILL.md"}),
+                            },
+                        }
+                    ],
+                }
+                finish = "tool_calls"
+            common = {"id": "personal-replay", "object": "chat.completion.chunk", "created": 1, "model": "deterministic-chat"}
+            send_openai_sse_response(
+                self,
+                [
+                    {**common, "choices": [{"index": 0, "delta": delta, "finish_reason": None}]},
+                    {
+                        **common,
+                        "choices": [{"index": 0, "delta": {}, "finish_reason": finish}],
+                        "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+                    },
+                ],
+            )
+
+        def log_message(self, *args):
+            """测试不输出模型输入。"""
+
+    with serve_replay_handler(Handler) as url:
+        yield {"url": url, **scenario, "scenario": scenario}
+
+
 async def test_main_agent_reads_personal_skill_directly_from_user_workspace(
     e2e_client: httpx.AsyncClient,
     e2e_headers: dict[str, str],
     e2e_agent_context: dict[str, str],
+    personal_replay,
 ):
     """共享选择为空时，真实主 Agent 仍发现并读取个人 SKILL.md。"""
     uid = e2e_agent_context["uid"]
@@ -47,6 +113,9 @@ async def test_main_agent_reads_personal_skill_directly_from_user_workspace(
     turn_id: str | None = None
     thread_id: str | None = None
     agent_created = False
+    provider_created = False
+    provider_id = f"ci-personal-{uuid.uuid4().hex[:8]}"
+    personal_replay["scenario"]["slug"] = slug
 
     prepare_response = await e2e_client.post(
         "/api/skills/import/prepare",
@@ -63,20 +132,19 @@ async def test_main_agent_reads_personal_skill_directly_from_user_workspace(
     assert confirm_response.status_code == 200, confirm_response.text
 
     try:
-        default_response = await e2e_client.get("/api/agent/default", headers=e2e_headers)
-        assert default_response.status_code == 200, default_response.text
-        default_context = ((default_response.json().get("agent") or {}).get("config_json") or {}).get("context") or {}
+        await register_replay_provider(e2e_client, e2e_headers, base_url=personal_replay["url"], provider_id=provider_id)
+        provider_created = True
+        await asyncio.sleep(6)
         context: dict[str, Any] = {
             "system_prompt": (
                 f"收到请求后从可用 Skills 中找到 {slug} 并读取其 SKILL.md，然后严格遵循其中的 Verification 指令，不要添加解释。"
             ),
+            "model": f"{provider_id}:deterministic-chat",
             "tools": [],
             "knowledges": [],
             "mcps": [],
             "skills": [],
         }
-        if default_context.get("model"):
-            context["model"] = default_context["model"]
 
         agent_response = await e2e_client.post(
             "/api/agent",
@@ -165,6 +233,15 @@ async def test_main_agent_reads_personal_skill_directly_from_user_workspace(
         finally:
             await conn.close()
 
+        assert len(personal_replay["requests"]) == 2
+        # 移除真实首请求的发现路径，保留测试原提示中的 slug 与工具 schema。
+        first_request = personal_replay["requests"][0]
+        discovered_path = f"/home/gem/user-data/agents/skills/{slug}/SKILL.md"
+        missing_discovery = json.loads(json.dumps(first_request).replace(discovered_path, ""))
+        async with httpx.AsyncClient() as replay_client:
+            rejected = await replay_client.post(f"{personal_replay['url']}/chat/completions", json=missing_discovery)
+        assert rejected.status_code == 400
+        assert rejected.json()["error"]["message"] == "个人 Skill 或合法文件工具未进入模型请求"
         personal_skill = user_workspace_dir(uid) / "agents" / "skills" / slug / "SKILL.md"
         assert personal_skill.read_text(encoding="utf-8") == skill_md
         projected_skill = get_user_skills_root_dir(uid) / slug / "SKILL.md"
@@ -178,3 +255,6 @@ async def test_main_agent_reads_personal_skill_directly_from_user_workspace(
             assert agent_delete.status_code in {200, 404}, agent_delete.text
         skill_delete = await e2e_client.delete(f"/api/skills/personal/{slug}", headers=e2e_headers)
         assert skill_delete.status_code in {200, 404}, skill_delete.text
+        if provider_created:
+            response = await e2e_client.delete(f"/api/system/model-providers/{provider_id}", headers=e2e_headers)
+            assert response.status_code in {200, 404}, response.text

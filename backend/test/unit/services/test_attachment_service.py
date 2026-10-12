@@ -1,15 +1,17 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock
 import io
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
 import pytest
 
-from yuxi.modules.agents.runtime.sandbox.paths import workdir_scope_from_runtime_path
 import yuxi.modules.agents.services.attachments as service
 from yuxi.modules.agents.models.attachments import AgentAttachment
+from yuxi.modules.agents.runtime.sandbox.paths import workdir_scope_from_runtime_path
+from yuxi.shared.errors import DomainError, InvalidInputError, ResourceNotFoundError, StateConflictError, UpstreamError
 
 pytestmark = pytest.mark.unit
 
@@ -167,6 +169,7 @@ async def test_cancelled_attachment_write_reclaims_uncommitted_original(tmp_path
     """用真实文件边界验证取消不会留下尚未提交的原附件。"""
     import asyncio
     import threading
+
     from yuxi.modules.workspace.filesystem import Workspace
     from yuxi.modules.workspace.paths import ensure_user_workspace
     from yuxi.modules.workspace.workdir import Workdir
@@ -250,7 +253,7 @@ async def test_draft_upload_has_one_record_and_content_without_manifest(draft_en
 async def test_draft_oversize_has_no_record_or_content(draft_env):
     """超限在真实上传边界失败，没有持久副作用。"""
     client, db = draft_env
-    with pytest.raises(service.HTTPException, match="附件过大"):
+    with pytest.raises(DomainError, match="附件过大"):
         await service.upload_draft_file(
             file_content=b"x" * (service.MAX_ATTACHMENT_SIZE_BYTES + 1),
             filename="large.bin",
@@ -288,13 +291,13 @@ async def test_draft_isolated_by_user_and_app_and_rejects_expiry(draft_env):
         service.ActorScope("user-1", "app-b"),
         service.ActorScope("user-1", None),
     ):
-        with pytest.raises(service.HTTPException) as error:
+        with pytest.raises(DomainError) as error:
             await service.get_draft_file(file_id=result["id"], scope=other, db=db)
-        assert error.value.status_code == 404
+        assert isinstance(error.value, ResourceNotFoundError)
     db.records[result["id"]].expires_at = datetime.now(UTC) - timedelta(seconds=1)
-    with pytest.raises(service.HTTPException) as error:
+    with pytest.raises(DomainError) as error:
         await service.get_draft_file(file_id=result["id"], scope=scope, db=db)
-    assert error.value.status_code == 422
+    assert isinstance(error.value, InvalidInputError)
 
 
 @pytest.mark.asyncio
@@ -309,9 +312,9 @@ async def test_bound_draft_cannot_be_deleted_or_reparsed(draft_env):
         service.delete_draft_file(file_id=result["id"], scope=scope, db=db),
         service.parse_draft_file(file_id=result["id"], parse_method="disable", scope=scope, db=db),
     ):
-        with pytest.raises(service.HTTPException) as error:
+        with pytest.raises(DomainError) as error:
             await operation
-        assert error.value.status_code == 409
+        assert isinstance(error.value, StateConflictError)
     assert client.objects == before
 
 
@@ -333,27 +336,27 @@ async def test_private_parse_records_complete_directory_and_preserves_failure(dr
     record = db.records[uploaded["id"]]
     source_path = record.parsed_source
     assert service.Workspace(scope.uid).read_authorized_file("/" + source_path, 1024).decode() == "完整文档"
-    unavailable = service.HTTPException(503, "parser unavailable", headers={"Retry-After": "30"})
+    unavailable = UpstreamError("parser unavailable")
 
     async def fail(*args, **kwargs):
         raise unavailable
 
     monkeypatch.setattr("yuxi.modules.documents.service.parse", fail)
-    with pytest.raises(service.HTTPException) as error:
+    with pytest.raises(DomainError) as error:
         await service.parse_draft_file(file_id=uploaded["id"], parse_method="disable", scope=scope, db=db)
     assert error.value is unavailable and record.parsed_source == source_path
 
 
 def test_webp_requires_explicit_capable_engine():
     """WebP 不静默使用不支持该格式的默认解析器。"""
-    with pytest.raises(service.HTTPException):
+    with pytest.raises(DomainError):
         service._normalize_parse_method("image.webp", "rapid_ocr", "rapid_ocr")
 
 
 @pytest.mark.asyncio
 async def test_binding_rejects_input_owned_by_other_scope():
     """替代调用不能把同用户其他 APP 的 Input 用作绑定目标。"""
-    from yuxi.modules.agents.services.scope import ActorScope
+    from yuxi.modules.agents.scope import ActorScope
 
     with pytest.raises(ValueError, match="身份不一致"):
         await service.stage_input_attachments(

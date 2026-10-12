@@ -26,9 +26,9 @@ from yuxi.modules.agents.runtime.callbacks.model_request_timing import FirstMode
 from yuxi.modules.agents.runtime.context import BaseContext
 from yuxi.modules.agents.runtime.state import AgentStatePayload
 from yuxi.modules.agents.services.attachments import serialize_attachment
-from yuxi.modules.agents.services.input_messages import AgentRunInputMessage
+from yuxi.modules.agents.input_messages import AgentRunInputMessage
 from yuxi.modules.agents.services.message_recorder import RunMessageRecorder
-from yuxi.modules.agents.services.messages import save_messages_from_langgraph_state, save_partial_message
+from yuxi.modules.agents.services.checkpoint_messages import save_messages_from_langgraph_state, save_partial_message
 from yuxi.modules.agents.services.openai_events import OpenAIEventAdapter
 from yuxi.modules.agents.services.preparation import PreparedRunExecution
 from yuxi.modules.agents.services.tracing import (
@@ -104,59 +104,6 @@ async def _flush_langfuse_best_effort(*, timeout: float = 2) -> None:
         await asyncio.wait_for(asyncio.to_thread(flush_langfuse), timeout=timeout)
     except TimeoutError:
         logger.warning("刷新 Langfuse 超时，后台导出仍会继续")
-
-
-async def _persist_agent_run_langfuse_trace(*, db, meta: dict, run_context: LangfuseRunContext) -> None:
-    """按 Thread→Turn→Run 顺序固定跨执行段的 trace 与观察身份。"""
-    run_id = meta.get("run_id")
-    worker_id = meta.get("worker_id")
-    if not run_id or not worker_id or not run_context.trace_id:
-        return
-
-    try:
-        root_thread_id = str(meta.get("thread_id") or "")
-        agent_session = await SessionRepository(db).lock_session_by_thread_id(root_thread_id)
-        if agent_session is None:
-            raise ValueError("Langfuse 根 Thread 不存在")
-        turn = await AgentTurnRepository(db).get_for_scope(
-            turn_id=str(meta["turn_id"]),
-            thread_id=root_thread_id,
-            uid=str(meta["uid"]),
-            app_id=agent_session.app_id,
-            for_update=True,
-        )
-        if turn is None:
-            raise ValueError("Langfuse Turn 不存在")
-        run_repo = AgentRunRepository(db)
-        run = await run_repo.get_run(str(run_id))
-        if run is None or run.turn_id != turn.id or run.thread_id != root_thread_id:
-            raise ValueError("Langfuse Run 与 Turn 归属不一致")
-        root_id = turn.langfuse_root_observation_id
-        if root_id is None:
-            root_id = start_turn_observation(run_context)
-            if root_id:
-                await AgentTurnRepository(db).set_langfuse_root_observation_id(turn, root_id)
-        else:
-            earlier_runs = await AgentTurnRepository(db).list_runs(turn.id)
-            trace_id = next((item.langfuse_trace_id for item in earlier_runs if item.langfuse_trace_id), None)
-            if trace_id is None:
-                raise ValueError("Langfuse Turn 根观察缺少持久 trace")
-            run_context.trace_id = trace_id
-        if root_id:
-            await run_repo.set_langfuse_trace_id(str(run_id), str(run_context.trace_id), worker_id=str(worker_id))
-            observation_id = attach_run_observation(
-                run_context,
-                root_observation_id=root_id,
-                existing_observation_id=run.langfuse_observation_id,
-            )
-            if observation_id and run.langfuse_observation_id is None:
-                await run_repo.set_langfuse_observation_id(str(run_id), observation_id, worker_id=str(worker_id))
-        await db.commit()
-    except BaseException:
-        await db.rollback()
-        run_context.terminal_status = "failed"
-        finish_run_observation(run_context)
-        raise
 
 
 def extract_agent_state(values: dict) -> AgentStatePayload:
@@ -386,72 +333,15 @@ class RunExecutionResult:
     error_message: str | None = None
 
 
-async def stream_agent_chat(
-    *,
-    agent_slug: str,
-    thread_id: str,
-    meta: dict,
-    input_messages: list[AgentRunInputMessage],
-    current_user,
-    db,
-    prepared_execution: PreparedRunExecution,
-    on_prepared: Callable[[], Awaitable[None]] | None = None,
-    model_request_recorder: FirstModelRequestRecorder | None = None,
-) -> AsyncIterator[dict[str, Any] | RunExecutionResult]:
-    """以持久 Input 执行当前会话 Run。"""
-    stream = _stream_agent_execution(
-        thread_id=thread_id,
-        meta=meta,
-        current_user=current_user,
-        db=db,
-        prepared_execution=prepared_execution,
-        on_prepared=on_prepared,
-        model_request_recorder=model_request_recorder,
-        agent_slug=agent_slug,
-        input_messages=input_messages,
-    )
-    async with aclosing(stream):
-        async for event in stream:
-            yield event
-
-
-async def stream_agent_resume(
+async def stream_agent_execution(
     *,
     thread_id: str,
-    resume_input: Any,
     meta: dict,
     current_user,
     db,
     prepared_execution: PreparedRunExecution,
     on_prepared: Callable[[], Awaitable[None]] | None = None,
     model_request_recorder: FirstModelRequestRecorder | None = None,
-) -> AsyncIterator[dict[str, Any] | RunExecutionResult]:
-    """以已验证的等待点控制输入恢复同一 Turn。"""
-    stream = _stream_agent_execution(
-        thread_id=thread_id,
-        meta=meta,
-        current_user=current_user,
-        db=db,
-        prepared_execution=prepared_execution,
-        on_prepared=on_prepared,
-        model_request_recorder=model_request_recorder,
-        resume_input=resume_input,
-        is_resume=True,
-    )
-    async with aclosing(stream):
-        async for event in stream:
-            yield event
-
-
-async def _stream_agent_execution(
-    *,
-    thread_id: str,
-    meta: dict,
-    current_user,
-    db,
-    prepared_execution: PreparedRunExecution,
-    on_prepared: Callable[[], Awaitable[None]] | None,
-    model_request_recorder: FirstModelRequestRecorder | None,
     agent_slug: str | None = None,
     input_messages: list[AgentRunInputMessage] | None = None,
     resume_input: Any = None,
@@ -494,7 +384,8 @@ async def _stream_agent_execution(
                 for position, message in enumerate(input_messages):
                     own_id = message.extra_metadata["message_id"]
                     visible = [
-                        attachment for attachment in authorized_attachments
+                        attachment
+                        for attachment in authorized_attachments
                         if attachment["message_id"] == own_id
                         or (position == len(input_messages) - 1 and attachment["message_id"] not in message_ids)
                     ]
@@ -510,8 +401,15 @@ async def _stream_agent_execution(
             message_type=message_type,
             meta=meta,
         )
-        await _persist_agent_run_langfuse_trace(db=db, meta=meta, run_context=langfuse_run)
-        await db.commit()
+        try:
+            await _persist_agent_run_langfuse_trace(db=db, meta=meta, run_context=langfuse_run)
+            # 结束 runtime/附件/追踪准备事务后才进入模型流，禁用追踪也经过此提交点。
+            await db.commit()
+        except BaseException:
+            await db.rollback()
+            langfuse_run.terminal_status = "failed"
+            finish_run_observation(langfuse_run)
+            raise
         trace_info = get_trace_info(langfuse_run)
         callbacks = list(langfuse_run.callbacks)
         if model_request_recorder is not None:
@@ -545,26 +443,10 @@ async def _stream_agent_execution(
                     # 同 Run 续图时，序号在公开投影与审计之前统一为递增序列。
                     event = {**event, "seq": sequence_offset + event["seq"]}
                     last_sequence = event["seq"]
-                    method = event["method"]
-                    params = event["params"]
-                    if method == "values" and not params.get("namespace"):
-                        state = extract_agent_state(params["data"])
-                        signature = _agent_state_signature(state)
-                        if signature != state_signature:
-                            state_signature = signature
-                            yield adapter.extension("turn.state", f"state:{event['seq']}", agent_state=state)
-                        continue
-                    if method == "custom":
-                        payload = params["data"]
-                        if isinstance(payload, dict) and payload.get("type") == "yuxi.context_compression":
-                            yield adapter.extension(
-                                "turn.context_compression",
-                                f"compression:{event['seq']}",
-                                compression=payload,
-                            )
-                        continue
-                    event = await recorder.consume(event)
-                    for public_event in await adapter.consume(event):
+                    public_events, state_signature = await _project_graph_event(
+                        event, recorder=recorder, adapter=adapter, state_signature=state_signature
+                    )
+                    for public_event in public_events:
                         if public_event["type"] == "agent.session.turn.output_text.delta":
                             accumulated_content.append(public_event["delta"])
                         yield public_event
@@ -580,7 +462,7 @@ async def _stream_agent_execution(
             terminal_status = await save_messages_from_langgraph_state(
                 state=final_state,
                 thread_id=thread_id,
-                session_repo=SessionRepository(db),
+                db=db,
                 trace_info=trace_info,
                 run_id=meta["run_id"],
                 turn_id=meta["turn_id"],
@@ -625,7 +507,7 @@ async def _stream_agent_execution(
         await _persist_model_request_timing(model_request_recorder, meta)
         async with pg_manager.get_async_session_context() as new_db:
             output = await save_partial_message(
-                SessionRepository(new_db),
+                new_db,
                 thread_id,
                 full_msg=AIMessage(content="".join(accumulated_content)) if accumulated_content else None,
                 error_message=error_message,
@@ -649,3 +531,67 @@ async def _stream_agent_execution(
         if langfuse_run is not None:
             finish_run_observation(langfuse_run)
         await _flush_langfuse_best_effort()
+
+
+async def _persist_agent_run_langfuse_trace(*, db, meta: dict, run_context: LangfuseRunContext) -> None:
+    """按 Thread→Turn→Run 顺序固定跨执行段的 trace 与观察身份。"""
+    run_id = meta.get("run_id")
+    worker_id = meta.get("worker_id")
+    if not run_id or not worker_id or not run_context.trace_id:
+        return
+
+    root_thread_id = str(meta.get("thread_id") or "")
+    agent_session = await SessionRepository(db).lock_session_by_thread_id(root_thread_id)
+    if agent_session is None:
+        raise ValueError("Langfuse 根 Thread 不存在")
+    turn = await AgentTurnRepository(db).get_for_scope(
+        turn_id=str(meta["turn_id"]),
+        thread_id=root_thread_id,
+        uid=str(meta["uid"]),
+        app_id=agent_session.app_id,
+        for_update=True,
+    )
+    if turn is None:
+        raise ValueError("Langfuse Turn 不存在")
+    run_repo = AgentRunRepository(db)
+    run = await run_repo.get_run(str(run_id))
+    if run is None or run.turn_id != turn.id or run.thread_id != root_thread_id:
+        raise ValueError("Langfuse Run 与 Turn 归属不一致")
+    root_id = turn.langfuse_root_observation_id
+    if root_id is None:
+        root_id = start_turn_observation(run_context)
+        if root_id:
+            await AgentTurnRepository(db).set_langfuse_root_observation_id(turn, root_id)
+    else:
+        earlier_runs = await AgentTurnRepository(db).list_runs(turn.id)
+        trace_id = next((item.langfuse_trace_id for item in earlier_runs if item.langfuse_trace_id), None)
+        if trace_id is None:
+            raise ValueError("Langfuse Turn 根观察缺少持久 trace")
+        run_context.trace_id = trace_id
+    if root_id:
+        await run_repo.set_langfuse_trace_id(str(run_id), str(run_context.trace_id), worker_id=str(worker_id))
+        observation_id = attach_run_observation(
+            run_context,
+            root_observation_id=root_id,
+            existing_observation_id=run.langfuse_observation_id,
+        )
+        if observation_id and run.langfuse_observation_id is None:
+            await run_repo.set_langfuse_observation_id(str(run_id), observation_id, worker_id=str(worker_id))
+
+
+async def _project_graph_event(event, *, recorder, adapter, state_signature: str) -> tuple[list[dict], str]:
+    """将单个原生事件投影到公开协议，审计在公开输出之前完成。"""
+    method, params = event["method"], event["params"]
+    if method == "values" and not params.get("namespace"):
+        state = extract_agent_state(params["data"])
+        signature = _agent_state_signature(state)
+        if signature != state_signature:
+            return [adapter.extension("turn.state", f"state:{event['seq']}", agent_state=state)], signature
+        return [], state_signature
+    if method == "custom":
+        payload = params["data"]
+        if isinstance(payload, dict) and payload.get("type") == "yuxi.context_compression":
+            return [adapter.extension("turn.context_compression", f"compression:{event['seq']}", compression=payload)], state_signature
+        return [], state_signature
+    event = await recorder.consume(event)
+    return await adapter.consume(event), state_signature

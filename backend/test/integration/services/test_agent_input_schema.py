@@ -13,7 +13,7 @@ from test.integration.services.agent_input_fixtures import (
 )
 from yuxi.modules.agents.models.inputs import AgentInput, AgentInputReceipt
 from yuxi.modules.agents.models.messages import Message
-from yuxi.modules.agents.services.input_messages import build_chat_input_message, serialize_input_message
+from yuxi.modules.agents.input_messages import build_chat_input_message, serialize_input_message
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.modules.agents.repositories.input import AgentInputRepository
@@ -458,7 +458,7 @@ async def test_parent_and_child_usage_stays_in_its_own_turn() -> None:
 
 async def test_reused_tool_call_id_never_reuses_another_message_declaration():
     """供应商重复 call_id 时，每条声明仍拥有独立 ToolCall 投影。"""
-    from yuxi.modules.agents.repositories.sessions import SessionRepository
+    from yuxi.modules.agents.repositories.messages import MessageRepository
 
     schema, admin_engine, engine = await _create_schema()
     try:
@@ -468,14 +468,13 @@ async def test_reused_tool_call_id_never_reuses_another_message_declaration():
             messages = [Message(session_record_id=agent_session.id, role="assistant", content="", extra_metadata={}) for _ in range(2)]
             db.add_all(messages)
             await db.flush()
-            repository = SessionRepository(db)
+            repository = MessageRepository(db)
             first, second = [
                 await repository.add_tool_call(
                     message_id=message.id,
                     tool_name="execute",
                     tool_input={"command": str(message.id)},
                     langgraph_tool_call_id="provider-reused-id",
-                    commit=False,
                 )
                 for message in messages
             ]
@@ -485,7 +484,6 @@ async def test_reused_tool_call_id_never_reuses_another_message_declaration():
                 tool_name="execute",
                 tool_input={"command": str(messages[0].id)},
                 langgraph_tool_call_id="provider-reused-id",
-                commit=False,
             )
             assert repeated.id == first.id
             await db.commit()

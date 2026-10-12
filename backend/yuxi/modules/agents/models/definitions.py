@@ -35,15 +35,6 @@ class AgentEnv(Base):
 
     user = relationship("User", back_populates="agent_env")
 
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "uid": self.uid,
-            "env": self.env or {},
-            "created_at": format_utc_datetime(self.created_at),
-            "updated_at": format_utc_datetime(self.updated_at),
-        }
-
-
 class Agent(Base):
     """用户可管理、可授权、可切换的智能体。"""
 

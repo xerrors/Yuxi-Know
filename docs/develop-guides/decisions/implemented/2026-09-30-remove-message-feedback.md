@@ -2,7 +2,7 @@
 
 状态：implemented
 类型：simplification
-Owner：backend/yuxi/modules/agents/services/messages.py
+Owner：backend/yuxi/modules/agents/services/checkpoint_messages.py
 
 ## 问题
 
@@ -38,7 +38,7 @@ Public Agent capabilities 不注册旧消息反馈路由，agent service、Messa
 | 验收主张 | 失败面 | 语义 Owner | 直接证据 / 命令 | 负向案例 | 当前结果 |
 |---|---|---|---|---|---|
 | 两个按钮保留并只显示开发中提示 | handler 发请求或写入状态 | `frontend/src/modules/session/ui/RefsComponent.vue` | 阅读两个 handler 与模板；`rg -n 'submitMessageFeedback|getMessageFeedback|messages/.*/feedback' frontend/src backend/yuxi` | 恢复任一调用或状态后命中旧 API 引用搜索 | Inspected：handler 只调用提示；旧 API 搜索无结果。Not run：页面点击验证，当前无登录态且 API 容器未启动，访问 `/agent` 被重定向到 `/login` |
-| 后端不再有消息反馈读写、ORM 或 Langfuse 评分能力 | 路由、模型、History、score helper 残留 | `backend/yuxi/modules/agents/services/messages.py` | `rg -n 'MessageFeedback|message_feedbacks|submit_user_feedback_score|user_feedback' backend/yuxi` | 恢复映射或入口后命中旧能力搜索 | Inspected：搜索无结果 |
+| 后端不再有消息反馈读写、ORM 或 Langfuse 评分能力 | 路由、模型、History、score helper 残留 | `backend/yuxi/modules/agents/services/checkpoint_messages.py` | `rg -n 'MessageFeedback|message_feedbacks|submit_user_feedback_score|user_feedback' backend/yuxi` | 恢复映射或入口后命中旧能力搜索 | Inspected：搜索无结果 |
 | Dashboard 不再提供反馈端点、统计或界面 | endpoint、card、modal 或 analytics 字段残留 | `backend/yuxi/modules/system/dashboard.py`、`frontend/src/pages/DashboardView.vue` | `rg -n 'feedback_stats|total_feedbacks|satisfaction_rate|agent_satisfaction_rates|/feedbacks|FeedbackModalComponent' backend/yuxi frontend/src` | 恢复任一字段或组件后命中旧能力搜索 | Inspected：实现源码无结果；测试保留缺失字段断言 |
 | 代码格式与前端构建可用 | 删除产生语法、格式或组件构建错误 | 受影响 Python 与 Web 源码 | `git diff --check`；`python3 -m compileall -q backend/yuxi backend/test scripts`；`docker compose exec frontend pnpm run lint:check`；`docker compose exec frontend pnpm run build` | 恢复非法语法或 lint/build 破坏后命令失败 | Passed：上述格式检查、Python 编译检查、前端 lint 和构建 |
 

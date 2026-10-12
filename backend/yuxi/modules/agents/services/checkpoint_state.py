@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import HTTPException
-
 from yuxi.infrastructure.postgres.checkpointer import get_langgraph_checkpointer
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
@@ -14,6 +12,7 @@ from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 from yuxi.modules.agents.services.cooperation import tree_snapshot
 from yuxi.modules.agents.services.execution import build_pending_interrupt_payload, extract_agent_state
 from yuxi.modules.identity.models import User
+from yuxi.shared.errors import ResourceNotFoundError
 
 
 async def _read_checkpoint_state(*, uid: str, thread_id: str) -> tuple[dict, Any | None]:
@@ -47,7 +46,7 @@ async def get_agent_state_view(
     agent_session = await session_repo.get_session_by_thread_id(thread_id)
     if agent_session:
         if agent_session.uid != str(current_uid) or agent_session.app_id != app_id or agent_session.status == "deleted":
-            raise HTTPException(status_code=404, detail="对话线程不存在")
+            raise ResourceNotFoundError("对话线程不存在")
 
         latest_run = await run_repo.get_latest_run_by_thread_for_user(thread_id, current_uid)
         values, interrupt_info = await _read_checkpoint_state(uid=current_uid, thread_id=thread_id)
@@ -75,4 +74,4 @@ async def get_agent_state_view(
             response["parent_thread_id"] = agent_session.parent_thread_id
         return response
 
-    raise HTTPException(status_code=404, detail="对话线程不存在")
+    raise ResourceNotFoundError("对话线程不存在")

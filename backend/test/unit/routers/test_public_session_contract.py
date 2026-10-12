@@ -1,13 +1,14 @@
 """公开 Session 请求与生成 OpenAPI 的可执行契约。"""
 
 import pytest
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from pydantic import ValidationError
 
 from yuxi.api.routers.public_v1.agents import public_agents_router
 from yuxi.api.routers.public_v1.agents.events import public_stream_response
 from yuxi.api.routers.public_v1.agents.schemas import SessionCreate, SessionEventCreate, SessionUpdate, input_messages_to_domain
-from yuxi.modules.agents.services.scope import ActorScope
+from yuxi.modules.agents.scope import ActorScope
+from yuxi.shared.errors import InvalidInputError
 
 
 def test_initial_text_shorthand_has_same_domain_message_as_array():
@@ -145,13 +146,13 @@ def test_public_waiting_status_expresses_the_required_action(kind, expected):
 
 def test_invalid_cursor_rejected_before_streaming_response():
     """非法游标必须成为 HTTP 422，不能在 SSE 200 后断流。"""
-    with pytest.raises(HTTPException) as error:
+    with pytest.raises(InvalidInputError) as error:
         public_stream_response(
             scope=ActorScope(uid="user", app_id=None),
             thread_id="thread",
             after_cursor="not-a-cursor",
         )
-    assert error.value.status_code == 422
+    assert error.value.message == "事件游标无效或版本不兼容"
 
 
 def _resume_body(answer):
@@ -201,7 +202,7 @@ def test_turn_http_core_matches_terminal_event_and_preserves_cancelling():
     """相同终态事实生成相同核心，取消清理不能提前投影终态。"""
     from datetime import UTC, datetime
     from types import SimpleNamespace
-    from yuxi.modules.agents.services.events import _turn_event
+    from yuxi.modules.agents.services.subscriptions import _turn_event
     from yuxi.modules.agents.services.public_resources import turn_core
 
     timestamp = datetime(2026, 10, 9, tzinfo=UTC)

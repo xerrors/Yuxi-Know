@@ -17,6 +17,7 @@ from psycopg_pool import AsyncConnectionPool
 from yuxi.modules.agents.runtime.middlewares.steer import SteerMiddleware
 import yuxi.modules.agents.services.runs as runs
 from yuxi.infrastructure.postgres.manager import PostgresManager
+from yuxi.infrastructure.postgres.checkpointer import get_langgraph_checkpointer
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
@@ -104,7 +105,7 @@ async def test_steer_waits_for_parallel_tools_and_next_run_reads_pg_checkpoint(m
     ):
         manager._initialized = True
         manager.langgraph_pool = pool
-        saver = manager.get_langgraph_checkpointer()
+        saver = get_langgraph_checkpointer(manager)
         agent = create_agent(
             model=model,
             tools=[first_tool, second_tool],
@@ -135,7 +136,7 @@ async def test_steer_waits_for_parallel_tools_and_next_run_reads_pg_checkpoint(m
             await asyncio.wait_for(task, timeout=5)
             assert model.call_count == 1
 
-            restored = await manager.get_langgraph_checkpointer().aget_tuple(config)
+            restored = await get_langgraph_checkpointer(manager).aget_tuple(config)
             assert restored is not None
             tool_results = {
                 message.tool_call_id: message.content
@@ -150,7 +151,7 @@ async def test_steer_waits_for_parallel_tools_and_next_run_reads_pg_checkpoint(m
                 config=config,
                 context=_RunContext(run_id="next-run"),
             )
-            final = await manager.get_langgraph_checkpointer().aget_tuple(config)
+            final = await get_langgraph_checkpointer(manager).aget_tuple(config)
             assert final.checkpoint["channel_values"]["messages"][-1].content == "STEER_COMPLETE"
             assert effects == ["first", "second"]
             assert model.call_count == 2

@@ -8,7 +8,7 @@ from yuxi.api.dependencies.auth import get_db, get_required_user
 from yuxi.api.uploads import read_upload_with_limit
 from yuxi.infrastructure.images import process_uploaded_image
 from yuxi.modules.agents.services.attachments import get_draft_file, parse_draft_file
-from yuxi.modules.agents.services.scope import ActorScope
+from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.identity.models import User
 
 

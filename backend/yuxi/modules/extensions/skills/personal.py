@@ -10,11 +10,12 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from yuxi.infrastructure.filesystem import ensure_within_root, open_regular_file_fd
+from yuxi.infrastructure.filesystem import ensure_within_root, open_directory_fd, open_regular_file_fd, publish_directory_fd
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.modules.agents.runtime.sandbox.download import download_sandbox_directory
+from yuxi.modules.agents.runtime.sandbox.paths import normalize_runtime_path
 from yuxi.modules.agents.runtime.sandbox.paths import VIRTUAL_PATH_PREFIX
-from yuxi.modules.extensions.skills.draft import consume_installed_draft_items, load_and_select_draft_items
+from yuxi.modules.extensions.skills.install_draft import consume_installed_draft_items, load_and_select_draft_items
 from yuxi.modules.extensions.skills.package import (
     TEXT_FILE_EXTENSIONS,
     copy_skill_snapshot,
@@ -204,7 +205,11 @@ def _install_personal_skill_dir_sync(
         if target_dir.exists() or target_dir.is_symlink():
             raise ValueError(f"个人 Skill 源已存在同名 Skill: {slug}")
         try:
-            temp_target.rename(target_dir)
+            directory_fd = open_directory_fd(root, ())
+            try:
+                publish_directory_fd(directory_fd, temp_target.name, directory_fd, target_dir.name)
+            finally:
+                os.close(directory_fd)
         except OSError as exc:
             if target_dir.exists():
                 raise ValueError(f"个人 Skill 源已存在同名 Skill: {slug}") from exc
@@ -267,6 +272,7 @@ def _download_sandbox_skill(
     """从当前用户沙盒下载 Skill 目录到本地暂存区。"""
     from yuxi.modules.agents.runtime.sandbox import ProvisionerSandboxBackend
 
+    sandbox_path = normalize_runtime_path(sandbox_path)
     allowed = sandbox_path.startswith(f"{VIRTUAL_PATH_PREFIX.rstrip('/')}/")
     allowed = allowed or bool(workdir_path and sandbox_path.startswith(f"{workdir_path.rstrip('/')}/"))
     if not allowed:

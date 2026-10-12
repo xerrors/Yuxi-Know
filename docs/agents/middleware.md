@@ -2,17 +2,17 @@
 
 中间件把文件、Skills、会话协作、上下文压缩、审批和用量统计接到 LangGraph Agent。它们在模型调用、工具调用或 state 更新的边界运行，让不同 Agent 复用同一套能力。
 
-内置 `ChatbotAgent` 在 `get_graph()` 中组装中间件。Graph 创建前，系统先完成用户资源和权限的归一化；中间件不应绕过这一步重新决定授权。
+内置 `ChatbotAgent` 在 `get_graph()` 中组装中间件。Graph 创建前，系统完成用户资源和权限的归一化；运行中的最新授权由执行边界复查，具体规则见[Agent 运行机制](../mechanisms/agent-runtime.md#资源权限)。
 
 ## Graph 创建前的准备
 
 `prepare_agent_runtime_context` 会根据当前用户和 Agent 配置：
 
 - 过滤内置工具、知识库、MCP 和 Skills；
-- 展开 Skill 依赖，生成 `_effective_skill_slugs` 和 `_runtime_skills`；
+- 展开 Skill 依赖，生成 `skill_runtime_snapshot`；
 - 使用系统默认模型补齐空的模型配置。
 
-随后，工具解析器准备可执行工具，`build_prompt_with_context` 生成系统提示词，Agent 再创建 Graph。工具执行时仍需检查具体目标，准备阶段的资源快照不是授权替代品。
+随后，工具解析器记录工具来源和可执行注册集合，`build_prompt_with_context` 生成系统提示词，Agent 再创建 Graph。工具执行时仍需检查具体目标，准备阶段的资源快照不是授权替代品。
 
 ## 内置中间件顺序
 
@@ -30,9 +30,10 @@
 | 8 | `TodoListMiddleware` | 保存待办，供状态面板展示 |
 | 9 | `PatchToolCallsMiddleware` | 修正部分工具调用消息形态 |
 | 10 | `NetworkRetryMiddleware` | 网络错误按预算、其他可重试模型错误按次数重试，耗尽后抛出异常 |
-| 11 | `ImageInputCompatibilityMiddleware` | 桥接工具读取图片与模型输入格式；必要时回退 OCR |
-| 12 | `TokenUsageMiddleware` | 记录近似上下文和主模型实际用量 |
-| 13 | 工具审批 middleware | 默认模式下审批 Project 外的文件写入和命令执行；当前 Project 内的写/编辑自动放行 |
+| 11 | `TokenUsageMiddleware` | 记录近似上下文和主模型实际用量 |
+| 12 | 工具审批 middleware | 默认模式下审批 Project 外的文件写入和命令执行；当前 Project 内的写/编辑自动放行 |
+| 13 | `RuntimeAuthorizationMiddleware` | 准备模型输入时刷新资源，实际请求前同步投影；返回时先于审批复查身份 |
+| 14 | `ImageInputCompatibilityMiddleware` | 桥接工具读取图片与模型输入格式；必要时回退 OCR |
 
 模型重试耗尽后，异常进入 Run 失败通道，持久化 `failed` 状态与错误原因；已有部分输出保留错误元数据。
 

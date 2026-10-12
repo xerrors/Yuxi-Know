@@ -2,10 +2,10 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from fastapi import HTTPException
 
 from yuxi.modules.knowledge.read_models import KnowledgeBaseDetail
 from yuxi.modules.knowledge.utils import sample_question_utils as sq
+from yuxi.shared.errors import DomainError, InvalidOperationError, OperationFailedError, ResourceNotFoundError
 
 
 def _database_detail(files: dict | None = None, *, name: str = "测试知识库") -> KnowledgeBaseDetail:
@@ -53,11 +53,11 @@ async def test_generate_knowledge_base_sample_questions_rejects_empty_files(monk
         lambda _kb_type: SimpleNamespace(supports_documents=True),
     )
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(DomainError) as exc_info:
         await sq.generate_knowledge_base_sample_questions("kb_1")
 
-    assert exc_info.value.status_code == 400
-    assert "没有文件" in exc_info.value.detail
+    assert isinstance(exc_info.value, InvalidOperationError)
+    assert "没有文件" in exc_info.value.message
 
 
 @pytest.mark.asyncio
@@ -128,11 +128,11 @@ async def test_generate_knowledge_base_sample_questions_maps_invalid_json(monkey
 
     monkeypatch.setattr(type(sq.system_options), "get", get_system_options)
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(DomainError) as exc_info:
         await sq.generate_knowledge_base_sample_questions("kb_1")
 
-    assert exc_info.value.status_code == 500
-    assert "AI返回格式错误" in exc_info.value.detail
+    assert isinstance(exc_info.value, OperationFailedError)
+    assert "AI返回格式错误" in exc_info.value.message
 
 
 @pytest.mark.parametrize("missing", [False, True])
@@ -148,10 +148,10 @@ async def test_generated_questions_require_successful_save(monkeypatch, missing)
     repository = SimpleNamespace(update=AsyncMock(return_value=None, side_effect=None if missing else error))
     monkeypatch.setattr(sq, "KnowledgeBaseRepository", lambda: repository)
 
-    with pytest.raises(HTTPException if missing else RuntimeError) as caught:
+    with pytest.raises(DomainError if missing else RuntimeError) as caught:
         await sq.generate_knowledge_base_sample_questions("kb_1")
 
     if missing:
-        assert caught.value.status_code == 404
+        assert isinstance(caught.value, ResourceNotFoundError)
     else:
         assert caught.value is error

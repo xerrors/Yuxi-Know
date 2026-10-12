@@ -6,18 +6,18 @@ import json
 import re
 from urllib.parse import urlsplit
 
-from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.agents.repositories.references import TurnReferenceRepository
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
-from yuxi.modules.agents.services.scope import ActorScope
-from yuxi.modules.agents.services.threads import require_thread
+from yuxi.modules.agents.scope import ActorScope
+from yuxi.modules.agents.services.thread_access import require_thread
 from yuxi.modules.knowledge.services.access import visible_knowledge_bases
 from yuxi.modules.models.chat import load_chat_model
 from yuxi.shared.datetime import format_utc_datetime, utc_now
+from yuxi.shared.errors import ContentTooLargeError, OperationTimeoutError, ResourceNotFoundError, StateConflictError, UpstreamError
 
 
 class ReferenceMatch(BaseModel):
@@ -59,25 +59,22 @@ async def annotate_turn_references(*, db: AsyncSession, scope: ActorScope, threa
 
     # 事务级锁覆盖模型调用与保存，避免同一 Turn 并发重复标注。
     if not await repo.try_lock(turn_id):
-        raise HTTPException(status_code=409, detail={"code": "references_busy", "message": "本轮正在标注来源，请稍后读取结果"})
+        raise StateConflictError("本轮正在标注来源，请稍后读取结果", code="references_busy")
 
     message, run, sources = await _load_reference_input(db, scope, thread_id, turn_id)
     if message is None or not message.content.strip():
-        raise HTTPException(status_code=409, detail={"code": "answer_not_completed", "message": "本轮尚无已完成的最终回答"})
+        raise StateConflictError("本轮尚无已完成的最终回答", code="answer_not_completed")
 
     saved = (message.extra_metadata or {}).get("references")
     if saved and saved.get("answer_hash") == _answer_hash(message.content):
         return _visible_references(saved, sources, message.content)
     if not sources:
-        raise HTTPException(status_code=409, detail={"code": "reference_sources_empty", "message": "本轮没有可用的检索内容"})
+        raise StateConflictError("本轮没有可用的检索内容", code="reference_sources_empty")
 
     # 使用最终 Run 的执行快照，后续 Session 默认配置的修改不影响本轮标注。
     snapshot = run.input_payload.get("context_snapshot")
     if not isinstance(snapshot, dict) or not isinstance(snapshot.get("model"), str) or not snapshot["model"].strip():
-        raise HTTPException(
-            status_code=409,
-            detail={"code": "references_config_missing", "message": "本轮缺少执行模型配置，无法标注来源"},
-        )
+        raise StateConflictError("本轮缺少执行模型配置，无法标注来源", code="references_config_missing")
     model_spec = snapshot["model"]
 
     prompt = json.dumps(
@@ -88,10 +85,7 @@ async def annotate_turn_references(*, db: AsyncSession, scope: ActorScope, threa
         ensure_ascii=False,
     )
     if len(prompt) > 60000:
-        raise HTTPException(
-            status_code=413,
-            detail={"code": "references_input_too_large", "message": "本轮回答与检索内容过长，暂不支持标注来源"},
-        )
+        raise ContentTooLargeError("本轮回答与检索内容过长，暂不支持标注来源", code="references_input_too_large")
 
     try:
         model = load_chat_model(model_spec, uid=scope.uid, session_id=f"references-{turn_id}", max_retries=0)
@@ -112,11 +106,11 @@ async def annotate_turn_references(*, db: AsyncSession, scope: ActorScope, threa
             )
         references = validate_reference_matches(response.text, message.content, sources)
     except (ValidationError, ValueError) as exc:
-        raise HTTPException(status_code=502, detail={"code": "references_invalid", "message": "来源标注返回无效结果，请重试"}) from exc
+        raise UpstreamError("来源标注返回无效结果，请重试", code="references_invalid") from exc
     except TimeoutError as exc:
-        raise HTTPException(status_code=504, detail={"code": "references_timeout", "message": "来源标注超时，请重试"}) from exc
+        raise OperationTimeoutError("来源标注超时，请重试", code="references_timeout") from exc
     except Exception as exc:
-        raise HTTPException(status_code=502, detail={"code": "references_call_failed", "message": "来源标注调用失败，请重试"}) from exc
+        raise UpstreamError("来源标注调用失败，请重试", code="references_call_failed") from exc
 
     result = {
         "turn_id": turn_id,
@@ -220,7 +214,7 @@ async def _load_reference_input(db, scope, thread_id, turn_id):
     await require_thread(db=db, scope=scope, thread_id=thread_id)
     turn = await AgentTurnRepository(db).get_for_scope(turn_id=turn_id, thread_id=thread_id, uid=scope.uid, app_id=scope.app_id)
     if turn is None:
-        raise HTTPException(status_code=404, detail="Turn 不存在")
+        raise ResourceNotFoundError("Turn 不存在")
     repo = TurnReferenceRepository(db)
     result = await repo.get_result(turn_id=turn_id, thread_id=thread_id, uid=scope.uid, app_id=scope.app_id)
     if result is None:

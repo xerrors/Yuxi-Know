@@ -191,7 +191,7 @@ async def test_fresh_business_schema_contains_input_lifecycle_without_request_ta
         } <= input_columns
         assert "conversation_thread_id" not in input_columns
         assert BUSINESS_SCHEMA_VERSION == 9
-        assert KNOWLEDGE_SCHEMA_VERSION == 3
+        assert KNOWLEDGE_SCHEMA_VERSION == 4
     finally:
         await _drop_isolated_schema(schema, admin_engine, scoped_engine)
 
@@ -487,3 +487,76 @@ async def test_background_job_baseline_replaces_task_table_and_knowledge_owner_c
             await require_current_schema(manager)
     finally:
         await _drop_isolated_schema(schema, admin_engine, scoped_engine)
+
+
+@pytest.mark.parametrize("business_version", [8, 9])
+async def test_knowledge_name_upgrade_preserves_data_and_rejects_case_insensitive_duplicates(monkeypatch, business_version):
+    """3→4 由真实入口升级；重跑保留数据，活动名称唯一，已删名称可复用。"""
+    schema, admin, engine, manager = await _create_isolated_manager("pytest_name_upgrade")
+    try:
+        await create_business_tables(manager)
+        await create_knowledge_tables(manager)
+        await create_schema_version_table(manager)
+        await record_schema_version(manager, "business", business_version)
+        await record_schema_version(manager, "knowledge", 3)
+        async with engine.begin() as conn:
+            await conn.execute(text("DROP INDEX IF EXISTS uq_knowledge_bases_active_name"))
+            await conn.execute(text("INSERT INTO knowledge_bases (kb_id, name, kb_type) VALUES ('existing', 'Preserved', 'milvus')"))
+            await conn.execute(
+                text(
+                    "INSERT INTO knowledge_bases (kb_id, name, kb_type, deleted_at) "
+                    "VALUES ('archived', 'PRESERVED', 'milvus', CURRENT_TIMESTAMP)"
+                )
+            )
+        monkeypatch.setattr(schema_bootstrap, "pg_manager", manager)
+        monkeypatch.setattr(manager, "initialize", lambda: None)
+        monkeypatch.setattr(manager, "close", AsyncMock())
+        await schema_bootstrap.main()
+        await schema_bootstrap.main()
+        await require_current_schema(manager)
+        async with engine.connect() as conn:
+            assert await conn.scalar(text("SELECT name FROM knowledge_bases WHERE kb_id='existing'")) == "Preserved"
+        with pytest.raises(IntegrityError):
+            async with engine.begin() as conn:
+                await conn.execute(text("INSERT INTO knowledge_bases (kb_id, name, kb_type) VALUES ('duplicate', 'PRESERVED', 'milvus')"))
+        async with engine.begin() as conn:
+            await conn.execute(text("UPDATE knowledge_bases SET deleted_at=CURRENT_TIMESTAMP WHERE kb_id='existing'"))
+            await conn.execute(text("INSERT INTO knowledge_bases (kb_id, name, kb_type) VALUES ('replacement', 'preserved', 'milvus')"))
+        async with engine.connect() as conn:
+            assert await conn.scalar(text("SELECT count(*) FROM knowledge_bases")) == 3
+    finally:
+        await _drop_isolated_schema(schema, admin, engine)
+
+
+async def test_knowledge_name_upgrade_rejects_existing_duplicates_without_changing_version_or_rows(monkeypatch):
+    """存量重名不会自动改名或丢数据，迁移失败保持知识域版本 3。"""
+    schema, admin, engine, manager = await _create_isolated_manager("pytest_name_conflict")
+    try:
+        await create_knowledge_tables(manager)
+        await create_schema_version_table(manager)
+        await record_schema_version(manager, "business", 9)
+        await record_schema_version(manager, "knowledge", 3)
+        async with engine.begin() as conn:
+            await conn.execute(text("DROP INDEX IF EXISTS uq_knowledge_bases_active_name"))
+            await conn.execute(
+                text("INSERT INTO knowledge_bases (kb_id, name, kb_type) "
+                    "VALUES ('a', 'Duplicate', 'milvus'), ('b', 'duplicate', 'milvus')")
+            )
+        monkeypatch.setattr(schema_bootstrap, "pg_manager", manager)
+        monkeypatch.setattr(manager, "initialize", lambda: None)
+        monkeypatch.setattr(manager, "close", AsyncMock())
+        with pytest.raises(RuntimeError, match="重名"):
+            await schema_bootstrap.main()
+        assert await get_schema_versions(manager) == {"business": 9, "knowledge": 3}
+        async with engine.connect() as conn:
+            assert list((await conn.execute(text("SELECT name FROM knowledge_bases ORDER BY kb_id"))).scalars()) == [
+                "Duplicate",
+                "duplicate",
+            ]
+            assert await conn.scalar(text("SELECT to_regclass('uq_knowledge_bases_active_name')")) is None
+        async with engine.begin() as conn:
+            await conn.execute(text("UPDATE knowledge_bases SET name='Resolved' WHERE kb_id='b'"))
+        await schema_bootstrap.main()
+        await require_current_schema(manager)
+    finally:
+        await _drop_isolated_schema(schema, admin, engine)

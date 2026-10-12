@@ -10,7 +10,7 @@ Skill 是一个可复用的能力包，通常包含一个 `SKILL.md`、提示词
 
 | 来源 | 位置和事实 | 谁可以安装/管理 |
 | --- | --- | --- |
-| 内置 | 随代码发布，启动时同步索引 | 管理员可以启用/停用，不能删除或直接编辑 |
+| 内置 | 随代码发布，启动时同步索引 | superadmin 可以启用/停用，不能删除或直接编辑 |
 | 共享上传/远程 | Skill 持久目录 + PostgreSQL 索引 | 管理员按共享范围管理 |
 | Agent 专属 | Skill 持久目录 + 唯一 Agent 绑定 | 访问与管理权限跟随所属 Agent |
 | 个人 | 当前用户 UserWorkspace 的 `agents/skills/<slug>` | 当前用户；不创建共享 Skill 数据库记录 |
@@ -183,6 +183,10 @@ Agent 配置中的 Skill 选择不能扩大用户的文件、知识库或 MCP �
 
 ## 运行时文件行为
 
+解析结果的 `source_type` 记录安装来源，`source_scope` 区分个人、共享和专属范围，内部 `source_dir` 指向真实文件；列表中的 `overrides_shared` 与 `shadowed_by_personal` 分别描述个人卡片和被覆盖共享卡片，管理页仍需要显示后者。整包编辑和版本恢复比较包含路径、文件字节及可执行位的目录 `revision`；单文件编辑比较该文件 sha256，根说明接口比较 `SKILL.md` sha256。`content_hash` 始终使用整目录算法，内置同步与安装包一致。修订冲突返回领域冲突，HTTP 层映射为 409。
+
+远程安装和安装确认草稿共用远程下载、白名单及提取边界。个人来源采用创建型原子发布，同名目录即使为空也失败；共享内容先发布唯一不可变包再提交数据库引用，失败清理未提交包；内置更新保留旧目录用于失败恢复。投影按 uid 锁定并核对完整授权集合：单项变更先撤销旧投影，再重建用户集合，失败保留撤销结果并由下一次执行刷新补偿。不同发布点保留各自的覆盖与撤权规则。
+
 共享和内置 Skill 投影对 Agent 只读，但沙盒命令仍可能执行其中的脚本。脚本如需写文件，应写入当前 Project Workdir 或 User Data，而不是 Skill 目录。个人 Skill 直接从当前用户工作区读取，不会复制到共享投影。
 
 Skill 的选择影响 Prompt 和工具激活；共享投影按用户授权集合生成，不会因为某个 Agent 选择了 Skill 就改变 Sandbox 身份。路径穿越、符号链接和跨用户访问由文件系统边界拒绝。
@@ -196,4 +200,4 @@ Skill 的选择影响 Prompt 和工具激活；共享投影按用户授权集合
 - 脚本按不可信输入处理，不读取或输出运行环境中的秘密。
 - 修改共享 Skill 的依赖、范围或文件后，用一个真实 Agent Run 验证模型可见工具和最终产物。
 
-实现入口见 [共享 Skill 用例](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/skills/shared.py)、[运行时解析](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/skills/runtime.py) 和 [Skills middleware](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/runtime/middlewares/skills.py)。
+权限、依赖与带锁读取由 [Skill 访问契约](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/skills/access.py) 拥有，内置文件和索引同步由 [builtin/sync](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/skills/builtin/sync.py) 拥有，安装确认暂存由 install_draft 模块拥有。shared 保留现有扩展与测试使用的显式导出，包内实现直接依赖职责 Owner。实现入口见 [共享 Skill 用例](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/skills/shared.py)、[运行时解析](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/skills/runtime.py) 和 [Skills middleware](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/runtime/middlewares/skills.py)。

@@ -10,6 +10,9 @@ from typing import Any, Protocol
 from yuxi.infrastructure.observability.logging import logger
 
 
+ADMIN_ROLES = frozenset({"admin", "superadmin"})
+
+
 class ResourcePermission(StrEnum):
     """资源权限等级，数值顺序用于判断权限是否足够。"""
 
@@ -299,8 +302,11 @@ def resolve_skill_permission(user: Any, resource: ShareableResource) -> Resource
             return ResourcePermission.MANAGE
         return ResourcePermission.NONE
 
-    return resolve_resource_permission(
+    permission = resolve_resource_permission(
         user,
         resource,
         SKILL_PERMISSION_POLICY,
     )
+    if _value(resource, "source_type") == "builtin" and _value(user, "role") != "superadmin":
+        return _minimum_permission(permission, ResourcePermission.READ)
+    return permission

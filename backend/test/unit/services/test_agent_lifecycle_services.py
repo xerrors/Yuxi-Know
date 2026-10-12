@@ -3,20 +3,20 @@
 from types import SimpleNamespace
 
 import pytest
-from fastapi import HTTPException
 
-from yuxi.modules.agents.services.events import _Cursor, _parse_cursor
+from yuxi.modules.agents.services.subscriptions import _Cursor, _parse_cursor
 from yuxi.modules.agents.services.scheduler import Dispatch, deliver
 from yuxi.modules.agents.services.turns import _summarize_turn_usage, _validate_resume_response
+from yuxi.shared.errors import DomainError, InvalidInputError
 
 
 def test_thread_cursor_round_trip_across_receipt_run_and_redis_positions():
     """接收序号、Run 序号和 Redis 位置能独立恢复。"""
     cursor = _Cursor(receipt_seq=31, run_seq=12, event_seq="172-4", run_phase=1)
     assert _parse_cursor(cursor.encode()) == cursor
-    with pytest.raises(HTTPException) as error:
+    with pytest.raises(DomainError) as error:
         _parse_cursor("12-0")
-    assert error.value.status_code == 422
+    assert isinstance(error.value, InvalidInputError)
 
 
 def test_turn_usage_counts_only_completed_audits_with_real_token_numbers():
@@ -52,9 +52,9 @@ def test_waitpoint_rejects_partial_or_reordered_answers():
         [{"question_id": "q-1", "answer": "yes"}],
         [{"question_id": "q-2", "answer": "later"}, {"question_id": "q-1", "answer": "yes"}],
     ):
-        with pytest.raises(HTTPException) as error:
+        with pytest.raises(DomainError) as error:
             _validate_resume_response(waitpoint, {"type": "answer", "answers": answers})
-        assert error.value.status_code == 422
+        assert isinstance(error.value, InvalidInputError)
 
 
 def test_waitpoint_rejects_unlisted_approval_decision():
@@ -66,7 +66,7 @@ def test_waitpoint_rejects_unlisted_approval_decision():
             {"call_id": "call-2", "allowed_decisions": ["approve", "reject"]},
         ],
     }
-    with pytest.raises(HTTPException) as error:
+    with pytest.raises(DomainError) as error:
         _validate_resume_response(
             waitpoint,
             {
@@ -77,7 +77,7 @@ def test_waitpoint_rejects_unlisted_approval_decision():
                 ],
             },
         )
-    assert error.value.status_code == 422
+    assert isinstance(error.value, InvalidInputError)
 
 
 @pytest.mark.asyncio

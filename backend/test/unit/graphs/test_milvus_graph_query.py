@@ -245,3 +245,36 @@ def test_graph_ppr_ranks_chunk_nodes_from_seed_entities():
     ranked = MilvusGraphService.rank_chunks_by_ppr(subgraph, {"seed": 1.0}, top_k=2, damping=0.85)
 
     assert [chunk_id for chunk_id, _ in ranked] == ["chunk_a", "chunk_b"]
+
+
+async def test_delete_file_graph_initializes_vector_store_outside_event_loop(monkeypatch):
+    """首次删除将同步客户端初始化移出事件循环，完成两种投影清理。"""
+    import threading
+    from contextlib import asynccontextmanager
+    from unittest.mock import AsyncMock
+    import yuxi.modules.knowledge.graphs.milvus_graph_service as module
+
+    loop_thread = threading.get_ident()
+    store = SimpleNamespace(delete_graph_records=AsyncMock())
+    initialized_threads = []
+
+    def create_store():
+        """记录构造线程，拒绝事件循环内初始化。"""
+        initialized_threads.append(threading.get_ident())
+        assert threading.get_ident() != loop_thread, "网络客户端在事件循环内初始化"
+        return store
+
+    @asynccontextmanager
+    async def references(_file_id, *, generation):
+        """提供本次删除的文件图谱引用。"""
+        assert generation == 2
+        yield ["entity-1"], ["triple-1"], ["chunk-1"]
+
+    monkeypatch.setattr(module, "MilvusGraphVectorStore", create_store)
+    service = MilvusGraphService(graph_repo=SimpleNamespace(delete_file_references=references))
+    deleted = []
+    service._delete_file_graph_from_neo4j = lambda *args: deleted.append(args)
+    await service.delete_file_graph("kb-1", "file-1", generation=2)
+    assert initialized_threads and initialized_threads[0] != loop_thread
+    store.delete_graph_records.assert_awaited_once_with("kb-1", entity_ids=["entity-1"], triple_ids=["triple-1"])
+    assert deleted == [("kb-1", "file-1", ["chunk-1"])]

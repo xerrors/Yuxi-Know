@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from yuxi.modules.agents.repositories.pagination import order_page
+
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
@@ -132,20 +134,6 @@ class AgentTurnRepository:
         )
         return result.scalar_one_or_none()
 
-    async def get_latest_for_thread(self, *, thread_id: str, uid: str, app_id: str | None) -> AgentTurn | None:
-        """读取线程最近的整轮事实。"""
-        result = await self.db.execute(
-            select(AgentTurn)
-            .where(
-                AgentTurn.thread_id == thread_id,
-                AgentTurn.uid == uid,
-                AgentTurn.app_id == app_id,
-            )
-            .order_by(AgentTurn.created_at.desc(), AgentTurn.id.desc())
-            .limit(1)
-        )
-        return result.scalar_one_or_none()
-
     async def list_page(
         self,
         *,
@@ -157,7 +145,6 @@ class AgentTurnRepository:
         order: str,
     ) -> list:
         """按创建时间与 ID 分页轮次，同时读取当前执行段。"""
-        from sqlalchemy import tuple_
 
         statement = (
             select(AgentTurn, AgentRun)
@@ -169,15 +156,14 @@ class AgentTurnRepository:
                 AgentTurn.app_id == app_id,
             )
         )
+        anchor = None
         if after is not None:
             cursor = await self.get_for_scope(turn_id=after, thread_id=thread_id, uid=uid, app_id=app_id)
             if cursor is None:
                 raise ValueError("after 不是当前 Session 的 Turn")
-            position = tuple_(AgentTurn.created_at, AgentTurn.id)
-            boundary = tuple_(cursor.created_at, cursor.id)
-            statement = statement.where(position > boundary if order == "asc" else position < boundary)
-        sorting = (AgentTurn.created_at.asc(), AgentTurn.id.asc()) if order == "asc" else (AgentTurn.created_at.desc(), AgentTurn.id.desc())
-        return list((await self.db.execute(statement.order_by(*sorting).limit(limit + 1))).all())
+            anchor = (cursor.created_at, cursor.id)
+        statement = order_page(statement, columns=(AgentTurn.created_at, AgentTurn.id), anchor=anchor, order=order)
+        return list((await self.db.execute(statement.limit(limit + 1))).all())
 
     async def set_current(self, turn: AgentTurn, *, run_id: str) -> AgentTurn:
         """将同一 Turn 的新顶层 Run 设为当前执行。"""

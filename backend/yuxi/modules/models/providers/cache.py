@@ -105,15 +105,15 @@ class ModelCache:
             with sync_redis_client() as redis_client:
                 raw = redis_client.get(REDIS_CACHE_KEY)
             if not raw:
-                self._local_cache = {}
-                self._local_cache_at = now
-                return {}
+                raise RuntimeError("Redis 中缺少模型缓存")
 
             items = json.loads(raw)
             cache = {spec: ModelInfo.from_dict(data) for spec, data in items.items()}
         except Exception as e:
-            logger.warning(f"Failed to load model cache from Redis: {e}")
-            return {}
+            logger.bind(component="model_cache", error_type=type(e).__name__, available=False).error(
+                "component=model_cache error_type={} available=false 模型缓存读取失败", type(e).__name__
+            )
+            raise RuntimeError("模型缓存不可用，请检查 Redis 与模型缓存初始化") from e
 
         self._local_cache = cache
         self._local_cache_at = now
@@ -196,17 +196,3 @@ class ModelCache:
 
 
 model_cache = ModelCache()
-
-
-def resolve_model_spec(spec: str) -> ModelInfo:
-    """根据 spec 返回 ModelInfo。"""
-    if not spec:
-        raise ValueError("model spec 不能为空")
-
-    info = model_cache.get_model_info(spec)
-    if info:
-        return info
-
-    all_specs = model_cache.get_all_specs()
-    available = [item.spec for item in all_specs[:10]]
-    raise ValueError(f"未找到模型: '{spec}'。可用模型 ({len(all_specs)}): {available}")

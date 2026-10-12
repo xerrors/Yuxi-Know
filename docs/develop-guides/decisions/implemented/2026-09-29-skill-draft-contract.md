@@ -2,7 +2,7 @@
 
 状态：implemented
 类型：architecture
-Owner：backend/yuxi/modules/extensions/skills/draft.py
+Owner：backend/yuxi/modules/extensions/skills/install_draft.py
 
 ## 问题
 
@@ -12,7 +12,7 @@ Owner：backend/yuxi/modules/extensions/skills/draft.py
 
 ### 实现方案
 
-`modules/extensions/skills/draft.py` 拥有上传和远程安装草稿的创建、加载、授权、条目选择、消费及删除。元数据 `items` 只包含已解析的包快照，获取或解析失败保存在 `failures`。共享授权选项由 HTTP 响应适配层装配，不进入草稿。草稿加载校验期限、操作者、来源、唯一 slug 与路径，向目标来源返回具名条目。
+`modules/extensions/skills/install_draft.py` 拥有上传和远程安装草稿的创建、加载、授权、条目选择、消费及删除。元数据 `items` 只包含已解析的包快照，获取或解析失败保存在 `failures`。共享授权选项由 HTTP 响应适配层装配，不进入草稿。草稿加载校验期限、操作者、来源、唯一 slug 与路径，向目标来源返回具名条目。
 
 `remote.py` 拥有远程发现与目录下载；获取结果明确区分 `DownloadedSkill` 与 `SkillDownloadFailure`，下载完成不代表包格式有效。个人 service 同时拥有草稿确认和 Agent 直接安装；工具仅提取运行上下文并装配 ToolMessage，直接安装无需创建持久草稿。共享 service 在确认时分配 slug 并提交文件和索引。两个安装执行边界均重新解析复制后的包并核对草稿 slug。
 

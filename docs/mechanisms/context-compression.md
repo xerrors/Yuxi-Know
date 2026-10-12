@@ -10,6 +10,8 @@
 
 ## 自动压缩流程
 
+正式 graph 使用 `awrap_model_call`，主动维护使用 `aforce_summarize`；两者在实际摘要请求前执行异步授权刷新。同步 `wrap_model_call` 明确失败，避免在临时事件循环中复用 PostgreSQL 连接池。确定性消息精简和 token 计量保持普通函数。
+
 ```mermaid
 flowchart TD
     Request["模型请求：消息 + system + tools"] --> Count["近似计算 token"]

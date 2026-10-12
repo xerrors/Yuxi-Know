@@ -2,14 +2,14 @@
 
 import pytest
 
-from yuxi.modules.knowledge.chunking.ragflow_like.dispatcher import _build_chunk_records, chunk_file
+from yuxi.modules.knowledge.chunking.ragflow_like.dispatcher import _build_chunk_records, chunk_markdown
 from yuxi.modules.knowledge.chunking.ragflow_like.parsers import semantic
 from yuxi.modules.knowledge.chunking.source_spans import LocatedText, SourceText
 
 
 def test_blank_lines_and_repeated_chunks_keep_distinct_source_locations():
     """保留空行计数，并按原文顺序区分重复内容。"""
-    records = chunk_file("相同内容\r\n\r\n相同内容", "file", "text.txt", {"chunk_preset_id": "separator"})
+    records = chunk_markdown("相同内容\r\n\r\n相同内容", "file", "text.txt", {"chunk_preset_id": "separator"})
     assert [(row["chunk_index"], row["start_line"], row["end_line"]) for row in records] == [(0, 1, 1), (1, 3, 3)]
 
 
@@ -22,13 +22,13 @@ def test_overlap_can_start_before_previous_chunk_end():
 
 def test_normalized_whitespace_does_not_shift_original_line_numbers():
     """合并时去掉的空行与缩进仍占原文行号。"""
-    records = chunk_file("  第一行\n\n    第二行\n", "file", "text.md", {"chunk_preset_id": "general"})
+    records = chunk_markdown("  第一行\n\n    第二行\n", "file", "text.md", {"chunk_preset_id": "general"})
     assert (records[0]["start_line"], records[0]["end_line"]) == (1, 3)
 
 
 def test_plain_text_ingestion_has_source_lines():
     """TXT 经相同文本入口保存原文首尾行。"""
-    records = chunk_file("第一段\n\n第二段", "file", "text.txt", {"chunk_preset_id": "separator"})
+    records = chunk_markdown("第一段\n\n第二段", "file", "text.txt", {"chunk_preset_id": "separator"})
     assert [(row["start_line"], row["end_line"]) for row in records] == [(1, 1), (3, 3)]
 
 
@@ -52,7 +52,7 @@ def test_chunk_without_source_mapping_is_rejected(content):
 
 def test_repeated_multiline_chunks_keep_parser_boundaries():
     """重复多行块不能被反查误认为前一块的重叠。"""
-    records = chunk_file(
+    records = chunk_markdown(
         "甲\n甲\n甲\n甲\n甲\n甲",
         "file",
         "text.md",
@@ -66,7 +66,7 @@ def test_repeated_multiline_chunks_keep_parser_boundaries():
 
 def test_separator_overlap_keeps_repeated_source_locations():
     """配置重叠时，由实际切片范围定位重复文本。"""
-    records = chunk_file(
+    records = chunk_markdown(
         "甲\n甲\n甲\n甲",
         "file",
         "text.txt",
@@ -80,7 +80,7 @@ def test_separator_overlap_keeps_repeated_source_locations():
 
 def test_symbol_lines_keep_source_boundaries_after_blank_line_removal():
     """纯符号首尾行仍属于片段，不能仅定位到字母数字正文。"""
-    records = chunk_file("```\n\nhello\n\n```", "file", "text.md", {"chunk_preset_id": "general"})
+    records = chunk_markdown("```\n\nhello\n\n```", "file", "text.md", {"chunk_preset_id": "general"})
     assert (records[0]["start_line"], records[0]["end_line"]) == (1, 5)
 
 
@@ -97,21 +97,21 @@ def test_long_semantic_code_keeps_fences_without_source_failure():
 def test_qa_repeated_answer_uses_its_own_source_lines():
     """重复问题和答案保留当前问答来源，而非回到首次出现位置。"""
     source = "Q: 同一问题\nA: 同一答案\n\nQ: 第二问题\nA: 同一答案"
-    records = chunk_file(source, "file", "qa.md", {"chunk_preset_id": "qa"})
+    records = chunk_markdown(source, "file", "qa.md", {"chunk_preset_id": "qa"})
     assert [(row["start_line"], row["end_line"]) for row in records] == [(1, 2), (4, 5)]
 
 
 def test_csv_escaped_quotes_keep_complete_record_range():
     """CSV 结构引号不能冒充跨行字段的正文来源。"""
     source = '"Q","""\n"""'
-    records = chunk_file(source, "file", "qa.csv", {"chunk_preset_id": "qa"})
+    records = chunk_markdown(source, "file", "qa.csv", {"chunk_preset_id": "qa"})
     assert (records[0]["start_line"], records[0]["end_line"]) == (1, 2)
 
 
 def test_long_csv_answer_keeps_record_range_after_subdivision():
     """CSV 解码后的长问答子块仍定位到完整原始 record。"""
     source = '"问题","' + "长答案" * 2000 + '"'
-    records = chunk_file(source, "file", "qa.csv", {"chunk_preset_id": "qa"})
+    records = chunk_markdown(source, "file", "qa.csv", {"chunk_preset_id": "qa"})
     assert len(records) > 1
     assert all((row["start_line"], row["end_line"]) == (1, 1) for row in records)
 

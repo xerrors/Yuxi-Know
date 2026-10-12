@@ -4,16 +4,19 @@ from __future__ import annotations
 
 import asyncio
 import copy
-import json
 import re
 import uuid
 from datetime import timedelta
 
 from sqlalchemy import select
 
+from yuxi.modules.agents.services.thread_access import require_thread
+from yuxi.modules.agents.services.turns import cancel_turn
+from yuxi.modules.agents.runtime_locks import cooperation_lock_key
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.manager import pg_manager
-from yuxi.modules.agents.models.messages import Message
+from yuxi.modules.agents.receipts import require_idempotency_key, control_intent_hash, require_receipt_replay
+from yuxi.modules.agents.services.run_creation import create_resume_run
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.models.turns import AgentTurn
@@ -26,14 +29,15 @@ from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 from yuxi.modules.agents.runtime.agent_backends import get_agent_backend
 from yuxi.modules.agents.services.directory import list_public_agents
 from yuxi.modules.agents.services.input_config import resolve_agent_context_snapshot
-from yuxi.modules.agents.services.input_messages import build_chat_input_message
+from yuxi.modules.agents.input_messages import build_chat_input_message
 from yuxi.modules.agents.services.inputs import accept_locked
 from yuxi.modules.agents.services.scheduler import Dispatch, deliver, dispatch_next_input
-from yuxi.modules.agents.services.scope import ActorScope
+from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.identity.models import User
 from yuxi.modules.workspace.repositories.projects import ProjectRepository
 from yuxi.modules.workspace.services.bindings import resolve_session_workdir_binding
 from yuxi.shared.datetime import format_utc_datetime, utc_now
+from yuxi.shared.errors import StateConflictError
 
 
 class SessionCooperationService:
@@ -177,7 +181,6 @@ class SessionCooperationService:
         """取消精确目标 Turn，控制权限允许树内任意成员。"""
         run, caller = await self.caller()
         member = await self.require_target(caller, target)
-        from yuxi.modules.agents.services.turns import cancel_turn
 
         member = await SessionRepository(self.db).lock_session_by_thread_id(member.thread_id)
         key = f"cooperation:{run.turn_id}:{call_id}"
@@ -237,8 +240,6 @@ class SessionCooperationService:
 
         tree_runtime = await self.db.get(CooperationRuntime, caller.tree_root_thread_id, populate_existing=True)
         if tree_runtime is not None and tree_runtime.stopped:
-            from yuxi.modules.agents.services.turns import cancel_turn
-
             # 停止意图先于逐成员取消提交；抢先进入模型边界的成员也按取消收敛。
             await cancel_turn(
                 db=self.db,
@@ -261,13 +262,12 @@ class SessionCooperationService:
     async def _accept(self, *, run: AgentRun, target: Session, description: str, call_id: str) -> dict:
         """复用 Input/Receipt 接收，不为排队输入提前创建 Turn。"""
         target = await SessionRepository(self.db).lock_session_by_thread_id(target.thread_id)
-        from yuxi.modules.agents.services.inputs import require_input_replay
 
         key = f"cooperation:{run.turn_id}:{call_id}"
         intent = str(uuid.uuid5(uuid.NAMESPACE_URL, description))
         existing = await self.repo.lock_tool_receipt(run, target, key)
         if existing is not None:
-            require_input_replay(existing, "agent.session.input.message", intent)
+            require_receipt_replay(existing, "agent.session.input.message", intent)
             return await self._input_result(target, existing.input_id)
         frozen = {"runtime": {"tool_call_id": call_id}}
         receipt = await accept_locked(
@@ -345,7 +345,6 @@ async def tree_snapshot(db, caller: Session) -> dict:
 
 async def get_cooperation_summary(*, db, scope: ActorScope, thread_id: str) -> dict:
     """HTTP 观察只读取授权范围内的持久摘要。"""
-    from yuxi.modules.agents.services.threads import require_thread
 
     caller = await require_thread(db=db, scope=scope, thread_id=thread_id)
     return await tree_snapshot(db, caller)
@@ -419,32 +418,6 @@ async def read_updates(db, caller: Session, *, targets: list[str], after: int) -
     }
 
 
-async def notify_turn_state(db, run: AgentRun) -> None:
-    """与 Turn 状态同事务发布可补读的通知；完成通知不创建 Input。"""
-    sender = await db.get(Session, run.session_record_id)
-    turn = await db.get(AgentTurn, run.turn_id)
-    if sender is None or turn is None:
-        raise ValueError("协作通知缺少会话或轮次")
-    recipients = [sender]
-    if sender.parent_thread_id:
-        parent = await db.scalar(select(Session).where(Session.thread_id == sender.parent_thread_id))
-        recipients.append(parent)
-    for recipient in recipients:
-        await CooperationRepository(db).append(
-            sender=sender,
-            recipient=recipient,
-            key=f"turn:{run.id}:{turn.status}",
-            kind="turn_status",
-            run_id=run.id,
-            turn_id=turn.id,
-            payload={
-                "status": turn.status,
-                "result_run_id": turn.result_run_id,
-                "waiting_for": (turn.waitpoint or {}).get("kind"),
-            },
-        )
-
-
 async def recover_cooperation_waits() -> None:
     """分页恢复等待；单项失败不阻止后续记录，失败仍使本轮健康失效。"""
     after = ""
@@ -513,78 +486,35 @@ async def _recover_cooperation_wait(turn_id: str) -> None:
                 return
             result["wait_timed_out"] = True
         previous = await db.get(AgentRun, turn.current_run_id)
-        run_id = str(uuid.uuid4())
         binding = await resolve_session_workdir_binding(agent_session=member, uid=member.uid, db=db)
-        message = Message(
-            session_record_id=member.id,
-            role="user",
-            content=json.dumps(result, ensure_ascii=False),
-            message_type="resume",
-            extra_metadata={"resume": result},
-            delivery_status="dispatched",
-            turn_id=turn.id,
-            run_id=run_id,
-        )
-        db.add(message)
-        await db.flush()
-        await AgentRunRepository(db).create_run(
-            run_id=run_id,
-            thread_id=member.thread_id,
-            runtime_scope_id=member.tree_root_thread_id,
-            agent_slug=previous.agent_slug,
-            uid=member.uid,
-            turn_id=turn.id,
-            app_id=member.app_id,
+        run = await create_resume_run(
+            db=db,
+            agent_session=member,
+            turn=turn,
+            previous=previous,
             api_key_id=previous.api_key_id,
-            input_payload=previous.input_payload,
-            session_record_id=member.id,
-            input_message_id=message.id,
-            source=previous.source,
-            channel=previous.channel,
-            external_id=previous.external_id,
-            origin_metadata=previous.origin_metadata,
-            run_type="resume",
-            resume_from_run_id=previous.id,
-            created_by_run_id=previous.created_by_run_id,
+            response=result,
+            metadata={"resume": result},
         )
-        await AgentTurnRepository(db).set_current(turn, run_id=run_id)
+        run_id = run.id
+
     await deliver(Dispatch(run_id=run_id, binding=binding))
-
-
-async def notify_user_intervention(db, member: Session, *, key: str, action: str) -> None:
-    """用户直接操作成员时告知父会话，不创建父工作。"""
-    if member.parent_thread_id is None:
-        return
-    parent = await db.scalar(select(Session).where(Session.thread_id == member.parent_thread_id))
-    await CooperationRepository(db).append(
-        sender=member,
-        recipient=parent,
-        key=f"user:{key}",
-        kind="user_intervention",
-        payload={"action": action},
-    )
 
 
 async def control_tree(*, db, scope: ActorScope, thread_id: str, idempotency_key: str, stopped: bool) -> dict:
     """持久接受用户的整树停止或继续意图，重试不改变新一轮状态。"""
-    from fastapi import HTTPException
+
     from sqlalchemy import text
     from sqlalchemy.dialects.postgresql import insert
 
     from yuxi.modules.agents.models.cooperation import CooperationRuntime
     from yuxi.modules.agents.repositories.input_receipt import AgentInputReceiptRepository
-    from yuxi.modules.agents.services.threads import (
-        check_control_key,
-        control_accepted,
-        hash_control_intent,
-        require_control_replay,
-        require_thread,
-    )
+    from yuxi.modules.agents.services.threads import control_accepted
 
-    check_control_key(idempotency_key)
+    require_idempotency_key(idempotency_key)
     member = await require_thread(db=db, scope=scope, thread_id=thread_id)
     event_type = "yuxi.session.tree.stop" if stopped else "yuxi.session.tree.continue"
-    intent = hash_control_intent(event_type)
+    intent = control_intent_hash(event_type)
     members = []
     if not stopped:
         # 与会话生命周期保持 Session → Turn/Run → 树锁的方向；一起解除队列暂停。
@@ -605,12 +535,12 @@ async def control_tree(*, db, scope: ActorScope, thread_id: str, idempotency_key
         )
     await db.execute(
         text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
-        {"key": f"cooperation:{member.tree_root_thread_id}"},
+        {"key": cooperation_lock_key(member.tree_root_thread_id)},
     )
     repo = AgentInputReceiptRepository(db)
     receipt = await repo.get_for_scope(uid=scope.uid, app_id=scope.app_id, thread_id=thread_id, idempotency_key=idempotency_key)
     if receipt is not None:
-        require_control_replay(receipt, event_type, intent)
+        require_receipt_replay(receipt, event_type, intent)
         return control_accepted(receipt)
     if (
         not stopped
@@ -625,7 +555,7 @@ async def control_tree(*, db, scope: ActorScope, thread_id: str, idempotency_key
         )
         is not None
     ):
-        raise HTTPException(status_code=409, detail="整树仍有未结束的 Turn")
+        raise StateConflictError("整树仍有未结束的 Turn")
     await db.execute(
         insert(CooperationRuntime)
         .values(tree_root_thread_id=member.tree_root_thread_id, stopped=stopped, released=False)
@@ -656,7 +586,6 @@ async def control_tree(*, db, scope: ActorScope, thread_id: str, idempotency_key
 async def reconcile_stopped_trees() -> None:
     """补做已持久停止意图，禁止父轮次结束默认影响后代。"""
     from yuxi.modules.agents.models.cooperation import CooperationRuntime
-    from yuxi.modules.agents.services.turns import cancel_turn
 
     async with pg_manager.get_async_session_context() as db:
         members = list(

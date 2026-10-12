@@ -75,13 +75,3 @@ def is_url_parsing_enabled() -> bool:
     """Check if URL parsing is enabled (whitelist is configured)."""
     whitelist = _get_whitelist()
     return len(whitelist) > 0
-
-
-def get_whitelist_info() -> dict:
-    """Get information about the current whitelist configuration."""
-    whitelist = _get_whitelist()
-    return {
-        "enabled": len(whitelist) > 0,
-        "domains": whitelist,
-        "count": len(whitelist),
-    }

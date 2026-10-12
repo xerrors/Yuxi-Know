@@ -31,13 +31,14 @@ from deepagents.backends.sandbox import MAX_BINARY_BYTES, BaseSandbox
 from deepagents.backends.utils import _get_file_type
 
 from yuxi.infrastructure.observability.logging import logger
-from yuxi.modules.agents.runtime.sandbox.paths import VIRTUAL_PATH_PREFIX, VIRTUAL_SKILLS_PATH, runtime_workdir_path
+from yuxi.modules.agents.runtime.sandbox.paths import VIRTUAL_PATH_PREFIX, VIRTUAL_SKILLS_PATH, normalize_runtime_path, runtime_workdir_path
 from yuxi.modules.agents.runtime.sandbox.provider import (
     get_sandbox_provider,
     sandbox_id_for_thread,
     sandbox_provisioner_token,
 )
 from yuxi.modules.workspace.errors import FileTransferLimitError
+from yuxi.modules.workspace.paths import validate_directory_name
 
 if TYPE_CHECKING:
     from yuxi.modules.agents.runtime.context import BaseContext
@@ -91,18 +92,6 @@ def _read_window(offset: int, limit: int | None) -> tuple[int, int | None]:
     start_line = max(0, int(offset))
     end_line = start_line + int(limit) if limit is not None else None
     return start_line, end_line
-
-
-def _normalize_path(path: str) -> str:
-    raw = str(path or "").strip()
-    if not raw:
-        raise ValueError("path is required")
-    if not raw.startswith("/"):
-        raise ValueError("path must start with /")
-    pure = PurePosixPath(raw)
-    if ".." in pure.parts:
-        raise ValueError("path traversal is not allowed")
-    return str(pure)
 
 
 def _is_same_or_child(path: str, root: str) -> bool:
@@ -248,7 +237,7 @@ class ProvisionerSandboxBackend(BaseSandbox):
         result: list[FileInfo] = []
         for info in infos:
             try:
-                path = _normalize_path(info.get("path", ""))
+                path = normalize_runtime_path(info.get("path", ""))
             except ValueError:
                 continue
             if self._can_list_path(path):
@@ -259,7 +248,7 @@ class ProvisionerSandboxBackend(BaseSandbox):
         result: list[GrepMatch] = []
         for match in matches:
             try:
-                path = _normalize_path(match.get("path", ""))
+                path = normalize_runtime_path(match.get("path", ""))
             except ValueError:
                 continue
             if self._can_read_path(path):
@@ -450,7 +439,7 @@ class ProvisionerSandboxBackend(BaseSandbox):
     ) -> ReadResult:
         """Read allowed file content via the sandbox file API."""
         try:
-            normalized_path = _normalize_path(file_path)
+            normalized_path = normalize_runtime_path(file_path)
         except Exception as exc:  # noqa: BLE001
             return ReadResult(error=f"Invalid path '{file_path}': {exc}")
         if not self._can_read_path(normalized_path):
@@ -495,7 +484,7 @@ class ProvisionerSandboxBackend(BaseSandbox):
     ) -> ReadResult:
         """通过 sandbox 原生异步文件 API 读取授权内容。"""
         try:
-            normalized_path = _normalize_path(file_path)
+            normalized_path = normalize_runtime_path(file_path)
         except Exception as exc:  # noqa: BLE001
             return ReadResult(error=f"Invalid path '{file_path}': {exc}")
         if not self._can_read_path(normalized_path):
@@ -594,7 +583,7 @@ class ProvisionerSandboxBackend(BaseSandbox):
     def ls(self, path: str) -> LsResult:
         """List direct children of an allowed sandbox path with lightweight metadata."""
         try:
-            normalized_path = _normalize_path(path)
+            normalized_path = normalize_runtime_path(path)
         except Exception as exc:  # noqa: BLE001
             return LsResult(error=f"Invalid path '{path}': {exc}")
         if not self._can_list_path(normalized_path):
@@ -659,7 +648,7 @@ finally:
         upload_files(), which uses base64 encoding for the sandbox file API.
         """
         try:
-            normalized_path = _normalize_path(file_path)
+            normalized_path = normalize_runtime_path(file_path)
         except Exception as exc:  # noqa: BLE001
             return WriteResult(error=f"Error: Invalid path '{file_path}': {exc}")
         if not self._can_write_path(normalized_path):
@@ -696,7 +685,7 @@ finally:
         are not supported here and should be handled via download/upload flows.
         """
         try:
-            normalized_path = _normalize_path(file_path)
+            normalized_path = normalize_runtime_path(file_path)
         except Exception as exc:  # noqa: BLE001
             return EditResult(error=f"Error: Invalid path '{file_path}': {exc}")
         if not self._can_write_path(normalized_path):
@@ -786,7 +775,7 @@ finally:
     ) -> GrepResult:
         """Search allowed sandbox paths for literal text with a global match cap."""
         try:
-            normalized_path = _normalize_path(path or "/")
+            normalized_path = normalize_runtime_path(path or "/")
         except Exception as exc:  # noqa: BLE001
             return GrepResult(error=f"Invalid path '{path or '/'}': {exc}")
 
@@ -835,7 +824,7 @@ finally:
     def glob(self, pattern: str, path: str = "/") -> GlobResult:
         """Return files matching a glob pattern under allowed sandbox paths."""
         try:
-            normalized_path = _normalize_path(path)
+            normalized_path = normalize_runtime_path(path)
         except Exception as exc:  # noqa: BLE001
             return GlobResult(error=f"Invalid path '{path}': {exc}")
         if ".." in PurePosixPath(str(pattern or "")).parts:
@@ -869,7 +858,7 @@ finally:
         responses: list[FileUploadResponse] = []
         for path, content in files:
             try:
-                normalized_path = _normalize_path(path)
+                normalized_path = normalize_runtime_path(path)
                 if not self._can_write_path(normalized_path):
                     responses.append(FileUploadResponse(path=normalized_path, error="permission_denied"))
                     continue
@@ -899,7 +888,7 @@ finally:
 
     def upload_authorized_file_from_path(self, path: str, source_path: str) -> None:
         """从受信任服务向 Project 或 User Data 写入普通文件。"""
-        normalized_path = _normalize_path(path)
+        normalized_path = normalize_runtime_path(path)
         if normalized_path == _USER_DATA_ROOT or not _is_same_or_child(normalized_path, _USER_DATA_ROOT):
             raise ValueError(f"write path is outside authorized roots: {normalized_path}")
         relative_parts = normalized_path[len(_USER_DATA_ROOT) + 1 :].split("/")
@@ -974,8 +963,8 @@ finally:
 
     def list_authorized_directory(self, path: str, *, root: str) -> list[dict[str, Any]]:
         """不跟随链接地列出授权目录中的普通文件与真实目录。"""
-        normalized_path = _normalize_path(path)
-        normalized_root = _normalize_path(root)
+        normalized_path = normalize_runtime_path(path)
+        normalized_root = normalize_runtime_path(root)
         if normalized_path != normalized_root and not _is_same_or_child(normalized_path, normalized_root):
             raise ValueError(f"directory path is outside authorized root: {normalized_path}")
         relative_parts = (
@@ -1025,10 +1014,9 @@ finally:
 
     def create_authorized_directory(self, parent_path: str, name: str, *, root: str) -> str:
         """在授权根内以 dir-fd 创建一个单层目录。"""
-        if not name or name in {".", ".."} or "/" in name or "\\" in name:
-            raise ValueError("directory name must be one path component")
-        normalized_parent = _normalize_path(parent_path)
-        normalized_root = _normalize_path(root)
+        validate_directory_name(name)
+        normalized_parent = normalize_runtime_path(parent_path)
+        normalized_root = normalize_runtime_path(root)
         if normalized_parent != normalized_root and not _is_same_or_child(normalized_parent, normalized_root):
             raise ValueError("parent path is outside authorized root")
         target_path = f"{normalized_parent.rstrip('/')}/{name}"
@@ -1058,8 +1046,8 @@ finally:
 
     def delete_authorized_path(self, path: str, *, root: str) -> None:
         """不跟随链接地递归删除授权根内路径，但不允许删除根。"""
-        normalized_path = _normalize_path(path)
-        normalized_root = _normalize_path(root)
+        normalized_path = normalize_runtime_path(path)
+        normalized_root = normalize_runtime_path(root)
         if normalized_path == normalized_root or not _is_same_or_child(normalized_path, normalized_root):
             raise ValueError("delete path is outside authorized root or is the root")
         parts = tuple(PurePosixPath(normalized_path[len(normalized_root) + 1 :]).parts)
@@ -1100,7 +1088,7 @@ finally:
 
     def download_authorized_file_to_path(self, path: str, target_path: str, max_bytes: int) -> int:
         """安全下载 Project、User Data 或 Skills 内普通文件到 worker。"""
-        normalized_path = _normalize_path(path)
+        normalized_path = normalize_runtime_path(path)
         root = next(
             (
                 candidate
@@ -1115,7 +1103,7 @@ finally:
 
     def regular_file_exists(self, path: str) -> bool:
         """确认授权根内路径是未越界的普通文件。"""
-        normalized_path = _normalize_path(path)
+        normalized_path = normalize_runtime_path(path)
         if not self._can_read_path(normalized_path):
             return False
         root = next(
@@ -1291,7 +1279,7 @@ finally:
         responses: list[FileDownloadResponse] = []
         for path in paths:
             try:
-                normalized_path = _normalize_path(path)
+                normalized_path = normalize_runtime_path(path)
                 if not self._can_read_path(normalized_path):
                     responses.append(FileDownloadResponse(path=normalized_path, content=None, error="permission_denied"))
                     continue

@@ -2,6 +2,7 @@
 
 from sqlalchemy import func, or_, select, text
 
+from yuxi.modules.agents.runtime_locks import cooperation_lock_key, sandbox_release_lock_key
 from yuxi.modules.agents.models.cooperation import CooperationEvent, CooperationRuntime
 from yuxi.modules.agents.models.inputs import AgentInput, AgentInputReceipt
 from yuxi.modules.agents.models.messages import Message
@@ -125,7 +126,7 @@ class CooperationRepository:
             raise ValueError("协作消息必须处于同一授权树")
         await self.db.execute(
             text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
-            {"key": f"cooperation:{sender.tree_root_thread_id}"},
+            {"key": cooperation_lock_key(sender.tree_root_thread_id)},
         )
         query = select(CooperationEvent).where(
             CooperationEvent.tree_root_thread_id == sender.tree_root_thread_id,
@@ -203,12 +204,12 @@ class CooperationRepository:
         # 回收仅持有专用生命周期锁；执行暂缓领取，不堵塞消息树锁。
         if not await self.db.scalar(
             text("SELECT pg_try_advisory_xact_lock_shared(hashtextextended(:key, 0))"),
-            {"key": f"sandbox-release:{run.runtime_scope_id}"},
+            {"key": sandbox_release_lock_key(run.runtime_scope_id)},
         ):
             return False
         await self.db.execute(
             text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
-            {"key": f"cooperation:{run.runtime_scope_id}"},
+            {"key": cooperation_lock_key(run.runtime_scope_id)},
         )
         runtime = await self.db.get(CooperationRuntime, run.runtime_scope_id)
         if runtime is not None and runtime.stopped:

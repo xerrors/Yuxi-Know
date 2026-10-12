@@ -18,16 +18,7 @@ def resolve_runtime_sandbox_scope(runtime: ToolRuntime) -> tuple[str, str, str]:
 
 
 def runtime_scope_value(runtime: ToolRuntime, key: str) -> str | None:
-    """按配置、上下文和 state 顺序读取运行作用域。"""
-    config = getattr(runtime, "config", None)
-    configurable = config.get("configurable", {}) if isinstance(config, dict) else {}
-    sources = (
-        configurable if isinstance(configurable, dict) else {},
-        getattr(runtime, "context", None),
-        getattr(runtime, "state", None) if isinstance(getattr(runtime, "state", None), dict) else {},
-    )
-    for source in sources:
-        value = source.get(key) if isinstance(source, dict) else getattr(source, key, None)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
+    """只读取执行者注入的 Context，配置和模型 state 不拥有身份。"""
+    context = getattr(runtime, "context", None)
+    value = context.get(key) if isinstance(context, dict) else getattr(context, key, None)
+    return value.strip() if isinstance(value, str) and value.strip() else None

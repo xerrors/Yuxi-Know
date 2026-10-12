@@ -5,12 +5,12 @@ from __future__ import annotations
 import asyncio
 import tempfile
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import BinaryIO
 
 from yuxi.infrastructure.filesystem import await_io
 from yuxi.modules.workspace.filesystem import Workspace
-from yuxi.modules.workspace.paths import normalize_workdir_path
+from yuxi.modules.workspace.paths import normalize_workdir_path, normalize_workspace_scope
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,17 +38,14 @@ class Workdir:
     def resolve_path(self, path: str | None) -> str:
         """把 Workdir scope 路径解析为 UserWorkspace scope 路径。"""
         raw = str(path or "/").strip() or "/"
-        pure = PurePosixPath(raw)
-        if not pure.is_absolute() or ".." in pure.parts or "\\" in raw or "://" in raw:
-            raise ValueError("invalid Workdir scope path")
-        normalized = pure.as_posix()
+        normalized = normalize_workspace_scope(raw)
         if normalized == "/":
             return self.root_path
         return f"{self.root_path}{normalized}"
 
     def scope_path(self, workspace_path: str) -> str:
         """把当前 Workdir 内的 UserWorkspace 路径转换为浏览 scope。"""
-        normalized = PurePosixPath(str(workspace_path)).as_posix()
+        normalized = normalize_workspace_scope(workspace_path)
         root = self.root_path.rstrip("/")
         if normalized == root:
             return "/"

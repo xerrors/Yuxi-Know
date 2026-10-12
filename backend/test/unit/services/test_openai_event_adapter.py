@@ -14,6 +14,7 @@ from langgraph.types import Command
 from test.support.agent_stream_fixtures import native
 from yuxi.modules.agents.services.openai_events import OpenAIEventAdapter
 from yuxi.modules.agents.services.message_recorder import tool_event_output
+from yuxi.modules.agents.tool_results import normalize_tool_result
 
 SCHEMA = json.loads((Path(__file__).parents[2] / "support/openai_agents_events.schema.json").read_text())
 
@@ -55,7 +56,14 @@ async def collect(adapter, events):
     for event in events:
         if event["method"] == "tools" and event["params"]["data"].get("event") == "tool-finished":
             data = event["params"]["data"]
-            event = {**event, "params": {**event["params"], "data": {**data, "output": tool_event_output(data)}}}
+            value = tool_event_output(data)
+            event = {
+                **event,
+                "params": {
+                    **event["params"],
+                    "data": {**data, "output": value, "result": normalize_tool_result(value, message=data.get("message"))},
+                },
+            }
         batch = await adapter.consume(event)
         for value in batch:
             if value["type"].startswith("agent."):
@@ -201,7 +209,7 @@ async def test_failure_preserves_completed_commentary_and_only_saves_active_part
 )
 def test_turn_lifecycle_events_keep_required_protocol_fields(name, status):
     """普通 Session 的标准 Turn 事件保留官方 nullable 字段。"""
-    from yuxi.modules.agents.services import events
+    from yuxi.modules.agents.services import subscriptions as events
 
     now = datetime(2026, 10, 7, tzinfo=UTC)
     run = SimpleNamespace(

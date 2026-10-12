@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+from yuxi.modules.extensions.skills import package as skill_package
+from yuxi.modules.extensions.skills import access as skill_access
+from yuxi.modules.extensions.skills.builtin import sync as builtin_service
 import io
 import json
 import socket
@@ -16,7 +19,7 @@ import pytest
 from yuxi.modules.extensions.tools import catalog as tool_service
 from yuxi.modules.extensions.skills.repository import SkillRepository as RealSkillRepository
 from yuxi.modules.extensions.skills import catalog
-from yuxi.modules.extensions.skills import draft as draft_service
+from yuxi.modules.extensions.skills import install_draft as draft_service
 from yuxi.modules.extensions.skills import edit as edit_service
 from yuxi.modules.extensions.skills import content as content_service
 from yuxi.modules.extensions.skills import package as package_service
@@ -130,6 +133,8 @@ def _fake_skill_repository(monkeypatch, target=svc, *, existing_slugs=(), method
     for name, implementation in (methods or {}).items():
         setattr(FakeRepo, name, implementation)
     monkeypatch.setattr(target, "SkillRepository", FakeRepo)
+    if target is svc:
+        monkeypatch.setattr(skill_access, "SkillRepository", FakeRepo)
     return FakeRepo
 
 
@@ -173,6 +178,7 @@ def _isolated_skill_storage(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     monkeypatch.setattr(content_service, "SkillRepository", ContentRepo)
     monkeypatch.setattr(content_service, "prune_skill_content", no_prune)
     monkeypatch.setattr(svc, "get_enabled_mcp_server_slugs", no_mcps)
+    monkeypatch.setattr("yuxi.modules.extensions.mcp.service.get_enabled_mcp_server_slugs", no_mcps)
 
 
 def test_allowed_skill_access_levels_by_role():
@@ -286,7 +292,6 @@ async def test_list_visible_skills_for_management_includes_owned_disabled_and_en
         methods={"list_all": AsyncMock(return_value=items)},
     )
 
-
     visible = await svc.SkillRepository(None).list_visible_for_management(_user("root", role="admin"))
 
     assert [item.slug for item in visible] == ["owned-disabled", "shared-enabled", "shared-disabled"]
@@ -324,7 +329,6 @@ async def test_locked_shared_list_only_locks_visible_rows_and_rechecks_permissio
         target=projection_service,
         methods={"list_all": AsyncMock(return_value=[visible, hidden]), "lock_rows_for_read": lock_rows_for_read},
     )
-
 
     result = await projection_service.lock_accessible_shared_skills_for_projection(None, _user("root", role="user"))
 
@@ -394,7 +398,6 @@ async def test_management_readable_skill_allows_manageable_disabled_and_enabled_
         methods={"get_by_slug": get_by_slug},
     )
 
-
     result = await svc.get_management_readable_skill_or_raise(None, operator, skill.slug)
 
     assert result is skill
@@ -425,7 +428,6 @@ async def test_management_readable_skill_denies_disabled_ordinary_user(monkeypat
         methods={"get_by_slug": get_by_slug},
     )
 
-
     with pytest.raises(ValueError, match="无权访问"):
         await svc.get_management_readable_skill_or_raise(None, _user("root", role="user"), skill.slug)
 
@@ -450,7 +452,6 @@ async def test_runtime_access_still_excludes_disabled_shared_skill(monkeypatch: 
         target=catalog,
         methods={"list_enabled": AsyncMock(return_value=[])},
     )
-
 
     async def no_personal_skills(_uid):
         return []
@@ -581,7 +582,7 @@ async def test_confirm_skill_install_draft_rejects_invalid_selection(
 
 def test_parse_skill_markdown_ok():
     content = "---\nname: demo-skill\ndescription: demo description\n---\n# Demo\n"
-    slug, name, desc, meta = svc.parse_skill_markdown(content)
+    slug, name, desc, meta = skill_package.parse_skill_markdown(content)
     assert slug == "demo-skill"
     assert name == "demo-skill"
     assert desc == "demo description"
@@ -600,7 +601,7 @@ def test_parse_skill_markdown_supports_display_name_with_slug():
         "---\n"
         "# Word / DOCX\n"
     )
-    slug, name, desc, meta = svc.parse_skill_markdown(content)
+    slug, name, desc, meta = skill_package.parse_skill_markdown(content)
     assert slug == "word-docx"
     assert name == "Word / DOCX"
     assert desc == "Create, inspect, and edit Microsoft Word documents."
@@ -609,12 +610,12 @@ def test_parse_skill_markdown_supports_display_name_with_slug():
 
 def test_parse_skill_markdown_requires_frontmatter():
     with pytest.raises(ValueError, match="frontmatter"):
-        svc.parse_skill_markdown("# missing")
+        skill_package.parse_skill_markdown("# missing")
 
 
 @pytest.fixture
 def builtin_skill_specs():
-    return {spec["slug"]: spec for spec in svc.list_builtin_skill_specs()}
+    return {spec["slug"]: spec for spec in builtin_service.list_builtin_skill_specs()}
 
 
 @pytest.mark.parametrize(
@@ -657,14 +658,14 @@ def test_builtin_skill_spec_matches_declared_dependencies(builtin_skill_specs, s
 
 def test_is_valid_skill_slug():
     # Test valid slugs
-    assert svc.is_valid_skill_slug("demo-skill") is True
-    assert svc.is_valid_skill_slug("valid-name-123") is True
+    assert skill_package.is_valid_skill_slug("demo-skill") is True
+    assert skill_package.is_valid_skill_slug("valid-name-123") is True
     # Test invalid slugs
-    assert svc.is_valid_skill_slug("../bad") is False
-    assert svc.is_valid_skill_slug("Invalid") is False  # uppercase not allowed
-    assert svc.is_valid_skill_slug(" demo ") is False
-    assert svc.is_valid_skill_slug("demo\n") is False
-    assert svc.is_valid_skill_slug("") is False
+    assert skill_package.is_valid_skill_slug("../bad") is False
+    assert skill_package.is_valid_skill_slug("Invalid") is False  # uppercase not allowed
+    assert skill_package.is_valid_skill_slug(" demo ") is False
+    assert skill_package.is_valid_skill_slug("demo\n") is False
+    assert skill_package.is_valid_skill_slug("") is False
 
 
 @pytest.mark.parametrize(
@@ -959,25 +960,34 @@ async def test_read_personal_skill_file_rejects_symlink(tmp_path: Path, monkeypa
         await personal_service.read_personal_skill_file("user-1", "demo", "leak.txt")
 
 
-def test_install_personal_skill_preserves_concurrent_target(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+@pytest.mark.parametrize("with_file", [False, True], ids=["empty-directory", "existing-content"])
+def test_install_personal_skill_preserves_concurrent_target(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, with_file):
     """安装提交遇到并发同名目录时必须保留用户文件并失败。"""
     root = _personal_skill_root(tmp_path, monkeypatch)
     source = _write_personal_skill(tmp_path / "source", "demo", "personal")
-    original_copytree = svc.shutil.copytree
+    original_exists = Path.exists
+    injected = False
 
-    def copytree_with_concurrent_target(source_dir, temp_target, **kwargs):
-        result = original_copytree(source_dir, temp_target, **kwargs)
-        target = Path(temp_target).with_name("demo")
-        target.mkdir()
-        (target / "user-file.txt").write_text("keep", encoding="utf-8")
-        return result
+    def exists_with_concurrent_target(path):
+        nonlocal injected
+        existed = original_exists(path)
+        if path == root / "demo" and not existed and not injected:
+            injected = True
+            path.mkdir()
+            if with_file:
+                (path / "user-file.txt").write_text("keep", encoding="utf-8")
+        return existed
 
-    monkeypatch.setattr(svc.shutil, "copytree", copytree_with_concurrent_target)
+    monkeypatch.setattr(Path, "exists", exists_with_concurrent_target)
 
     with pytest.raises(ValueError, match="已存在同名 Skill"):
         personal_service._install_personal_skill_dir_sync("user-1", source)
 
-    assert (root / "demo/user-file.txt").read_text(encoding="utf-8") == "keep"
+    if with_file:
+        assert (root / "demo/user-file.txt").read_text(encoding="utf-8") == "keep"
+    else:
+        assert list((root / "demo").iterdir()) == []
+    assert not list(root.glob(".install.tmp-*"))
 
 
 def test_sync_user_accessible_skills_updates_executable_mode(
@@ -1351,9 +1361,9 @@ def test_owner_only_skill_can_depend_on_visible_skill():
 def test_list_builtin_skill_specs_rejects_missing_skill_file(tmp_path, monkeypatch):
     """发现的目录必须包含 Skill 定义，不能静默漏装。"""
     (tmp_path / "incomplete").mkdir()
-    monkeypatch.setattr(svc, "BUILTIN_SKILLS_DIR", tmp_path)
+    monkeypatch.setattr(builtin_service, "BUILTIN_SKILLS_DIR", tmp_path)
     with pytest.raises(ValueError, match="内置 skill 缺少 SKILL.md"):
-        svc.list_builtin_skill_specs()
+        builtin_service.list_builtin_skill_specs()
 
 
 def test_list_builtin_skill_specs_rejects_mismatched_slug(tmp_path, monkeypatch):
@@ -1361,9 +1371,9 @@ def test_list_builtin_skill_specs_rejects_mismatched_slug(tmp_path, monkeypatch)
     source = tmp_path / "expected"
     source.mkdir()
     (source / "SKILL.md").write_text("---\nname: other\ndescription: test\n---\n")
-    monkeypatch.setattr(svc, "BUILTIN_SKILLS_DIR", tmp_path)
+    monkeypatch.setattr(builtin_service, "BUILTIN_SKILLS_DIR", tmp_path)
     with pytest.raises(ValueError, match="frontmatter.slug 必须等于 slug"):
-        svc.list_builtin_skill_specs()
+        builtin_service.list_builtin_skill_specs()
 
 
 @pytest.mark.asyncio
@@ -1380,7 +1390,7 @@ async def test_init_builtin_skills_create_missing(tmp_path: Path, monkeypatch: p
     (source_dir / "prompts").mkdir(parents=True, exist_ok=True)
     (source_dir / "prompts" / "system.md").write_text("prompt", encoding="utf-8")
 
-    monkeypatch.setattr(svc, "BUILTIN_SKILLS_DIR", source_dir.parent)
+    monkeypatch.setattr(builtin_service, "BUILTIN_SKILLS_DIR", source_dir.parent)
 
     async def get_by_slug(self, slug: str):
         assert slug == "reporter"
@@ -1392,17 +1402,17 @@ async def test_init_builtin_skills_create_missing(tmp_path: Path, monkeypatch: p
 
     FakeRepo = _fake_skill_repository(
         monkeypatch,
-        target=svc,
+        target=builtin_service,
         methods={"get_by_slug": get_by_slug, "create": create},
     )
     FakeRepo.created_payload = None
 
-    items = await svc.init_builtin_skills(None)
+    items = await builtin_service.init_builtin_skills(None)
 
     assert len(items) == 1
     assert items[0].slug == "reporter"
     assert FakeRepo.created_payload["source_type"] == "builtin"
-    assert FakeRepo.created_payload["share_config"] == svc.BUILTIN_SKILL_SHARE_CONFIG
+    assert FakeRepo.created_payload["share_config"] == builtin_service.BUILTIN_SKILL_SHARE_CONFIG
     assert FakeRepo.created_payload["enabled"] is True
     assert FakeRepo.created_payload["created_by"] == "system"
     assert FakeRepo.created_payload["tool_dependencies"] == ["mysql_query"]
@@ -1418,7 +1428,8 @@ async def test_init_builtin_skills_updates_existing_record_and_preserves_disable
     source_dir = tmp_path / "builtin-skills" / "reporter"
     source_dir.mkdir(parents=True, exist_ok=True)
     (source_dir / "SKILL.md").write_text(
-        "---\nname: reporter\ndescription: new description\nversion: 1.0.1\ntool_dependencies: [mysql_query]\nmcp_dependencies: [charts]\n---\n# SQL Reporter\n",
+        "---\nname: reporter\ndescription: new description\nversion: 1.0.1\n"
+        "tool_dependencies: [mysql_query]\nmcp_dependencies: [charts]\n---\n# SQL Reporter\n",
         encoding="utf-8",
     )
     (source_dir / "prompt.md").write_text("new builtin content", encoding="utf-8")
@@ -1427,7 +1438,7 @@ async def test_init_builtin_skills_updates_existing_record_and_preserves_disable
     target_dir.mkdir(parents=True, exist_ok=True)
     (target_dir / "prompt.md").write_text("old content", encoding="utf-8")
 
-    monkeypatch.setattr(svc, "BUILTIN_SKILLS_DIR", source_dir.parent)
+    monkeypatch.setattr(builtin_service, "BUILTIN_SKILLS_DIR", source_dir.parent)
 
     existing_item = Skill(
         slug="reporter",
@@ -1493,14 +1504,14 @@ async def test_init_builtin_skills_updates_existing_record_and_preserves_disable
         item.version = version
         item.content_hash = content_hash
         item.source_type = "builtin"
-        item.share_config = svc.BUILTIN_SKILL_SHARE_CONFIG.copy()
+        item.share_config = builtin_service.BUILTIN_SKILL_SHARE_CONFIG.copy()
         item.updated_by = updated_by
         captured["install"] = {"version": version, "content_hash": content_hash, "updated_by": updated_by}
         return item
 
     _fake_skill_repository(
         monkeypatch,
-        target=svc,
+        target=builtin_service,
         methods={
             "get_by_slug": get_by_slug,
             "update_metadata": update_metadata,
@@ -1509,8 +1520,7 @@ async def test_init_builtin_skills_updates_existing_record_and_preserves_disable
         },
     )
 
-
-    items = await svc.init_builtin_skills(None, created_by="release-bot")
+    items = await builtin_service.init_builtin_skills(None, created_by="release-bot")
 
     assert len(items) == 1
     assert items[0].enabled is False
@@ -1541,7 +1551,7 @@ async def test_init_builtin_skills_rejects_non_builtin_conflict(tmp_path: Path, 
     )
 
     monkeypatch.setattr(
-        svc,
+        builtin_service,
         "list_builtin_skill_specs",
         lambda: [
             {
@@ -1563,13 +1573,12 @@ async def test_init_builtin_skills_rejects_non_builtin_conflict(tmp_path: Path, 
 
     _fake_skill_repository(
         monkeypatch,
-        target=svc,
+        target=builtin_service,
         methods={"get_by_slug": get_by_slug},
     )
 
-
     with pytest.raises(ValueError, match="非内置 skill 冲突"):
-        await svc.init_builtin_skills(None)
+        await builtin_service.init_builtin_skills(None)
 
 
 @pytest.mark.asyncio
@@ -1703,7 +1712,6 @@ async def test_delete_skills_batch_ok(tmp_path: Path, monkeypatch: pytest.Monkey
         methods={"get_by_slug": get_by_slug, "delete": delete},
     )
 
-
     # 执行批量删除，skill-a, skill-b, skill-c (不存在)
     results = await svc.delete_skills_batch(
         _UnitOfWork(),
@@ -1766,7 +1774,6 @@ async def test_delete_skill_commits_database_before_removing_trash(tmp_path: Pat
         target=svc,
         methods={"get_by_slug": get_by_slug, "delete": delete},
     )
-
 
     await svc.delete_skill(UnitOfWork(), slug="concurrent-skill", operator=_user("root"))
 
@@ -1841,7 +1848,6 @@ async def test_personal_skill_overrides_shared_skill_and_drops_dependencies(
         methods={"list_enabled": AsyncMock(return_value=[shared])},
     )
 
-
     items = await catalog.list_accessible_skills(None, _user("user-1", role="user"))
 
     assert len(items) == 1
@@ -1896,7 +1902,6 @@ async def test_skill_cards_keep_shadowed_shared_item_for_management(
         target=catalog,
         methods={"list_all": AsyncMock(return_value=[shared])},
     )
-
 
     cards = await catalog.list_skill_cards_for_user(None, _user("user-1", role="admin"))
 
@@ -1958,6 +1963,7 @@ async def test_confirm_personal_skill_draft_uses_package_slug_without_database(
     monkeypatch.setattr(content_service, "SkillRepository", ContentRepo)
     monkeypatch.setattr(content_service, "prune_skill_content", no_prune)
     monkeypatch.setattr(svc, "get_enabled_mcp_server_slugs", no_mcps)
+    monkeypatch.setattr("yuxi.modules.extensions.mcp.service.get_enabled_mcp_server_slugs", no_mcps)
 
     results = await personal_service.confirm_personal_skill_install_draft(
         draft_id=draft_id,
@@ -1986,9 +1992,28 @@ def test_resolved_shared_skill_captures_original_version_and_hash(monkeypatch, t
         version="v1",
         content_hash="hash-v1",
     )
-    monkeypatch.setattr(svc, "_resolve_skill_dir", lambda item: tmp_path)
+    monkeypatch.setattr(skill_access, "_resolve_skill_dir", lambda item: tmp_path)
     resolved = svc.resolved_shared_skill(row)
     row.version, row.content_hash = "v2", "hash-v2"
     assert resolved.version == "v1"
     assert resolved.content_hash == "hash-v1"
     assert resolved.source_scope == "shared"
+
+
+def test_builtin_hash_uses_canonical_tree_and_executable_mode(tmp_path, monkeypatch):
+    """内置和安装包比较相同目录哈希，脚本可执行位参与修订。"""
+    from yuxi.modules.extensions.skills.package import compute_skill_directory_hash
+
+    source = tmp_path / "demo"
+    source.mkdir()
+    (source / "SKILL.md").write_text("---\nname: demo\ndescription: test\n---\n")
+    script = source / "run.sh"
+    script.write_text("#!/bin/sh\n")
+    script.chmod(0o644)
+    monkeypatch.setattr(builtin_service, "BUILTIN_SKILLS_DIR", tmp_path)
+    first = builtin_service.list_builtin_skill_specs()[0]["content_hash"]
+    assert first == compute_skill_directory_hash(source).hex()
+    script.chmod(0o755)
+    second = builtin_service.list_builtin_skill_specs()[0]["content_hash"]
+    assert second == compute_skill_directory_hash(source).hex()
+    assert second != first

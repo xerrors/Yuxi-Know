@@ -1,4 +1,4 @@
-"""持久生命周期与 Redis 公开事件共用 Thread 订阅 cursor。"""
+"""从持久生命周期和 Redis 投影订阅公开事件，共用 Thread cursor。"""
 
 from __future__ import annotations
 
@@ -8,8 +8,6 @@ import re
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
-from fastapi import HTTPException
-
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.agents.repositories.input import AgentInputRepository
@@ -18,10 +16,11 @@ from yuxi.modules.agents.repositories.runs import TERMINAL_RUN_STATUSES, AgentRu
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 from yuxi.modules.agents.services.openai_events import OpenAIEventAdapter
 from yuxi.modules.agents.services.public_resources import turn_core
-from yuxi.modules.agents.services.scope import ActorScope
-from yuxi.modules.agents.services.threads import require_thread
+from yuxi.modules.agents.scope import ActorScope
+from yuxi.modules.agents.services.thread_access import require_thread
 from yuxi.modules.agents.services.transport import list_recent_run_stream_events, list_run_stream_events
 from yuxi.shared.datetime import utc_now
+from yuxi.shared.errors import InvalidInputError
 from yuxi.shared.hashing import hash_id
 
 SSE_HEARTBEAT_SECONDS = int(os.getenv("RUN_SSE_HEARTBEAT_SECONDS", "15"))
@@ -49,7 +48,7 @@ def _parse_cursor(raw: str | None) -> _Cursor:
         return _Cursor()
     match = _CURSOR.fullmatch(raw)
     if match is None:
-        raise HTTPException(status_code=422, detail="事件游标无效或版本不兼容")
+        raise InvalidInputError("事件游标无效或版本不兼容")
     receipt, run, event, phase = match.groups()
     return _Cursor(int(receipt), int(run), event, int(phase))
 

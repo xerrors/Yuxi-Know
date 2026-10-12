@@ -20,7 +20,7 @@ Thread 是长期对话和调度隔离范围，Public Session 只在 HTTP 边界�
 
 [Public Thread 路由](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/api/routers/public_v1/agents/threads.py)是 Agent 对话主协议，Web、CLI、定时任务和评估调用方使用它背后的同一领域用例。认证边界把 JWT 和未绑定 APP 的 full Key 映射到所属用户的产品作用域，绑定 APP 的 Key 则解析终端用户；repository 与产生文件副作用的边界再次核对作用域。Thread 只能归档，Project 删除先检查在途 Turn/Input，再归档其所有普通与子 Thread；删除 Agent 则拒绝仍有活跃 Turn、待处理 Input 或未清理 Run 的情况。Session 路由只调整路径、字段与事件名，不建立独立实体。
 
-[事件用例](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/services/events.py)以 Turn 为订阅范围，跨 Run 结合 Redis 短期事件和 PostgreSQL 快照恢复；最终状态、消息、输出和用量仍以持久事实为准。Langfuse 的根观察按 Turn 关联多段 Run，前端以 Turn 展示同一轮工作。独立的 Agent eval/Invocation 对话入口和 Request 业务状态机不再注册或存储；CLI 评估从 Dataset 读取样例后通过 Public Thread 执行。
+[事件用例](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/services/subscriptions.py)以 Turn 为订阅范围，跨 Run 结合 Redis 短期事件和 PostgreSQL 快照恢复；最终状态、消息、输出和用量仍以持久事实为准。Langfuse 的根观察按 Turn 关联多段 Run，前端以 Turn 展示同一轮工作。独立的 Agent eval/Invocation 对话入口和 Request 业务状态机不再注册或存储；CLI 评估从 Dataset 读取样例后通过 Public Thread 执行。
 
 ## 替代方案
 

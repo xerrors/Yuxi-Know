@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from time import monotonic
@@ -15,6 +14,7 @@ from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.agents.repositories.model_audit import ModelMessageAuditRepository
 from yuxi.modules.agents.repositories.tool_audit import ToolMessageAuditRepository
 from yuxi.modules.agents.runtime.base import json_safe
+from yuxi.modules.agents.tool_results import normalize_tool_result, TOOL_FAILURE_MESSAGE
 
 
 @dataclass(slots=True)
@@ -51,6 +51,7 @@ class RunMessageRecorder:
             data = dict(event["params"]["data"])
             if data.get("event") == "tool-finished":
                 data["output"] = tool_event_output(data)
+                data["result"] = normalize_tool_result(data["output"], message=data.get("message"))
                 event = {**event, "params": {**event["params"], "data": data}}
             if isinstance(data.get("event"), str):
                 await self._consume_tool(event, data)
@@ -165,14 +166,13 @@ class RunMessageRecorder:
             await self._start_tool(event, data)
         elif event_name == "tool-finished":
             output = data.get("output")
-            content = _tool_output_content(output)
-            failed = isinstance(output, dict) and output.get("status") == "error"
+            result = data["result"]
             await self._close_tool(
                 event=event,
                 tool_call_id=self._tool_call_id(data),
                 output=output,
-                content=content,
-                error_message=content if failed else None,
+                content=result.audit_content,
+                error_message=result.error,
             )
         elif event_name == "tool-error":
             await self._close_tool(
@@ -180,7 +180,7 @@ class RunMessageRecorder:
                 tool_call_id=self._tool_call_id(data),
                 output=None,
                 content="",
-                error_message=str(data.get("message") or "Tool 执行失败"),
+                error_message=str(data.get("message") or TOOL_FAILURE_MESSAGE),
                 wait_for_run_terminal=True,
             )
 
@@ -245,7 +245,7 @@ class RunMessageRecorder:
                     thread_id=self.thread_id,
                     worker_id=self.worker_id,
                     tool_call_id=tool_call_id,
-                    error_message=error_message or "Tool 执行失败",
+                    error_message=error_message or TOOL_FAILURE_MESSAGE,
                     finished_at=kwargs["finished_at"],
                     duration_ms=duration_ms,
                     finished_sequence=kwargs["finished_sequence"],
@@ -290,16 +290,6 @@ class RunMessageRecorder:
     def _duration_ms(started_at: float | None) -> int | None:
         """仅从本进程的单调时钟计算耗时。"""
         return max(0, round((monotonic() - started_at) * 1000)) if started_at is not None else None
-
-
-def _tool_output_content(output: Any) -> str:
-    """从工具结果生成展示文本，原始结果另存 metadata。"""
-    value = output.get("content") if isinstance(output, dict) else output
-    if value is None:
-        return ""
-    if isinstance(value, str):
-        return value
-    return json.dumps(value, ensure_ascii=False, default=str)
 
 
 def tool_event_output(data: dict) -> Any:

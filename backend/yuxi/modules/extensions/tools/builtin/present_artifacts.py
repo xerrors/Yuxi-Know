@@ -1,6 +1,5 @@
 """登记当前用户可见的交付物。"""
 
-from pathlib import PurePosixPath
 from typing import Annotated, Literal
 
 from langchain.tools import InjectedToolCallId
@@ -9,7 +8,7 @@ from langgraph.prebuilt.tool_node import ToolRuntime
 from langgraph.types import Command
 from pydantic import BaseModel, Field
 
-from yuxi.modules.agents.runtime.sandbox.paths import VIRTUAL_PATH_PREFIX, VIRTUAL_SKILLS_PATH
+from yuxi.modules.agents.runtime.sandbox.paths import normalize_artifact_path
 from yuxi.modules.extensions.tools.builtin.sandbox_scope import resolve_runtime_sandbox_scope
 from yuxi.modules.extensions.tools.registry import tool
 
@@ -72,16 +71,7 @@ def _normalize_presented_artifact_path(filepath: str, runtime: ToolRuntime) -> s
     runtime_context = runtime.context
     runtime_scope_id, uid, workdir_relative_path = resolve_runtime_sandbox_scope(runtime)
 
-    normalized_input = str(filepath or "").strip()
-    if not normalized_input:
-        raise ValueError("文件路径不能为空")
-
-    normalized_path = str(PurePosixPath(normalized_input if normalized_input.startswith("/") else f"/{normalized_input}"))
-    workdir_path = str(getattr(runtime_context, "workdir_path", "") or "").rstrip("/")
-    allowed = normalized_path.startswith(f"{workdir_path}/") or normalized_path.startswith(f"{VIRTUAL_PATH_PREFIX.rstrip('/')}/")
-    allowed = allowed or normalized_path.startswith(f"{VIRTUAL_SKILLS_PATH}/")
-    if not workdir_path or not allowed:
-        raise ValueError(f"文件不在当前用户可见范围内: {normalized_input}")
+    normalized_path = normalize_artifact_path(getattr(runtime_context, "workdir_path", None), filepath)
     backend = ProvisionerSandboxBackend(
         thread_id=runtime_scope_id,
         uid=str(uid),
@@ -89,5 +79,5 @@ def _normalize_presented_artifact_path(filepath: str, runtime: ToolRuntime) -> s
         create_if_missing=True,
     )
     if not backend.regular_file_exists(normalized_path):
-        raise ValueError(f"文件不存在或不是普通文件: {normalized_input}")
+        raise ValueError(f"文件不存在或不是普通文件: {filepath}")
     return normalized_path

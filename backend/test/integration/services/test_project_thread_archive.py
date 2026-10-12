@@ -4,20 +4,20 @@ import os
 import uuid
 
 import pytest
-from fastapi import HTTPException
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from yuxi.modules.workspace.services.projects import delete_project_view
-from yuxi.modules.agents.services.scope import ActorScope
-from yuxi.modules.agents.services.threads import archive_thread
 from yuxi.modules.agents.models.inputs import AgentInput
 from yuxi.modules.agents.models.runs import AgentRun
-from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.modules.agents.models.sessions import Session
-from yuxi.modules.agents.services.input_messages import build_chat_input_message, serialize_input_message
-from yuxi.modules.workspace.models import Project
+from yuxi.modules.agents.models.turns import AgentTurn
+from yuxi.modules.agents.input_messages import build_chat_input_message, serialize_input_message
+from yuxi.modules.agents.scope import ActorScope
+from yuxi.modules.agents.services.threads import archive_thread
 from yuxi.modules.identity.models import User
+from yuxi.modules.workspace.models import Project
+from yuxi.modules.workspace.services.projects import delete_project_view
+from yuxi.shared.errors import DomainError, StateConflictError
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
@@ -66,9 +66,9 @@ async def test_project_delete_rejects_pending_work_then_archives_history(pending
             await db.commit()
 
         async with sessions() as db:
-            with pytest.raises(HTTPException) as exc_info:
+            with pytest.raises(DomainError) as exc_info:
                 await delete_project_view(uid=uid, project_id=project_id, db=db)
-            assert exc_info.value.status_code == 409
+            assert isinstance(exc_info.value, StateConflictError)
             await db.rollback()
 
         async with sessions() as db:
@@ -187,13 +187,13 @@ async def test_archive_respects_independent_child_and_runtime_cleanup(remaining_
             if remaining_work == "child_run":
                 await archive_thread(db=db, scope=scope, thread_id=thread_id)
             else:
-                with pytest.raises(HTTPException) as thread_error:
+                with pytest.raises(DomainError) as thread_error:
                     await archive_thread(db=db, scope=scope, thread_id=thread_id)
-                assert thread_error.value.status_code == 409
+                assert isinstance(thread_error.value, StateConflictError)
                 await db.rollback()
-            with pytest.raises(HTTPException) as project_error:
+            with pytest.raises(DomainError) as project_error:
                 await delete_project_view(uid=uid, project_id=project_id, db=db)
-            assert project_error.value.status_code == 409
+            assert isinstance(project_error.value, StateConflictError)
             await db.rollback()
 
         async with sessions() as db:

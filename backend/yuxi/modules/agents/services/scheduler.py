@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.manager import pg_manager
+from yuxi.modules.agents.services.run_creation import create_turn_run
 from yuxi.modules.agents.models.attachments import AgentAttachment
 from yuxi.modules.agents.models.inputs import AgentInput
 from yuxi.modules.agents.models.runs import AgentRun
@@ -54,27 +55,9 @@ async def claim_next_input(*, db: AsyncSession, agent_session: Session, binding:
         binding = await resolve_session_workdir_binding(agent_session=agent_session, uid=agent_session.uid, db=db)
 
     turn_id = str(uuid.uuid4())
-    run_id = str(uuid.uuid4())
     turn = await turn_repo.create(turn_id=turn_id, thread_id=agent_session.thread_id, uid=agent_session.uid, app_id=agent_session.app_id)
-    await AgentRunRepository(db).create_run(
-        run_id=run_id,
-        thread_id=agent_session.thread_id,
-        runtime_scope_id=agent_session.tree_root_thread_id,
-        agent_slug=head.agent_slug,
-        uid=head.uid,
-        turn_id=turn_id,
-        app_id=head.app_id,
-        api_key_id=head.api_key_id,
-        input_payload=head.input_payload or {},
-        source=head.source,
-        channel=head.channel,
-        external_id=head.external_id,
-        origin_metadata=head.origin_metadata or {},
-        session_record_id=agent_session.id,
-        run_type="chat",
-        created_by_run_id=(head.origin_metadata or {}).get("created_by_run_id"),
-    )
-    await turn_repo.set_current(turn, run_id=run_id)
+    run = await create_turn_run(db=db, agent_session=agent_session, turn=turn, source=head, api_key_id=head.api_key_id)
+    run_id = run.id
     messages = await input_repo.consume(inputs=batch, turn_id=turn_id, run_id=run_id)
     await AgentRunRepository(db).set_input_message(run_id, messages[0].id)
     return Dispatch(run_id=run_id, binding=binding)

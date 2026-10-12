@@ -15,7 +15,7 @@ Yuxi 是一个面向 RAG、知识图谱和多智能体工作流的知识库平�
 - `frontend`：Vue 3 / Vite 前端，挂载 `frontend/src` 并热重载。
 - `api`：FastAPI API 服务，挂载 `backend/yuxi` 和测试目录并热重载。
 - `worker`：ARQ worker，执行已经派发的 AgentRun 与注册的 后台作业，并周期触发用户自建 Agent 定时任务；三者分别使用 PostgreSQL 中的运行租约、任务租约和调度锁闭合并发与恢复。
-- `schema-init`：Compose 中唯一修改 Yuxi 数据库 Schema 的一次性初始化进程，为全新部署建立 business Schema 9，支持从 8 原子新增反馈表；其他旧版本明确拒绝启动，不清库。API 与 worker 等待其成功后只校验 Schema 版本。
+- `schema-init`：Compose 中唯一修改 Yuxi 数据库 Schema 的一次性初始化进程，为全新部署建立 business Schema 9 与 knowledge Schema 4，分别支持 business 8→9 原子新增反馈表与 knowledge 3→4 原子约束活动知识库名称；存量重名和其他旧版本明确拒绝启动，不清库。API 与 worker 等待其成功后只校验 Schema 版本。
 - `sandbox-provisioner`：为智能体工具执行提供隔离沙盒。
 - `postgres`：业务数据、知识库元数据、持久 Input 队列、Turn/Run 与 LangGraph checkpoint。
 - `redis`：ARQ 投递、运行事件、取消信号以及跨进程配置和模型缓存。
@@ -48,6 +48,8 @@ Yuxi 始终交付完整知识能力。API 注册知识库、图谱、评估、Da
 `modules/extensions/skills` 按共享索引、个人来源、草稿、文件编辑和投影组织用例。共享编辑通过文件修订值拒绝过期保存，读取、运行快照与投影复制持有共享行锁；授权变更按共享行锁、用户投影锁的顺序提交并刷新投影。个人 Skill 文件由 `personal.py` 在 UserWorkspace 边界访问。
 
 ### 共享技术边界
+
+领域用例使用 `shared/errors.py` 中的失败类型、消息与可选业务 code，API 的 `errors.py` 负责转换为 HTTP 状态及现有 detail 正文。定时执行、文件预览与模型工具直接按领域类型消费失败；持久错误消息使用业务文本。HTTPException 属于 API 适配层。
 
 `infrastructure/postgres` 管理业务 session 与 LangGraph checkpoint pool；`redis` 提供连接，业务 key 与事件语义留在对应模块；`minio`、`neo4j` 和 `oidc` 封装远端客户端；`observability` 封装日志与 Langfuse SDK。`infrastructure/file_preview.py` 准备浏览器展示内容，`infrastructure/office_conversion.py` 独立执行 Office 到 PDF 转换；Workspace 与 Knowledge 拥有各自的预览缓存。`shared` 只保存不依赖业务域与 HTTP 的小型公共契约与通用逻辑，`shared/files.py` 拥有文件输入、文件结果、MIME 识别与共用原文件预览预算；各预览读取用例把预算传给文件或对象存储边界执行有界读取。`infrastructure/runtime_settings.py` 管理进程环境与运行目录；system 模块拥有品牌模板和持久系统配置。`api/responses` 负责文件与知识响应，业务服务提供已经授权的读取结果。
 

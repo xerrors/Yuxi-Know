@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import uuid
 from copy import deepcopy
 from typing import Literal
 
-from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from yuxi.modules.agents.services.thread_access import require_thread
+from yuxi.modules.agents.services.cooperation_notifications import notify_user_intervention
+from yuxi.modules.agents.receipts import input_intent_hash, require_idempotency_key, require_receipt_replay
 from yuxi.modules.agents.models.inputs import AgentInputReceipt
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.repositories.attachments import AttachmentRepository
@@ -29,22 +29,22 @@ from yuxi.modules.agents.services.input_config import (
     resolve_agent_run_model_spec,
     resolve_agent_run_tool_approval_mode,
 )
-from yuxi.modules.agents.services.input_messages import AgentRunInputMessage, serialize_input_message
+from yuxi.modules.agents.input_messages import AgentRunInputMessage, serialize_input_message
 from yuxi.modules.agents.services.public_items import serialize_public_items
 from yuxi.modules.agents.services.scheduler import dispatch_next_input
-from yuxi.modules.agents.services.scope import ActorScope
-from yuxi.modules.agents.services.threads import require_thread
+from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.identity.models import User
 from yuxi.modules.workspace.paths import ensure_bound_user_workdir
 from yuxi.modules.workspace.repositories.projects import ProjectRepository
 from yuxi.modules.workspace.services.bindings import resolve_session_workdir_binding
 from yuxi.modules.workspace.services.projects import create_implicit_project
+from yuxi.shared.errors import InvalidInputError, ResourceNotFoundError, StateConflictError
 from yuxi.shared.hashing import hash_id
 
 
 def thread_id_for_creation(scope: ActorScope, idempotency_key: str) -> str:
     """以接收身份和幂等键生成跨 Thread/Session 别名稳定的 Thread ID。"""
-    _check_idempotency_key(idempotency_key)
+    require_idempotency_key(idempotency_key)
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"yuxi-thread:{scope.uid}:{scope.app_id}:{idempotency_key}"))
 
 
@@ -67,12 +67,12 @@ async def create_thread(
     origin_metadata: dict | None = None,
 ) -> dict:
     """在一个事务中创建 Thread，并可同时接收与领取首条输入。"""
-    _check_idempotency_key(idempotency_key)
+    require_idempotency_key(idempotency_key)
     input_messages = list(messages or [])
     file_ids = list(attachment_file_ids or [])
     if file_ids and not input_messages:
-        raise HTTPException(status_code=422, detail="附件必须随非空输入提交")
-    intent_hash = _intent_hash(
+        raise InvalidInputError("附件必须随非空输入提交")
+    intent_hash = input_intent_hash(
         "yuxi.session.create",
         agent_slug,
         project_id,
@@ -87,15 +87,15 @@ async def create_thread(
     receipt_repo = AgentInputReceiptRepository(db)
     existing = await receipt_repo.get_for_scope(uid=scope.uid, app_id=scope.app_id, thread_id=thread_id, idempotency_key=idempotency_key)
     if existing is not None:
-        require_input_replay(existing, "yuxi.session.create", intent_hash)
+        require_receipt_replay(existing, "yuxi.session.create", intent_hash)
         return _accepted(existing)
 
-    user = await db.scalar(select(User).where(User.uid == scope.uid))
+    user = await db.scalar(select(User).where(User.uid == scope.uid, User.is_deleted == 0))
     if user is None:
-        raise HTTPException(status_code=404, detail="用户不存在")
+        raise ResourceNotFoundError("用户不存在")
     agent_item = await AgentRepository(db).get_visible_by_slug(slug=agent_slug, user=user, for_key_share=True)
     if agent_item is None:
-        raise HTTPException(status_code=404, detail="智能体不存在")
+        raise ResourceNotFoundError("智能体不存在")
 
     existing_thread = await SessionRepository(db).get_session_by_thread_id(thread_id)
     if existing_thread is not None:
@@ -106,13 +106,13 @@ async def create_thread(
             idempotency_key=idempotency_key,
         )
         if existing is not None:
-            require_input_replay(existing, "yuxi.session.create", intent_hash)
+            require_receipt_replay(existing, "yuxi.session.create", intent_hash)
             return _accepted(existing)
-        raise HTTPException(status_code=409, detail="Thread ID 已存在")
+        raise StateConflictError("Thread ID 已存在")
     try:
         backend = get_agent_backend(agent_item.backend_id)
     except AgentBackendNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise ResourceNotFoundError(str(exc)) from exc
     config_snapshot = await resolve_agent_context_snapshot(model_spec, tool_approval_mode, agent_item, backend, db)
     thread_metadata = {"source": source, "channel": channel}
     try:
@@ -123,7 +123,7 @@ async def create_thread(
                 else await create_implicit_project(uid=scope.uid, db=db)
             )
             if project is None:
-                raise HTTPException(status_code=404, detail="Project 不存在或不可访问")
+                raise ResourceNotFoundError("Project 不存在或不可访问")
             agent_session = await SessionRepository(db).add_session(
                 uid=scope.uid,
                 agent_id=agent_slug,
@@ -145,9 +145,9 @@ async def create_thread(
             idempotency_key=idempotency_key,
         )
         if existing is not None:
-            require_input_replay(existing, "yuxi.session.create", intent_hash)
+            require_receipt_replay(existing, "yuxi.session.create", intent_hash)
             return _accepted(existing)
-        raise HTTPException(status_code=409, detail="Thread 创建冲突") from exc
+        raise StateConflictError("Thread 创建冲突") from exc
     binding = await resolve_session_workdir_binding(agent_session=agent_session, uid=scope.uid, db=db, project=project)
     if input_messages:
         receipt = await accept_locked(
@@ -201,12 +201,12 @@ async def accept_message(
     origin_metadata: dict | None = None,
 ) -> dict:
     """锁定 Thread 后接收消息，提交新事实，再投递已领取的 Run。"""
-    _check_idempotency_key(idempotency_key)
+    require_idempotency_key(idempotency_key)
     if not messages:
-        raise HTTPException(status_code=422, detail="输入消息不能为空")
+        raise InvalidInputError("输入消息不能为空")
     if mode not in {None, "follow_up", "steer"}:
-        raise HTTPException(status_code=422, detail="不支持的输入模式")
-    intent_hash = _intent_hash(
+        raise InvalidInputError("不支持的输入模式")
+    intent_hash = input_intent_hash(
         "agent.session.input.message",
         mode,
         model_spec,
@@ -219,13 +219,13 @@ async def accept_message(
     receipt_repo = AgentInputReceiptRepository(db)
     existing = await receipt_repo.get_for_scope(uid=scope.uid, app_id=scope.app_id, thread_id=thread_id, idempotency_key=idempotency_key)
     if existing is not None:
-        require_input_replay(existing, "agent.session.input.message", intent_hash)
+        require_receipt_replay(existing, "agent.session.input.message", intent_hash)
         return _accepted(existing)
 
     agent_session = await require_thread(db=db, scope=scope, thread_id=thread_id, lock=True)
     existing = await receipt_repo.get_for_scope(uid=scope.uid, app_id=scope.app_id, thread_id=thread_id, idempotency_key=idempotency_key)
     if existing is not None:
-        require_input_replay(existing, "agent.session.input.message", intent_hash)
+        require_receipt_replay(existing, "agent.session.input.message", intent_hash)
         return _accepted(existing)
 
     receipt = await accept_locked(
@@ -260,7 +260,7 @@ async def get_receipt_snapshot(*, db: AsyncSession, scope: ActorScope, thread_id
         idempotency_key=idempotency_key,
     )
     if receipt is None:
-        raise HTTPException(status_code=404, detail="回执不存在")
+        raise ResourceNotFoundError("回执不存在")
     return _accepted(receipt)
 
 
@@ -268,10 +268,10 @@ async def get_input_snapshot(*, db: AsyncSession, scope: ActorScope, thread_id: 
     """按完整作用域回读 Input 的接收与消费事实。"""
     agent_session = await SessionRepository(db).get_session_by_thread_id(thread_id)
     if agent_session is None or agent_session.uid != scope.uid or agent_session.app_id != scope.app_id:
-        raise HTTPException(status_code=404, detail="Thread 不存在")
+        raise ResourceNotFoundError("Thread 不存在")
     input_item = await AgentInputRepository(db).get_for_scope(input_id=input_id, thread_id=thread_id, uid=scope.uid, app_id=scope.app_id)
     if input_item is None:
-        raise HTTPException(status_code=404, detail="Input 不存在")
+        raise ResourceNotFoundError("Input 不存在")
     messages = await AgentInputRepository(db).list_messages(input_id)
     attachments = await AttachmentRepository(db).for_messages([message.id for message in messages])
     input_attachments = await AttachmentRepository(db).list_for_input(input_id)
@@ -325,25 +325,25 @@ async def accept_locked(
 ) -> AgentInputReceipt:
     """在调用方事务与 Thread 锁内保存原始 Input、附件与接收回执。"""
     if agent_session.status != "active":
-        raise HTTPException(status_code=409, detail="Thread 已归档")
+        raise StateConflictError("Thread 已归档")
     turn_repo = AgentTurnRepository(db)
     active_turn = await turn_repo.lock_active_for_thread(thread_id=agent_session.thread_id, uid=scope.uid, app_id=scope.app_id)
     cooperation_wait = (
         active_turn is not None and active_turn.status == "waiting" and (active_turn.waitpoint or {}).get("kind") == "cooperation"
     )
     if active_turn is not None and (active_turn.status == "cancelling" or (active_turn.status == "waiting" and not cooperation_wait)):
-        raise HTTPException(status_code=409, detail="当前 Turn 正在等待控制输入或取消清理")
+        raise StateConflictError("当前 Turn 正在等待控制输入或取消清理")
 
     mode = mode or ("follow_up" if cooperation_wait or active_turn is None else "steer")
     if cooperation_wait and mode == "steer":
-        raise HTTPException(status_code=409, detail="协作等待中请提交排队输入或取消当前 Turn")
+        raise StateConflictError("协作等待中请提交排队输入或取消当前 Turn")
     input_repo = AgentInputRepository(db)
     if mode == "steer" and (model_spec is not None or tool_approval_mode is not None):
-        raise HTTPException(status_code=422, detail="Steer 不指定模型或审批配置")
-    user = await db.scalar(select(User).where(User.uid == scope.uid))
+        raise InvalidInputError("Steer 不指定模型或审批配置")
+    user = await db.scalar(select(User).where(User.uid == scope.uid, User.is_deleted == 0))
     agent_item = await AgentRepository(db).get_visible_by_slug(slug=agent_session.agent_id, user=user)
     if agent_item is None:
-        raise HTTPException(status_code=404, detail="智能体不存在")
+        raise ResourceNotFoundError("智能体不存在")
     if agent_session.config_snapshot is None:
         raise ValueError("Session 缺少配置快照")
     snapshot = deepcopy(agent_session.config_snapshot)
@@ -388,16 +388,8 @@ async def accept_locked(
         await stage_input_attachments(db=db, scope=scope, input_item=input_item, file_ids=input_item.attachment_file_ids)
 
     if source != "cooperation":
-        from yuxi.modules.agents.services.cooperation import notify_user_intervention
-
         await notify_user_intervention(db, agent_session, key=receipt.id, action=mode)
     return receipt
-
-
-def _check_idempotency_key(idempotency_key: str) -> None:
-    """在接收边界校验客户端幂等键。"""
-    if not isinstance(idempotency_key, str) or not 1 <= len(idempotency_key) <= 128:
-        raise HTTPException(status_code=422, detail="Idempotency-Key 长度必须为 1 至 128")
 
 
 def _message_intent(message: AgentRunInputMessage) -> dict:
@@ -409,18 +401,6 @@ def _message_intent(message: AgentRunInputMessage) -> dict:
         "raw_message": message.raw_message(),
         "metadata": message.extra_metadata,
     }
-
-
-def _intent_hash(*parts) -> str:
-    """对已规范化输入建立跨 Thread/Session 别名共用的意图指纹。"""
-    value = json.dumps(parts, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
-    return hashlib.sha256(value.encode()).hexdigest()
-
-
-def require_input_replay(receipt: AgentInputReceipt, event_type: str, intent_hash: str) -> None:
-    """只允许同一命令与同一规范化意图重放。"""
-    if receipt.event_type != event_type or receipt.intent_hash != intent_hash:
-        raise HTTPException(status_code=409, detail="Idempotency-Key 已用于其他输入")
 
 
 def _accepted(receipt: AgentInputReceipt) -> dict:

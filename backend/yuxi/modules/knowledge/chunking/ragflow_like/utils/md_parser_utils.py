@@ -1,34 +1,9 @@
 from __future__ import annotations
 
-import re
 from collections.abc import Callable
 from typing import Any
 
 from yuxi.modules.knowledge.chunking.ragflow_like.utils.semantic_utils import semantic_chunking_with_auto_clusters
-
-
-def infer_heading_level(title: str) -> int:
-    """
-    根据标题文本推断其层级级别（1-6级）。
-
-    逻辑说明：
-    1. 数字序号推断：
-       - 匹配如 "1.", "1.1", "1.2.3" 等格式。
-       - 根据点号分隔的数量确定层级，例如 "1.1" 为 2 级，"1.2.3" 为 3 级。
-       - 层级限制在 1-6 之间。
-    2. 中文序号推断：
-       - 匹配如 "一、", "二." 等中文数字序号。
-       - 统一归类为 1 级标题。
-    3. 默认处理：
-       - 若不匹配以上规则，默认返回 1 级。
-    """
-    m = re.match(r"^\s*(\d+(?:\.\d+)*)[.)、]?\s*", title)
-    if m:
-        return max(1, min(len(m.group(1).split(".")), 6))
-    m_zh = re.match(r"^\s*[一二三四五六七八九十百千]+[、.]\s*", title)
-    if m_zh:
-        return 1
-    return 1
 
 
 def get_title_path(stack: list[str]) -> str:

@@ -2,7 +2,7 @@
 
 状态：implemented
 类型：bug-fix
-Owner：backend/yuxi/modules/agents/services/state.py
+Owner：backend/yuxi/modules/agents/services/checkpoint_state.py
 
 ## 问题
 

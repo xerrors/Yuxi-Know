@@ -5,12 +5,12 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import fields
 
-from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.modules.agents.runtime.tool_approval import DEFAULT_TOOL_APPROVAL_MODE, normalize_tool_approval_mode
 from yuxi.modules.models.providers.cache import model_cache
 from yuxi.modules.system.options import system_options
+from yuxi.shared.errors import InvalidInputError
 
 
 async def resolve_agent_context_snapshot(
@@ -31,7 +31,7 @@ async def resolve_agent_context_snapshot(
 async def resolve_agent_run_model_spec(requested_model: str | None, configured_model: str | None, db: AsyncSession | None = None) -> str:
     """按显式值、Agent 配置和系统默认值选择聊天模型。"""
     if requested_model is not None and not requested_model.strip():
-        raise HTTPException(status_code=422, detail="显式模型标识不能为空")
+        raise InvalidInputError("显式模型标识不能为空")
     model_spec = next(
         (candidate.strip() for candidate in (requested_model, configured_model) if isinstance(candidate, str) and candidate.strip()),
         None,
@@ -40,10 +40,7 @@ async def resolve_agent_run_model_spec(requested_model: str | None, configured_m
         model_spec = str((await system_options.get(db))["default_model"]).strip()
     info = model_cache.get_model_info(model_spec)
     if not info or info.model_type != "chat":
-        raise HTTPException(
-            status_code=422,
-            detail={"code": "chat_model_not_found", "message": f"未找到可用聊天模型: '{model_spec}'"},
-        )
+        raise InvalidInputError(f"未找到可用聊天模型: '{model_spec}'", code="chat_model_not_found")
     return model_spec
 
 
@@ -53,4 +50,4 @@ def resolve_agent_run_tool_approval_mode(requested_mode: str | None, configured_
     try:
         return normalize_tool_approval_mode(source)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise InvalidInputError(str(exc)) from exc

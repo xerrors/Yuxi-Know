@@ -127,6 +127,31 @@ async def upgrade_feedback_schema(manager) -> None:
         )
 
 
+async def upgrade_knowledge_name_schema(manager) -> None:
+    """3→4 原子约束活动知识库名称，存量重名时保留原数据与版本。"""
+    manager._check_initialized()
+    async with manager.async_engine.begin() as conn:
+        await conn.execute(text("LOCK TABLE knowledge_bases IN SHARE ROW EXCLUSIVE MODE"))
+        duplicates = await conn.scalar(
+            text(
+                "SELECT count(*) FROM (SELECT lower(name) FROM knowledge_bases "
+                "WHERE deleted_at IS NULL GROUP BY lower(name) HAVING count(*) > 1) AS conflicts"
+            )
+        )
+        if duplicates:
+            raise RuntimeError(f"知识库存在 {duplicates} 组未删除的重名记录，请修正名称后重新执行 schema-init；数据与知识域版本保持不变")
+        await conn.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_knowledge_bases_active_name ON knowledge_bases (lower(name)) WHERE deleted_at IS NULL"
+            )
+        )
+        await conn.execute(
+            text(
+                f"UPDATE {SCHEMA_VERSION_TABLE} SET version = 4, applied_at = CURRENT_TIMESTAMP WHERE domain = 'knowledge' AND version = 3"
+            )
+        )
+
+
 async def ensure_knowledge_schema(manager):
     """建立不适合由 ORM 表达的知识域访问路径索引。"""
     manager._check_initialized()

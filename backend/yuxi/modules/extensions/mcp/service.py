@@ -33,17 +33,6 @@ from yuxi.modules.extensions.mcp.runtime import (
     get_mcp_tools as load_mcp_tools,
 )
 
-# =============================================================================
-# === Global Cache & State ===
-# =============================================================================
-
-# Global Lock for MCP state
-
-# 本地仅缓存工具对象。配置始终以数据库为准，每次按 server_slug 现查。
-# cache key 使用 server_slug:config_hash，当配置变化时会自然失效。
-
-# MCP tools statistics (for reporting enabled/disabled counts)
-
 BUILTIN_MCP_SERVERS = BUILTIN_MCP_MANIFEST["mcpServers"]
 
 _SYNCED_MCP_FIELDS = (
@@ -183,16 +172,6 @@ async def get_mcp_tools(
         else await get_enabled_mcp_server_config(server_slug)
     )
     return await load_mcp_tools(server_slug, config, disabled_tools=disabled_tools, cache=cache, force_refresh=force_refresh)
-
-
-async def get_tools_from_all_servers() -> list[Callable[..., Any]]:
-    """Get all tools from all configured MCP servers."""
-    server_configs = await _load_enabled_mcp_server_configs()
-    all_tools = []
-    for server_slug in server_configs:
-        tools = await get_mcp_tools(server_slug, additional_servers=server_configs)
-        all_tools.extend(tools)
-    return all_tools
 
 
 # =============================================================================
@@ -401,24 +380,8 @@ async def get_enabled_mcp_tools(server_slug: str) -> list:
         List of enabled tools
     """
     config = await get_enabled_mcp_server_config(server_slug)
-    if config is None:
-        logger.warning(f"MCP server '{server_slug}' not found in database or disabled")
-        return []
-
-    disabled_tools = config.get("disabled_tools") or []
+    disabled_tools = (config or {}).get("disabled_tools") or []
     return await get_mcp_tools(server_slug, additional_servers={server_slug: config}, disabled_tools=disabled_tools)
-
-
-async def get_servers_config(names: list[str]) -> dict[str, dict[str, Any]]:
-    """Batch get server configurations.
-
-    Args:
-        names: List of server names
-
-    Returns:
-        {name: config} dictionary, containing only found servers
-    """
-    return await _load_enabled_mcp_server_configs(names=names)
 
 
 async def get_all_mcp_tools(server_slug: str) -> list:
@@ -434,10 +397,6 @@ async def get_all_mcp_tools(server_slug: str) -> list:
         List of all tools (unfiltered)
     """
     config = await get_enabled_mcp_server_config(server_slug)
-    if config is None:
-        logger.warning(f"MCP server '{server_slug}' not found in database or disabled")
-        return []
-
     # Get all tools (no filtering, force refresh, no cache update)
     return await get_mcp_tools(
         server_slug,

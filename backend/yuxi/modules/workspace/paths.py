@@ -28,6 +28,22 @@ _MANAGED_WORKDIR_TIMESTAMP_FORMAT = "%Y-%m-%d_%H-%M-%S"
 WORKDIR_PROJECTS_DIR_NAME = "projects"
 
 
+def normalize_workspace_scope(path: str) -> str:
+    """规范化用户文件 scope，拒绝跳转、URL、反斜杠与 NUL。"""
+    raw = str(path or "").strip()
+    pure = PurePosixPath(raw)
+    if not raw or not pure.is_absolute() or ".." in pure.parts or "\\" in raw or "://" in raw or "\0" in raw:
+        raise ValueError("invalid Workspace scope path")
+    return pure.as_posix()
+
+
+def validate_directory_name(name: str) -> str:
+    """目录创建只接受单个普通 POSIX 组件。"""
+    if not name or name in {".", ".."} or any(char in name for char in ("/", "\\", "\0")):
+        raise ValueError("directory name must be one path component")
+    return name
+
+
 def validate_thread_id(thread_id: str) -> str:
     value = str(thread_id or "").strip()
     if not value:

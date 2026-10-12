@@ -13,7 +13,7 @@ import pytest_asyncio
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from yuxi.modules.agents.repositories.sessions import SessionRepository
+from yuxi.modules.agents.services.memory_history import MemoryHistoryService
 import yuxi.modules.agents.services.memory as memory_service
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.agents.models.runs import AgentRun
@@ -234,10 +234,9 @@ async def test_history_query_uses_postgres_visibility_and_field_allowlists(memor
         await db.commit()
 
     async with session_factory() as db:
-        repository = SessionRepository(db)
-        search = await repository.search_memory_messages(uid=uid, query="needle", limit=10)
-        default_read = await repository.read_memory_messages(uid=uid, thread_id=visible.thread_id)
-        tool_read = await repository.read_memory_messages(
+        search = await MemoryHistoryService(db).search_memory_messages(uid=uid, query="needle", limit=10)
+        default_read = await MemoryHistoryService(db).read_memory_messages(uid=uid, thread_id=visible.thread_id)
+        tool_read = await MemoryHistoryService(db).read_memory_messages(
             uid=uid,
             thread_id=visible.thread_id,
             include_tools=True,

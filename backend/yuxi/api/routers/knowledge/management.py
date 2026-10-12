@@ -46,6 +46,7 @@ from yuxi.modules.knowledge.utils.sample_question_utils import (
 from yuxi.modules.knowledge.utils.url_fetcher import fetch_url_content
 from yuxi.modules.system.options import system_options
 from yuxi.modules.workspace.services.files import read_workspace_file_bytes
+from yuxi.shared.errors import DomainError
 
 knowledge = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
@@ -325,6 +326,8 @@ async def update_knowledge_base_info(
             operator_department_id=current_user.department_id,
         )
         return {"message": "更新成功", "knowledge_base": serialize_knowledge_base(knowledge_base)}
+    except KBNameConflictError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
     except HTTPException:
         raise
     except Exception as e:
@@ -1234,7 +1237,7 @@ async def generate_sample_questions(
     try:
         count = request_body.get("count", 10)
         return await generate_knowledge_base_sample_questions(kb_id, count=count)
-    except HTTPException:
+    except (HTTPException, DomainError):
         raise
     except Exception as e:
         logger.error(f"生成知识库问题失败: {e}, {traceback.format_exc()}")
@@ -1246,7 +1249,7 @@ async def get_sample_questions(kb_id: str, current_user: User = Depends(require_
     """获取知识库的测试问题。"""
     try:
         return await get_knowledge_base_sample_questions(kb_id)
-    except HTTPException:
+    except (HTTPException, DomainError):
         raise
     except Exception as e:
         logger.error(f"获取知识库问题失败: {e}, {traceback.format_exc()}")

@@ -1,4 +1,4 @@
-"""Utilities for normalizing user input across DB and LangChain messages."""
+"""Input 原始消息与数据库、LangChain 投影之间的规范化契约。"""
 
 from __future__ import annotations
 
@@ -16,6 +16,8 @@ MAX_CHAT_IMAGE_TOTAL_BYTES = 80 * 1024 * 1024
 
 @dataclass(frozen=True)
 class AgentRunInputMessage:
+    """保存原始输入与 LangChain 投影之间的不可变消息契约。"""
+
     content: str
     message_type: str
     image_content: str | None
@@ -23,14 +25,17 @@ class AgentRunInputMessage:
     extra_metadata: dict[str, Any] = field(default_factory=dict)
 
     def raw_message(self) -> dict[str, Any] | None:
+        """返回持久化所需的原始消息表示。"""
         return self.langchain_message.model_dump() if self.langchain_message else None
 
     def require_langchain_message(self) -> HumanMessage:
+        """读取本次输入的 LangChain 消息，缺失时显式失败。"""
         if not self.langchain_message:
             raise ValueError("chat input message must include a LangChain HumanMessage")
         return self.langchain_message
 
     def with_metadata(self, metadata: dict[str, Any]) -> AgentRunInputMessage:
+        """合并可信元数据并返回独立输入消息。"""
         return replace(self, extra_metadata=dict(metadata))
 
 
@@ -100,6 +105,7 @@ def build_chat_input_message(query: str, image_content: str | list[str] | None =
 
 
 def build_chat_input_message_from_openai_content(content: str | list[dict[str, Any]]) -> AgentRunInputMessage:
+    """将公开文本与图片内容转换为持久输入消息。"""
     if isinstance(content, str):
         if not content:
             raise ValueError("user message content 必须是非空字符串或多模态数组")
@@ -153,6 +159,7 @@ def build_chat_input_message_from_openai_content(content: str | list[dict[str, A
 
 
 def _normalize_openai_image_url_part(image_url: object) -> dict[str, Any]:
+    """在图片输入边界规范化公开图片项。"""
     if isinstance(image_url, str):
         url = image_url
         normalized: dict[str, Any] = {"url": url}
@@ -169,6 +176,7 @@ def _normalize_openai_image_url_part(image_url: object) -> dict[str, Any]:
 
 
 def _extract_data_url_base64(url: str) -> str | None:
+    """解析并校验 data URL 的媒体类型与内容。"""
     marker = ";base64,"
     if not url.startswith("data:image/") or marker not in url:
         return None
@@ -202,6 +210,7 @@ def extract_image_contents(raw_message: dict[str, Any] | None) -> list[str]:
 
 
 def restore_chat_input_message(*, content: str, image_content: str | None, metadata: dict) -> AgentRunInputMessage:
+    """从持久内容与元数据恢复可执行输入消息。"""
     raw_message = metadata.get("raw_message")
     if not isinstance(raw_message, dict):
         raise ValueError("missing raw_message for chat input message")
@@ -221,4 +230,5 @@ def restore_chat_input_message(*, content: str, image_content: str | None, metad
 
 
 def _has_image_url_content_part(content: object) -> bool:
+    """判断原始内容是否携带图片项。"""
     return isinstance(content, list) and any(isinstance(part, dict) and part.get("type") == "image_url" for part in content)

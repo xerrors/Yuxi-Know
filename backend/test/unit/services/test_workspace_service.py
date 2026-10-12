@@ -1,23 +1,23 @@
 from __future__ import annotations
 
-import hashlib
 import asyncio
+import hashlib
 import os
 from io import BytesIO
 from pathlib import Path
-from types import SimpleNamespace
 from threading import Event
+from types import SimpleNamespace
 
 import pytest
-from fastapi import HTTPException
-from yuxi.shared.files import FileInput
-from yuxi.modules.workspace import filesystem
-from yuxi.modules.workspace.filesystem import Workspace
-from yuxi.modules.workspace.services.files import _write_workspace_upload
 
 import yuxi.modules.workspace.preview as file_preview
-from yuxi.modules.workspace import paths as workspace_paths
 import yuxi.modules.workspace.services.files as svc
+from yuxi.modules.workspace import filesystem
+from yuxi.modules.workspace import paths as workspace_paths
+from yuxi.modules.workspace.filesystem import Workspace
+from yuxi.modules.workspace.services.files import _write_workspace_upload
+from yuxi.shared.errors import DomainError, InvalidOperationError, PermissionDeniedError, ResourceNotFoundError
+from yuxi.shared.files import FileInput
 
 
 def _user() -> SimpleNamespace:
@@ -91,10 +91,10 @@ def test_workspace_root_rejects_symlink_root(tmp_path: Path, monkeypatch) -> Non
     outside_root.mkdir()
     (user_root / "workspace").symlink_to(outside_root, target_is_directory=True)
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(DomainError) as exc_info:
         svc._workspace_backend(_user())
 
-    assert exc_info.value.status_code == 403
+    assert isinstance(exc_info.value, PermissionDeniedError)
 
 
 @pytest.mark.parametrize(
@@ -294,10 +294,10 @@ async def test_write_workspace_file_content_rejects_unsupported_suffix(tmp_path:
     target = root / "script.py"
     target.write_text("print('hello')", encoding="utf-8")
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(DomainError) as exc_info:
         await svc.write_workspace_file_content(path="/script.py", content="print('bye')", current_user=user)
 
-    assert exc_info.value.status_code == 400
+    assert isinstance(exc_info.value, InvalidOperationError)
     assert target.read_text(encoding="utf-8") == "print('hello')"
 
 
@@ -307,27 +307,27 @@ async def test_write_workspace_file_content_rejects_directory_and_missing_file(t
     user = _user()
     workspace_paths.ensure_user_workspace("user-1")
 
-    with pytest.raises(HTTPException) as directory_error:
+    with pytest.raises(DomainError) as directory_error:
         await svc.write_workspace_file_content(path="/agents/", content="x", current_user=user)
-    with pytest.raises(HTTPException) as missing_error:
+    with pytest.raises(DomainError) as missing_error:
         await svc.write_workspace_file_content(path="/missing.md", content="x", current_user=user)
 
-    assert directory_error.value.status_code == 400
-    assert missing_error.value.status_code == 404
+    assert isinstance(directory_error.value, InvalidOperationError)
+    assert isinstance(missing_error.value, ResourceNotFoundError)
 
 
 @pytest.mark.asyncio
 async def test_write_workspace_file_content_blocks_path_traversal(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("YUXI_USER_DATA_DIR", str(tmp_path / "threads"))
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(DomainError) as exc_info:
         await svc.write_workspace_file_content(
             path="/../outside.md",
             content="x",
             current_user=_user(),
         )
 
-    assert exc_info.value.status_code == 403
+    assert isinstance(exc_info.value, PermissionDeniedError)
 
 
 @pytest.mark.asyncio
@@ -388,11 +388,11 @@ async def test_upload_workspace_files_rejects_oversized_file_and_cleans_partial_
         FileInput(filename="large.txt", source=BytesIO(b"123456")),
     ]
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(DomainError) as exc_info:
         await svc.upload_workspace_files(parent_path="/", files=uploads, current_user=user)
 
-    assert exc_info.value.status_code == 400
-    assert "100 MB" in exc_info.value.detail
+    assert isinstance(exc_info.value, InvalidOperationError)
+    assert "100 MB" in exc_info.value.message
     assert not (root / "small.txt").exists()
     assert not (root / "large.txt").exists()
 
@@ -403,11 +403,11 @@ async def test_upload_workspace_files_rejects_more_than_limit(tmp_path: Path, mo
     user = _user()
     uploads = [FileInput(filename=f"demo-{index}.txt", source=BytesIO(b"hello")) for index in range(svc.MAX_WORKSPACE_UPLOAD_FILES + 1)]
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(DomainError) as exc_info:
         await svc.upload_workspace_files(parent_path="/", files=uploads, current_user=user)
 
-    assert exc_info.value.status_code == 400
-    assert f"一次最多上传 {svc.MAX_WORKSPACE_UPLOAD_FILES} 个文件" in exc_info.value.detail
+    assert isinstance(exc_info.value, InvalidOperationError)
+    assert f"一次最多上传 {svc.MAX_WORKSPACE_UPLOAD_FILES} 个文件" in exc_info.value.message
 
 
 @pytest.mark.asyncio

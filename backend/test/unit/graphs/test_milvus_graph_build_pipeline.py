@@ -62,11 +62,6 @@ class _FakeChunkRepository:
         """按稳定 chunk id 返回同一条替身记录。"""
         return next(chunk for chunk in self.chunks if chunk.chunk_id == chunk_id)
 
-    async def mark_graph_indexed(self, chunk_id, ent_ids=None):
-        """标记 chunk 的图索引已完成。"""
-        chunk = await self.get_by_chunk_id(chunk_id)
-        chunk.graph_indexed = True
-
     async def mark_graph_structure_indexed(self, chunk_id, ent_ids=None):
         """标记 chunk 的结构写入已完成。"""
         chunk = await self.get_by_chunk_id(chunk_id)

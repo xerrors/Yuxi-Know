@@ -11,7 +11,7 @@ from langgraph.types import Command
 
 import yuxi.modules.agents.runtime.middlewares.skills as skills_middleware
 from yuxi.modules.agents.runtime.middlewares.skills import SkillsMiddleware
-from yuxi.modules.extensions.skills.runtime import resolve_skill_gated_tools
+from yuxi.modules.extensions.tools.runtime import resolve_skill_gated_tools
 from yuxi.modules.extensions.tools.runtime import resolve_configured_runtime_tools
 
 _KB_TOOL_NAMES = {
@@ -49,7 +49,13 @@ async def test_skills_prompt_uses_effective_skills_at_request_level():
     context = SimpleNamespace(
         system_prompt="context base",
         skills=["configured-only"],
-        _skill_runtime_snapshot={
+        skill_runtime_snapshot={
+            "capability_limited": False,
+            "context_skills": [],
+            "context_preload_skills": [],
+            "skill_metadata": {},
+            "preloaded_skills": [],
+            "preloaded_skill_contents": {},
             "effective_skills": ["alpha"],
             "runtime_skills": {
                 "alpha": _runtime_skill("alpha", name="Alpha", description="alpha desc"),
@@ -94,7 +100,12 @@ async def test_preloaded_skill_injects_full_instructions_once_and_hides_lazy_rea
     context = SimpleNamespace(
         tools=[],
         mcps=[],
-        _skill_runtime_snapshot={
+        mcp_tool_servers={},
+        skill_runtime_snapshot={
+            "capability_limited": False,
+            "context_skills": [],
+            "context_preload_skills": [],
+            "skill_metadata": {},
             "effective_skills": ["alpha", "beta"],
             "preloaded_skills": ["alpha"],
             "preloaded_skill_contents": {"alpha": "# Alpha full instructions\nUSE_ALPHA_TOOL"},
@@ -148,7 +159,14 @@ async def test_awrap_model_call_mounts_dependencies_only_for_readable_activated_
             self.runtime = SimpleNamespace(
                 context=SimpleNamespace(
                     mcps=[],
-                    _skill_runtime_snapshot={
+                    mcp_tool_servers={},
+                    skill_runtime_snapshot={
+                        "capability_limited": False,
+                        "context_skills": [],
+                        "context_preload_skills": [],
+                        "skill_metadata": {},
+                        "preloaded_skills": [],
+                        "preloaded_skill_contents": {},
                         "effective_skills": ["alpha"],
                         "runtime_skills": {
                             "alpha": _runtime_skill("alpha", tools=["tool-a"]),
@@ -185,7 +203,14 @@ async def test_awrap_model_call_mounts_knowledge_base_skill_tools():
             self.runtime = SimpleNamespace(
                 context=SimpleNamespace(
                     mcps=[],
-                    _skill_runtime_snapshot={
+                    mcp_tool_servers={},
+                    skill_runtime_snapshot={
+                        "capability_limited": False,
+                        "context_skills": [],
+                        "context_preload_skills": [],
+                        "skill_metadata": {},
+                        "preloaded_skills": [],
+                        "preloaded_skill_contents": {},
                         "effective_skills": ["knowledge-base"],
                         "runtime_skills": {
                             "knowledge-base": _runtime_skill(
@@ -229,7 +254,14 @@ async def test_resolve_skill_gated_tools_registers_kb_tools():
     context = SimpleNamespace(
         tools=None,
         mcps=None,
-        _skill_runtime_snapshot={
+        mcp_tool_servers={},
+        skill_runtime_snapshot={
+            "capability_limited": False,
+            "context_skills": [],
+            "context_preload_skills": [],
+            "skill_metadata": {},
+            "preloaded_skills": [],
+            "preloaded_skill_contents": {},
             "effective_skills": ["knowledge-base"],
             "runtime_skills": {"knowledge-base": _runtime_skill("knowledge-base", tools=sorted(_KB_TOOL_NAMES))},
         },
@@ -250,7 +282,17 @@ async def test_base_tools_are_registered_once_without_configuration_or_skill(run
         run_id=run_id,
         tools=[],
         mcps=[],
-        _skill_runtime_snapshot={"effective_skills": [], "runtime_skills": {}},
+        mcp_tool_servers={},
+        skill_runtime_snapshot={
+            "capability_limited": False,
+            "context_skills": [],
+            "context_preload_skills": [],
+            "skill_metadata": {},
+            "preloaded_skills": [],
+            "preloaded_skill_contents": {},
+            "effective_skills": [],
+            "runtime_skills": {},
+        },
     )
     tools = await resolve_configured_runtime_tools(context)
     assert [tool.name for tool in tools] == ["ask_user_question", "mark_for_improvement"]
@@ -265,7 +307,14 @@ async def test_unactivated_skill_cannot_hide_base_tools():
     context = SimpleNamespace(
         tools=[],
         mcps=[],
-        _skill_runtime_snapshot={
+        mcp_tool_servers={},
+        skill_runtime_snapshot={
+            "capability_limited": False,
+            "context_skills": [],
+            "context_preload_skills": [],
+            "skill_metadata": {},
+            "preloaded_skills": [],
+            "preloaded_skill_contents": {},
             "effective_skills": ["alpha"],
             "runtime_skills": {"alpha": _runtime_skill("alpha", tools=["ask_user_question", "mark_for_improvement", "query_kb"])},
         },
@@ -317,7 +366,13 @@ async def test_preloaded_skill_rejects_duplicate_mcp_tool_names(monkeypatch):
     context = SimpleNamespace(
         tools=[],
         mcps=[],
-        _skill_runtime_snapshot={
+        mcp_tool_servers={},
+        skill_runtime_snapshot={
+            "capability_limited": False,
+            "context_skills": [],
+            "context_preload_skills": [],
+            "skill_metadata": {},
+            "preloaded_skill_contents": {},
             "effective_skills": ["report"],
             "preloaded_skills": ["report"],
             "runtime_skills": {"report": _runtime_skill("report", mcps=["charts", "conflicting-charts"])},
@@ -358,7 +413,14 @@ async def test_activated_mcp_rejects_name_of_inactive_registered_skill_tool(monk
     context = SimpleNamespace(
         tools=[],
         mcps=[],
-        _skill_runtime_snapshot={
+        mcp_tool_servers={},
+        skill_runtime_snapshot={
+            "capability_limited": False,
+            "context_skills": [],
+            "context_preload_skills": [],
+            "skill_metadata": {},
+            "preloaded_skills": [],
+            "preloaded_skill_contents": {},
             "effective_skills": ["report", "other"],
             "runtime_skills": {
                 "report": _runtime_skill("report", mcps=["charts"]),
@@ -397,7 +459,13 @@ async def test_preloaded_skill_exposes_mcp_tool_on_first_model_call(monkeypatch)
     context = SimpleNamespace(
         tools=[],
         mcps=[],
-        _skill_runtime_snapshot={
+        mcp_tool_servers={},
+        skill_runtime_snapshot={
+            "capability_limited": False,
+            "context_skills": [],
+            "context_preload_skills": [],
+            "skill_metadata": {},
+            "preloaded_skill_contents": {},
             "effective_skills": ["report"],
             "preloaded_skills": ["report"],
             "runtime_skills": {"report": _runtime_skill("report", mcps=["charts"])},
@@ -445,7 +513,14 @@ async def test_activated_skill_loads_mcp_without_agent_selection(monkeypatch):
     context = SimpleNamespace(
         tools=[],
         mcps=[],
-        _skill_runtime_snapshot={
+        mcp_tool_servers={},
+        skill_runtime_snapshot={
+            "capability_limited": False,
+            "context_skills": [],
+            "context_preload_skills": [],
+            "skill_metadata": {},
+            "preloaded_skills": [],
+            "preloaded_skill_contents": {},
             "effective_skills": ["report"],
             "runtime_skills": {"report": _runtime_skill("report", mcps=["charts"])},
         },
@@ -506,7 +581,13 @@ async def test_skill_reusing_explicit_mcp_server_does_not_duplicate_registered_t
     context = SimpleNamespace(
         tools=[],
         mcps=["charts"],
-        _skill_runtime_snapshot={
+        mcp_tool_servers={},
+        skill_runtime_snapshot={
+            "capability_limited": False,
+            "context_skills": [],
+            "context_preload_skills": [],
+            "skill_metadata": {},
+            "preloaded_skill_contents": {},
             "effective_skills": ["report"],
             "preloaded_skills": ["report"],
             "runtime_skills": {"report": _runtime_skill("report", mcps=["charts"])},
@@ -552,7 +633,14 @@ async def test_explicit_mcp_rejects_skill_local_tool_name_collision(monkeypatch)
     context = SimpleNamespace(
         tools=[],
         mcps=["configured"],
-        _skill_runtime_snapshot={
+        mcp_tool_servers={},
+        skill_runtime_snapshot={
+            "capability_limited": False,
+            "context_skills": [],
+            "context_preload_skills": [],
+            "skill_metadata": {},
+            "preloaded_skills": [],
+            "preloaded_skill_contents": {},
             "effective_skills": ["knowledge-base"],
             "runtime_skills": {"knowledge-base": _runtime_skill("knowledge-base", tools=["list_kbs"])},
         },
@@ -571,7 +659,14 @@ def _make_gated_request(activated, *, preloaded=None):
             self.runtime = SimpleNamespace(
                 context=SimpleNamespace(
                     mcps=[],
-                    _skill_runtime_snapshot={
+                    mcp_tool_servers={},
+                    skill_runtime_snapshot={
+                        "capability_limited": False,
+                        "context_skills": [],
+                        "context_preload_skills": [],
+                        "skill_metadata": {},
+                        "preloaded_skills": [],
+                        "preloaded_skill_contents": {},
                         "effective_skills": ["knowledge-base"],
                         "runtime_skills": {"knowledge-base": _runtime_skill("knowledge-base", tools=["list_kbs", "query_kb"])},
                     },
@@ -623,7 +718,19 @@ def test_read_file_activates_only_readable_skill() -> None:
     middleware = SkillsMiddleware()
     result = ToolMessage(content="ok", tool_call_id="tool-1", name="read_file")
     request = SimpleNamespace(
-        runtime=SimpleNamespace(context=SimpleNamespace(_skill_runtime_snapshot={"effective_skills": ["alpha"]})),
+        runtime=SimpleNamespace(
+            context=SimpleNamespace(
+                skill_runtime_snapshot={
+                    "capability_limited": False,
+                    "context_skills": [],
+                    "context_preload_skills": [],
+                    "skill_metadata": {},
+                    "preloaded_skills": [],
+                    "preloaded_skill_contents": {},
+                    "effective_skills": ["alpha"],
+                }
+            )
+        ),
         tool_call={"name": "read_file", "args": {"file_path": "/home/gem/skills/alpha/SKILL.md"}},
     )
 
@@ -640,7 +747,19 @@ def test_failed_read_file_does_not_activate_skill(wrapped_in_command) -> None:
     error = ToolMessage(content="read failed", tool_call_id="tool-1", name="read_file", status="error")
     result = Command(update={"messages": [error]}) if wrapped_in_command else error
     request = SimpleNamespace(
-        runtime=SimpleNamespace(context=SimpleNamespace(_skill_runtime_snapshot={"effective_skills": ["alpha"]})),
+        runtime=SimpleNamespace(
+            context=SimpleNamespace(
+                skill_runtime_snapshot={
+                    "capability_limited": False,
+                    "context_skills": [],
+                    "context_preload_skills": [],
+                    "skill_metadata": {},
+                    "preloaded_skills": [],
+                    "preloaded_skill_contents": {},
+                    "effective_skills": ["alpha"],
+                }
+            )
+        ),
         tool_call={"name": "read_file", "args": {"file_path": "/home/gem/skills/alpha/SKILL.md"}},
     )
 
@@ -653,7 +772,19 @@ def test_zero_line_read_does_not_activate_skill(limit) -> None:
     middleware = SkillsMiddleware()
     result = ToolMessage(content="No lines requested", tool_call_id="tool-1", name="read_file")
     request = SimpleNamespace(
-        runtime=SimpleNamespace(context=SimpleNamespace(_skill_runtime_snapshot={"effective_skills": ["alpha"]})),
+        runtime=SimpleNamespace(
+            context=SimpleNamespace(
+                skill_runtime_snapshot={
+                    "capability_limited": False,
+                    "context_skills": [],
+                    "context_preload_skills": [],
+                    "skill_metadata": {},
+                    "preloaded_skills": [],
+                    "preloaded_skill_contents": {},
+                    "effective_skills": ["alpha"],
+                }
+            )
+        ),
         tool_call={"name": "read_file", "args": {"file_path": "/home/gem/skills/alpha/SKILL.md", "limit": limit}},
     )
 
@@ -672,10 +803,40 @@ def test_read_file_denies_skill_outside_readable_scope() -> None:
     middleware = SkillsMiddleware()
     result = ToolMessage(content="ok", tool_call_id="tool-1", name="read_file")
     request = SimpleNamespace(
-        runtime=SimpleNamespace(context=SimpleNamespace(_skill_runtime_snapshot={"effective_skills": ["alpha"]})),
+        runtime=SimpleNamespace(
+            context=SimpleNamespace(
+                skill_runtime_snapshot={
+                    "capability_limited": False,
+                    "context_skills": [],
+                    "context_preload_skills": [],
+                    "skill_metadata": {},
+                    "preloaded_skills": [],
+                    "preloaded_skill_contents": {},
+                    "effective_skills": ["alpha"],
+                }
+            )
+        ),
         tool_call={"name": "read_file", "args": {"file_path": "/home/gem/skills/beta/SKILL.md"}},
     )
 
     updated = middleware._process_tool_call_result(result, request)
 
     assert updated is result
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("source", ["configured", "skill"])
+async def test_mcp_failure_reaches_runtime_instead_of_removing_tools(monkeypatch, source):
+    """显式 MCP 与 Skill MCP 加载失败都保留运行失败，不变成无工具成功。"""
+    failure = RuntimeError("MCP 服务 demo 工具加载失败")
+    loader = AsyncMock(side_effect=failure)
+    monkeypatch.setattr("yuxi.modules.extensions.mcp.service.get_enabled_mcp_tools", loader)
+    monkeypatch.setattr(skills_middleware, "get_enabled_mcp_tools", loader)
+    context = SimpleNamespace(tools=[], mcps=["demo"] if source == "configured" else [], mcp_tool_servers={})
+    with pytest.raises(RuntimeError, match="MCP 服务 demo") as caught:
+        if source == "configured":
+            await resolve_configured_runtime_tools(context)
+        else:
+            await SkillsMiddleware()._get_mcp_tools_from_context(context, extra_mcps=["demo"])
+    assert caught.value is failure
+    assert context.mcp_tool_servers == {}

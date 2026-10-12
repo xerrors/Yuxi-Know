@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from copy import deepcopy
 from dataclasses import dataclass, field
 
 
@@ -22,17 +23,24 @@ _all_tool_instances: list = []
 
 def get_extra_metadata(tool_name: str) -> ToolExtraMetadata | None:
     """获取工具附加元数据"""
-    return _extra_registry.get(tool_name)
+    return deepcopy(_extra_registry.get(tool_name))
 
 
 def get_all_extra_metadata() -> dict[str, ToolExtraMetadata]:
     """获取所有附加元数据"""
-    return _extra_registry.copy()
+    return deepcopy(_extra_registry)
 
 
 def get_all_tool_instances() -> list:
     """获取所有工具实例（由 @tool 装饰器自动收集）"""
-    return _all_tool_instances
+    return list(_all_tool_instances)
+
+
+def register_tool(tool_obj, metadata: ToolExtraMetadata) -> None:
+    """通过同一入口登记现有工具实例和附加信息。"""
+    _extra_registry[tool_obj.name] = deepcopy(metadata)
+    tool_obj.handle_tool_error = True
+    _all_tool_instances.append(tool_obj)
 
 
 # 基于 langchain.tool 的拓展装饰器
@@ -71,8 +79,7 @@ def tool(
         tool_obj = langchain_decorator(func)
 
         # 注册附加元数据
-        tool_name = tool_obj.name
-        _extra_registry[tool_name] = ToolExtraMetadata(
+        metadata = ToolExtraMetadata(
             category=category,
             tags=tags or [],
             display_name=display_name,
@@ -81,8 +88,7 @@ def tool(
         )
 
         # 自动收集工具实例
-        tool_obj.handle_tool_error = True
-        _all_tool_instances.append(tool_obj)
+        register_tool(tool_obj, metadata)
 
         return tool_obj
 

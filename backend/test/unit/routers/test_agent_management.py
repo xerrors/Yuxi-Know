@@ -73,6 +73,18 @@ def _build_app(monkeypatch, repo_cls, *, role: str = "admin") -> TestClient:
 
     monkeypatch.setattr(agent_router_module, "create_agent_definition", fake_create_definition)
 
+    async def fake_ensure_default(db):
+        """默认定义事务由真实 HTTP 集成验证。"""
+        return await repo_cls(db).ensure_default_agent()
+
+    monkeypatch.setattr(agent_router_module, "ensure_default_agent_definition", fake_ensure_default)
+
+    async def fake_serialize(db, item, **kwargs):
+        """路由只装配协议，治理投影由真实 HTTP 集成验证。"""
+        return dict(item.__dict__)
+
+    monkeypatch.setattr(agent_router_module, "serialize_agent_definition", fake_serialize)
+
     app = FastAPI()
     app.include_router(agent_router_module.agent_router, prefix="/api")
 

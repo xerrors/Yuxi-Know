@@ -24,9 +24,9 @@ from yuxi.modules.extensions.skills.package import (
     is_valid_skill_slug,
 )
 from yuxi.modules.identity.models import User
+from yuxi.modules.identity.permissions.resource_permission import ADMIN_ROLES
 
 SKILL_DRAFT_TTL_SECONDS = 60 * 60
-ADMIN_ROLES = {"admin", "superadmin"}
 
 
 @dataclass(frozen=True, slots=True)

@@ -756,8 +756,9 @@ class MilvusGraphService:
         """外部清理成功后才提交关联移除，失败保留重试所需的 ID。"""
         async with self.graph_repo.delete_file_references(file_id, generation=generation) as scope:
             orphan_entity_ids, orphan_triple_ids, chunk_ids = scope
+            graph_vector_store = await self.get_graph_vector_store()
             await await_io(
-                self.graph_vector_store.delete_graph_records(
+                graph_vector_store.delete_graph_records(
                     kb_id,
                     entity_ids=orphan_entity_ids,
                     triple_ids=orphan_triple_ids,

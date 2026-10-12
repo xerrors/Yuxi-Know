@@ -58,6 +58,10 @@ Session 通过 `project_id` 绑定 Project；Project 拥有这项绑定和 `work
 
 文件访问使用相对路径和 no-follow 原语，拒绝 `..`、符号链接、特殊文件和跨用户根目录。普通运行服务以 `1000:1000` 访问数据。
 
+runtime 绝对路径由 `sandbox/paths.normalize_runtime_path` 校验，UserWorkspace 和 Workdir 浏览 scope 由 `workspace/paths.normalize_workspace_scope` 校验；两者分别拒绝跳转、URL、反斜杠和 NUL，通过显式映射连接。产物登记与读取共用 `normalize_artifact_path`，要求非空 Workdir 绑定和当前用户可见 runtime 根。子目录名共用单组件校验；宿主 no-follow 与远端文件脚本都将链接拒绝翻译为权限异常。目录 fd 原语保留 ELOOP 供调用方识别，普通文件边界将它映射为 PermissionError。
+
+文件工具只从注入的 Context 读取 uid、runtime scope 和 Workdir，模型 state 与 configurable 不提供身份回退。Workspace 与 provisioner backend 分别提供宿主 scope 和 runtime 路径的操作；Workdir 的转发为每次操作附加已绑定根，Viewer 只能使用该受限视图，个人工作区使用 Workspace 的 uid 根。两套文件能力保留路径和返回类型差异，共用的条目字段与排序由 workspace service 维护。
+
 Agent 的 `grep` 通过沙盒原生文件搜索 API 执行字面量匹配，未指定路径时搜索当前用户的 UserWorkspace 与已授权共享 Skill。结果包含路径、行号、文本和截断标志，并受跨根全局 `max_count` 限制；未指定限额时采用原生服务默认值（1.11.0 每根 500 条），达到限额会标记截断。默认搜索不包含隐藏文件，可通过显式 glob 选择；目录 glob 相对于搜索根。单根结构化结果超过 `SANDBOX_MAX_OUTPUT_BYTES` 时返回明确错误。
 
 搜索请求路径必须属于可读根，glob 拒绝 `..`。原生搜索允许显式指定的根内符号链接指向容器内其他位置；grep 不提供容器内部的 no-follow 隔离。用户之间的隔离由 provisioner 的 uid、挂载与独立容器边界执行，Agent 的 shell 也使用同一容器边界。宿主 Workspace 文件访问继续执行上述 no-follow 契约。
@@ -72,7 +76,7 @@ Kubernetes backend 创建 Pod 和 NodePort Service。Pod 从 User Data PVC 的 `
 
 ## 环境变量和信任边界
 
-API/worker 使用 `SANDBOX_PROVISIONER_TOKEN` 调用 provisioner。动态沙盒会收到全局 `sandbox.env` 与当前用户 Agent 环境的合并值，用户值覆盖同名全局值；这些值都可能被沙盒内代码读取和外传。provisioner token、数据库凭据、对象存储管理凭据和云平台管理员密钥不能进入这两类环境。
+API/worker 使用 `SANDBOX_PROVISIONER_TOKEN` 调用 provisioner。动态沙盒的同步创建调用 AgentEnvRepository 同步读取 PostgreSQL 的用户配置，异步 API 仓储使用同一行；SQLAlchemy 驱动前缀由 PostgreSQL 基础设施转换，查询字符串保留。缺失配置返回空环境，存储连接或查询失败明确阻止创建。动态沙盒会收到全局 `sandbox.env` 与当前用户 Agent 环境的合并值，用户值覆盖同名全局值；这些值都可能被沙盒内代码读取和外传。provisioner token、数据库凭据、对象存储管理凭据和云平台管理员密钥不能进入这两类环境。
 
 远程 Skill 安装使用不继承环境变量的一次性 Sandbox，也不挂载持久用户根。Skill 文件是只读的，但其中脚本仍可能被执行；脚本如需写文件，应写入当前 Project Workdir 或 User Data。
 

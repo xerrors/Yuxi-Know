@@ -8,7 +8,7 @@ from sqlalchemy import text
 
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
-from yuxi.modules.agents.repositories.sessions import SessionRepository
+from yuxi.modules.agents.services.memory_history import MemoryHistoryService
 from yuxi.modules.identity.preferences import UserConfig
 from yuxi.modules.workspace.filesystem import Workspace
 
@@ -110,7 +110,7 @@ async def search_thread_messages(*, uid: str, query: str, limit: int = 5) -> dic
         config = await UserConfig.load(db, normalized_uid)
         if not config.schema.enable_memory:
             raise ValueError("Memory 已关闭")
-        return await SessionRepository(db).search_memory_messages(
+        return await MemoryHistoryService(db).search_memory_messages(
             uid=normalized_uid,
             query=query,
             limit=limit,
@@ -133,7 +133,7 @@ async def read_thread_messages(
         config = await UserConfig.load(db, normalized_uid)
         if not config.schema.enable_memory:
             raise ValueError("Memory 已关闭")
-        return await SessionRepository(db).read_memory_messages(
+        return await MemoryHistoryService(db).read_memory_messages(
             uid=normalized_uid,
             thread_id=thread_id,
             message_id=message_id,

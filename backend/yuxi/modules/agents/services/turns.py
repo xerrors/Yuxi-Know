@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import uuid
 
-from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from yuxi.modules.agents.services.thread_access import require_thread
+from yuxi.modules.agents.services.cooperation_notifications import notify_user_intervention, notify_turn_state
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.manager import pg_manager
+from yuxi.modules.agents.receipts import input_intent_hash, require_idempotency_key, require_receipt_replay
+from yuxi.modules.agents.services.run_creation import create_resume_run
 from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.turns import AgentTurn
@@ -19,11 +20,11 @@ from yuxi.modules.agents.repositories.input_receipt import AgentInputReceiptRepo
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 from yuxi.modules.agents.services.scheduler import Dispatch, deliver
-from yuxi.modules.agents.services.scope import ActorScope
-from yuxi.modules.agents.services.threads import require_thread
+from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.agents.services.tracing import finish_turn_observation_if_terminal
 from yuxi.modules.agents.services.transport import publish_cancel_signals
 from yuxi.modules.workspace.services.bindings import resolve_session_workdir_binding
+from yuxi.shared.errors import InvalidInputError, InvalidOperationError, ResourceNotFoundError, StateConflictError
 
 
 async def resume_turn(
@@ -37,13 +38,13 @@ async def resume_turn(
     idempotency_key: str,
 ) -> dict:
     """一次性消费明确等待点，在同一 Turn 建立下一段恢复 Run。"""
-    _check_key(idempotency_key)
+    require_idempotency_key(idempotency_key)
     event_type = "yuxi.session.input.resume"
-    intent_hash = _hash_intent(event_type, turn_id, waitpoint_id, response)
+    intent_hash = input_intent_hash(event_type, turn_id, waitpoint_id, response)
     receipt_repo = AgentInputReceiptRepository(db)
     existing = await receipt_repo.get_for_scope(uid=scope.uid, app_id=scope.app_id, thread_id=thread_id, idempotency_key=idempotency_key)
     if existing is not None:
-        _require_replay(existing, event_type, intent_hash)
+        require_receipt_replay(existing, event_type, intent_hash)
         return _accepted(existing)
 
     agent_session = await require_thread(db=db, scope=scope, thread_id=thread_id)
@@ -62,34 +63,35 @@ async def resume_turn(
         )
     )
     if agent is None:
-        raise HTTPException(status_code=404, detail="Agent 不可访问")
+        raise ResourceNotFoundError("Agent 不可访问")
     agent_session = await require_thread(db=db, scope=scope, thread_id=thread_id, lock=True)
     if agent_session.status != "active":
-        raise HTTPException(status_code=409, detail="Thread 已归档")
+        raise StateConflictError("Thread 已归档")
     turn_repo = AgentTurnRepository(db)
     turn = await turn_repo.get_for_scope(turn_id=turn_id, thread_id=thread_id, uid=scope.uid, app_id=scope.app_id, for_update=True)
     if turn is None:
-        raise HTTPException(status_code=404, detail="Turn 不存在")
+        raise ResourceNotFoundError("Turn 不存在")
     existing = await receipt_repo.get_for_scope(uid=scope.uid, app_id=scope.app_id, thread_id=thread_id, idempotency_key=idempotency_key)
     if existing is not None:
-        _require_replay(existing, event_type, intent_hash)
+        require_receipt_replay(existing, event_type, intent_hash)
         return _accepted(existing)
     waitpoint = turn.waitpoint
     if turn.status != "waiting" or not waitpoint or waitpoint.get("id") != waitpoint_id:
-        raise HTTPException(status_code=409, detail="等待点已变化或已被消费")
+        raise StateConflictError("等待点已变化或已被消费")
     previous = await AgentRunRepository(db).get_run(turn.current_run_id)
     if previous is None or previous.status != "interrupted" or waitpoint.get("run_id") != previous.id:
-        raise HTTPException(status_code=409, detail="等待点与 interrupted Run 不一致")
+        raise StateConflictError("等待点与 interrupted Run 不一致")
     resume_value = _validate_resume_response(waitpoint, response)
     binding = await resolve_session_workdir_binding(agent_session=agent_session, uid=scope.uid, db=db)
 
-    run_id = str(uuid.uuid4())
-    message = Message(
-        session_record_id=agent_session.id,
-        role="user",
-        content=json.dumps(response, ensure_ascii=False),
-        message_type="resume",
-        extra_metadata={
+    run = await create_resume_run(
+        db=db,
+        agent_session=agent_session,
+        turn=turn,
+        previous=previous,
+        api_key_id=scope.api_key_id,
+        response=response,
+        metadata={
             "resume": resume_value,
             "waitpoint_id": waitpoint_id,
             "rejected_tool_calls": [
@@ -98,33 +100,8 @@ async def resume_turn(
                 if decision["type"] == "reject"
             ],
         },
-        delivery_status="dispatched",
-        turn_id=turn.id,
-        run_id=run_id,
     )
-    db.add(message)
-    await db.flush()
-    await AgentRunRepository(db).create_run(
-        run_id=run_id,
-        thread_id=thread_id,
-        runtime_scope_id=previous.runtime_scope_id,
-        agent_slug=previous.agent_slug,
-        uid=scope.uid,
-        turn_id=turn.id,
-        app_id=scope.app_id,
-        api_key_id=scope.api_key_id,
-        input_payload=previous.input_payload or {},
-        source=previous.source,
-        channel=previous.channel,
-        external_id=previous.external_id,
-        origin_metadata=previous.origin_metadata or {},
-        session_record_id=agent_session.id,
-        resume_from_run_id=previous.id,
-        run_type="resume",
-        created_by_run_id=previous.created_by_run_id,
-    )
-    await AgentRunRepository(db).set_input_message(run_id, message.id)
-    await turn_repo.set_current(turn, run_id=run_id)
+    run_id = run.id
     receipt = await receipt_repo.create(
         receipt_id=str(uuid.uuid4()),
         idempotency_key=idempotency_key,
@@ -136,7 +113,6 @@ async def resume_turn(
         turn_id=turn.id,
         run_id=run_id,
     )
-    from yuxi.modules.agents.services.cooperation import notify_user_intervention
 
     await notify_user_intervention(db, agent_session, key=receipt.id, action="resume")
     await db.commit()
@@ -155,19 +131,19 @@ async def cancel_turn(
     notify_parent: bool = True,
 ) -> dict:
     """取消指定轮次，保留已产生副作用与待消费输入。"""
-    _check_key(idempotency_key)
+    require_idempotency_key(idempotency_key)
     event_type = "agent.session.input.cancel"
-    intent_hash = _hash_intent(event_type, turn_id, expected_run_id)
+    intent_hash = input_intent_hash(event_type, turn_id, expected_run_id)
     receipt_repo = AgentInputReceiptRepository(db)
     existing = await receipt_repo.get_for_scope(uid=scope.uid, app_id=scope.app_id, thread_id=thread_id, idempotency_key=idempotency_key)
     if existing is not None:
-        _require_replay(existing, event_type, intent_hash)
+        require_receipt_replay(existing, event_type, intent_hash)
         return _accepted(existing)
 
     agent_session = await require_thread(db=db, scope=scope, thread_id=thread_id, lock=True)
     existing = await receipt_repo.get_for_scope(uid=scope.uid, app_id=scope.app_id, thread_id=thread_id, idempotency_key=idempotency_key)
     if existing is not None:
-        _require_replay(existing, event_type, intent_hash)
+        require_receipt_replay(existing, event_type, intent_hash)
         return _accepted(existing)
     turn_repo = AgentTurnRepository(db)
     turn = (
@@ -176,11 +152,11 @@ async def cancel_turn(
         else await turn_repo.lock_active_for_thread(thread_id=thread_id, uid=scope.uid, app_id=scope.app_id)
     )
     if turn is None:
-        raise HTTPException(status_code=404, detail="Turn 不存在")
+        raise ResourceNotFoundError("Turn 不存在")
     if expected_run_id is not None and turn.current_run_id != expected_run_id:
-        raise HTTPException(status_code=409, detail="当前 Run 已变化")
+        raise StateConflictError("当前 Run 已变化")
     if turn.status not in {"running", "waiting", "cancelling", "cancelled"}:
-        raise HTTPException(status_code=409, detail="Turn 已结束，无法取消")
+        raise StateConflictError("Turn 已结束，无法取消")
 
     cancelled_run_ids: list[str] = []
     waiting_cleanup = False
@@ -203,7 +179,7 @@ async def cancel_turn(
                 await turn_repo.set_terminal(turn, status="cancelled")
                 terminal_changed = True
         elif run.status != "interrupted" or not waiting_cleanup:
-            raise HTTPException(status_code=409, detail="当前 Run 已结束，取消目标已变化")
+            raise StateConflictError("当前 Run 已结束，取消目标已变化")
 
     receipt = await receipt_repo.create(
         receipt_id=str(uuid.uuid4()),
@@ -216,7 +192,6 @@ async def cancel_turn(
         turn_id=turn.id,
         run_id=turn.current_run_id,
     )
-    from yuxi.modules.agents.services.cooperation import notify_turn_state, notify_user_intervention
 
     if terminal_changed:
         await notify_turn_state(db, run)
@@ -242,7 +217,7 @@ async def get_turn_snapshot(*, db: AsyncSession, scope: ActorScope, thread_id: s
     turn_repo = AgentTurnRepository(db)
     turn = await turn_repo.get_for_scope(turn_id=turn_id, thread_id=thread_id, uid=scope.uid, app_id=scope.app_id)
     if turn is None:
-        raise HTTPException(status_code=404, detail="Turn 不存在")
+        raise ResourceNotFoundError("Turn 不存在")
     from yuxi.modules.agents.repositories.input import AgentInputRepository
     from yuxi.modules.agents.services.public_items import serialize_public_run
 
@@ -324,7 +299,7 @@ async def list_turn_page(
     try:
         rows = await repo.list_page(thread_id=thread_id, uid=scope.uid, app_id=scope.app_id, after=after, limit=limit, order=order)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise InvalidOperationError(str(exc)) from exc
     starts = await repo.get_start_times(turn_ids=[turn.id for turn, _run in rows[:limit]], uid=scope.uid, app_id=scope.app_id)
     from yuxi.modules.agents.services.public_resources import turn_core
 
@@ -369,7 +344,6 @@ async def settle_waiting_cancel(*, thread_id: str, turn_id: str, uid: str, app_i
         if not agent_session.queue_paused:
             raise ValueError("等待取消未保持队列暂停")
         await AgentTurnRepository(db).set_terminal(turn, status="cancelled")
-        from yuxi.modules.agents.services.cooperation import notify_turn_state
 
         await notify_turn_state(db, run)
     await finish_turn_observation_if_terminal(turn_id)
@@ -410,7 +384,6 @@ async def reconcile_cancelling_turns() -> list[str]:
                     )
                     if turn is not None and turn.status == "cancelling":
                         await AgentTurnRepository(db).set_terminal(turn, status="cancelled")
-                        from yuxi.modules.agents.services.cooperation import notify_turn_state
 
                         await notify_turn_state(db, run)
                         settled.append(candidate.id)
@@ -466,51 +439,33 @@ async def _clear_waitpoint_checkpoint(run: AgentRun) -> None:
 def _validate_resume_response(waitpoint: dict, response: dict) -> dict:
     """将结构化回答或审批核对为 LangGraph resume payload。"""
     if not isinstance(response, dict):
-        raise HTTPException(status_code=422, detail="恢复响应必须是对象")
+        raise InvalidInputError("恢复响应必须是对象")
     if waitpoint["kind"] == "answer":
         if response.get("type") != "answer" or not isinstance(response.get("answers"), list):
-            raise HTTPException(status_code=422, detail="等待点需要 answer 响应")
+            raise InvalidInputError("等待点需要 answer 响应")
         questions = waitpoint.get("questions") or []
         answers = response["answers"]
         expected_ids = [question.get("question_id") for question in questions]
         received_ids = [item.get("question_id") for item in answers if isinstance(item, dict)]
         if len(answers) != len(questions) or received_ids != expected_ids:
-            raise HTTPException(status_code=422, detail="回答必须覆盖等待点全部问题并保持顺序")
+            raise InvalidInputError("回答必须覆盖等待点全部问题并保持顺序")
         if any(not isinstance(item.get("answer"), (str, list, dict)) for item in answers):
-            raise HTTPException(status_code=422, detail="回答内容类型无效")
+            raise InvalidInputError("回答内容类型无效")
         return {item["question_id"]: item["answer"] for item in answers}
 
     if waitpoint["kind"] == "approval":
         if response.get("type") != "approval" or not isinstance(response.get("decisions"), list):
-            raise HTTPException(status_code=422, detail="等待点需要 approval 响应")
+            raise InvalidInputError("等待点需要 approval 响应")
         calls = waitpoint.get("calls") or []
         decisions = response["decisions"]
         received_ids = [item.get("call_id") for item in decisions if isinstance(item, dict)]
         if len(decisions) != len(calls) or received_ids != [call.get("call_id") for call in calls]:
-            raise HTTPException(status_code=422, detail="审批必须覆盖等待点全部调用并保持顺序")
+            raise InvalidInputError("审批必须覆盖等待点全部调用并保持顺序")
         if any(item.get("decision") not in call.get("allowed_decisions", []) for item, call in zip(decisions, calls)):
-            raise HTTPException(status_code=422, detail="审批决定不在允许范围内")
+            raise InvalidInputError("审批决定不在允许范围内")
         return {"decisions": [{"type": item["decision"]} for item in decisions]}
 
-    raise HTTPException(status_code=409, detail="等待点类型无效")
-
-
-def _check_key(key: str) -> None:
-    """在控制边界校验 Idempotency-Key。"""
-    if not isinstance(key, str) or not 1 <= len(key) <= 128:
-        raise HTTPException(status_code=422, detail="Idempotency-Key 长度必须为 1 至 128")
-
-
-def _hash_intent(*parts) -> str:
-    """为等待点或取消命令生成稳定意图指纹。"""
-    value = json.dumps(parts, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
-    return hashlib.sha256(value.encode()).hexdigest()
-
-
-def _require_replay(receipt, event_type: str, intent_hash: str) -> None:
-    """只允许同一命令和相同目标重放。"""
-    if receipt.event_type != event_type or receipt.intent_hash != intent_hash:
-        raise HTTPException(status_code=409, detail="Idempotency-Key 已用于其他输入")
+    raise StateConflictError("等待点类型无效")
 
 
 def _accepted(receipt) -> dict:

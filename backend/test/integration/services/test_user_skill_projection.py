@@ -16,7 +16,7 @@ from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.extensions.skills.models import Skill
 from yuxi.modules.identity.models import User
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
+pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
 
 async def _wait_for_advisory_waiter(session_factory, lock_identity) -> bool:

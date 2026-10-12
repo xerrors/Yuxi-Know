@@ -4,14 +4,13 @@ import json
 import textwrap
 from typing import Any
 
-from fastapi import HTTPException
-
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.modules.knowledge.factory import KnowledgeBaseFactory
 from yuxi.modules.knowledge.repositories.bases import KnowledgeBaseRepository
 from yuxi.modules.knowledge.runtime import knowledge_base
 from yuxi.modules.models import select_model
 from yuxi.modules.system.options import system_options
+from yuxi.shared.errors import InvalidOperationError, OperationFailedError, ResourceNotFoundError
 
 SAMPLE_QUESTIONS_SYSTEM_PROMPT = """你是一个专业的知识库问答测试专家。
 
@@ -84,16 +83,16 @@ def parse_sample_questions_content(content: str) -> list[str]:
 async def generate_knowledge_base_sample_questions(kb_id: str, count: int = 10) -> dict[str, Any]:
     kb_info = await knowledge_base.get_knowledge_base_info(kb_id, include_files=True)
     if not kb_info:
-        raise HTTPException(status_code=404, detail=f"知识库 {kb_id} 不存在")
+        raise ResourceNotFoundError(f"知识库 {kb_id} 不存在")
 
     kb_type = kb_info.kb_type.lower()
     if not KnowledgeBaseFactory.get_kb_class(kb_type).supports_documents:
-        raise HTTPException(status_code=400, detail=f"{kb_info.name or kb_type} 不支持基于文件生成测试问题")
+        raise InvalidOperationError(f"{kb_info.name or kb_type} 不支持基于文件生成测试问题")
 
     name = kb_info.name
     all_files = kb_info.files or {}
     if not all_files:
-        raise HTTPException(status_code=400, detail="知识库中没有文件")
+        raise InvalidOperationError("知识库中没有文件")
 
     files_info = build_sample_question_file_list(all_files)
     logger.info(f"开始生成知识库问题，知识库: {name}, 文件数量: {len(files_info)}, 问题数量: {count}")
@@ -110,13 +109,13 @@ async def generate_knowledge_base_sample_questions(kb_id: str, count: int = 10) 
         questions = parse_sample_questions_content(content)
     except (json.JSONDecodeError, ValueError) as e:
         logger.error(f"AI返回的JSON解析失败: {e}, 原始内容: {content}")
-        raise HTTPException(status_code=500, detail=f"AI返回格式错误: {str(e)}") from e
+        raise OperationFailedError(f"AI返回格式错误: {str(e)}") from e
 
     logger.info(f"成功生成{len(questions)}个问题")
 
     saved = await KnowledgeBaseRepository().update(kb_id, {"sample_questions": questions})
     if saved is None:
-        raise HTTPException(status_code=404, detail=f"知识库 {kb_id} 不存在")
+        raise ResourceNotFoundError(f"知识库 {kb_id} 不存在")
     logger.info(f"成功保存 {len(questions)} 个问题到知识库 {kb_id}")
 
     return {
@@ -131,7 +130,7 @@ async def generate_knowledge_base_sample_questions(kb_id: str, count: int = 10) 
 async def get_knowledge_base_sample_questions(kb_id: str) -> dict[str, Any]:
     kb = await KnowledgeBaseRepository().get_by_kb_id(kb_id)
     if kb is None:
-        raise HTTPException(status_code=404, detail=f"知识库 {kb_id} 不存在")
+        raise ResourceNotFoundError(f"知识库 {kb_id} 不存在")
 
     questions = kb.sample_questions or []
     return {

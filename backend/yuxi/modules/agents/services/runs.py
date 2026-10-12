@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass
 
-from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from yuxi.modules.agents.services.cooperation_notifications import notify_turn_state
+from yuxi.modules.agents.services.run_creation import create_turn_run
 from yuxi.modules.agents.models.runs import AgentRun
+from yuxi.modules.agents.models.inputs import AgentInput
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.modules.agents.repositories.attachments import AttachmentRepository
@@ -16,7 +17,10 @@ from yuxi.modules.agents.repositories.input import AgentInputRepository
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
-from yuxi.modules.agents.services.scope import ActorScope
+from yuxi.modules.agents.scope import ActorScope
+from yuxi.modules.agents.services.scheduler import Dispatch
+from yuxi.modules.workspace.services.bindings import resolve_session_workdir_binding
+from yuxi.shared.errors import ResourceNotFoundError
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,7 +29,7 @@ class RunSettlement:
 
     status: str
     changed: bool
-    next_run_id: str | None = None
+    next_dispatch: Dispatch | None = None
 
 
 async def should_yield_for_steer(run_id: str) -> bool:
@@ -55,6 +59,9 @@ async def settle_checkpoint(
     *,
     db: AsyncSession,
     run: AgentRun,
+    agent_session: Session,
+    turn: AgentTurn,
+    pending_steer: AgentInput | None,
     worker_id: str | None,
     status: str,
     token_usage: dict | None,
@@ -62,35 +69,20 @@ async def settle_checkpoint(
     error_type: str | None = None,
     error_message: str | None = None,
 ) -> RunSettlement:
-    """在已锁 Thread 的输出事务内决定 yielded、waiting 或整轮终态。"""
+    """消费同事务已锁的 Session/Turn 和 steer 裁决，更新持久终态。"""
     turn_repo = AgentTurnRepository(db)
-    turn = await turn_repo.get_for_scope(
-        turn_id=run.turn_id,
-        thread_id=run.thread_id,
-        uid=run.uid,
-        app_id=run.app_id,
-        for_update=True,
-    )
-    if turn is None or turn.current_run_id != run.id:
-        raise ValueError("Run 不是目标 Turn 的当前执行段")
-    input_repo = AgentInputRepository(db)
     run_repo = AgentRunRepository(db)
-    agent_session = await SessionRepository(db).get_session_by_thread_id(run.thread_id)
-    if agent_session is None or agent_session.uid != run.uid or agent_session.app_id != run.app_id:
+    if turn.current_run_id != run.id:
+        raise ValueError("Run 不是目标 Turn 的当前执行段")
+    if agent_session.uid != run.uid or agent_session.app_id != run.app_id:
         raise ValueError("Run 的 Thread 归属不一致")
 
-    if status == "completed" and turn.status == "running" and not agent_session.queue_paused:
-        pending = await input_repo.get_pending_steer(
-            thread_id=run.thread_id,
-            uid=run.uid,
-            app_id=run.app_id,
-        )
-        if pending is not None and not await AttachmentRepository(db).has_unready(pending.id):
-            terminal, changed = await run_repo.set_terminal_status(run.id, status="yielded", token_usage=token_usage, worker_id=worker_id)
-            if terminal is None or not changed:
-                raise ValueError("Steer 接管前当前 Run 所有权已失效")
-            next_run_id = await _consume_steer(db=db, agent_session=agent_session, turn=turn, previous=run, pending=pending)
-            return RunSettlement(status="yielded", changed=True, next_run_id=next_run_id)
+    if status == "completed" and pending_steer is not None:
+        terminal, changed = await run_repo.set_terminal_status(run.id, status="yielded", token_usage=token_usage, worker_id=worker_id)
+        if terminal is None or not changed:
+            raise ValueError("Steer 接管前当前 Run 所有权已失效")
+        next_dispatch = await _consume_steer(db=db, agent_session=agent_session, turn=turn, previous=run, pending=pending_steer)
+        return RunSettlement(status="yielded", changed=True, next_dispatch=next_dispatch)
 
     if status == "interrupted" and turn.status == "running":
         if not waitpoint or waitpoint.get("run_id") != run.id:
@@ -106,7 +98,6 @@ async def settle_checkpoint(
         if terminal is None or not changed:
             raise ValueError("等待终态的 Run 所有权已失效")
         await turn_repo.set_waiting(turn, run_id=run.id, waitpoint=waitpoint)
-        from yuxi.modules.agents.services.cooperation import notify_turn_state
 
         await notify_turn_state(db, run)
         return RunSettlement(status="interrupted", changed=True)
@@ -116,7 +107,6 @@ async def settle_checkpoint(
         if terminal is None or not changed:
             raise ValueError("完成终态的 Run 所有权已失效")
         await turn_repo.set_terminal(turn, status="completed", result_run_id=run.id)
-        from yuxi.modules.agents.services.cooperation import notify_turn_state
 
         await notify_turn_state(db, run)
         return RunSettlement(status="completed", changed=True)
@@ -137,7 +127,6 @@ async def settle_checkpoint(
             await turn_repo.set_terminal(turn, status="failed")
         elif turn.status != "cancelling":
             await turn_repo.set_cancelling(turn)
-        from yuxi.modules.agents.services.cooperation import notify_turn_state
 
         await notify_turn_state(db, run)
         return RunSettlement(status=status, changed=True)
@@ -145,14 +134,28 @@ async def settle_checkpoint(
     raise ValueError(f"Turn 状态 {turn.status} 不能接受 Run 终态 {status}")
 
 
+async def lock_ready_steer(db: AsyncSession, *, agent_session: Session, turn: AgentTurn) -> AgentInput | None:
+    """在 Thread/Turn 锁之后锁定 steer，裁决附件就绪，再允许取得 Run 锁。"""
+    if turn.status != "running" or agent_session.queue_paused:
+        return None
+    pending = await AgentInputRepository(db).get_pending_steer(
+        thread_id=agent_session.thread_id,
+        uid=agent_session.uid,
+        app_id=agent_session.app_id,
+    )
+    if pending is None or await AttachmentRepository(db).has_unready(pending.id):
+        return None
+    return pending
+
+
 async def get_run_snapshot(*, db: AsyncSession, scope: ActorScope, thread_id: str, run_id: str) -> dict:
     """按 Thread/Turn/APP 归属读取执行段及持久输出。"""
     agent_session = await SessionRepository(db).get_session_by_thread_id(thread_id)
     if agent_session is None or agent_session.uid != scope.uid or agent_session.app_id != scope.app_id:
-        raise HTTPException(status_code=404, detail="Run 不存在")
+        raise ResourceNotFoundError("Run 不存在")
     run = await AgentRunRepository(db).get_run(run_id)
     if run is None or run.uid != scope.uid or run.app_id != scope.app_id or run.thread_id != thread_id:
-        raise HTTPException(status_code=404, detail="Run 不存在")
+        raise ResourceNotFoundError("Run 不存在")
     turn = await AgentTurnRepository(db).get_for_scope(
         turn_id=run.turn_id,
         thread_id=run.thread_id,
@@ -160,7 +163,7 @@ async def get_run_snapshot(*, db: AsyncSession, scope: ActorScope, thread_id: st
         app_id=scope.app_id,
     )
     if turn is None:
-        raise HTTPException(status_code=404, detail="Run 不存在")
+        raise ResourceNotFoundError("Run 不存在")
     from yuxi.modules.agents.services.public_items import serialize_public_run
 
     input_ids = await AgentInputRepository(db).input_ids_for_runs([run.id])
@@ -185,44 +188,17 @@ async def get_run_snapshot(*, db: AsyncSession, scope: ActorScope, thread_id: st
     return result
 
 
-async def get_run_langfuse_link(*, db: AsyncSession, scope: ActorScope, thread_id: str, run_id: str) -> dict:
-    """按根 Thread 作用域解析同一 Turn 的 Langfuse trace 链接。"""
-    snapshot = await get_run_snapshot(db=db, scope=scope, thread_id=thread_id, run_id=run_id)
-    if not snapshot.get("langfuse_trace_id"):
-        return {"run_id": run_id, "available": False, "reason": "trace_not_available"}
-    url = snapshot.get("langfuse_url")
-    if not url:
-        return {"run_id": run_id, "available": False, "reason": "langfuse_unavailable"}
-    return {"run_id": run_id, "available": True, "url": url}
-
-
-async def _consume_steer(*, db: AsyncSession, agent_session: Session, turn: AgentTurn, previous: AgentRun, pending) -> str:
+async def _consume_steer(*, db: AsyncSession, agent_session: Session, turn: AgentTurn, previous: AgentRun, pending) -> Dispatch:
     """消费 Thread 优先批次，在当前 Turn 建立下一执行段。"""
     input_repo = AgentInputRepository(db)
     batch = await input_repo.ready_batch(thread_id=previous.thread_id, uid=previous.uid, app_id=previous.app_id)
     if not batch or batch[0].id != pending.id or batch[0].kind != "steer":
         raise ValueError("Steer 队头已变化或尚未就绪")
-    run_id = str(uuid.uuid4())
-    await AgentRunRepository(db).create_run(
-        run_id=run_id,
-        thread_id=agent_session.thread_id,
-        runtime_scope_id=previous.runtime_scope_id,
-        agent_slug=previous.agent_slug,
-        uid=previous.uid,
-        turn_id=turn.id,
-        app_id=previous.app_id,
-        api_key_id=pending.api_key_id,
-        input_payload=previous.input_payload or {},
-        source=pending.source,
-        channel=pending.channel,
-        external_id=pending.external_id,
-        origin_metadata=pending.origin_metadata or {},
-        session_record_id=agent_session.id,
-        resume_from_run_id=previous.id,
-        run_type="chat",
-        created_by_run_id=previous.created_by_run_id,
+    run = await create_turn_run(
+        db=db, agent_session=agent_session, turn=turn, source=pending, previous=previous, api_key_id=pending.api_key_id
     )
-    await AgentTurnRepository(db).set_current(turn, run_id=run_id)
+    run_id = run.id
     messages = await input_repo.consume(inputs=batch, turn_id=turn.id, run_id=run_id)
     await AgentRunRepository(db).set_input_message(run_id, messages[0].id)
-    return run_id
+    binding = await resolve_session_workdir_binding(agent_session=agent_session, uid=previous.uid, db=db)
+    return Dispatch(run_id=run_id, binding=binding)

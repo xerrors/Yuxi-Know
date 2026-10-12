@@ -7,8 +7,6 @@ import os
 import tempfile
 from pathlib import PurePosixPath
 
-from fastapi import HTTPException
-
 from yuxi.infrastructure.file_preview import preview_too_large
 from yuxi.infrastructure.filesystem import await_io
 from yuxi.infrastructure.office_conversion import OfficeConversionError
@@ -17,6 +15,8 @@ from yuxi.modules.workspace.errors import FileTransferLimitError
 from yuxi.modules.workspace.preview import preview_workspace_file
 from yuxi.modules.workspace.services.bindings import AuthorizedWorkdir, resolve_authorized_workdir
 from yuxi.shared.datetime import utc_isoformat_from_timestamp
+from yuxi.modules.workspace.services.file_entries import file_entry, sort_file_entries
+from yuxi.shared.errors import ContentTooLargeError, InvalidOperationError, PermissionDeniedError, ResourceNotFoundError, StateConflictError
 from yuxi.shared.files import MAX_FILE_PREVIEW_BYTES, FileInput, PreparedFile, PreviewResult, detect_media_type
 
 SEARCH_MAX_RESULTS = 100
@@ -36,27 +36,21 @@ async def _viewer_state(*, thread_id: str, current_user, db) -> AuthorizedWorkdi
 def _validate_viewer_path(access: AuthorizedWorkdir, path: str) -> None:
     """Viewer 只接受 Workdir scope，不接受 Backend runtime 绝对路径。"""
     if is_runtime_path(path):
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise PermissionDeniedError("Access denied")
     try:
         access.workdir.resolve_path(path)
     except ValueError as exc:
-        raise HTTPException(status_code=403, detail="Access denied") from exc
+        raise PermissionDeniedError("Access denied") from exc
 
 
 def _entry(access: AuthorizedWorkdir, parent_scope: str, item: dict) -> dict:
     scope = f"{parent_scope.rstrip('/')}/{item['name']}"
     if not scope.startswith("/"):
         scope = f"/{scope}"
-    is_dir = bool(item.get("is_dir"))
+    entry = file_entry(scope, item)
     runtime_path = runtime_path_for_workdir_scope(access.workdir_path, scope)
-    return {
-        "path": f"{scope}/" if is_dir else scope,
-        "name": str(item["name"]),
-        "is_dir": is_dir,
-        "size": int(item.get("size") or 0),
-        "modified_at": utc_isoformat_from_timestamp(float(item.get("modified_at") or 0)) or "",
-        "artifact_url": (None if is_dir else f"/api/v1/agents/sessions/{access.thread_id}/artifacts/{runtime_path.lstrip('/')}"),
-    }
+    entry["artifact_url"] = None if entry["is_dir"] else f"/api/v1/agents/sessions/{access.thread_id}/artifacts/{runtime_path.lstrip('/')}"
+    return entry
 
 
 async def _list_directory(access: AuthorizedWorkdir, scope: str) -> list[dict]:
@@ -66,13 +60,10 @@ async def _list_directory(access: AuthorizedWorkdir, scope: str) -> list[dict]:
             scope,
         )
     except PermissionError as exc:
-        raise HTTPException(status_code=403, detail="Access denied") from exc
+        raise PermissionDeniedError("Access denied") from exc
     except (FileNotFoundError, NotADirectoryError, ValueError) as exc:
-        raise HTTPException(status_code=404, detail="目录不存在") from exc
-    return sorted(
-        (_entry(access, scope, item) for item in items),
-        key=lambda item: (not item["is_dir"], item["name"].lower()),
-    )
+        raise ResourceNotFoundError("目录不存在") from exc
+    return sort_file_entries(_entry(access, scope, item) for item in items)
 
 
 async def list_viewer_filesystem_tree(*, thread_id: str, path: str, current_user, db) -> dict:
@@ -96,7 +87,7 @@ async def search_viewer_files(*, thread_id: str, query: str, current_user, db) -
             max_directories=SEARCH_MAX_DIRECTORIES,
         )
     except (FileNotFoundError, NotADirectoryError, PermissionError, ValueError) as exc:
-        raise HTTPException(status_code=404, detail="目录不存在") from exc
+        raise ResourceNotFoundError("目录不存在") from exc
     entries = []
     for item in matches:
         parent = str(PurePosixPath(str(item["path"])).parent)
@@ -129,13 +120,13 @@ async def read_viewer_file_content(*, thread_id: str, path: str, current_user, d
             MAX_FILE_PREVIEW_BYTES,
         )
     except PermissionError as exc:
-        raise HTTPException(status_code=403, detail="Access denied") from exc
+        raise PermissionDeniedError("Access denied") from exc
     except IsADirectoryError as exc:
-        raise HTTPException(status_code=400, detail="路径不是普通文件") from exc
+        raise InvalidOperationError("路径不是普通文件") from exc
     except FileTransferLimitError:
         return preview_too_large().payload()
     except (FileNotFoundError, NotADirectoryError, ValueError) as exc:
-        raise HTTPException(status_code=404, detail="文件不存在") from exc
+        raise ResourceNotFoundError("文件不存在") from exc
     try:
         return await preview_workspace_file(
             path,
@@ -143,7 +134,7 @@ async def read_viewer_file_content(*, thread_id: str, path: str, current_user, d
             office_cache_key=f"viewer:{access.uid}:{access.workdir_path}:{path}",
         )
     except OfficeConversionError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise InvalidOperationError(str(exc)) from exc
 
 
 async def download_viewer_file(*, thread_id: str, path: str, current_user, db) -> PreparedFile:
@@ -153,13 +144,13 @@ async def download_viewer_file(*, thread_id: str, path: str, current_user, db) -
     try:
         temp_path = await _download_to_temp(access.workdir, path, MAX_VIEWER_DOWNLOAD_BYTES)
     except PermissionError as exc:
-        raise HTTPException(status_code=403, detail="Access denied") from exc
+        raise PermissionDeniedError("Access denied") from exc
     except IsADirectoryError as exc:
-        raise HTTPException(status_code=400, detail="路径不是普通文件") from exc
+        raise InvalidOperationError("路径不是普通文件") from exc
     except FileTransferLimitError as exc:
-        raise HTTPException(status_code=413, detail="文件超过下载大小限制") from exc
+        raise ContentTooLargeError("文件超过下载大小限制") from exc
     except (FileNotFoundError, NotADirectoryError, ValueError) as exc:
-        raise HTTPException(status_code=404, detail="文件不存在") from exc
+        raise ResourceNotFoundError("文件不存在") from exc
     file_name = PurePosixPath(path).name or "download"
     return PreparedFile(
         temp_path,
@@ -175,11 +166,11 @@ async def delete_viewer_file(*, thread_id: str, path: str, current_user, db) -> 
     normalized = PurePosixPath(path).as_posix()
     _validate_viewer_path(access, normalized)
     if normalized == "/":
-        raise HTTPException(status_code=400, detail="Project Workdir 根目录不允许删除")
+        raise InvalidOperationError("Project Workdir 根目录不允许删除")
     try:
         await asyncio.to_thread(access.workdir.delete, normalized)
     except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail="文件不存在") from exc
+        raise ResourceNotFoundError("文件不存在") from exc
     return {"success": True, "path": normalized}
 
 
@@ -194,7 +185,7 @@ async def create_viewer_directory(*, thread_id: str, parent_path: str, name: str
             str(name or "").strip(),
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise InvalidOperationError(str(exc)) from exc
     return {
         "entry": {
             "path": f"{parent_path.rstrip('/')}/{str(name or '').strip()}/",
@@ -212,9 +203,9 @@ async def upload_viewer_files(*, thread_id: str, parent_path: str, files: list[F
     _validate_viewer_path(access, parent_path)
     file_names = [PurePosixPath(str(upload.filename or "")).name for upload in files]
     if any(not name or name in {".", ".."} for name in file_names):
-        raise HTTPException(status_code=400, detail="无法识别的文件名")
+        raise InvalidOperationError("无法识别的文件名")
     if len(file_names) != len(set(file_names)):
-        raise HTTPException(status_code=409, detail="同一次上传不能包含重名文件")
+        raise StateConflictError("同一次上传不能包含重名文件")
     try:
         existing_names = {
             str(item["name"])
@@ -224,12 +215,12 @@ async def upload_viewer_files(*, thread_id: str, parent_path: str, files: list[F
             )
         }
     except PermissionError as exc:
-        raise HTTPException(status_code=403, detail="Access denied") from exc
+        raise PermissionDeniedError("Access denied") from exc
     except (FileNotFoundError, NotADirectoryError, ValueError) as exc:
-        raise HTTPException(status_code=404, detail="目录不存在") from exc
+        raise ResourceNotFoundError("目录不存在") from exc
     collisions = existing_names.intersection(file_names)
     if collisions:
-        raise HTTPException(status_code=409, detail=f"文件已存在: {', '.join(sorted(collisions))}")
+        raise StateConflictError(f"文件已存在: {', '.join(sorted(collisions))}")
 
     entries: list[dict] = []
     for upload, file_name in zip(files, file_names, strict=True):
@@ -245,12 +236,12 @@ async def upload_viewer_files(*, thread_id: str, parent_path: str, files: list[F
                 )
             )
         except FileTransferLimitError as exc:
-            raise HTTPException(status_code=400, detail="文件过大") from exc
+            raise InvalidOperationError("文件过大") from exc
         except FileExistsError as exc:
-            raise HTTPException(status_code=409, detail=f"文件已存在: {file_name}") from exc
+            raise StateConflictError(f"文件已存在: {file_name}") from exc
         except PermissionError as exc:
-            raise HTTPException(status_code=403, detail="Access denied") from exc
+            raise PermissionDeniedError("Access denied") from exc
         except (FileNotFoundError, NotADirectoryError) as exc:
-            raise HTTPException(status_code=404, detail="目录不存在") from exc
+            raise ResourceNotFoundError("目录不存在") from exc
         entries.append(_entry(access, parent_path, {"name": file_name, **metadata}))
     return {"entries": entries}

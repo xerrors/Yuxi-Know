@@ -3,9 +3,10 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
-from fastapi import HTTPException
+
 import yuxi.modules.schedules.service as service
 from yuxi.modules.schedules.service import next_run_at, validate_schedule
+from yuxi.shared.errors import DomainError, InvalidInputError, ResourceNotFoundError, StateConflictError
 
 
 def test_next_run_at_uses_timezone_and_returns_utc_aware_datetime():
@@ -20,10 +21,10 @@ def test_next_run_at_uses_timezone_and_returns_utc_aware_datetime():
     [("every day", "Asia/Shanghai"), ("0 9 * * * *", "Asia/Shanghai"), ("0 9 * * *", "Mars/Olympus")],
 )
 def test_validate_schedule_rejects_invalid_expression_or_timezone(expression, timezone):
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(DomainError) as exc_info:
         validate_schedule(expression, timezone)
 
-    assert exc_info.value.status_code == 422
+    assert isinstance(exc_info.value, InvalidInputError)
 
 
 def test_next_run_at_preserves_input_offset_and_crosses_daylight_saving():
@@ -41,10 +42,10 @@ def test_validate_schedule_accepts_five_field_cron_and_iana_timezone():
 
 
 def test_validate_schedule_rejects_expression_without_future_occurrence():
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(DomainError) as exc_info:
         validate_schedule("0 0 31 2 *", "UTC")
 
-    assert exc_info.value.status_code == 422
+    assert isinstance(exc_info.value, InvalidInputError)
 
 
 @pytest.mark.asyncio
@@ -59,10 +60,10 @@ async def test_validate_project_rejects_project_owned_by_another_user(monkeypatc
 
     monkeypatch.setattr(service, "ProjectRepository", ProjectRepository)
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(DomainError) as exc_info:
         await service._validate_project("project-1", SimpleNamespace(uid="user-2"), object())
 
-    assert exc_info.value.status_code == 404
+    assert isinstance(exc_info.value, ResourceNotFoundError)
 
 
 @pytest.mark.asyncio
@@ -77,10 +78,10 @@ async def test_validate_agent_rejects_agent_outside_user_visibility(monkeypatch)
 
     monkeypatch.setattr(service, "AgentRepository", AgentRepository)
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(DomainError) as exc_info:
         await service._validate_agent("private-agent", SimpleNamespace(uid="user-2"), object())
 
-    assert exc_info.value.status_code == 404
+    assert isinstance(exc_info.value, ResourceNotFoundError)
 
 
 def test_scheduled_run_model_owns_execution_configuration_snapshot():
@@ -203,7 +204,7 @@ async def test_run_now_rejects_request_id_reused_for_another_job(monkeypatch):
 
     monkeypatch.setattr(service, "ScheduledAgentRepository", lambda _db: Repository())
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(DomainError) as exc_info:
         await service.run_scheduled_job_now(
             job_id="job-2",
             request_id="manual-request-1",
@@ -211,7 +212,7 @@ async def test_run_now_rejects_request_id_reused_for_another_job(monkeypatch):
             db=object(),
         )
 
-    assert exc_info.value.status_code == 409
+    assert isinstance(exc_info.value, StateConflictError)
 
 
 @pytest.mark.asyncio

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+import json
+from collections.abc import Callable
 import time
 import uuid
 
@@ -29,3 +31,9 @@ def hash_id(prefix: str, value: object, length: int = 48) -> str:
     digest_length = max(0, length - len(prefix))
     digest = hashstr(value, length=digest_length) if digest_length else ""
     return f"{prefix}{digest}"
+
+
+def json_intent_hash(value: object, *, default: Callable[[object], object] | None = None) -> str:
+    """按既有规范 JSON 字节生成意图指纹，保留显式类型适配。"""
+    encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=default)
+    return hashlib.sha256(encoded.encode()).hexdigest()

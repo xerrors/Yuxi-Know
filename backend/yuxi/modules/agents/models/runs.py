@@ -283,20 +283,3 @@ class AgentRunAttempt(Base):
             sqlite_where=finished_at.is_(None),
         ),
     )
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "id": self.id,
-            "run_id": self.run_id,
-            "attempt_no": self.attempt_no,
-            "worker_id": self.worker_id,
-            "started_at": format_utc_datetime(self.started_at),
-            "heartbeat_at": format_utc_datetime(self.heartbeat_at),
-            "lease_expires_at": format_utc_datetime(self.lease_expires_at),
-            "finished_at": format_utc_datetime(self.finished_at),
-            "outcome": self.outcome,
-            "error_type": self.error_type,
-            "error_message": self.error_message,
-            "created_at": format_utc_datetime(self.created_at),
-            "updated_at": format_utc_datetime(self.updated_at),
-        }

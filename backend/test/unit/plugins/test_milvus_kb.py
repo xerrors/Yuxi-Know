@@ -26,7 +26,8 @@ from test.unit.support.milvus import (
     make_query_config,
 )
 
-def test_milvus_retrieval_config_exposes_graph_and_dependencies():
+def test_milvus_retrieval_config_exposes_graph_and_dependencies(monkeypatch):
+    monkeypatch.setattr(milvus_module.model_cache, "get_all_specs", lambda _type=None: [])
     options = _retrieval_config_options()
     by_key = {option["key"]: option for option in options}
 
@@ -890,7 +891,8 @@ async def test_hybrid_mode_does_not_apply_cosine_threshold_to_fusion_score():
     assert chunks[0]["hybrid_score"] == 0.1
 
 
-def test_query_params_config_uses_bm25_parameters():
+def test_query_params_config_uses_bm25_parameters(monkeypatch):
+    monkeypatch.setattr(milvus_module.model_cache, "get_all_specs", lambda _type=None: [])
     kb = MilvusKB.__new__(MilvusKB)
 
     config = kb.get_query_params_config("db")

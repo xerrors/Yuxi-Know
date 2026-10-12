@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from sqlalchemy import JSON, String, and_, case, cast, column, func, literal, or_, select, true, tuple_
+from yuxi.modules.agents.repositories.pagination import order_page
+
+from sqlalchemy import JSON, String, and_, case, cast, column, func, literal, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer, selectinload
 
@@ -225,15 +227,14 @@ class PublicItemRepository:
         )
         if turn_id is not None:
             source = source.where(Message.turn_id == turn_id)
+        anchor = None
         if after is not None:
             cursor = (await self.db.execute(source.with_only_columns(Message.id, index).where(identity == after))).one_or_none()
             if cursor is None:
                 raise ValueError("after 不是当前 Turn 的公开 item" if turn_id else "after 不是当前 Session 的公开 item")
-            position = tuple_(Message.id, index)
-            source = source.where(position > tuple_(*cursor) if order == "asc" else position < tuple_(*cursor))
-        sorting = (Message.id.asc(), index.asc()) if order == "asc" else (Message.id.desc(), index.desc())
+            anchor = tuple(cursor)
         statement = (
-            source.order_by(*sorting)
+            order_page(source, columns=(Message.id, index), anchor=anchor, order=order)
             .limit(limit + 1)
             .options(
                 defer(AgentRun.input_payload, raiseload=True),

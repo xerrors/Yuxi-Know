@@ -4,10 +4,10 @@ from types import SimpleNamespace
 from uuid import UUID
 
 import pytest
-from fastapi import HTTPException
 
 import yuxi.modules.workspace.services.projects as svc
 from yuxi.modules.workspace.paths import ensure_user_workspace, user_workspace_dir
+from yuxi.shared.errors import DomainError, InvalidInputError, InvalidOperationError, ResourceNotFoundError
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.unit]
 
@@ -144,7 +144,7 @@ async def test_implicit_project_uses_timestamped_managed_workdir(monkeypatch, tm
     [("managed", None), ("managed", "clients/acme"), ("linked", None), ("linked", "")],
 )
 async def test_manual_project_requires_selected_directory(directory_mode: str, workdir_path: str | None):
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(DomainError) as exc:
         await svc.create_project_view(
             uid="user-1",
             request_id="request-manual-without-directory",
@@ -154,8 +154,8 @@ async def test_manual_project_requires_selected_directory(directory_mode: str, w
             db=_Db(),
         )
 
-    assert exc.value.status_code == 422
-    assert exc.value.detail == "手动创建项目必须选择目录"
+    assert isinstance(exc.value, InvalidInputError)
+    assert exc.value.message == "手动创建项目必须选择目录"
 
 
 @pytest.mark.parametrize("path", ["/", "../outside", "/tmp/host"])
@@ -163,7 +163,7 @@ async def test_linked_project_rejects_root_or_outside_paths(monkeypatch, tmp_pat
     monkeypatch.setattr("yuxi.modules.workspace.paths.get_user_data_dir", lambda: tmp_path)
     ensure_user_workspace("user-1")
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(DomainError) as exc:
         await svc.create_project_view(
             uid="user-1",
             request_id=f"request-{path}",
@@ -173,7 +173,7 @@ async def test_linked_project_rejects_root_or_outside_paths(monkeypatch, tmp_pat
             db=_Db(),
         )
 
-    assert exc.value.status_code == 400
+    assert isinstance(exc.value, InvalidOperationError)
 
 
 async def test_linked_project_rejects_file_and_symlink(monkeypatch, tmp_path: Path):
@@ -186,7 +186,7 @@ async def test_linked_project_rejects_file_and_symlink(monkeypatch, tmp_path: Pa
     (workspace / "link").symlink_to(outside, target_is_directory=True)
 
     for path in ("file.txt", "link"):
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(DomainError) as exc:
             await svc.create_project_view(
                 uid="user-1",
                 request_id=f"request-{path}",
@@ -195,7 +195,7 @@ async def test_linked_project_rejects_file_and_symlink(monkeypatch, tmp_path: Pa
                 workdir_path=path,
                 db=_Db(),
             )
-        assert exc.value.status_code == 400
+        assert isinstance(exc.value, InvalidOperationError)
 
 
 async def test_history_candidates_only_expose_resolved_directory_shortcuts(monkeypatch):
@@ -297,17 +297,17 @@ async def test_rename_project_rejects_missing_or_deleted_project(monkeypatch):
 
     monkeypatch.setattr(svc, "ProjectRepository", _ProjectRepository)
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(DomainError) as exc:
         await svc.rename_project_view(uid="user-1", project_id="missing", name="New", db=_Db())
 
-    assert exc.value.status_code == 404
+    assert isinstance(exc.value, ResourceNotFoundError)
 
 
 async def test_rename_project_rejects_blank_name_before_write():
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(DomainError) as exc:
         await svc.rename_project_view(uid="user-1", project_id="project-1", name="   ", db=_Db())
 
-    assert exc.value.status_code == 422
+    assert isinstance(exc.value, InvalidInputError)
 
 
 async def test_delete_project_archives_idle_threads_in_one_commit(monkeypatch):

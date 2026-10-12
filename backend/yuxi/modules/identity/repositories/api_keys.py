@@ -1,7 +1,5 @@
 """API Key 数据访问层。"""
 
-import hashlib
-import json
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -10,6 +8,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.modules.identity.models import APIKey, User
+from yuxi.shared.hashing import json_intent_hash
 from yuxi.shared.datetime import utc_now
 
 
@@ -67,8 +66,7 @@ class APIKeyRepository:
         if access_level != "full" or app_id is not None:
             payload["access_level"] = access_level
             payload["app_id"] = app_id
-        encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
-        return hashlib.sha256(encoded).hexdigest()
+        return json_intent_hash(payload)
 
     async def list_visible(self, *, requester_user_id: int, is_superadmin: bool, skip: int, limit: int) -> tuple[list[APIKey], int]:
         """列出请求者可见的 API Key 并返回总数。"""

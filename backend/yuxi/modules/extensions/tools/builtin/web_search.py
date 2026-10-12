@@ -7,7 +7,7 @@ from langchain_core.tools import tool as langchain_tool
 from pydantic import BaseModel, Field
 
 from yuxi.infrastructure.observability.logging import logger
-from yuxi.modules.extensions.tools.registry import ToolExtraMetadata, _all_tool_instances, _extra_registry
+from yuxi.modules.extensions.tools.registry import ToolExtraMetadata, register_tool
 
 _DOUBAO_SEARCH_URL = "https://open.feedcoopapi.com/search_api/web_search"
 
@@ -155,11 +155,14 @@ def _register_web_search_tool() -> None:
     """注册配置或自动选择的网页搜索工具。"""
     provider = _resolve_web_search_provider()
     if provider is None:
+        reason = "provider_unavailable" if os.getenv("WEB_SEARCH_PROVIDER", "").strip() else "credentials_missing"
+        logger.bind(component="web_search", reason=reason, available=False).warning(
+            "component=web_search reason={} available=false 网页搜索不可用，工具未注册", reason
+        )
         return
 
     _, create_tool, display_name = _WEB_SEARCH_PROVIDERS[provider]
-    _extra_registry["web_search"] = ToolExtraMetadata(category="builtin", tags=["搜索"], display_name=display_name)
-    _all_tool_instances.append(create_tool())
+    register_tool(create_tool(), ToolExtraMetadata(category="builtin", tags=["搜索"], display_name=display_name))
 
 
 def _resolve_web_search_provider() -> str | None:
@@ -185,4 +188,7 @@ def _resolve_web_search_provider() -> str | None:
 try:
     _register_web_search_tool()
 except Exception as e:
-    logger.warning(f"Failed to register web search tool: {e}")
+    logger.bind(component="web_search", reason="registration_failed", error_type=type(e).__name__, available=False).warning(
+        "component=web_search reason=registration_failed error_type={} available=false 网页搜索注册失败，工具不可用",
+        type(e).__name__,
+    )

@@ -58,15 +58,6 @@ class UserRepository:
             raise RuntimeError("终端用户 UID 与既有用户冲突")
         return result
 
-    @asynccontextmanager
-    async def _session(self) -> AsyncIterator[AsyncSession]:
-        """复用请求会话，未注入时创建独立事务会话。"""
-        if self.db_session is not None:
-            yield self.db_session
-            return
-        async with pg_manager.get_async_session_context() as session:
-            yield session
-
     async def get_by_id(self, id: int) -> User | None:
         """根据 ID 获取用户"""
         async with self._session() as session:
@@ -139,12 +130,6 @@ class UserRepository:
             result = await session.execute(select(User).where(User.uid.in_(normalized_uids)))
             return list(result.scalars().all())
 
-    async def get_by_phone(self, phone: str) -> User | None:
-        """根据手机号获取用户"""
-        async with self._session() as session:
-            result = await session.execute(select(User).where(User.phone_number == phone))
-            return result.scalar_one_or_none()
-
     async def get_by_login_identifier(self, identifier: str) -> User | None:
         """按 uid 优先、手机号兜底查找登录用户。"""
         async with self._session() as session:
@@ -169,18 +154,6 @@ class UserRepository:
         async with self._session() as session:
             result = await session.execute(select(User).where(User.phone_number == phone, User.id != exclude_user_id))
             return result.scalar_one_or_none()
-
-    async def list_users(self, skip: int = 0, limit: int = 100, department_id: int | None = None, role: str | None = None) -> list[User]:
-        """获取有效系统用户列表，终端用户仅由管理分页显式查询。"""
-        async with self._session() as session:
-            query = select(User).where(User.is_deleted == 0, User.user_kind == "human")
-            if department_id is not None:
-                query = query.where(User.department_id == department_id)
-            if role is not None:
-                query = query.where(User.role == role)
-            query = query.order_by(User.id.asc()).offset(skip).limit(limit)
-            result = await session.execute(query)
-            return list(result.scalars().all())
 
     async def list_with_department(
         self, skip: int = 0, limit: int = 100, department_id: int | None = None, role: str | None = None
@@ -245,7 +218,7 @@ class UserRepository:
 
     async def create(self, data: dict[str, Any]) -> User:
         """创建用户"""
-        async with self._session() as session:
+        async with self._session(write=True) as session:
             user = User(**data)
             session.add(user)
             await session.flush()
@@ -254,7 +227,7 @@ class UserRepository:
 
     async def save(self, user: User, *, refresh: bool = False) -> User:
         """flush 用户实体的当前变更，事务提交由用例 owner 负责。"""
-        async with self._session() as session:
+        async with self._session(write=True) as session:
             await session.flush()
             if refresh:
                 await session.refresh(user)
@@ -262,7 +235,7 @@ class UserRepository:
 
     async def update(self, id: int, data: dict[str, Any]) -> User | None:
         """更新用户"""
-        async with self._session() as session:
+        async with self._session(write=True) as session:
             result = await session.execute(select(User).where(User.id == id, User.is_deleted == 0))
             user = result.scalar_one_or_none()
             if user is None:
@@ -273,34 +246,9 @@ class UserRepository:
             await session.flush()
         return user
 
-    async def soft_delete(self, id: int, username: str | None = None, phone_number: str | None = None) -> bool:
-        """软删除用户"""
-        async with self._session() as session:
-            if session.get_bind().dialect.name == "postgresql":
-                await session.execute(text("SELECT pg_advisory_xact_lock(1498765386)"))
-            result = await session.execute(select(User).where(User.id == id, User.is_deleted == 0).with_for_update())
-            user = result.scalar_one_or_none()
-            if user is None:
-                return False
-            await self.ensure_deletable_superadmin(session, user)
-            user.is_deleted = 1
-
-            user.deleted_at = utc_now()
-            if username:
-                import hashlib
-
-                hash_suffix = hashlib.sha256(user.uid.encode()).hexdigest()[:4]
-                user.username = f"已注销用户-{hash_suffix}"
-            if phone_number:
-                user.phone_number = None
-            await self._revoke_api_keys(session, user.id, user.deleted_at)
-            await self._delete_scheduled_jobs(session, user.uid)
-            await session.flush()
-        return True
-
     async def delete_for_admin(self, user: User) -> None:
         """软删除用户并在同一事务中不可恢复地撤销其 API Key。"""
-        async with self._session() as session:
+        async with self._session(write=True) as session:
             await self.ensure_deletable_superadmin(session, user)
             user.is_deleted = 1
             user.deleted_at = utc_now()
@@ -314,7 +262,7 @@ class UserRepository:
 
     async def lock_identity_changes(self) -> None:
         """删除身份前按共同顺序取得事务锁。"""
-        async with self._session() as session:
+        async with self._session(write=True) as session:
             if session.get_bind().dialect.name == "postgresql":
                 await session.execute(text("SELECT pg_advisory_xact_lock(1498765386)"))
 
@@ -362,11 +310,13 @@ class UserRepository:
             result = await session.execute(select(User.uid))
             return [uid for (uid,) in result.all()]
 
-    async def get_admin_count_in_department(self, department_id: int, exclude_user_id: int | None = None) -> int:
-        """统计部门中管理员数量"""
-        async with self._session() as session:
-            query = select(func.count(User.id)).where(User.department_id == department_id, User.role == "admin", User.is_deleted == 0)
-            if exclude_user_id is not None:
-                query = query.where(User.id != exclude_user_id)
-            result = await session.execute(query)
-            return result.scalar() or 0
+    @asynccontextmanager
+    async def _session(self, *, write: bool = False) -> AsyncIterator[AsyncSession]:
+        """写入要求调用方事务，独立会话只用于读取。"""
+        if write and self.db_session is None:
+            raise RuntimeError("用户写入需要调用方事务")
+        if self.db_session is not None:
+            yield self.db_session
+            return
+        async with pg_manager.get_async_session_context() as session:
+            yield session

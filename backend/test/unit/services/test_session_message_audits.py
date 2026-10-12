@@ -3,8 +3,8 @@ from types import SimpleNamespace
 
 import pytest
 
-import yuxi.modules.agents.services.messages as messages
-from yuxi.modules.agents.services.scope import ActorScope
+import yuxi.modules.agents.services.message_audits as messages
+from yuxi.modules.agents.scope import ActorScope
 
 
 @pytest.mark.asyncio
@@ -89,7 +89,8 @@ async def test_get_thread_message_audits_view_serializes_model_and_tool_facts(mo
             assert limit == messages.AGENT_RUN_TRACE_LIMIT
             return [run], True
 
-    monkeypatch.setattr(messages, "SessionRepository", FakeSessionRepository)
+    monkeypatch.setattr(messages, "MessageRepository", FakeSessionRepository)
+    monkeypatch.setattr(messages, "AgentRunRepository", FakeSessionRepository)
 
     async def visible_thread(**_kwargs):
         """模拟已通过完整作用域查询的 Thread。"""
@@ -223,7 +224,8 @@ async def test_get_thread_message_audits_view_uses_agent_run_terminal_status(mon
             assert limit == messages.AGENT_RUN_TRACE_LIMIT
             return [run], False
 
-    monkeypatch.setattr(messages, "SessionRepository", FakeSessionRepository)
+    monkeypatch.setattr(messages, "MessageRepository", FakeSessionRepository)
+    monkeypatch.setattr(messages, "AgentRunRepository", FakeSessionRepository)
 
     async def visible_thread(**_kwargs):
         """模拟已通过完整作用域查询的 Thread。"""

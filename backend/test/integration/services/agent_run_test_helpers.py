@@ -20,7 +20,7 @@ from yuxi.modules.agents.models.messages import Message, ToolCall
 from yuxi.modules.workspace.models import Project
 from yuxi.modules.identity.models import User
 from yuxi.shared.datetime import utc_now
-from yuxi.modules.agents.services.input_messages import build_chat_input_message, serialize_input_message
+from yuxi.modules.agents.input_messages import build_chat_input_message, serialize_input_message
 
 
 async def create_agent_run(
@@ -140,3 +140,21 @@ async def cleanup_agent_run_threads(session_factory, thread_ids: list[str]) -> N
         await db.execute(delete(Agent).where(Agent.created_by.in_([row.uid for row in rows])))
         await db.execute(delete(User).where(User.uid.in_([row.uid for row in rows])))
         await db.commit()
+
+
+async def settle_locked_run(db, run, **options):
+    """测试入口取得真实 Thread/Turn 锁，断言仍由调用方独立 PG 回读。"""
+    from yuxi.modules.agents.repositories.turn import AgentTurnRepository
+    from yuxi.modules.agents.repositories.sessions import SessionRepository
+    from yuxi.modules.agents.services.runs import lock_ready_steer, settle_checkpoint
+
+    agent_session = await SessionRepository(db).lock_session_by_thread_id(run.thread_id)
+    turn = await AgentTurnRepository(db).get_for_scope(
+        turn_id=run.turn_id,
+        thread_id=run.thread_id,
+        uid=run.uid,
+        app_id=run.app_id,
+        for_update=True,
+    )
+    pending = await lock_ready_steer(db, agent_session=agent_session, turn=turn) if options["status"] == "completed" else None
+    return await settle_checkpoint(db=db, run=run, agent_session=agent_session, turn=turn, pending_steer=pending, **options)

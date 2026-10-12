@@ -2,12 +2,15 @@
 
 from dataclasses import dataclass
 from datetime import datetime
+import json
+import os
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.modules.agents.models.definitions import AgentEnv
+from yuxi.infrastructure.postgres.connection import postgres_conninfo
 
 
 @dataclass(frozen=True)
@@ -16,6 +19,7 @@ class AgentEnvWriteResult:
 
     env: dict[str, str]
     updated_at: datetime | None
+    changed: bool = False
 
 
 class AgentEnvRepository:
@@ -24,9 +28,33 @@ class AgentEnvRepository:
     def __init__(self, db_session: AsyncSession):
         self.db_session = db_session
 
+    @staticmethod
+    def load_for_sync_runtime(uid: str) -> dict[str, str]:
+        """同步沙盒消费者从同一用户配置记录读取环境变量。"""
+        import psycopg
+
+        conninfo = postgres_conninfo(os.getenv("POSTGRES_URL", ""))
+        if not conninfo:
+            raise RuntimeError("POSTGRES_URL is required for Agent environment")
+        try:
+            with psycopg.connect(conninfo, connect_timeout=3) as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT env FROM agent_envs WHERE uid = %s", (uid,))
+                    row = cursor.fetchone()
+        except Exception as exc:
+            raise RuntimeError("failed to load Agent environment") from exc
+        if not row:
+            return {}
+        value = row[0]
+        if isinstance(value, str):
+            value = json.loads(value)
+        if not isinstance(value, dict):
+            raise ValueError("stored Agent environment must be an object")
+        return {str(key): "" if item is None else str(item) for key, item in value.items() if str(key)}
+
     async def get_by_uid(self, uid: str) -> AgentEnv | None:
         """读取指定用户的 Agent 环境变量。"""
-        result = await self.db_session.execute(select(AgentEnv).where(AgentEnv.uid == uid))
+        result = await self.db_session.execute(select(AgentEnv).where(AgentEnv.uid == uid).execution_options(populate_existing=True))
         return result.scalar_one_or_none()
 
     async def upsert(self, *, uid: str, env: dict[str, str], updated_at: datetime) -> AgentEnvWriteResult:
@@ -44,5 +72,4 @@ class AgentEnvRepository:
             )
         )
         await self.db_session.execute(statement)
-        await self.db_session.commit()
-        return AgentEnvWriteResult(env=env, updated_at=updated_at)
+        return AgentEnvWriteResult(env=env, updated_at=updated_at, changed=True)

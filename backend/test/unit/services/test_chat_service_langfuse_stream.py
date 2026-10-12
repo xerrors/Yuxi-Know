@@ -19,7 +19,7 @@ from yuxi.modules.agents.runtime.context import BaseContext
 from yuxi.modules.agents.runtime.middlewares.steer import SteerMiddleware
 import yuxi.modules.agents.services.execution as svc
 from yuxi.modules.agents.services.execution import RunExecutionResult
-from yuxi.modules.agents.services.input_messages import build_chat_input_message
+from yuxi.modules.agents.input_messages import build_chat_input_message
 from yuxi.modules.agents.services.tracing import LangfuseRunContext
 
 
@@ -73,7 +73,12 @@ def _patch_stream_scaffolding(monkeypatch, *, agent, supply_checkpoint=True, **_
     monkeypatch.setattr(svc, "_resolve_agent_runtime", resolve)
     monkeypatch.setattr(svc, "AttachmentRepository", ConvRepo)
     monkeypatch.setattr(svc, "AgentRunRepository", lambda db: SimpleNamespace(get_run=AsyncMock(return_value=None)))
-    monkeypatch.setattr(svc, "_persist_agent_run_langfuse_trace", AsyncMock())
+
+    async def persist_trace(*, db, **_kwargs):
+        """追踪准备不拥有提交。"""
+        return None
+
+    monkeypatch.setattr(svc, "_persist_agent_run_langfuse_trace", persist_trace)
     monkeypatch.setattr(svc, "_build_langfuse_run_context", lambda **kw: LangfuseRunContext())
     monkeypatch.setattr(svc, "get_trace_info", lambda _: {"langfuse_trace_id": "trace"})
     monkeypatch.setattr(svc, "flush_langfuse", lambda: None)
@@ -121,9 +126,9 @@ def execute(mode="chat", *, db=None, on_prepared=None, image=None):
         on_prepared=on_prepared,
     )
     return (
-        svc.stream_agent_chat(**kwargs, agent_slug="test-agent", input_messages=[build_chat_input_message("hello", image)])
+        svc.stream_agent_execution(**kwargs, agent_slug="test-agent", input_messages=[build_chat_input_message("hello", image)])
         if mode == "chat"
-        else svc.stream_agent_resume(**kwargs, resume_input={"answer": "yes"})
+        else svc.stream_agent_execution(is_resume=True, **kwargs, resume_input={"answer": "yes"})
     )
 
 
@@ -298,6 +303,63 @@ async def test_prepared_commit_precedes_graph_and_checkpoint_settlement(monkeypa
         assert not any(isinstance(e, dict) and "input" in e["type"] for e in events)
     else:
         assert isinstance(agent.input[0], HumanMessage)
+
+
+@pytest.mark.parametrize("mode", ["chat", "resume"])
+@pytest.mark.parametrize("failure", ["prepare", "commit", "cancel_commit"])
+async def test_preparation_failure_rolls_back_before_graph_and_finishes_observation(monkeypatch, mode, failure):
+    """准备或提交失败不得启动图，事务回滚且真实观察结束。"""
+    agent = FakeAgent(text_events())
+    _patch_stream_scaffolding(monkeypatch, agent=agent)
+
+    class Transaction(_FakeSession):
+        """未提交写入在失败后必须清空。"""
+
+        def __init__(self):
+            super().__init__()
+            self.pending = []
+
+        async def commit(self):
+            raise asyncio.CancelledError() if failure == "cancel_commit" else RuntimeError("commit rejected")
+
+        async def rollback(self):
+            await super().rollback()
+            self.pending.clear()
+
+    class Observation:
+        """保留实际观察的状态与结束结果。"""
+
+        def __init__(self):
+            self.status = None
+            self.ended = False
+
+        def update(self, *, metadata, level):
+            self.status = metadata["status"]
+
+        def end(self):
+            self.ended = True
+
+    db, observation = Transaction(), Observation()
+    context = LangfuseRunContext(run_observation=observation)
+    monkeypatch.setattr(svc, "_build_langfuse_run_context", lambda **kwargs: context)
+
+    async def prepare(**kwargs):
+        db.pending.append("uncommitted trace")
+        if failure == "prepare":
+            raise RuntimeError("preparation rejected")
+
+    monkeypatch.setattr(svc, "_persist_agent_run_langfuse_trace", prepare)
+    if failure == "cancel_commit":
+        with pytest.raises(asyncio.CancelledError):
+            _ = [event async for event in execute(mode, db=db)]
+    else:
+        events = [event async for event in execute(mode, db=db)]
+        assert events[-1].status == "failed"
+    assert agent.input is None
+    assert db.pending == []
+    assert db.rollback_count == 1
+    assert observation.ended and observation.status == "failed"
+    assert context.run_observation is None
 
 
 async def test_execution_forwards_recorded_command_result_to_public_adapter(monkeypatch):
@@ -550,14 +612,15 @@ async def test_service_consumer_cancel_closes_real_graph(monkeypatch, mode):
         db=_FakeSession(),
     )
     stream = (
-        svc.stream_agent_chat(
+        svc.stream_agent_execution(
             prepared_execution=prepared_execution(),
             **kwargs,
             agent_slug="test-agent",
             input_messages=[build_chat_input_message("hello")],
         )
         if mode == "chat"
-        else svc.stream_agent_resume(
+        else svc.stream_agent_execution(
+            is_resume=True,
             prepared_execution=prepared_execution(),
             **kwargs,
             resume_input="continue",
@@ -591,7 +654,7 @@ async def test_service_consumer_cancel_closes_real_graph(monkeypatch, mode):
 
 
 @pytest.mark.asyncio
-async def test_persist_agent_run_langfuse_trace_skips_when_langfuse_is_disabled(monkeypatch: pytest.MonkeyPatch):
+async def test_disabled_langfuse_does_not_write_or_own_transaction(monkeypatch: pytest.MonkeyPatch):
     db = _FakeSession()
 
     class UnexpectedRepository:
@@ -631,9 +694,9 @@ async def test_execution_rejects_missing_persisted_identity(mode, thread_id, met
         prepared_execution=prepared_execution(),
     )
     stream = (
-        svc.stream_agent_chat(**kwargs, agent_slug="test-agent", input_messages=[build_chat_input_message("hello")])
+        svc.stream_agent_execution(**kwargs, agent_slug="test-agent", input_messages=[build_chat_input_message("hello")])
         if mode == "chat"
-        else svc.stream_agent_resume(**kwargs, resume_input={"answer": "ok"})
+        else svc.stream_agent_execution(is_resume=True, **kwargs, resume_input={"answer": "ok"})
     )
     with pytest.raises(ValueError, match="执行需要已持久化的 Thread、Turn 和 Run"):
         await anext(stream)
@@ -651,6 +714,6 @@ def test_execution_requires_worker_snapshot(mode):
     )
     with pytest.raises(TypeError, match="prepared_execution"):
         if mode == "chat":
-            svc.stream_agent_chat(**kwargs, agent_slug="test-agent", input_messages=[build_chat_input_message("hello")])
+            svc.stream_agent_execution(**kwargs, agent_slug="test-agent", input_messages=[build_chat_input_message("hello")])
         else:
-            svc.stream_agent_resume(**kwargs, resume_input={"answer": "ok"})
+            svc.stream_agent_execution(is_resume=True, **kwargs, resume_input={"answer": "ok"})

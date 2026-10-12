@@ -184,7 +184,7 @@ async def prepare_run_execution(
         tool_approval_mode=context.tool_approval_mode,
         normalized_context=effective_config,
         limits={name: getattr(context, name, None) for name in MANIFEST_LIMIT_FIELDS},
-        skill_entries=build_skill_manifest_entries(effective_config, context._skill_runtime_snapshot),
+        skill_entries=build_skill_manifest_entries(effective_config, context.skill_runtime_snapshot),
         code_revision=resolve_code_revision(),
     )
     return PreparedRunExecution(manifest=manifest, context=context, backend_id=agent_item.backend_id)

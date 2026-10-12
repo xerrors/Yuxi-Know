@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-import yuxi.modules.agents.services.input_messages as input_messages
-from yuxi.modules.agents.services.input_messages import (
+import yuxi.modules.agents.input_messages as input_messages
+from yuxi.modules.agents.input_messages import (
     MAX_CHAT_IMAGES,
     build_chat_input_message,
     extract_image_contents,

@@ -339,6 +339,7 @@ async def test_prepare_agent_runtime_context_filters_resources_and_derives_runti
         *,
         db=None,
         user=None,
+        agent=None,
     ):
         del db
         assert user.uid == "u1"
@@ -444,10 +445,10 @@ async def test_prepare_agent_runtime_context_filters_resources_and_derives_runti
     assert prepared.skills == ["skill-a"]
     assert prepared.preload_skills == ["skill-a"]
     assert not hasattr(prepared, "_visible_knowledge_bases")
-    assert prepared._skill_runtime_snapshot.get("effective_skills", []) == ["skill-a", "skill-b"]
-    assert prepared._skill_runtime_snapshot.get("runtime_skills", {})["skill-a"]["name"] == "Skill A"
-    assert prepared._skill_runtime_snapshot.get("runtime_skills", {})["skill-a"]["skills"] == ["skill-b"]
-    assert prepared._skill_runtime_snapshot.get("preloaded_skills", []) == ["skill-a", "skill-b"]
+    assert prepared.skill_runtime_snapshot.get("effective_skills", []) == ["skill-a", "skill-b"]
+    assert prepared.skill_runtime_snapshot.get("runtime_skills", {})["skill-a"]["name"] == "Skill A"
+    assert prepared.skill_runtime_snapshot.get("runtime_skills", {})["skill-a"]["skills"] == ["skill-b"]
+    assert prepared.skill_runtime_snapshot.get("preloaded_skills", []) == ["skill-a", "skill-b"]
 
     # 已准备对象保留同次执行内容，后续构图不得重新读取配置或 Skill。
     monkeypatch.setattr(
@@ -620,7 +621,7 @@ async def test_resource_field_declarations_drive_write_runtime_and_schema(monkey
     """新增声明自动参与写入校验和展开，普通列表保持原样。"""
     from types import SimpleNamespace
 
-    from yuxi.modules.agents.repositories.definitions import merge_agent_config_json
+    from yuxi.modules.agents.services.configuration import merge_agent_config_json
     from yuxi.modules.agents.services.configuration import prepare_agent_config_write
 
     async def options(names, **kwargs):

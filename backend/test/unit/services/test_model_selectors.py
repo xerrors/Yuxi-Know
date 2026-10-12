@@ -102,7 +102,9 @@ def _httpx_embedding_response(status_code: int, content: str | None = None) -> h
         (get_reranker, {"model_id": "unknown-provider:namespace/model"}),
     ],
 )
-def test_selectors_report_unknown_unconfigured_specs(selector, args):
+def test_selectors_report_unknown_unconfigured_specs(monkeypatch, selector, args):
+    monkeypatch.setattr(model_cache, "get_model_info", lambda _spec: None)
+    monkeypatch.setattr(model_cache, "get_all_specs", lambda _type=None: [])
     with pytest.raises(ValueError, match="Unknown|未找到模型"):
         selector(**args)
 
@@ -604,7 +606,6 @@ async def test_langchain_chat_adapter_preserves_call_response_contract():
     response = await adapter.call([{"role": "user", "content": "Say hello"}], stream=False)
 
     assert response.content == "hello"
-    assert response.is_full is False
     assert type(captured["messages"][0]).__name__ == "HumanMessage"
 
 

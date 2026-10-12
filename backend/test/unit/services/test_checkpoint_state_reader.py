@@ -4,14 +4,15 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from fastapi import HTTPException
 from langchain.messages import AIMessage, HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
-from yuxi.modules.agents.runtime.agent_backends.chatbot.state import ChatBotState
-import yuxi.modules.agents.services.state as svc
+
+import yuxi.modules.agents.services.checkpoint_state as svc
 from yuxi.modules.agents.repositories.public_items import PublicItemRepository
+from yuxi.modules.agents.runtime.agent_backends.chatbot.state import ChatBotState
+from yuxi.shared.errors import DomainError, ResourceNotFoundError
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
 
@@ -158,9 +159,11 @@ async def test_state_view_rejects_missing_or_invisible_thread_before_checkpoint(
 
     _patch_state_view_repositories(monkeypatch, session=agent_session)
     monkeypatch.setattr(svc, "get_langgraph_checkpointer", lambda _manager: _unexpected_runtime())
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(DomainError) as exc:
         await svc.get_agent_state_view(thread_id="thread", current_user=SimpleNamespace(uid="user"), db=None)
-    assert exc.value.status_code == 404
+    assert isinstance(exc.value, ResourceNotFoundError)
+
+
 @pytest.mark.parametrize("turn_status", ["waiting", "cancelled"])
 async def test_get_agent_state_view_returns_interrupt_only_for_waiting_owner(monkeypatch: pytest.MonkeyPatch, turn_status):
     thread_id = "thread-1"

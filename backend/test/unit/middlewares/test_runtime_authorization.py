@@ -13,10 +13,10 @@ def context():
     return SimpleNamespace(
         tools=[],
         mcps=[],
-        _registered_builtin_tool_names={"skill_tool"},
-        _mcp_tool_servers={"remote_tool": "remote"},
-        _enabled_mcps={"remote": set()},
-        _skill_runtime_snapshot={
+        registered_builtin_tool_names={"skill_tool"},
+        mcp_tool_servers={"remote_tool": "remote"},
+        disabled_mcp_tools={"remote": set()},
+        skill_runtime_snapshot={
             "effective_skills": ["skill"],
             "preloaded_skills": [],
             "runtime_skills": {"skill": {"tools": ["skill_tool"], "mcps": ["remote"]}},
@@ -29,7 +29,7 @@ def test_unactivated_skill_cannot_execute_registered_local_or_mcp_dependency(con
     assert not tool_allowed(context, "skill_tool", {})
     assert not tool_allowed(context, "remote_tool", {})
     assert tool_allowed(context, "skill_tool", {"activated_skills": ["skill"]})
-    context._skill_runtime_snapshot["effective_skills"] = []
+    context.skill_runtime_snapshot["effective_skills"] = []
     assert not tool_allowed(context, "skill_tool", {"activated_skills": ["skill"]})
 
 
@@ -37,18 +37,18 @@ def test_mcp_single_tool_or_server_disable_rejects_old_registration(context):
     """启停服务器和单工具都不能被既有对象绕过。"""
     state = {"activated_skills": ["skill"]}
     assert tool_allowed(context, "remote_tool", state)
-    context._enabled_mcps["remote"] = {"remote_tool"}
+    context.disabled_mcp_tools["remote"] = {"remote_tool"}
     assert not tool_allowed(context, "remote_tool", state)
-    context._enabled_mcps.clear()
+    context.disabled_mcp_tools.clear()
     assert not tool_allowed(context, "remote_tool", state)
 
 
 @pytest.mark.parametrize("name", ["ask_user_question", "mark_for_improvement"])
 def test_base_tool_is_allowed_without_configuration_skill_or_run(context, name):
     """基础工具使用统一白名单，不依赖配置、Skill 或 Run 是否存在。"""
-    context._registered_builtin_tool_names.add(name)
+    context.registered_builtin_tool_names.add(name)
     assert tool_allowed(context, name, {})
-    context._mcp_tool_servers[name] = "remote"
+    context.mcp_tool_servers[name] = "remote"
     assert not tool_allowed(context, name, {})
 
 
@@ -92,6 +92,7 @@ async def test_network_retry_rechecks_before_each_model_request(monkeypatch, con
             raise authorization.AgentExecutionRevoked("revoked")
 
     monkeypatch.setattr(authorization, "refresh_execution_authorization", check)
+    monkeypatch.setattr(authorization, "_refresh_execution_resources", check)
     graph = create_agent(
         model=ReplayModel(),
         middleware=[
@@ -176,6 +177,7 @@ async def test_context_overflow_does_not_send_summary_after_revocation(monkeypat
             raise authorization.AgentExecutionRevoked("revoked")
 
     monkeypatch.setattr(authorization, "refresh_execution_authorization", check)
+    monkeypatch.setattr(authorization, "_refresh_execution_resources", check)
     summary = summary_module.YuxiSummarizationMiddleware(
         model=SummaryModel(),
         backend=CompositeBackend(default=MemoryBackend(), routes={}, artifacts_root="/outputs"),

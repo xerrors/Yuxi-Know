@@ -10,11 +10,12 @@ from contextlib import asynccontextmanager
 from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
+import httpx
 import pytest
 import pytest_asyncio
-import httpx
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
+from yuxi.api.errors import domain_error_handler
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -24,8 +25,9 @@ from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.identity import oidc
 from yuxi.modules.identity.models import Department, User
 from yuxi.modules.identity.services.oidc import build_oidc_login_response
+from yuxi.shared.errors import DomainError, OperationFailedError, StateConflictError
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
+pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
 
 @pytest_asyncio.fixture
@@ -112,9 +114,9 @@ async def test_binding_collision_does_not_commit_unbound_account(identity_db, mo
         db.add(User(username=username, uid="unrelated", password_hash="disabled", role="user"))
         await db.commit()
     async with identity_db() as db:
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(DomainError) as exc:
             await build_oidc_login_response(db, {"sub": "tenant:test", "name": "reader", "username": "reader"})
-        assert exc.value.status_code == 500
+        assert isinstance(exc.value, OperationFailedError)
     async with identity_db() as observer:
         assert list(await observer.scalars(select(User.uid))) == ["unrelated"]
         assert await observer.scalar(select(func.count()).select_from(Department)) == 0
@@ -147,14 +149,14 @@ async def test_concurrent_sub_cannot_bind_two_raw_usernames(identity_db, monkeyp
                 return await build_oidc_login_response(
                     db, {"sub": "tenant:test", "name": username, "username": username, "department_name": username}
                 )
-            except HTTPException as exc:
+            except DomainError as exc:
                 return exc
 
     results = await asyncio.gather(login("reader-a"), login("reader-b"))
     successes = [result[0]["user_id"] for result in results if isinstance(result, tuple) and result[1] is None]
     assert len(successes) == 1
-    failure = next(result for result in results if isinstance(result, HTTPException))
-    assert failure.status_code == 409
+    failure = next(result for result in results if isinstance(result, DomainError))
+    assert isinstance(failure, StateConflictError)
     async with identity_db() as observer:
         users = list(await observer.scalars(select(User)))
         assert len(users) == 2
@@ -193,6 +195,7 @@ async def oidc_http(identity_db, monkeypatch):
     monkeypatch.setattr(oidc.OIDCUtils, "_state_store", {})
     monkeypatch.setattr(oidc.OIDCUtils, "_login_code_store", {})
     app = FastAPI()
+    app.add_exception_handler(DomainError, domain_error_handler)
     app.include_router(auth, prefix="/api")
     app.dependency_overrides[get_db] = request_db
     sock = socket.socket()

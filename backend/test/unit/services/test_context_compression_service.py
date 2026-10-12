@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-from yuxi.modules.agents.runtime.context import BaseContext
-
 import asyncio
+from yuxi.modules.agents.services import thread_access
 from types import SimpleNamespace
 
 import pytest
-from fastapi import HTTPException
 
 import yuxi.modules.agents.services.compression as service
-
+from yuxi.modules.agents.runtime.context import BaseContext
+from yuxi.shared.errors import DomainError, ResourceNotFoundError, StateConflictError
 
 _Context = BaseContext
 
@@ -53,6 +52,7 @@ async def test_compress_thread_context_uses_locked_idle_thread(
     events = []
     agent_session = SimpleNamespace(
         uid="user-1",
+        app_id=None,
         status="active",
         agent_id="assistant",
         config_snapshot=config_snapshot,
@@ -106,7 +106,7 @@ async def test_compress_thread_context_uses_locked_idle_thread(
         events.append(("compress", kwargs["context"].model))
         return {"status": "completed", "after_tokens": 300}
 
-    monkeypatch.setattr(service, "SessionRepository", SessionRepo)
+    monkeypatch.setattr(thread_access, "SessionRepository", SessionRepo)
     monkeypatch.setattr(service, "AgentRepository", AgentRepo)
     monkeypatch.setattr(service, "_ensure_thread_idle", idle)
     monkeypatch.setattr(service, "ensure_session_workdir_available", workdir)
@@ -151,10 +151,10 @@ async def test_compress_rejects_same_user_from_other_app(monkeypatch: pytest.Mon
         async def lock_session_by_thread_id(self, _thread_id):
             return SimpleNamespace(uid="user-1", app_id="app-a", status="active")
 
-    monkeypatch.setattr(service, "SessionRepository", SessionRepo)
-    with pytest.raises(HTTPException) as exc:
+    monkeypatch.setattr(thread_access, "SessionRepository", SessionRepo)
+    with pytest.raises(DomainError) as exc:
         await service.compress_thread_context(thread_id="thread-1", current_user=SimpleNamespace(uid="user-1"), db=object(), app_id="app-b")
-    assert exc.value.status_code == 404
+    assert isinstance(exc.value, ResourceNotFoundError)
 
 
 @pytest.mark.unit
@@ -298,11 +298,11 @@ async def test_rejects_non_idle_thread(active_turn, pending_input) -> None:
         async def scalar(self, _statement):
             return self.results.pop(0)
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(DomainError) as exc_info:
         await service._ensure_thread_idle(
             db=Db(),
             thread_id="thread-1",
         )
 
-    assert exc_info.value.status_code == 409
-    assert exc_info.value.detail["code"] == "thread_busy"
+    assert isinstance(exc_info.value, StateConflictError)
+    assert exc_info.value.code == "thread_busy"

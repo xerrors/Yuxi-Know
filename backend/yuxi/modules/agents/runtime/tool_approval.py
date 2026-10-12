@@ -2,13 +2,12 @@ from pathlib import PurePosixPath
 from typing import Literal
 
 from langchain.agents.middleware import HumanInTheLoopMiddleware
+from yuxi.modules.agents.runtime.sandbox.paths import normalize_runtime_path
 
 ToolApprovalMode = Literal["default", "always_trust"]
 
 DEFAULT_TOOL_APPROVAL_MODE: ToolApprovalMode = "default"
 TOOL_APPROVAL_MODES = frozenset({"default", "always_trust"})
-# 主、子 Agent 默认审批模式在自身 Turn 中拦截的敏感工具。
-SENSITIVE_BACKEND_TOOLS = frozenset({"write_file", "edit_file", "execute"})
 _ALLOWED_DECISIONS = ["approve", "reject"]
 
 
@@ -57,8 +56,7 @@ def _normalize_runtime_path(value: object) -> PurePosixPath | None:
     """将审批参数收敛为无跳转的 Sandbox 绝对路径。"""
     if not isinstance(value, str):
         return None
-    raw = value.strip()
-    path = PurePosixPath(raw)
-    if not raw or not path.is_absolute() or ".." in path.parts or "\\" in raw or "://" in raw:
+    try:
+        return PurePosixPath(normalize_runtime_path(value))
+    except ValueError:
         return None
-    return path

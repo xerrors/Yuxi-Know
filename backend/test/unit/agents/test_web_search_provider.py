@@ -1,9 +1,8 @@
+from yuxi.modules.extensions.tools.registry import _all_tool_instances, _extra_registry
 from unittest.mock import MagicMock, patch
 
 from yuxi.modules.extensions.tools.builtin.web_search import (
-    _all_tool_instances,
     _create_doubao_search,
-    _extra_registry,
     _register_web_search_tool,
 )
 
@@ -83,3 +82,25 @@ def test_register_web_search_tool_provider_selection(monkeypatch):
     assert _extra_registry["web_search"].display_name == "豆包 网页搜索"
     assert len(_all_tool_instances) == instances_before + 1
     assert _all_tool_instances[-1].name == "web_search"
+
+
+def test_missing_web_search_credentials_emit_structured_degradation(monkeypatch):
+    """未配置搜索时明确记录不可用能力，不注册半成品工具。"""
+    from yuxi.modules.extensions.tools.builtin import web_search
+
+    for key in ("WEB_SEARCH_PROVIDER", "DOUBAO_SEARCH_API_KEY", "TAVILY_API_KEY"):
+        monkeypatch.delenv(key, raising=False)
+    records = []
+    sink = web_search.logger.add(lambda message: records.append(message.record), enqueue=False)
+    before = list(_all_tool_instances)
+    try:
+        _register_web_search_tool()
+    finally:
+        web_search.logger.remove(sink)
+    assert _all_tool_instances == before
+    assert any(
+        record["extra"].get("component") == "web_search"
+        and record["extra"].get("reason") == "credentials_missing"
+        and record["extra"].get("available") is False
+        for record in records
+    )

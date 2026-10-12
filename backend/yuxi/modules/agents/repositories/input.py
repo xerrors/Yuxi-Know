@@ -11,7 +11,7 @@ from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.modules.agents.repositories.attachments import AttachmentRepository
-from yuxi.modules.agents.services.input_messages import deserialize_input_message
+from yuxi.modules.agents.input_messages import deserialize_input_message
 from yuxi.shared.datetime import utc_now
 
 

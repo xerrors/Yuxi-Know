@@ -17,7 +17,8 @@ from yuxi.infrastructure.observability.logging import logger
 from yuxi.modules.agents.runtime.sandbox.paths import VIRTUAL_PERSONAL_SKILLS_PATH, VIRTUAL_SKILLS_PATH
 from yuxi.modules.extensions.mcp.service import get_enabled_mcp_tools
 from yuxi.modules.extensions.skills.package import is_valid_skill_slug, normalize_string_list
-from yuxi.modules.extensions.skills.runtime import RuntimeSkill, build_dependency_bundle
+from yuxi.modules.extensions.skills.resolved import RuntimeSkill
+from yuxi.modules.extensions.skills.runtime import build_dependency_bundle
 from yuxi.modules.extensions.tools import get_all_tool_instances
 from yuxi.modules.extensions.tools.builtin import BASE_TOOL_NAMES
 
@@ -67,10 +68,10 @@ class SkillsMiddleware(AgentMiddleware):
         """包装模型调用，处理 skills 提示词注入、动态激活和依赖展开"""
         runtime_context = request.runtime.context
 
+        snapshot = runtime_context.skill_runtime_snapshot
         if self.enable_skills_prompt:
-            effective_skills = getattr(runtime_context, "_skill_runtime_snapshot", {}).get("effective_skills", None)
-            if isinstance(effective_skills, list):
-                effective_skills = normalize_string_list(effective_skills)
+            if snapshot is not None:
+                effective_skills = snapshot["effective_skills"]
                 preloaded_skills = self._get_preloaded_skills(runtime_context)
                 preloaded_set = set(preloaded_skills)
                 prompt_sections: list[str] = []
@@ -119,7 +120,7 @@ class SkillsMiddleware(AgentMiddleware):
             if existing is not None and existing is not tool:
                 raise RuntimeError(f"Skill MCP 工具名冲突：{tool.name}")
             active_mcp_tools_by_name[tool.name] = tool
-        setattr(runtime_context, "_active_skill_mcp_tools", active_mcp_tools_by_name)
+        setattr(runtime_context, "active_skill_mcp_tools", active_mcp_tools_by_name)
 
         existing_tool_names = {t.name for t in model_tools}
         for t in enabled_tools:
@@ -146,7 +147,7 @@ class SkillsMiddleware(AgentMiddleware):
         base_tool_names.update(BASE_TOOL_NAMES)
         gated: set[str] = set()
         for slug in effective_skills:
-            gated.update(runtime_skills.get(slug, {}).get("tools", []))
+            gated.update(runtime_skills[slug]["tools"])
         return gated - base_tool_names
 
     async def _get_mcp_tools_from_context(
@@ -159,8 +160,8 @@ class SkillsMiddleware(AgentMiddleware):
         import asyncio
 
         # 显式 MCP 已在 Graph 基础工具中注册，这里只加载 Skill 新增依赖。
-        if not hasattr(context, "_mcp_tool_servers"):
-            context._mcp_tool_servers = {}
+        if getattr(context, "mcp_tool_servers", None) is None:
+            raise RuntimeError("MCP 工具来源尚未装配")
         configured_mcps = set(normalize_string_list(getattr(context, "mcps", None)))
         all_mcp_names: list[str] = []
         for server_name in extra_mcps or []:
@@ -171,22 +172,18 @@ class SkillsMiddleware(AgentMiddleware):
         unique_mcp_names = list(dict.fromkeys(all_mcp_names))
 
         async def load_mcp_tools(server_name: str) -> list:
-            """加载单个 MCP 服务器的工具"""
-            try:
-                mcp_tools = await get_enabled_mcp_tools(server_name)
-                if not mcp_tools:
-                    logger.warning(f"SkillsMiddleware: mcp dependency unavailable, skip: {server_name}")
-                return mcp_tools
-            except Exception as e:
-                logger.warning(f"SkillsMiddleware: failed to load mcp dependency '{server_name}': {e}")
-                return []
+            """加载单个依赖，建连故障保留为运行失败。"""
+            mcp_tools = await get_enabled_mcp_tools(server_name)
+            if not mcp_tools:
+                logger.info(f"SkillsMiddleware: mcp dependency has no enabled tools: {server_name}")
+            return mcp_tools
 
         # 并行加载所有 MCP 工具
         results = await asyncio.gather(*[load_mcp_tools(name) for name in unique_mcp_names])
         selected_tools = []
         for server_name, tools in zip(unique_mcp_names, results, strict=True):
             for tool in tools:
-                context._mcp_tool_servers[tool.name] = server_name
+                context.mcp_tool_servers[tool.name] = server_name
             selected_tools.extend(tools)
 
         return selected_tools
@@ -194,14 +191,7 @@ class SkillsMiddleware(AgentMiddleware):
     def _collect_prompt_metadata(self, slugs: list[str], runtime_context) -> list[RuntimeSkill]:
         """收集指定 slugs 的提示词元数据"""
         runtime_skills = self._get_runtime_skills(runtime_context)
-        result: list[RuntimeSkill] = []
-        for slug in slugs:
-            item = runtime_skills.get(slug)
-            if not item:
-                logger.debug(f"Skill slug not found in prompt metadata, skip: {slug}")
-                continue
-            result.append(dict(item))
-        return result
+        return [dict(runtime_skills[slug]) for slug in slugs]
 
     def _process_tool_call_result(self, result: Any, request: ToolCallRequest) -> Any:
         """处理工具调用结果，检查并处理 skill 动态激活"""
@@ -256,7 +246,7 @@ class SkillsMiddleware(AgentMiddleware):
         if request.tool is not None:
             return request
         context = request.runtime.context
-        active_tools = getattr(context, "_active_skill_mcp_tools", {})
+        active_tools = getattr(context, "active_skill_mcp_tools", {})
         if not isinstance(active_tools, dict):
             return request
         tool = active_tools.get(request.tool_call.get("name"))
@@ -280,29 +270,31 @@ class SkillsMiddleware(AgentMiddleware):
         return None
 
     def _get_effective_skills(self, runtime_context) -> set[str]:
-        selected = getattr(runtime_context, "_skill_runtime_snapshot", {}).get("effective_skills", [])
-        return set(normalize_string_list(selected if isinstance(selected, list) else []))
+        """读取完整快照的有效 Skill，未准备阶段返回空集合。"""
+        snapshot = runtime_context.skill_runtime_snapshot
+        return set(snapshot["effective_skills"]) if snapshot is not None else set()
 
     def _get_runtime_skills(self, runtime_context) -> dict[str, RuntimeSkill]:
-        runtime_skills = getattr(runtime_context, "_skill_runtime_snapshot", {}).get("runtime_skills", {})
-        return runtime_skills if isinstance(runtime_skills, dict) else {}
+        """读取准备阶段构造的运行信息。"""
+        snapshot = runtime_context.skill_runtime_snapshot
+        return snapshot["runtime_skills"] if snapshot is not None else {}
 
     def _get_preloaded_skills(self, runtime_context) -> list[str]:
-        selected = getattr(runtime_context, "_skill_runtime_snapshot", {}).get("preloaded_skills", [])
-        effective = self._get_effective_skills(runtime_context)
-        return [slug for slug in normalize_string_list(selected if isinstance(selected, list) else []) if slug in effective]
+        """仅保留完整快照内仍有效的预加载 Skill。"""
+        snapshot = runtime_context.skill_runtime_snapshot
+        if snapshot is None:
+            return []
+        effective = set(snapshot["effective_skills"])
+        return [slug for slug in snapshot["preloaded_skills"] if slug in effective]
 
     def _build_preloaded_skills_section(self, slugs: list[str], runtime_context) -> str:
-        """构建已预加载 Skill 的完整系统提示段。"""
-
-        contents = getattr(runtime_context, "_skill_runtime_snapshot", {}).get("preloaded_skill_contents", {})
-        if not isinstance(contents, dict):
-            contents = {}
+        """从完整快照构建预加载提示；未准备阶段没有正文。"""
+        snapshot = runtime_context.skill_runtime_snapshot
+        contents = snapshot["preloaded_skill_contents"] if snapshot is not None else {}
         sections = ["# Preloaded Skills", "The following Skill instructions are already loaded and active."]
         for slug in slugs:
-            content = contents.get(slug)
-            if isinstance(content, str):
-                sections.append(f'<preloaded_skill slug="{slug}">\n{content}\n</preloaded_skill>')
+            content = contents[slug]
+            sections.append(f'<preloaded_skill slug="{slug}">\n{content}\n</preloaded_skill>')
         return "\n\n".join(sections)
 
     def _merge_activated_skill_update(self, result: Any, slug: str):

@@ -125,13 +125,6 @@ class BaseReranker(ABC):
 
         return scores
 
-    def compute_score(self, sentence_pairs, batch_size=256, max_length=512, normalize=False):
-        try:
-            _ = asyncio.get_running_loop()
-        except RuntimeError:
-            return asyncio.run(self.acompute_score(sentence_pairs, batch_size, max_length, normalize))
-        raise RuntimeError("compute_score cannot be used while an event loop is running. Use acompute_score instead.")
-
     async def test_connection(self) -> tuple[bool, str]:
         try:
             scores = await self._batch_rerank("test query", ["test document"], max_length=128)

@@ -13,14 +13,10 @@ from yuxi.modules.agents.runtime.agent_backends.chatbot.context import ChatBotCo
 
 from yuxi.modules.agents.presets.deep_research import PRESET as GENERAL_PURPOSE
 from yuxi.api.routers.agents.management import delete_agent
-from yuxi.modules.agents.repositories.definitions import (
-    AgentRepository,
-    DEFAULT_AGENT_DESCRIPTION,
-    DEFAULT_SHARE_CONFIG,
-    merge_agent_config_json,
-    user_can_access_agent,
-    user_can_manage_agent,
-)
+from yuxi.modules.agents.services.definitions import serialize_agent_definition, update_agent_definition
+from yuxi.modules.agents.repositories.definitions import AgentRepository, DEFAULT_AGENT_DESCRIPTION, DEFAULT_SHARE_CONFIG
+from yuxi.modules.agents.services.configuration import merge_agent_config_json
+from yuxi.modules.agents.permissions import user_can_access_agent, user_can_manage_agent
 from yuxi.modules.agents.models.definitions import Agent
 from yuxi.modules.identity.models import User
 from yuxi.modules.agents.models.inputs import AgentInput
@@ -36,9 +32,21 @@ class FakeDb:
         self.added = None
         self.commit = AsyncMock()
         self.refresh = AsyncMock()
+        self.flush = AsyncMock()
+        self.rollback = AsyncMock()
 
     def add(self, item):
         self.added = item
+
+
+@pytest.fixture(autouse=True)
+def isolate_bound_definition_commit(monkeypatch):
+    """权限单测隔离专属包发布，持久事务由真实 PG/HTTP 验证。"""
+
+    async def commit(db, agent, user, **kwargs):
+        await db.commit()
+
+    monkeypatch.setattr("yuxi.modules.agents.services.definitions.commit_agent_definition", commit)
 
 
 _MANAGER_USER_SCOPE = {
@@ -175,13 +183,14 @@ async def test_ensure_default_agent_creates_description(monkeypatch):
 
     monkeypatch.setattr(repo, "get_by_slug", get_by_slug)
 
-    agent = await repo.ensure_default_agent()
+    agent, changed = await repo.ensure_default_agent()
 
     assert agent.description == DEFAULT_AGENT_DESCRIPTION
     assert agent.config_json == {"context": {}}
     assert db.added is agent
-    db.commit.assert_awaited_once()
-    db.refresh.assert_awaited_once_with(agent)
+    assert changed is True
+    db.commit.assert_not_awaited()
+    db.refresh.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -201,13 +210,14 @@ async def test_ensure_default_agent_backfills_missing_description(monkeypatch):
 
     monkeypatch.setattr(repo, "get_by_slug", get_by_slug)
 
-    result = await repo.ensure_default_agent(created_by="admin")
+    result, changed = await repo.ensure_default_agent(created_by="admin")
 
     assert result is agent
     assert agent.description == DEFAULT_AGENT_DESCRIPTION
     assert agent.updated_by == "admin"
-    db.commit.assert_awaited_once()
-    db.refresh.assert_awaited_once_with(agent)
+    assert changed is True
+    db.commit.assert_not_awaited()
+    db.refresh.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -221,7 +231,7 @@ async def test_ensure_preset_is_idempotent(monkeypatch):
 
     monkeypatch.setattr(repo, "get_by_slug", get_by_slug)
 
-    agent = await repo.ensure_preset(GENERAL_PURPOSE)
+    agent, changed = await repo.ensure_preset(GENERAL_PURPOSE)
 
     assert agent is existing
     assert db.added is None
@@ -285,7 +295,7 @@ async def test_delegated_admin_update_preserves_shared_agent_acl():
     db.execute = AsyncMock(return_value=SimpleNamespace(scalars=lambda: ["manager"]))
     user = User(uid="manager", role="admin", user_kind="human", is_deleted=0)
     db.scalar = AsyncMock(side_effect=[agent, user])
-    await AgentRepository(db).update(agent, share_config=_MANAGER_USER_SCOPE, updater=user)
+    await update_agent_definition(db, agent, share_config=_MANAGER_USER_SCOPE, updater=user)
     assert agent.share_config["manage_scope"]["user_uids"] == ["manager"]
     db.commit.assert_awaited_once()
 
@@ -299,7 +309,7 @@ async def test_normal_user_cannot_update_private_agent_grants():
     user = User(uid="manager", role="user", user_kind="human", is_deleted=0)
     db.scalar = AsyncMock(side_effect=[agent, user])
     with pytest.raises(ValueError, match="私有智能体不接受共享授权"):
-        await AgentRepository(db).update(agent, share_config=_MANAGER_USER_SCOPE, updater=user)
+        await update_agent_definition(db, agent, share_config=_MANAGER_USER_SCOPE, updater=user)
     assert agent.share_config == _MANAGER_USER_SCOPE
     db.commit.assert_not_awaited()
 
@@ -315,7 +325,7 @@ async def test_share_private_agent_updates_same_definition(role, owner):
     user = User(uid="manager", role=role, user_kind="human", is_deleted=0)
     db.scalar = AsyncMock(side_effect=[agent, user])
 
-    updated = await AgentRepository(db).update(agent, visibility="shared", share_config=DEFAULT_SHARE_CONFIG, updater=user)
+    updated = await update_agent_definition(db, agent, visibility="shared", share_config=DEFAULT_SHARE_CONFIG, updater=user)
 
     assert updated is agent
     assert (agent.id, agent.slug, agent.created_by, agent.visibility) == (1, "shared-bot", owner, "shared")
@@ -341,7 +351,7 @@ async def test_share_private_agent_requires_admin_and_explicit_grants(role, gran
     db.scalar = AsyncMock(side_effect=[agent, user])
 
     with pytest.raises(error, match=message):
-        await AgentRepository(db).update(agent, visibility="shared", share_config=grants, updater=user)
+        await update_agent_definition(db, agent, visibility="shared", share_config=grants, updater=user)
 
     assert agent.visibility == "private" and agent.share_config == original
     db.commit.assert_not_awaited()
@@ -389,7 +399,7 @@ async def test_serialize_agent_omits_capabilities(backend_id):
     )
     user = User(uid="owner", username="owner", role="user", password_hash="test")
 
-    result = await AgentRepository(FakeDb()).serialize(agent, user=user)
+    result = await serialize_agent_definition(FakeDb(), agent, user=user)
 
     assert result["backend_id"] == backend_id
     assert "is_subagent" not in result

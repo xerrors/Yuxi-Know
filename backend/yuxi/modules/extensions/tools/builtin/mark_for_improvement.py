@@ -1,6 +1,5 @@
 """保存当前执行中值得复盘的经验候选。"""
 
-from fastapi import HTTPException
 from langchain_core.tools import ToolException
 from langgraph.prebuilt.tool_node import ToolRuntime
 from pydantic import BaseModel, Field
@@ -9,6 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.agents.services.feedback import mark_run_for_improvement
 from yuxi.modules.extensions.tools.registry import tool
+from yuxi.shared.errors import DomainError
 
 
 class ImprovementInput(BaseModel):
@@ -44,8 +44,8 @@ async def mark_for_improvement(reason: str, runtime: ToolRuntime) -> dict:
                 tool_call_id=runtime.tool_call_id,
                 reason=reason,
             )
-    except HTTPException as exc:
-        raise ToolException(f"改进线索未保存：{exc.detail}") from exc
+    except DomainError as exc:
+        raise ToolException(f"改进线索未保存：{exc.message}") from exc
     except SQLAlchemyError as exc:
         raise ToolException("数据库写入失败，改进线索未确认保存；可以使用相同调用重试。") from exc
     return {"id": record["id"], "run_id": record["run_id"], "saved": True}

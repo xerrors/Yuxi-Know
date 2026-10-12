@@ -9,10 +9,10 @@ import uuid
 
 import pytest
 import pytest_asyncio
-from fastapi import HTTPException
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+import yuxi.modules.workspace.services.projects as project_service
 from test import live_api_cleanup as cleanup_module
 from test.live_api_cleanup import (
     delete_test_session_resources,
@@ -23,21 +23,21 @@ from test.live_api_cleanup import (
     validate_test_runs_terminal,
     validate_test_workdirs_exclusive,
 )
-from yuxi.modules.agents.repositories.runs import AgentRunRepository
-from yuxi.modules.agents.repositories.input import AgentInputRepository
-from yuxi.modules.agents.services.input_messages import build_chat_input_message, serialize_input_message
-from yuxi.modules.agents.repositories.input_receipt import AgentInputReceiptRepository
-from yuxi.modules.agents.repositories.turn import AgentTurnRepository
-import yuxi.modules.workspace.services.projects as project_service
 from yuxi.modules.agents.models.inputs import AgentInput, AgentInputReceipt
-from yuxi.modules.agents.models.runs import AgentRun, AgentRunAttempt
-from yuxi.modules.agents.models.turns import AgentTurn
-from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.models.messages import Message, ToolCall
-from yuxi.modules.workspace.models import Project
+from yuxi.modules.agents.models.runs import AgentRun, AgentRunAttempt
+from yuxi.modules.agents.models.sessions import Session
+from yuxi.modules.agents.models.turns import AgentTurn
+from yuxi.modules.agents.repositories.input import AgentInputRepository
+from yuxi.modules.agents.repositories.input_receipt import AgentInputReceiptRepository
+from yuxi.modules.agents.repositories.runs import AgentRunRepository
+from yuxi.modules.agents.repositories.turn import AgentTurnRepository
+from yuxi.modules.agents.input_messages import build_chat_input_message, serialize_input_message
 from yuxi.modules.identity.models import User
+from yuxi.modules.workspace.models import Project
 from yuxi.modules.workspace.paths import ensure_bound_user_workdir, user_workdir_host_dir
 from yuxi.shared.datetime import utc_now
+from yuxi.shared.errors import ResourceNotFoundError
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
@@ -513,10 +513,10 @@ async def test_resource_cleanup_lock_makes_overlapping_linked_project_revalidate
                             workdir_path=linked_workdir_path,
                             db=db,
                         )
-                    except HTTPException as exc:
-                        creation_result["status_code"] = exc.status_code
+                    except ResourceNotFoundError:
+                        creation_result["outcome"] = "not_found"
                     else:
-                        creation_result["status_code"] = 201
+                        creation_result["outcome"] = "created"
             finally:
                 await engine.dispose()
 
@@ -537,7 +537,7 @@ async def test_resource_cleanup_lock_makes_overlapping_linked_project_revalidate
         )
         worker_holder["worker"].join(timeout=5)
         assert not worker_holder["worker"].is_alive()
-        assert creation_result == {"status_code": 404}
+        assert creation_result == {"outcome": "not_found"}
 
         async with session_factory() as db:
             assert await db.get(Session, session_record_id) is None

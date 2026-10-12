@@ -21,6 +21,7 @@ from yuxi.infrastructure.filesystem import (
     write_all_fd,
 )
 from yuxi.modules.workspace.errors import FileTransferLimitError
+from yuxi.modules.workspace.paths import normalize_workspace_scope, validate_directory_name
 from yuxi.modules.workspace.paths import user_workspace_dir
 
 
@@ -329,8 +330,7 @@ class Workspace:
 
     def create_authorized_directory(self, parent_path: str, name: str, *, root: str) -> dict:
         """在 Workdir 内创建一个单层目录。"""
-        if not name or name in {".", ".."} or "/" in name or "\\" in name:
-            raise ValueError("directory name must be one path component")
+        validate_directory_name(name)
         self._require_within(parent_path, root)
         base, parts = self._resolve_path(parent_path)
         parent_fd = self._open_directory(base, parts)
@@ -358,16 +358,13 @@ class Workspace:
 
     def _resolve_path(self, path: str) -> tuple[Path, tuple[str, ...]]:
         """把 UserWorkspace scope 路径解析为持久化根内组件。"""
-        raw = str(path or "").strip()
-        pure = PurePosixPath(raw)
-        if not raw or not pure.is_absolute() or ".." in pure.parts or "\\" in raw:
-            raise ValueError("invalid Workspace path")
+        pure = PurePosixPath(normalize_workspace_scope(path))
         return self._workspace_root, tuple(pure.parts[1:])
 
     @staticmethod
     def _require_within(path: str, root: str, *, allow_root: bool = True) -> None:
-        normalized_path = PurePosixPath(str(path)).as_posix()
-        normalized_root = PurePosixPath(str(root)).as_posix()
+        normalized_path = normalize_workspace_scope(path)
+        normalized_root = normalize_workspace_scope(root)
         if normalized_path == normalized_root:
             if allow_root:
                 return

@@ -33,17 +33,13 @@ def validate_remote_transport(config: dict[str, Any]) -> None:
 
 async def get_mcp_client(
     server_configs: dict[str, Any] | None = None,
-) -> MultiServerMCPClient | None:
-    """Initializes an MCP client with the given server configurations."""
+) -> MultiServerMCPClient:
+    """校验远程配置并创建客户端，初始化失败交由调用方处理。"""
     for config in (server_configs or {}).values():
         validate_remote_transport(config)
-    try:
-        client = MultiServerMCPClient(server_configs)  # pyright: ignore[reportArgumentType]
-        logger.info(f"Initialized MCP client with servers: {list(server_configs.keys())}")
-        return client
-    except Exception as e:
-        logger.error("Failed to initialize MCP client: {}", e)
-        return None
+    client = MultiServerMCPClient(server_configs or {})  # pyright: ignore[reportArgumentType]
+    logger.info(f"Initialized MCP client with servers: {list((server_configs or {}).keys())}")
+    return client
 
 
 def to_camel_case(s: str) -> str:
@@ -73,7 +69,7 @@ async def get_mcp_tools(
 
     Args:
         server_slug: Server slug
-        additional_servers: Additional server configurations
+        server_config: 当前服务器的远端配置
         disabled_tools: List of tool names to filter out from the RETURN value (does not affect cache)
         cache: Whether to use/update the cache (default: True)
         force_refresh: Whether to force a refresh from the server (default: False)
@@ -102,9 +98,6 @@ async def get_mcp_tools(
             client_config = {k: v for k, v in server_config.items() if k not in ("disabled_tools",)}
 
             client = await get_mcp_client({server_slug: client_config})
-            if client is None:
-                return []
-
             raw_tools = cast(list[Any], await client.get_tools())
 
             server_cc = to_camel_case(server_slug)
@@ -139,12 +132,11 @@ async def get_mcp_tools(
                     f"Refreshed MCP tools cache for '{server_slug}' with key '{cache_key}': {len(all_processed_tools)} tools loaded."
                 )
 
-        except ExceptionGroup as e:
-            logger.warning(f"MCP server '{server_slug}' failed with group error: {e}")
-            return []
         except Exception as e:
-            logger.exception(f"Failed to load tools from MCP server '{server_slug}': {e}")
-            return []
+            logger.bind(component="mcp", server_slug=server_slug, error_type=type(e).__name__, available=False).error(
+                "component=mcp server_slug={} error_type={} available=false MCP 工具加载失败", server_slug, type(e).__name__
+            )
+            raise RuntimeError(f"MCP 服务 '{server_slug}' 工具加载失败") from e
 
     # 3. Filtering (Apply to Return Value Only)
     if disabled_tools:

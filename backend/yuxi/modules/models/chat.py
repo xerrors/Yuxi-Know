@@ -198,7 +198,6 @@ def normalize_tool_call_chunks(message: AIMessageChunk) -> None:
 class GeneralResponse:
     def __init__(self, content):
         self.content = content
-        self.is_full = False
 
 
 class LangChainChatAdapter:

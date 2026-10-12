@@ -14,7 +14,7 @@ from yuxi.api.dependencies.auth import get_db, get_required_user, get_superadmin
 from yuxi.api.routers.agents.feedback import FeedbackPage
 from yuxi.infrastructure.observability.logging import LOG_FILE, logger
 from yuxi.modules.agents.services.feedback import list_feedback
-from yuxi.modules.agents.services.scope import ActorScope
+from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.identity.models import User
 from yuxi.modules.system.options import invalidate_option_cache, system_options, update_option_value
 from yuxi.modules.system.readiness import get_readiness

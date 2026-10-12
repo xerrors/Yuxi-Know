@@ -7,28 +7,34 @@ import uuid
 from contextlib import asynccontextmanager
 
 import pytest
-from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from test.integration.services.agent_input_fixtures import (
-    create_input_schema as _create_schema,
-    drop_input_schema as _drop_schema,
-    input_workdir_binding as _binding,
-    queue_inputs as _queue_inputs,
-)
-from yuxi.modules.agents.repositories.runs import AgentRunRepository
-from yuxi.modules.agents.repositories.input_receipt import AgentInputReceiptRepository
-from yuxi.modules.agents.repositories.sessions import SessionRepository
-import yuxi.modules.agents.services.runs as runs
 import yuxi.modules.agents.services.scheduler as scheduler
 import yuxi.modules.agents.services.threads as threads
 import yuxi.modules.agents.services.turns as turns
-from yuxi.modules.agents.services.scope import ActorScope
+from test.integration.services.agent_input_fixtures import (
+    create_input_schema as _create_schema,
+)
+from test.integration.services.agent_input_fixtures import (
+    drop_input_schema as _drop_schema,
+)
+from test.integration.services.agent_input_fixtures import (
+    input_workdir_binding as _binding,
+)
+from test.integration.services.agent_input_fixtures import (
+    queue_inputs as _queue_inputs,
+)
+from test.integration.services.agent_run_test_helpers import settle_locked_run
 from yuxi.modules.agents.models.inputs import AgentInput, AgentInputReceipt
+from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.turns import AgentTurn
-from yuxi.modules.agents.models.messages import Message
+from yuxi.modules.agents.repositories.input_receipt import AgentInputReceiptRepository
+from yuxi.modules.agents.repositories.runs import AgentRunRepository
+from yuxi.modules.agents.repositories.sessions import SessionRepository
+from yuxi.modules.agents.scope import ActorScope
+from yuxi.shared.errors import StateConflictError
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
@@ -168,7 +174,7 @@ async def test_completion_winning_thread_lock_rejects_stale_cancel() -> None:
                 await control_started.wait()
                 await asyncio.sleep(0.05)
                 current = await AgentRunRepository(db).get_run(dispatch.run_id)
-                settled = await runs.settle_checkpoint(db=db, run=current, worker_id="owner-a", status="completed", token_usage=None)
+                settled = await settle_locked_run(db=db, run=current, worker_id="owner-a", status="completed", token_usage=None)
                 await db.commit()
                 return settled
 
@@ -185,11 +191,11 @@ async def test_completion_winning_thread_lock_rejects_stale_cancel() -> None:
                         turn_id=turn_id,
                         idempotency_key=str(uuid.uuid4()),
                     )
-                except HTTPException as exc:
-                    return exc.status_code
+                except StateConflictError:
+                    return "state_conflict"
 
         settled, rejected = await asyncio.gather(finish(), send_control())
-        assert (settled.status, settled.changed, rejected) == ("completed", True, 409)
+        assert (settled.status, settled.changed, rejected) == ("completed", True, "state_conflict")
         async with sessions() as db:
             run = await db.get(AgentRun, dispatch.run_id)
             turn = await db.get(AgentTurn, turn_id)
@@ -267,8 +273,9 @@ async def test_same_key_concurrent_cancel_replays_receipt_after_thread_lock(monk
 async def test_cancel_partial_snapshot_only_updates_existing_public_message(case):
     """取消快照保留可见正文；失效 owner、新 item 与工具写入均在真实 PG 边界拒绝。"""
     from datetime import timedelta
-    from yuxi.shared.datetime import utc_now
+
     from yuxi.modules.agents.repositories.public_items import PublicItemRepository
+    from yuxi.shared.datetime import utc_now
 
     schema, admin_engine, engine = await _create_schema()
     try:

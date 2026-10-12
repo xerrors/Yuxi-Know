@@ -73,6 +73,7 @@ async def _build_middlewares(context, backend, *, cleanup_model=None):
     middlewares.append(RuntimeAuthorizationMiddleware())
     # 图片回退读取授权过滤后的工具集，保持与实际模型请求一致。
     middlewares.append(ImageInputCompatibilityMiddleware())
+    context.middleware_tool_names = {tool.name for middleware in middlewares for tool in getattr(middleware, "tools", [])}
     return middlewares
 
 

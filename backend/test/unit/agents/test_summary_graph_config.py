@@ -210,8 +210,9 @@ async def test_image_fallback_uses_authorized_tools_from_shipping_middleware_ord
     context = _context()
     context.tools = ["ocr_parse_file"] if enabled else []
     context.mcps = []
-    context._registered_builtin_tool_names = {"ocr_parse_file"}
-    context._skill_runtime_snapshot = {"preloaded_skills": [], "effective_skills": [], "runtime_skills": {}}
+    context.registered_builtin_tool_names = {"ocr_parse_file"}
+    context.mcp_tool_servers = {}
+    context.skill_runtime_snapshot = {"preloaded_skills": [], "effective_skills": [], "runtime_skills": {}}
     _patch_common_graph_deps(monkeypatch, chatbot_graph, {})
     monkeypatch.setattr(chatbot_graph, "create_memory_middleware", AsyncMock(return_value=None))
     monkeypatch.setattr(chatbot_graph, "create_cooperation_middleware", lambda _context: None)

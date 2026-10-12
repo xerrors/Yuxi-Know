@@ -4,14 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from fastapi import HTTPException
-
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.workspace.models import Project
 from yuxi.modules.workspace.paths import ensure_bound_user_workdir
 from yuxi.modules.workspace.repositories.projects import ProjectRepository
 from yuxi.modules.workspace.workdir import Workdir
+from yuxi.shared.errors import ResourceNotFoundError
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,7 +105,7 @@ async def resolve_authorized_session_workdir(
         or getattr(agent_session, "app_id", None) != app_id
         or agent_session.status == "deleted"
     ):
-        raise HTTPException(status_code=404, detail="对话线程不存在")
+        raise ResourceNotFoundError("对话线程不存在")
     binding = await resolve_session_workdir_binding(
         agent_session=agent_session,
         uid=str(uid),
