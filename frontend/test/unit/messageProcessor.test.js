@@ -49,13 +49,13 @@ test('交付物只归属于调用 present_artifacts 的对话', () => {
   }
 
   assert.deepEqual(MessageProcessor.extractArtifactsFromMessageGroup(artifactSession), [
-    { path: '/home/gem/user-data/outputs/bubble_sort.py', type: 'file' },
-    { path: '/home/gem/user-data/outputs/bubble_sort.js', type: 'file' }
+    { path: '/home/gem/user-data/outputs/bubble_sort.py' },
+    { path: '/home/gem/user-data/outputs/bubble_sort.js' }
   ])
   assert.deepEqual(MessageProcessor.extractArtifactsFromMessageGroup(laterSession), [])
 })
 
-test('交付物保留显式类型，同一路径采用最近成功调用，失败与待执行调用不展示', () => {
+test('交付物忽略历史图片类型，保序去重，失败与待执行调用不展示', () => {
   const group = {
     messages: [
       {
@@ -91,8 +91,8 @@ test('交付物保留显式类型，同一路径采用最近成功调用，失�
     ]
   }
   assert.deepEqual(MessageProcessor.extractArtifactsFromMessageGroup(group), [
-    { path: '/a.png', type: 'image' },
-    { path: '/report.md', type: 'file' }
+    { path: '/a.png' },
+    { path: '/report.md' }
   ])
 })
 

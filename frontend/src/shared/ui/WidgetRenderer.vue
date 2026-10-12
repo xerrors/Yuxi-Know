@@ -9,24 +9,83 @@
       </details>
     </div>
     <template v-else>
-      <WidgetNode :node="parsed.node" :disabled="disabled" @action="handleAction" />
+      <WidgetNode :node="parsed.node" :disabled="disabled" @action="handleAction" @preview="preview = $event" />
       <p v-if="feedback" class="widget-notice" role="status">{{ feedback }}</p>
     </template>
+    <Modal
+      :open="Boolean(preview)"
+      :footer="null"
+      :closable="false"
+      :mask-closable="false"
+      width="100%"
+      wrap-class-name="widget-image-viewer"
+      :wrap-props="{ 'aria-label': '图片预览', 'aria-modal': true }"
+      destroy-on-close
+      @cancel="preview = null"
+    >
+      <div v-if="preview" class="widget-viewer-layout">
+        <div class="widget-viewer-toolbar">
+          <button type="button" class="widget-viewer-button" aria-label="关闭图片预览" @click="preview = null">
+            <X :size="22" aria-hidden="true" />
+          </button>
+        </div>
+        <div class="widget-viewer-stage">
+          <div class="yuxi-widget widget-image-preview">
+            <WidgetImage :key="preview.index" :node="previewNode" :previewable="false" />
+          </div>
+          <button
+            v-if="preview.images.length > 1"
+            type="button"
+            class="widget-viewer-button widget-viewer-previous"
+            aria-label="上一张"
+            :disabled="preview.index === 0"
+            @click="preview.index--"
+          ><ChevronLeft :size="24" aria-hidden="true" /></button>
+          <button
+            v-if="preview.images.length > 1"
+            type="button"
+            class="widget-viewer-button widget-viewer-next"
+            aria-label="下一张"
+            :disabled="preview.index === preview.images.length - 1"
+            @click="preview.index++"
+          ><ChevronRight :size="24" aria-hidden="true" /></button>
+        </div>
+        <p class="widget-viewer-caption">{{ preview.images[preview.index].caption || previewNode.alt }}</p>
+      </div>
+    </Modal>
   </div>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, provide, ref, watch } from 'vue'
 import WidgetNode from '@/shared/ui/WidgetNode.vue'
+import WidgetImage from '@/shared/ui/WidgetImage.vue'
+import { Modal } from 'ant-design-vue'
+import { X, ChevronLeft, ChevronRight } from '@lucide/vue'
 import { parseWidget } from '@/shared/lib/chatWidgets'
 const props = defineProps({
   source: { type: String, required: true },
   closed: Boolean,
   disabled: Boolean,
-  actionable: Boolean
+  actionable: Boolean,
+  imageLoader: { type: Function, default: null },
+  sourceImageLoader: { type: Function, default: null }
 })
+provide('widgetImageLoader', computed(() => props.imageLoader))
+provide('widgetSourceImageLoader', computed(() => props.sourceImageLoader))
 const emit = defineEmits(['action'])
 const feedback = ref('')
+const preview = ref(null)
+const previewNode = computed(() => {
+  if (!preview.value) return null
+  return { ...preview.value.images[preview.value.index], aspectRatio: undefined, fit: 'contain', caption: undefined }
+})
+watch([() => props.source, () => props.imageLoader, () => props.sourceImageLoader], () => { preview.value = null })
+watch(preview, (value, _previous, onCleanup) => {
+  if (!value) return
+  window.addEventListener('keydown', handlePreviewKeydown)
+  onCleanup(() => window.removeEventListener('keydown', handlePreviewKeydown))
+})
 const parsed = computed(() => {
   if (!props.closed) return {}
   try {
@@ -35,6 +94,24 @@ const parsed = computed(() => {
     return { error: error.message }
   }
 })
+
+/** 图片预览的方向键只切换当前图片组。 */
+function handlePreviewKeydown(event) {
+  if (!preview.value) return
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    preview.value = null
+    return
+  }
+  const index = preview.value.index
+  if (event.key === 'ArrowLeft' && index > 0) {
+    event.preventDefault()
+    preview.value.index--
+  } else if (event.key === 'ArrowRight' && index < preview.value.images.length - 1) {
+    event.preventDefault()
+    preview.value.index++
+  }
+}
 
 /** 明确告知操作结果，避免把草稿动作显示成业务完成。 */
 function handleAction(text) {
@@ -49,6 +126,121 @@ function handleAction(text) {
 </script>
 
 <style lang="less">
+.widget-image-viewer.ant-modal-wrap {
+  background: var(--color-bg-container);
+
+  .ant-modal {
+    top: 0;
+    width: 100% !important;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .ant-modal-content {
+    height: 100dvh;
+    padding: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  .ant-modal-body {
+    height: 100%;
+  }
+}
+
+.widget-viewer-layout {
+  display: grid;
+  grid-template-rows: 64px minmax(0, 1fr) 48px;
+  height: 100%;
+  color: var(--gray-900);
+}
+
+.widget-viewer-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 0 20px;
+}
+
+.widget-viewer-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--gray-200);
+  border-radius: 50%;
+  background: var(--color-bg-container);
+  color: var(--gray-900);
+  cursor: pointer;
+
+  &:hover:not(:disabled) { background: var(--gray-50); }
+  &:disabled { opacity: 0.3; cursor: default; }
+  &:focus-visible { outline: 2px solid var(--main-color); outline-offset: 3px; }
+}
+
+.widget-viewer-stage {
+  position: relative;
+  min-height: 0;
+  padding: 0 84px;
+
+  .yuxi-widget.widget-image-preview {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    margin: 0;
+
+    .widget-image {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      border-radius: 0;
+      background: transparent;
+    }
+
+    .widget-image img {
+      width: 100%;
+      height: 100%;
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+  }
+}
+
+.widget-viewer-previous,
+.widget-viewer-next {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.widget-viewer-previous { left: 20px; }
+.widget-viewer-next { right: 20px; }
+
+.widget-viewer-caption {
+  align-self: center;
+  margin: 0;
+  padding: 0 24px;
+  overflow: hidden;
+  color: var(--gray-600);
+  font-size: 13px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .widget-viewer-toolbar { padding: 0 12px; }
+  .widget-viewer-stage { padding: 0 12px; }
+  .widget-viewer-previous { left: 12px; }
+  .widget-viewer-next { right: 12px; }
+}
+
 .yuxi-widget,
 .yk-markdown-preview .yuxi-widget {
   --widget-surface: var(--color-bg-container);

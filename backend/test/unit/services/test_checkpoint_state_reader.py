@@ -71,8 +71,8 @@ async def test_checkpoint_reader_keeps_complete_snapshot_and_recovers_interrupt(
 
     values, pending = await svc._read_checkpoint_state(uid="user", thread_id="thread")
     snapshot = await graph.aget_state(config)
-    assert values["artifacts"] == [{"path": "saved.txt", "type": "file"}]
-    assert snapshot.values["artifacts"] == [{"path": "saved.txt", "type": "file"}, {"path": "pending.txt", "type": "file"}]
+    assert values["artifacts"] == ["saved.txt"]
+    assert snapshot.values["artifacts"] == ["saved.txt", "pending.txt"]
     assert pending == snapshot.tasks[0].interrupts[0]
     assert values["messages"][0].content == "start"
 
@@ -80,7 +80,7 @@ async def test_checkpoint_reader_keeps_complete_snapshot_and_recovers_interrupt(
     values, pending = await svc._read_checkpoint_state(uid="user", thread_id="thread")
     assert pending is None
     assert values["messages"][-1].content == "approved"
-    assert values["artifacts"] == [{"path": "saved.txt", "type": "file"}, {"path": "pending.txt", "type": "file"}]
+    assert values["artifacts"] == ["saved.txt", "pending.txt"]
 
 
 async def test_checkpoint_reader_missing_thread_is_empty(checkpoint_reader):

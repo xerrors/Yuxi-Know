@@ -8,6 +8,8 @@
       `widget-size-${node.size || 'md'}`
     ]"
     :style="nodeStyle"
+    :role="node.type === 'ImageGroup' ? 'group' : undefined"
+    :aria-label="node.type === 'ImageGroup' ? '图片组' : undefined"
     @submit.prevent="submitForm"
   >
     <button
@@ -22,6 +24,7 @@
         :key="index"
         :node="child"
         :disabled="disabled"
+        :previewable="false"
       />
     </button>
     <template v-else>
@@ -30,12 +33,21 @@
         :key="index"
         :node="child"
         :disabled="disabled"
+        :thumbnail="node.type === 'ImageGroup' || thumbnail"
+        :previewable="previewable"
+        @preview="previewImage($event, index)"
         @action="emit('action', $event)"
       />
     </template>
   </component>
   <WidgetChart v-else-if="node.type === 'Chart'" :node="node" :disabled="disabled" />
-  <WidgetImage v-else-if="node.type === 'Image'" :node="node" />
+  <WidgetImage
+    v-else-if="node.type === 'Image'"
+    :node="node"
+    :thumbnail="thumbnail"
+    :previewable="previewable"
+    @preview="emit('preview', { images: [node], index: 0 })"
+  />
   <component
     v-else-if="textTags[node.type]"
     :is="textTags[node.type]"
@@ -122,14 +134,20 @@ import { BookOpen, FileText, Lightbulb, Info, Check, Plus, Search, ChevronRight 
 import { composeWidgetMessage } from '@/shared/lib/chatWidgets'
 import WidgetChart from '@/shared/ui/WidgetChart.vue'
 import WidgetImage from '@/shared/ui/WidgetImage.vue'
-const props = defineProps({ node: { type: Object, required: true }, disabled: Boolean })
-const emit = defineEmits(['action'])
+const props = defineProps({
+  node: { type: Object, required: true },
+  disabled: Boolean,
+  thumbnail: Boolean,
+  previewable: { type: Boolean, default: true }
+})
+const emit = defineEmits(['action', 'preview'])
 const fieldValue = ref(props.node.defaultValue || '')
 const containers = {
   Card: 'section',
   Row: 'div',
   Col: 'div',
   ListView: 'ul',
+  ImageGroup: 'div',
   ListViewItem: 'li',
   Form: 'form'
 }
@@ -178,6 +196,11 @@ const nodeStyle = computed(() => {
   }
   return style
 })
+
+/** 图片组保留完整顺序，其他容器透传图片自身的预览。 */
+function previewImage(preview, index) {
+  emit('preview', props.node.type === 'ImageGroup' ? { images: props.node.children, index } : preview)
+}
 
 /** 表单值仅写入可审阅草稿，提交前使用浏览器原生校验。 */
 function submitForm(event) {

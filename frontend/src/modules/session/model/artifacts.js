@@ -1,10 +1,10 @@
-/** 统一旧路径与带展示类型的交付物，按路径保序并采用最近类型。 */
+/** 提取交付物路径，兼容旧 checkpoint 对象并按路径保序去重。 */
 export function normalizeArtifacts(artifacts = []) {
   const byPath = new Map()
   for (const item of artifacts) {
     const path = typeof item === 'string' ? item.trim() : item?.path?.trim()
     if (!path) continue
-    byPath.set(path, { path, type: item?.type === 'image' ? 'image' : 'file' })
+    byPath.set(path, { path })
   }
   return [...byPath.values()]
 }

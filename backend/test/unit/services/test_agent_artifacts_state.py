@@ -2,7 +2,6 @@ import pytest
 
 from yuxi.modules.agents.runtime.sandbox import backend as sandbox_backend
 from yuxi.modules.agents.runtime.state import merge_artifacts
-from pydantic import ValidationError
 
 from yuxi.modules.extensions.tools.builtin.present_artifacts import (
     PresentArtifactsInput,
@@ -43,44 +42,29 @@ def test_merge_artifacts_deduplicates_and_preserves_order():
         ["/home/gem/user-data/outputs/a.md"],
         ["/home/gem/user-data/outputs/a.md", "/home/gem/user-data/outputs/b.md"],
     ) == [
-        {"path": "/home/gem/user-data/outputs/a.md", "type": "file"},
-        {"path": "/home/gem/user-data/outputs/b.md", "type": "file"},
+        "/home/gem/user-data/outputs/a.md",
+        "/home/gem/user-data/outputs/b.md",
     ]
 
 
-def test_merge_artifacts_keeps_latest_type_without_duplicate_paths():
-    """同一路径的展示类型以最近登记为准，旧 checkpoint 仍可合并。"""
+def test_merge_artifacts_reads_legacy_objects_as_paths():
+    """旧 checkpoint 图片对象保留路径，合并不再保存展示类型。"""
     assert merge_artifacts(
         ["/a.png", {"path": "/b.md", "type": "file"}],
-        [{"path": "/a.png", "type": "image"}, {"path": "/c.png", "type": "file"}],
-    ) == [
-        {"path": "/a.png", "type": "image"},
-        {"path": "/b.md", "type": "file"},
-        {"path": "/c.png", "type": "file"},
-    ]
+        [{"path": "/a.png", "type": "image"}, "/c.png"],
+    ) == ["/a.png", "/b.md", "/c.png"]
     assert merge_artifacts(None, None) == []
-    assert merge_artifacts(["/a.png"], None) == [{"path": "/a.png", "type": "file"}]
+    assert merge_artifacts(["/a.png"], None) == ["/a.png"]
 
 
-@pytest.mark.parametrize("artifact_type", ["file", "image"])
-def test_present_artifacts_registers_explicit_type(monkeypatch, artifact_type):
-    """同一 PNG 可按指定类型交付。"""
+def test_present_artifacts_registers_paths_without_presentation_type(monkeypatch):
+    """PNG 与其他文件共用路径登记，工具 schema 不提供展示类型。"""
     _stub_output_exists(monkeypatch)
     path = "/home/gem/user-data/outputs/screenshot.png"
-    result = present_artifacts.func(filepaths=[path], runtime=_runtime_with_thread("thread-1"), tool_call_id="call-1", type=artifact_type)
-    assert result.update["artifacts"] == [{"path": path, "type": artifact_type}]
-    assert result.update["messages"][0].content == "已将交付物展示给用户"
-
-
-def test_present_artifacts_defaults_to_file_and_rejects_unknown_type(monkeypatch):
-    """省略类型按文件交付，模型输入中的未知类型被 schema 拒绝。"""
-    _stub_output_exists(monkeypatch)
-    path = "/home/gem/user-data/outputs/screenshot.png"
-    assert PresentArtifactsInput(filepaths=[path]).type == "file"
+    assert set(PresentArtifactsInput.model_json_schema()["properties"]) == {"filepaths"}
     result = present_artifacts.func(filepaths=[path], runtime=_runtime_with_thread("thread-1"), tool_call_id="call-1")
-    assert result.update["artifacts"] == [{"path": path, "type": "file"}]
-    with pytest.raises(ValidationError, match="file.*image"):
-        PresentArtifactsInput(filepaths=[path], type="video")
+    assert result.update["artifacts"] == [path]
+    assert result.update["messages"][0].content == "已将交付物展示给用户"
 
 
 def test_present_artifacts_does_not_register_missing_image(monkeypatch):
@@ -90,7 +74,6 @@ def test_present_artifacts_does_not_register_missing_image(monkeypatch):
         filepaths=["/home/gem/user-data/outputs/missing.png"],
         runtime=_runtime_with_thread("thread-1"),
         tool_call_id="call-1",
-        type="image",
     )
     assert "artifacts" not in result.update
     assert result.update["messages"][0].status == "error"

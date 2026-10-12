@@ -1,6 +1,6 @@
 ---
 name: chat-widgets
-description: "普通聊天的分类数值比较、图片介绍卡片、推荐选项续聊使用本 Skill：用户给出各类数值并想直观比较时绘制柱状图；给出图片地址并要图文介绍时展示图片卡片；要从几个推荐或方案中选一个继续时展示可点击列表。这三类请求应主动读取并使用本 Skill，无需用户说组件、按钮、Skill 或 JSON。也支持时间趋势折线图和短表单；明确要求纯文字、源码或概念解释时使用 Markdown。"
+description: "普通聊天的分类数值比较、单图和图片组展示、推荐选项续聊使用本 Skill：用户给出各类数值并想直观比较时绘制柱状图；给出图片地址或沙盒图片文件时直接在对话中展示图片，多张图合为一个横向图片组；要从几个推荐或方案中选一个继续时展示可点击列表。这三类请求应主动读取并使用本 Skill，无需用户说组件、按钮、Skill 或 JSON。也支持时间趋势折线图和短表单；明确要求纯文字、源码或概念解释时使用 Markdown。"
 version: "2026.10.12"
 ---
 
@@ -13,7 +13,7 @@ version: "2026.10.12"
 | 用户目的 | 最终回复 |
 |---|---|
 | 给出分类数值，希望直观比较、查看主要占比 | 简短结论 + Card 中的柱状图 + 单位与来源 |
-| 给出图片地址，希望图文介绍或继续规划 | Card 中的原地址图片、标题、短文；有继续意图时放草稿按钮 |
+| 展示一张或多张图片 | 单张以 Image 为根，多张以 ImageGroup 为根；短语用 Image.caption 放在左下角 |
 | 推荐多个安排/方案，方便选一个继续 | Card 中的 ListView，每项标题、理由、compose 动作 |
 
 这些短请求直接在回复里呈现内容即可。组件无需创建文件、执行脚本或更新待办。每个模板的开头是三个反引号紧接 `widget`，结尾是三个反引号。协议使用 Markdown 围栏，`<widget>` 标签不会被渲染。所有要展示的围栏放在最后一次工具调用之后的最终回复中，用户才能在正式消息里看到它。
@@ -69,42 +69,43 @@ version: "2026.10.12"
 
 分类和数值逐项对应用户数据。时间趋势沿用结构，将 series.type 改为 line，横轴使用日期。
 
-### 图片卡片模板
+### 单张图片与图片组模板
+
+单张图片直接使用 Image，不套 Card、Title 或 Text。caption 是可选短语，前端以半透明胶囊标签叠放在图片左下角；没有短语时只显示图片。
 
 ```widget
 {
-  "type": "Card",
-  "size": "full",
+  "type": "Image",
+  "src": "https://example.com/replace-with-real-image.jpg",
+  "alt": "用户提供的户外风景图片",
+  "caption": "周末去户外"
+}
+```
+
+多张图片始终合并到**一个** ImageGroup，children 只放 Image，前端以统一 5:4 缩略图横向排列，窄屏保持横向滑动，不显示滚动条。用户说“展示 N 张图片”或“N 个 Image 组件”时，理解为在同一个 ImageGroup 中放 N 个 Image。不要为每张图分别输出 Card、多个 Image 围栏或纵向图片列表，也不要把图片塞进 Card、Title、Text、Row 或 Col。图片组不叠加数量角标；点击任意图片可查看完整图片并切换。
+
+```widget
+{
+  "type": "ImageGroup",
   "children": [
     {
-      "type": "Title",
-      "value": "周末去户外"
+      "type": "Image",
+      "path": "/home/gem/user-data/projects/<project-dir>/first.png",
+      "alt": "第一张生成图片"
     },
     {
       "type": "Image",
-      "src": "https://example.com/replace-with-real-image.jpg",
-      "alt": "用户提供的户外风景图片",
-      "aspectRatio": 1.5
-    },
-    {
-      "type": "Text",
-      "value": "给自己半天闲暇，放慢脚步，轻松度过周末。"
-    },
-    {
-      "type": "Button",
-      "label": "继续规划行程",
-      "style": "primary",
-      "block": true,
-      "onClickAction": {
-        "type": "compose",
-        "text": "请帮我继续规划半天的户外行程。"
-      }
+      "path": "/home/gem/user-data/projects/<project-dir>/second.png",
+      "alt": "第二张生成图片",
+      "caption": "另一个方案"
     }
   ]
 }
 ```
 
-示例地址为保留域名占位符，替换为用户提供或已确认存在的实际地址。尚未实际读取画面时，说明与 alt 沿用用户描述；继续规划按钮只填入草稿。
+示例 URL 和文件路径均为占位符，替换为用户提供或工具确认存在的实际来源。尚未实际读取画面时，alt 和短语沿用用户描述。
+
+图片展示请求以对话正文中的图片为结果：用一两句简短引导后，立即输出一个顶格闭合的 Image 或 ImageGroup 围栏。不要长篇解释搜索过程、来源站点选择、地址验证或 HTTP 状态；没有被要求时不重复讲解图片检索方法。不要只返回 Markdown 图片链接、普通图片 Markdown、源代码或“已找到图片”的文字。需要说明来源时，围栏外最多附上简洁来源链接。Card 用于确有标题、文本或操作等内容的信息卡片；图片本身不构成套 Card 的理由。
 
 ### 推荐选择模板
 
@@ -185,9 +186,9 @@ version: "2026.10.12"
 
 输出前先完成结构检查：根对象、children 数组及每个节点都完整；所有键和字符串使用成对双引号；字段来自下表，括号与围栏闭合。JSON 按模板跨行缩进，每个节点独立成对象。最终回复只输出检查完成的组件；需要修改的草案在输出前修正，用户看到的是一份完整定稿。
 
-回答以普通 Markdown 说明结论和上下文。在卡片、图表、图片能清晰呈现内容，或选择选项能帮助用户继续对话时，补充一个顶格、完整闭合的 `widget` 围栏，内容是严格 JSON。每个围栏的根为 `Card` 或 `ListView`；围栏外继续放背景、完整明细和来源。用用户语言表达标签与动作，只展示已有数据或明确标注的示例数据。
+回答以普通 Markdown 说明结论和上下文。在卡片、图表、图片能清晰呈现内容，或选择选项能帮助用户继续对话时，补充一个顶格、完整闭合的 `widget` 围栏，内容是严格 JSON。每个围栏的根为 `Card`、`ListView`、`Image` 或 `ImageGroup`；围栏外继续放背景、完整明细和来源。图片展示请求遵循上面的简短图片回复规则，避免背景说明挤走对话中的图片。用用户语言表达标签与动作，只展示已有数据或明确标注的示例数据。
 
-先完成数据获取、计划更新等工具调用，再在最终给用户的回复中输出完整组件。组件若只出现在工具调用前的过程消息中，用户可能只看到过程摘要；最终回复必须包含需要展示的 `widget` 围栏。不要仅宣称“图表已绘制”或“图片已展示”。用户请求多张图时，分别输出多个完整围栏，每个图表保留自己的标题、单位与数据来源。
+先完成数据获取、计划更新等工具调用，再在最终给用户的回复中输出完整组件。组件若只出现在工具调用前的过程消息中，用户可能只看到过程摘要；最终回复必须包含需要展示的 `widget` 围栏。不要仅宣称“图表已绘制”或“图片已展示”。用户请求多个图表时，分别输出多个完整围栏，每个图表保留自己的标题、单位与数据来源。多张图片放在一个 ImageGroup 中。
 
 定稿时按属性表核对定义：字段名和字符串使用成对双引号，只保留当前组件支持的属性，省略未使用的可选字段。Divider、Spacer 的完整定义只有 `{"type":"Divider"}`、`{"type":"Spacer"}`。
 
@@ -202,7 +203,8 @@ version: "2026.10.12"
 | Title、Text、Caption | `value`；可选 `size`、`weight`、`textAlign`、`color` |
 | Badge | `label`；可选 `color`：secondary、success、warning、danger、info；`variant`：solid、soft（默认）、outline；`size`：sm、md、lg；`pill` |
 | Chart | `label`（图表说明）、`data`、`series`、`xAxis`；可选 `showLegend`、`height`；柱状图/折线图 |
-| Image | `src`、`alt`（非空图片说明）；可选 `fit`：cover、contain；`aspectRatio`：0.5–3 的数字 |
+| Image | `src`（HTTPS/同源 URL）或 `path`（沙盒虚拟绝对路径），二选一；`alt`（非空图片说明）；可选 `caption`（左下角短语）、`fit`：cover、contain；`aspectRatio`：0.5–3 的数字 |
+| ImageGroup | `children`，至少一个 Image；统一 5:4 缩略图横向滑动，不显示滚动条或数量角标；支持作为根节点 |
 | Icon | `name`：book-open、document、lightbulb、info、check、plus、search、chevron-right；可选 `size`：xs、sm、md、lg、xl；`color` |
 | Divider、Spacer | 只有 `type`；分割线、弹性空白 |
 | Button | `label`；可选 `style`：primary、secondary；普通按钮必须有 `onClickAction`；`color`：primary、secondary；`variant`：solid、soft、outline、ghost；`size`：sm、md、lg；`pill`、`block`、`iconStart`、`iconEnd` |
@@ -220,7 +222,7 @@ version: "2026.10.12"
 
 ## 图表与图片组合
 
-组件用于呈现内容，也可有下一步动作；不必为了使用组件而添加表单。比较分类用柱状图，观察时间趋势用折线图；Card 内放 Title、Caption、Chart，末尾按需要补充 Button。图片可与标题、说明、标签组合为内容卡片。
+组件用于呈现内容，也可有下一步动作；不必为了使用组件而添加表单。比较分类用柱状图，观察时间趋势用折线图；Card 内放 Title、Caption、Chart，末尾按需要补充 Button。图片直接使用 Image 或 ImageGroup；需要短语时用 caption 放在图片左下角，详细说明和来源放围栏外。
 
 Chart.data 为 0–60 个对象，每行只包含 xAxis 指定的类别列和 series 指定的数值列。类别为非空字符串，数值为有限数字（绝对值不超过 1e12），可以为 0 或负数。series 为 1–3 个 `{type:"bar"或"line",dataKey:"列名",label:"图例文字"}`；dataKey 唯一且不同于 xAxis。列名使用字母开头的字母/数字/下划线，最多 40 字符，禁用 constructor、prototype、__proto__。height 是 180–400 的整数像素值，默认 240；showLegend 默认 true。不要输出 ECharts option、formatter、函数或任意系列属性；单位放 Caption。未给出数据时不要编造结果，使用空 data 或明确标记示例数据。
 
@@ -232,7 +234,7 @@ Chart.data 为 0–60 个对象，每行只包含 xAxis 指定的类别列和 se
 
 绘制每日最高/最低温时优先使用逐日预报字段。小时预报采样的最大/最小值只标为“采样最高/最低温”，缺少全天时段时在图卡中注明；未来的预报值不能称为实测值。
 
-Image.src 只接受无凭据的 HTTPS URL 或同源 `/...` 路径，不能用协议相对 URL、data/file/javascript URL、宿主机或沙盒路径。只使用已知存在的图片地址，不猜测路径；图片来源和说明放 Caption，alt 描述图片内容。尚未实际读取图片时，alt 和说明沿用用户描述，保留已知内容。fit 默认 cover，aspectRatio 默认 16/9。
+Image 使用 src 或 path 之一，alt 描述图片内容。src 接受无凭据的 HTTPS URL 或同源 `/...` 路径；不能用协议相对 URL、data/file/javascript URL。path 使用已存在的沙盒虚拟绝对路径，例如 `{"type":"Image","path":"/home/gem/user-data/projects/<project-dir>/generated-image.png","alt":"生成的图片"}`，自定义虚拟根时沿用工具返回的真实路径。沙盒图片由当前会话鉴权读取，无需调用 present_artifacts；支持 user-data 和已授权 Skills 中的普通图片文件，临时目录图片先保存到 Workdir。直接填真实文件路径，不拼接 API URL 或 Token，不使用路径跳转或宿主机路径。只使用已知存在的图片地址，不猜测路径；图片来源和详细说明放围栏外，简短说明可用 caption。尚未实际读取图片时，alt 和说明沿用用户描述，保留已知内容。单张图片默认铺满正文宽度并保留原始宽高比；只有用户需要特定比例时才显式设置 aspectRatio，并按需要选择 cover 或 contain（默认）。ImageGroup 的缩略图统一使用 5:4 和 cover；点击后以完整比例预览，支持前后切换、方向键和 Esc 关闭。
 
 ## 草稿动作与短表单
 

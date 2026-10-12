@@ -5,6 +5,7 @@
     widgets
     :widgets-disabled="widgetsDisabled"
     :widget-action="widgetAction"
+    :widget-image-loader="widgetImageLoader"
     code-copy
     class="message-md"
     @open-reference="openReference"
@@ -26,6 +27,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
+import { threadApi } from '@/apis/agent_api'
 import MarkdownPreview from '@/modules/workspace/ui/MarkdownPreview.vue'
 import FileDetailModal from '@/modules/knowledge/ui/FileDetailModal.vue'
 import { useTurnReferencesStore } from '@/modules/session/model/turnReferences'
@@ -36,6 +38,10 @@ const props = defineProps({
   content: { type: String, default: '' },
   threadId: { type: String, default: '' },
   message: { type: Object, required: true }
+})
+const widgetImageLoader = computed(() => {
+  const threadId = props.threadId
+  return threadId ? (path) => threadApi.previewThreadArtifact(threadId, path) : null
 })
 const store = useTurnReferencesStore()
 const selected = ref(null)

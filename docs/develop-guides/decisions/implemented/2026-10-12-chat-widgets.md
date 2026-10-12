@@ -14,9 +14,9 @@ Owner：frontend/src/shared/lib/chatWidgets.js
 
 内置 `chat-widgets` 的描述覆盖分类比较、时间趋势、图文介绍和推荐选择。正文维护有限协议、完整跨行示例和最终回复约束，模型通过既有 Skill discovery/read_file 按需读取。ChatBotContext 继承 BaseContext 的空预加载默认值，不增加组件特例、关键词路由或模型输出改写。显式 Skills 允许列表需要包含该 Skill；默认全部选择沿既有授权归一化发现能力。
 
-`chatWidgets.js` 在模型 JSON 边界校验19种有限节点、受限呈现属性和 compose 动作，根为 Card 或 ListView。`WidgetRenderer.vue`、`WidgetNode.vue` 使用 Vue 文本插值和固定样式映射；非法 JSON、未知属性和服务端动作显示诊断及原始内容，未闭合围栏显示生成状态。限制为24000字符、100节点、8层，字段和选项唯一，整行列表禁止嵌套交互控件；不接收任意 HTML、CSS、脚本或图表配置。
+`chatWidgets.js` 在模型 JSON 边界校验有限节点、受限呈现属性和 compose 动作，根为 Card、ListView、Image 或 ImageGroup。`WidgetRenderer.vue`、`WidgetNode.vue` 使用 Vue 文本插值和固定样式映射；非法 JSON、未知属性和服务端动作显示诊断及原始内容，未闭合围栏显示生成状态。限制为24000字符、100节点、8层，字段和选项唯一，整行列表禁止嵌套交互控件；不接收任意 HTML、CSS、脚本或图表配置。
 
-`WidgetChart.vue` 复用现有 ECharts 的 SVG renderer，支持有限 data/series/xAxis、柱状与折线、图例、悬停数值、可展开数据表、零/负值及空数据。组件拥有 resize/dispose、主题重绘与本地图例状态。`WidgetImage.vue` 使用原生 img，提供加载/失败/恢复状态；受保护图片沿已有 Markdown 鉴权请求加载。Markdown 拥有 blob URL 生命周期，复用仍挂载的资源，移除或卸载时释放。
+`WidgetChart.vue` 复用现有 ECharts 的 SVG renderer，支持有限 data/series/xAxis、柱状与折线、图例、悬停数值、可展开数据表、零/负值及空数据。组件拥有 resize/dispose、主题重绘与本地图例状态。`WidgetImage.vue` 使用原生 img，提供加载/失败状态；HTTPS/同源图片使用 src，沙盒文件使用 path，通过会话注入的鉴权预览读取能力加载。Image 拥有沙盒图片 Blob URL 生命周期，移除或卸载时释放，单图和图片组直接展示，caption 胶囊放在图片左下角，单图保留原始比例并铺满正文，图片组使用统一缩略图横向浏览和完整图片预览；具体文件边界与兼容决定见[沙盒图片展示决策](./2026-10-12-widget-sandbox-images.md)。
 
 `MarkdownPreview.vue` 在正式聊天显式启用时挂载组件，相同 JSON 与闭合状态的 DOM 在正文追加、主题和行号变化时复用，保留字段值；定义改变后重建。JSON 保留原始文本，弯引号修复只作用于围栏外；引用行定位沿原 Markdown Owner。`SessionWorkspace.vue` 经普通消息和折叠过程组传递 compose 动作，将可见标签、值和动作文字追加到草稿并聚焦，用户发送后走既有 Input 链路。整组生成期间控件只读，较早闭合消息也遵循该边界。
 
@@ -32,7 +32,7 @@ Owner：frontend/src/shared/lib/chatWidgets.js
 |---|---|
 | 摘要与推荐列表 | 布局、字号、标签、图标、按钮变体和整行键盘动作；沿用 Yuxi 色彩字体，不承诺像素级复制 |
 | 图表 | bar/line、真实图例/悬停、响应式及双主题，补充数据表；area、堆叠、任意坐标和自定义颜色未实现 |
-| 图片 | HTTPS/同源src、alt、cover/contain、宽高比、固定圆角与加载恢复；图片上传、放大及完整尺寸协议未实现 |
+| 图片 | HTTPS/同源src或沙盒path、alt、可选左下角caption、原始比例或显式cover/contain、图片组与加载状态；图片上传及任意尺寸协议未实现 |
 | 短表单 | 原生 Input/Select/Textarea、可见标签和必填校验；弹层随平台，字段收集到草稿 |
 | 双主题与布局 | 跟随全局主题，有限尺寸/间距枚举；没有独立组件theme、任意CSS或Card根级确认配置 |
 | 动作与流式 | compose草稿、生成期只读、闭合后显示；没有服务端action、自动发送或逐节点流式更新 |
@@ -47,7 +47,7 @@ Owner：frontend/src/shared/lib/chatWidgets.js
 
 ## 后果
 
-这是 Yuxi 的受限组件子集，完整 SDK 兼容、服务端动作、任意脚本、日期控件、饼图和持久表单状态不在范围内。图表最多60条、3个系列、高度180–400px；图片拒绝危险协议、凭据URL和宿主/沙盒路径。动作不承担审批或权限，也不表达业务完成。刷新或修改定义后表单恢复默认值，外链图片依赖源站。
+这是 Yuxi 的受限组件子集，完整 SDK 兼容、服务端动作、任意脚本、日期控件、饼图和持久表单状态不在范围内。图表最多60条、3个系列、高度180–400px；图片拒绝危险协议、凭据URL和宿主路径；沙盒 path 与 URL src 二选一，文件授权由后端执行。动作不承担审批或权限，也不表达业务完成。刷新或修改定义后表单恢复默认值，外链图片依赖源站。
 
 自然选择和合法输出由模型决定，DeepSeek 的渐进发现存在漏读与非法草案。渲染成功不证明图片被识别或数据真实；预加载条件下的成功结果不能作为当前按需发现的成功率。新增专项测试脚本按用户要求移除，留存的阶段实验只能作为历史证据，常规 unit 不覆盖其全部协议边界。
 

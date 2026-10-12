@@ -1,7 +1,7 @@
 const MAX_SOURCE_LENGTH = 24000
 const MAX_NODES = 100
 const MAX_DEPTH = 8
-const containerTypes = new Set(['Card', 'ListView', 'ListViewItem', 'Row', 'Col', 'Form'])
+const containerTypes = new Set(['Card', 'ListView', 'ListViewItem', 'Row', 'Col', 'Form', 'ImageGroup'])
 const textTypes = new Set(['Title', 'Text', 'Caption'])
 const layoutProperties = ['gap', 'padding', 'align', 'justify', 'flex']
 const textProperties = ['size', 'weight', 'textAlign', 'color']
@@ -28,7 +28,8 @@ const properties = {
   Badge: ['label', 'color', 'variant', 'size', 'pill'],
   Icon: ['name', 'size', 'color'],
   Chart: ['label', 'data', 'series', 'xAxis', 'showLegend', 'height'],
-  Image: ['src', 'alt', 'fit', 'aspectRatio'],
+  Image: ['src', 'path', 'alt', 'caption', 'fit', 'aspectRatio'],
+  ImageGroup: ['children'],
   Divider: [],
   Spacer: [],
   Button: [
@@ -53,7 +54,8 @@ const properties = {
 export function parseWidget(source) {
   if (source.length > MAX_SOURCE_LENGTH) throw new Error('组件 JSON 超过 24000 字符')
   const root = JSON.parse(source)
-  if (!['Card', 'ListView'].includes(root?.type)) throw new Error('根组件必须是 Card 或 ListView')
+  if (!['Card', 'ListView', 'Image', 'ImageGroup'].includes(root?.type))
+    throw new Error('根组件必须是 Card、ListView、Image 或 ImageGroup')
   let count = 0
   const names = new Set()
   const string = (value) => typeof value === 'string' && value.length <= 4000
@@ -182,23 +184,33 @@ export function parseWidget(source) {
         throw new Error('Chart showLegend 必须是布尔值')
     }
     if (node.type === 'Image') {
-      if (!string(node.src) || !node.src || /[\s\\]/.test(node.src))
-        throw new Error('Image src 必须是 HTTPS URL 或同源绝对路径')
-      let url
-      try {
-        url = new URL(node.src, 'https://widget.invalid')
-      } catch {
-        throw new Error('Image src 必须是 HTTPS URL 或同源绝对路径')
+      if ((node.src !== undefined) === (node.path !== undefined))
+        throw new Error('Image 必须指定 src 或 path 之一')
+      if (node.path !== undefined) {
+        if (!string(node.path) || !node.path.startsWith('/') || node.path.startsWith('//') ||
+            /[\\\0]/.test(node.path) || node.path.includes('://') || node.path.split('/').includes('..'))
+          throw new Error('Image path 必须是无跳转的沙盒虚拟绝对路径')
+      } else {
+        if (!string(node.src) || !node.src || /[\s\\]/.test(node.src))
+          throw new Error('Image src 必须是 HTTPS URL 或同源绝对路径')
+        let url
+        try {
+          url = new URL(node.src, 'https://widget.invalid')
+        } catch {
+          throw new Error('Image src 必须是 HTTPS URL 或同源绝对路径')
+        }
+        if (
+          (!node.src.startsWith('https://') &&
+            (!node.src.startsWith('/') || node.src.startsWith('//'))) ||
+          url.protocol !== 'https:' ||
+          url.username ||
+          url.password
+        )
+          throw new Error('Image src 必须是无凭据的 HTTPS URL 或同源绝对路径')
       }
-      if (
-        (!node.src.startsWith('https://') &&
-          (!node.src.startsWith('/') || node.src.startsWith('//'))) ||
-        url.protocol !== 'https:' ||
-        url.username ||
-        url.password
-      )
-        throw new Error('Image src 必须是无凭据的 HTTPS URL 或同源绝对路径')
       if (!string(node.alt) || !node.alt.trim()) throw new Error('Image 需要非空 alt')
+      if (node.caption !== undefined && (!string(node.caption) || !node.caption.trim()))
+        throw new Error('Image caption 必须是非空短语')
       if (node.fit !== undefined && !['cover', 'contain'].includes(node.fit))
         throw new Error('Image fit 只支持 cover/contain')
       if (
@@ -270,7 +282,11 @@ export function parseWidget(source) {
       throw new Error('Form 不能嵌套且需要 compose 提交动作')
     if (containerTypes.has(node.type)) {
       if (!Array.isArray(node.children)) throw new Error('容器需要 children 数组')
+      if (node.type === 'ImageGroup' && !node.children.length)
+        throw new Error('ImageGroup 至少需要一张图片')
       for (const child of node.children) {
+        if (node.type === 'ImageGroup' && child?.type !== 'Image')
+          throw new Error('ImageGroup 只能包含 Image')
         if (node.type === 'ListView' && child?.type !== 'ListViewItem')
           throw new Error('ListView 只能包含 ListViewItem')
         visit(
@@ -306,4 +322,5 @@ export function widgetFencePlugin(md) {
       : ''
     return `<div class="widget-preview-render"${lines}><pre class="widget-source" hidden>${md.utils.escapeHtml(token.content)}</pre><div class="widget-mount" data-widget-closed="${closed}"></div></div>`
   }
+
 }

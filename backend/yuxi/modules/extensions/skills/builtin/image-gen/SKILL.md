@@ -3,6 +3,7 @@ name: image-gen
 description: "在 Agent 沙盒中生成并保存图片。当用户要求生成图片、海报、插画、文生图，或指定 Qwen-Image、其它兼容图片生成接口时使用此技能。"
 version: "2026.06.02"
 tool_dependencies: ["present_artifacts"]
+skill_dependencies: ["chat-widgets"]
 ---
 
 # 图片生成技能
@@ -29,7 +30,7 @@ tool_dependencies: ["present_artifacts"]
 3. 从生成接口响应中读取图片地址，默认路径为 `images[0].url`。
 4. 在同一个沙盒脚本中用 `Authorization: Bearer $SILICONFLOW_API_KEY` 下载该图片地址；如果接口直接返回 base64，则直接解码保存。
 5. 根据用户要求和项目结构，将最终图片保存到当前 Workdir 中合适的位置。
-6. 调用 `present_artifacts`，将保存后的绝对虚拟路径放入 `filepaths`，指定 `type: "image"`，让前端直接预览图片。
+6. 读取 `chat-widgets` Skill，在最终回复的完整 widget 围栏中输出独立 Image，多张图片使用 ImageGroup；path 使用保存后的绝对虚拟路径，alt 描述图片内容，需要短语时用 caption 放在左下角。用户需要下载或保存文件时，同时调用 `present_artifacts` 登记路径。
 7. 最终回复简要说明图片已生成，不要把外部临时 URL 当作最终结果展示。
 
 ## 脚本示例
@@ -75,11 +76,11 @@ print(output_path.as_posix())
 
 ## 多模型扩展
 
-如果用户指定其它图片生成模型或兼容接口，可以按该接口的协议先生成图片。只要最终拿到图片 bytes 或 base64，就保存到当前 Workdir 中合适的位置，再调用 `present_artifacts` 展示。
+如果用户指定其它图片生成模型或兼容接口，可以按该接口的协议先生成图片。只要最终拿到图片 bytes 或 base64，就保存到当前 Workdir 中合适的位置，再按 `chat-widgets` 的 Image 协议展示。
 
 ## 关键约束
 
 - 不要把外部生成接口返回的临时 URL 当作最终结果直接展示给用户。
 - 不要调用后端 MinIO 上传工具；图片生成和下载都应在沙盒内完成。
 - 如果 `SILICONFLOW_API_KEY` 缺失，应明确提示用户需要在 Agent 沙盒环境变量中配置。
-- 保存图片后必须调用 `present_artifacts`，否则前端不会自动展示生成图片。
+- 保存图片后在最终回复中输出完整 Image widget；`present_artifacts` 只展示可下载、可保存的文件卡片。

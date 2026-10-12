@@ -43,6 +43,7 @@ const props = defineProps({
   widgets: { type: Boolean, default: false },
   widgetsDisabled: { type: Boolean, default: false },
   widgetAction: { type: Function, default: null },
+  widgetImageLoader: { type: Function, default: null },
   references: { type: Array, default: () => [] },
   content: {
     type: String,
@@ -76,6 +77,14 @@ const props = defineProps({
 const emit = defineEmits(['open-reference'])
 
 const themeStore = useThemeStore()
+/** 为组件与预览提供同源受保护图片读取，外源不携带凭据。 */
+const widgetSourceImageLoader = computed(() => {
+  const resourceBaseUrl = props.resourceBaseUrl
+  return (source) => {
+    const imageUrl = resolveMarkdownImageUrl(source, resourceBaseUrl, window.location.origin)
+    return imageUrl ? apiGet(imageUrl, {}, true, 'blob') : null
+  }
+})
 const shikiTheme = computed(() => (themeStore.isDark ? 'github-dark' : 'github-light'))
 const previewRef = ref(null)
 const referencePreview = ref(null)
@@ -335,13 +344,15 @@ const enhanceWidgets = () => {
       closed: slot.dataset.widgetClosed === 'true',
       disabled: props.widgetsDisabled,
       actionable: Boolean(props.widgetAction),
+      imageLoader: props.widgetImageLoader,
+      sourceImageLoader: widgetSourceImageLoader.value,
       onAction: (text) => props.widgetAction?.(text)
     }), slot)
     widgetMounts.add(slot)
   })
 }
 
-watch(() => props.widgetsDisabled, enhanceWidgets)
+watch([() => props.widgetsDisabled, () => props.widgetImageLoader, widgetSourceImageLoader], enhanceWidgets)
 
 const enhanceCodeBlocks = () => {
   const root = previewRef.value
@@ -382,6 +393,8 @@ const enhanceDocumentImages = () => {
   if (!root) return
 
   root.querySelectorAll('img').forEach((img) => {
+    // Widget 图片自己拥有鉴权请求与 Blob，Markdown 只增强正文图片。
+    if (img.closest('.yuxi-widget')) return
     const src = img.getAttribute('src')
     const imageUrl = resolveMarkdownImageUrl(src, props.resourceBaseUrl, window.location.origin)
     if (!imageUrl || img.dataset.documentImageLoaded || img.dataset.documentImageLoading) return

@@ -61,9 +61,9 @@ export class MessageProcessor {
   }
 
   /**
-   * 提取一轮对话中已成功登记的交付物路径与展示类型。
+   * 提取一轮对话中已成功登记的交付物路径。
    * @param {Object} group - 单轮对话
-   * @returns {Array<{path: string, type: string}>} 去重后的交付物
+   * @returns {Array<{path: string}>} 去重后的交付物
    */
   static extractArtifactsFromMessageGroup(group) {
     if (!group || !Array.isArray(group.messages)) return []
@@ -89,7 +89,7 @@ export class MessageProcessor {
         const filepaths = Array.isArray(args?.filepaths) ? args.filepaths : []
         for (const filepath of filepaths) {
           const normalizedPath = typeof filepath === 'string' ? filepath.trim() : ''
-          if (normalizedPath) artifacts.push({ path: normalizedPath, type: args.type || 'file' })
+          if (normalizedPath) artifacts.push({ path: normalizedPath })
         }
       }
     }
