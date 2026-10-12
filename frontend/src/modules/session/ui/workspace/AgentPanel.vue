@@ -237,6 +237,7 @@
       default-mode="file"
       :file-search="searchActiveTreeFiles"
       :file-placeholder="fileSearchPlaceholder"
+      :file-scope-hint="activeTreeScope === 'workspace' ? '仅搜索个人空间，不包含知识库文件。' : '仅搜索当前对话或关联项目的工作目录。'"
       @select-file="handleSearchSelect"
     />
   </div>

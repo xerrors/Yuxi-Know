@@ -82,7 +82,9 @@ function publicErrorMessage(url, status, headers, requiresAuth) {
     if (requiresAuth) return '登录已过期，请重新登录'
     return path === '/api/auth/token' ? '用户名或密码错误' : '认证请求失败'
   }
-  if (status === 403) return '没有权限执行此操作'
+  if (status === 403) {
+    return !requiresAuth && path === '/api/auth/token' ? '账号已注销，请联系管理员' : '没有权限执行此操作'
+  }
   if (status === 404) return '请求资源不存在'
   if (status === 409) return '请求冲突，请刷新后重试'
   if (status === 410) return '请求已失效'

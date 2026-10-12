@@ -550,6 +550,7 @@ provide('settingsModal', {
       :recent-threads="threads.filter((thread) => !thread.yuxi.parent_session_id)"
       :file-search="searchWorkspace"
       file-placeholder="搜索个人空间文件..."
+      file-scope-hint="仅搜索个人空间，不包含知识库文件。"
       @select-thread="handleSearchSelectThread"
       @create-thread="handleCreateSessionFromSearch"
       @thread-found="handleSearchThreadFound"

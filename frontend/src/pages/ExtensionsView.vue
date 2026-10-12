@@ -31,6 +31,7 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
+import { message } from 'ant-design-vue'
 import { useRoute, useRouter } from 'vue-router'
 import ToolsCardList from '@/modules/extensions/ui/ToolsCardList.vue'
 import McpCardList from '@/modules/extensions/ui/McpCardList.vue'
@@ -100,7 +101,10 @@ watch(
   ([tab]) => {
     const nextTab = normalizeTab(tab)
     if (activeTab.value !== nextTab) activeTab.value = nextTab
-    if (tab && tab !== nextTab) replaceTabQuery(nextTab)
+    if (tab && tab !== nextTab) {
+      message.info('该扩展标签不可用，已切换到可访问的标签')
+      replaceTabQuery(nextTab)
+    }
   },
   { immediate: true }
 )

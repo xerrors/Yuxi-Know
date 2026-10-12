@@ -18,10 +18,12 @@
         </a-tooltip>
         <a-button v-if="userStore.isSuperAdmin" type="primary" @click="handleMcpAdd" class="lucide-icon-btn">
           <Plus :size="14" />
-          <span>添加 MCP</span>
+          <span>新增服务</span>
         </a-button>
       </template>
     </PageShoulder>
+
+    <p class="mcp-usage-hint">启用服务后，还需在智能体的工具配置中绑定，或由 Skill 依赖激活后使用。</p>
 
     <div
       v-if="filteredEnabledServers.length === 0 && filteredDisabledServers.length === 0"
@@ -34,7 +36,7 @@
     </div>
 
     <template v-else>
-      <div v-if="filteredEnabledServers.length" class="extension-section-header">已添加</div>
+      <div v-if="filteredEnabledServers.length" class="extension-section-header">已启用</div>
       <ExtensionCardGrid v-if="filteredEnabledServers.length" :min-width="300">
         <InfoCard
           v-for="server in filteredEnabledServers"
@@ -52,7 +54,7 @@
               type="button"
               class="mcp-card-action mcp-card-action-danger"
               :disabled="isActionLoading(server)"
-              :aria-label="server.is_builtin ? '移除 MCP' : '删除 MCP'"
+              :aria-label="server.is_builtin ? '停用服务' : '删除服务'"
               @click.stop="handleRemoveServer(server)"
             >
               <Check :size="15" class="action-icon action-icon-check" />
@@ -62,7 +64,7 @@
         </InfoCard>
       </ExtensionCardGrid>
 
-      <div v-if="filteredDisabledServers.length" class="extension-section-header">可添加</div>
+      <div v-if="filteredDisabledServers.length" class="extension-section-header">未启用</div>
       <ExtensionCardGrid v-if="filteredDisabledServers.length" :min-width="300">
         <InfoCard
           v-for="server in filteredDisabledServers"
@@ -80,7 +82,7 @@
               type="button"
               class="mcp-card-action"
               :disabled="isActionLoading(server)"
-              aria-label="添加 MCP"
+              aria-label="启用服务"
               @click.stop="handleSetServerEnabled(server, true)"
             >
               <Plus :size="15" class="action-icon" />
@@ -147,7 +149,7 @@
             @click="handleSetServerEnabled(previewServer, true)"
           >
             <template #icon><Plus :size="14" /></template>
-            添加
+            启用服务
           </a-button>
         </div>
       </div>
@@ -245,7 +247,7 @@ const handleSetServerEnabled = async (server, enabled) => {
     actionLoadingSlug.value = server.slug
     const result = await mcpApi.updateMcpServerStatus(server.slug, enabled)
     if (result.success) {
-      message.success(result.message || `MCP 已${enabled ? '添加' : '移除'}`)
+      message.success(enabled ? '服务已启用，请在智能体工具配置中绑定或通过 Skill 依赖激活' : '服务已停用')
       if (enabled) closeBasicInfo()
       await fetchServers()
     } else {
@@ -314,6 +316,12 @@ defineExpose({ fetchServers, loading })
 </script>
 
 <style lang="less" scoped>
+.mcp-usage-hint {
+  margin: 0 16px 16px;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+}
+
 
 .info-card-emoji-icon {
   font-size: 18px;

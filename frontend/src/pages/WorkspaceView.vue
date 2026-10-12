@@ -31,7 +31,18 @@
       default-mode="file"
       :file-search="searchWorkspace"
       file-placeholder="搜索个人空间文件..."
+      file-scope-hint="仅搜索个人空间，不包含知识库文件。"
       @select-file="handleFileSearchSelect"
+    />
+
+    <a-alert
+      v-if="uploadError && activeSourceKey === 'personal'"
+      class="upload-error"
+      type="error"
+      :message="uploadError"
+      show-icon
+      closable
+      @close="uploadError = ''"
     />
 
     <div class="workspace-shell" :class="{ 'is-sidebar-collapsed': sidebarCollapsed }">
@@ -296,6 +307,7 @@ const agentsGuideModalVisible = ref(false)
 const newDirectoryName = ref('')
 const creatingDirectory = ref(false)
 const uploadingFile = ref(false)
+const uploadError = ref('')
 const uploadInputRef = ref(null)
 const deletingPaths = ref([])
 const sidebarCollapsed = ref(false)
@@ -803,13 +815,16 @@ const handleUploadInputChange = async (event) => {
   }
 
   uploadingFile.value = true
+  uploadError.value = ''
   try {
     await uploadWorkspaceFiles(currentPath.value, files)
     await loadWorkspaceEntries(currentPath.value)
     message.success(`${files.length} 个文件上传成功`)
   } catch (error) {
     console.warn('上传文件失败:', error)
-    message.error(error?.message || '上传文件失败')
+    const hint = error?.status === 400 ? ' 请检查是否存在同名文件，重命名后再上传。' : ''
+    uploadError.value = `${files.map((file) => file.name).join('、')} 上传失败：${error?.message || '请重试'}。${hint}`
+    message.error(uploadError.value)
   } finally {
     uploadingFile.value = false
     event.target.value = ''
@@ -997,6 +1012,11 @@ watch([useInlinePreview, workspaceActive], ([isInline, isActive]) => {
 </script>
 
 <style scoped lang="less">
+.upload-error {
+  margin: 12px;
+  overflow-wrap: anywhere;
+}
+
 .workspace-view {
   display: flex;
   flex-direction: column;

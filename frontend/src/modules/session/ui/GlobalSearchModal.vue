@@ -86,7 +86,7 @@
 
             <div v-else-if="fileSearchError" class="global-search-error">{{ fileSearchError }}</div>
 
-            <div v-else-if="!isSearching" class="global-search-empty">未找到相关文件</div>
+            <div v-else-if="!isSearching" class="global-search-empty">{{ fileEmptyMessage }}</div>
           </div>
 
           <div
@@ -213,6 +213,10 @@ const props = defineProps({
   filePlaceholder: {
     type: String,
     default: '搜索文件...'
+  },
+  fileScopeHint: {
+    type: String,
+    default: ''
   }
 })
 
@@ -251,6 +255,12 @@ const isSearchMode = computed(() => Boolean(trimmedSearchText.value))
 const inputPlaceholder = computed(() =>
   activeMode.value === 'file' ? props.filePlaceholder : '搜索对话...'
 )
+
+/** 文件搜索范围由实际查询的调用方说明。 */
+const fileEmptyMessage = computed(() => {
+  const text = trimmedSearchText.value ? '未找到相关文件' : '输入关键词搜索文件'
+  return props.fileScopeHint ? `${text}。${props.fileScopeHint}` : text
+})
 
 const sortedRecentThreads = computed(() => {
   return [...props.recentThreads]
@@ -292,12 +302,12 @@ const actionCount = computed(() => {
   return 1 + sortedRecentThreads.value.length
 })
 
-const resetState = () => {
+const resetState = (clearSearchText = true) => {
   searchRequestId += 1
   fileSearchRequestId += 1
   clearTimeout(searchTimer)
   clearTimeout(fileSearchTimer)
-  searchText.value = ''
+  if (clearSearchText) searchText.value = ''
   sessionResults.value = []
   fileResults.value = []
   fileSearchError.value = ''
@@ -314,7 +324,7 @@ const close = () => {
 const switchMode = (mode) => {
   if (!props.modes.includes(mode) || mode === activeMode.value) return
   activeMode.value = mode
-  resetState()
+  resetState(false)
   nextTick(() => {
     searchInputRef.value?.focus()
   })
@@ -527,7 +537,11 @@ watch(
   }
 )
 
-watch(trimmedSearchText, (query) => {
+watch([trimmedSearchText, activeMode], ([query]) => {
+  searchRequestId += 1
+  fileSearchRequestId += 1
+  clearTimeout(searchTimer)
+  clearTimeout(fileSearchTimer)
   selectedIndex.value = 0
   if (activeMode.value === 'file') {
     clearTimeout(fileSearchTimer)
