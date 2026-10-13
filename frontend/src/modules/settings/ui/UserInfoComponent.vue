@@ -5,28 +5,31 @@
         <div class="user-avatar">
           <FallbackAvatar
             :src="userStore.avatar"
-            :name="userStore.username"
+            :name="displayName"
             :seed="userStore.uid || userStore.username"
             kind="user"
             :size="32"
             shape="circle"
-            :alt="userStore.username"
+            :alt="displayName"
             class="avatar-image"
           />
           <!-- <div class="user-role-badge" :class="userRoleClass"></div> -->
         </div>
-        <div v-if="showRole" class="user-name">{{ userStore.username }}</div>
+        <div v-if="showRole" class="user-name" :title="displayName">{{ displayName }}</div>
         <div v-if="slots.actions" class="user-info-actions">
           <slot name="actions" />
         </div>
       </div>
       <template #overlay>
-        <a-menu @click="handleMenuClick">
+        <a-menu class="user-account-menu" @click="handleMenuClick">
           <a-menu-item key="user-info" @click="openProfile">
             <div class="user-info-display">
-              <div class="user-menu-username">{{ userStore.username }}</div>
+              <div class="user-menu-username" :title="displayName">{{ displayName }}</div>
               <div class="user-menu-details">
-                <span class="user-menu-info">ID: {{ userStore.uid }}</span>
+                <span class="user-menu-info" :title="isEnterpriseAccount ? '企业账号' : userStore.uid">
+                  {{ isEnterpriseAccount ? '企业账号' : `ID: ${userStore.uid}` }}
+                </span>
+                <span class="user-menu-separator" aria-hidden="true">·</span>
                 <span class="user-menu-role">{{ userRoleText }}</span>
               </div>
             </div>
@@ -85,6 +88,11 @@ const infoStore = useInfoStore()
 const themeStore = useThemeStore()
 const slots = useSlots()
 const menuOpen = ref(false)
+const isEnterpriseAccount = computed(() => userStore.uid.startsWith('oidc:'))
+// OIDC 开户生成的随机后缀用于名称唯一性，账号菜单只显示可读名称。
+const displayName = computed(() =>
+  isEnterpriseAccount.value ? userStore.username.replace(/-[0-9a-f]{12}$/, '') : userStore.username
+)
 
 /** 主题项允许连续轮换，其他菜单操作关闭浮层。 */
 function handleMenuClick({ key }) {
@@ -255,7 +263,15 @@ const openProfile = () => {
   }
 }
 
+.user-account-menu {
+  width: 260px;
+  max-width: calc(100vw - 24px);
+}
+
 .user-info-display {
+  min-width: 0;
+  width: 100%;
+  padding: 4px 0;
   line-height: 1.4;
 }
 
@@ -264,21 +280,33 @@ const openProfile = () => {
   color: var(--gray-900);
   font-size: 14px;
   display: block;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .user-menu-details {
   display: flex;
-  gap: 12px;
+  gap: 6px;
   align-items: center;
 }
 
 .user-menu-info {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 12px;
-  color: var(--gray-600);
+  color: var(--gray-500);
+}
+
+.user-menu-separator {
+  color: var(--gray-400);
 }
 
 .user-menu-role {
+  flex-shrink: 0;
   font-size: 12px;
   color: var(--gray-500);
 }
@@ -307,6 +335,7 @@ const openProfile = () => {
 }
 
 :deep(.ant-dropdown-menu-title-content) {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 8px;
