@@ -85,7 +85,7 @@ class AgentRun(Base):
         comment="Terminal Run still owns its runtime cleanup",
     )
     agent_slug = Column(String(64), index=True, nullable=False, comment="Agent slug")
-    uid = Column(String(64), index=True, nullable=False, comment="UID")
+    uid = Column(String(128), index=True, nullable=False, comment="UID")
     status = Column(
         String(32),
         index=True,

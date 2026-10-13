@@ -42,7 +42,7 @@ class ScheduledAgentJob(Base):
     )
 
     id = Column(String(64), primary_key=True)
-    uid = Column(String(64), ForeignKey("users.uid", ondelete="CASCADE"), nullable=False, index=True)
+    uid = Column(String(128), ForeignKey("users.uid", ondelete="CASCADE"), nullable=False, index=True)
     creation_request_id = Column(String(64), nullable=False)
     creation_intent_hash = Column(String(64), nullable=False)
     project_id = Column(String(64), nullable=False, index=True)

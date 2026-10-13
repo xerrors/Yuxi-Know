@@ -12,7 +12,7 @@ class AgentAttachment(BusinessBase):
     __tablename__ = "agent_attachments"
 
     id = Column(String(32), primary_key=True)
-    uid = Column(String(64), nullable=False)
+    uid = Column(String(128), nullable=False)
     app_id = Column(String(64), nullable=True)
     filename = Column(String(255), nullable=False)
     mime_type = Column(String(255), nullable=False)

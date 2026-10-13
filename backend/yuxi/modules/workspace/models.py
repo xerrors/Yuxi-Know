@@ -36,7 +36,7 @@ class Project(Base):
 
     id = Column(String(64), primary_key=True, comment="Project UUID")
     uid = Column(
-        String(64),
+        String(128),
         ForeignKey("users.uid", ondelete="CASCADE", name="fk_projects_uid_users"),
         nullable=False,
         index=True,

@@ -24,7 +24,7 @@ class AgentTurn(Base):
 
     id = Column(String(64), primary_key=True)
     thread_id = Column(String(64), ForeignKey("sessions.thread_id", ondelete="CASCADE"), nullable=False, index=True)
-    uid = Column(String(64), nullable=False, index=True)
+    uid = Column(String(128), nullable=False, index=True)
     app_id = Column(String(64), nullable=True, index=True)
     status = Column(String(32), nullable=False, default="running")
     next_output_index = Column(Integer, nullable=False, default=0, server_default="0")

@@ -40,7 +40,7 @@ class Session(Base):
     created_by_run_id = Column(String(64), ForeignKey("agent_runs.id", use_alter=True), nullable=True)
     config_snapshot = Column(JSON, nullable=True)
     creation_request_id = Column(String(64), nullable=True, comment="新建 Session 幂等请求 ID")
-    uid = Column(String(64), index=True, nullable=False, comment="UID")
+    uid = Column(String(128), index=True, nullable=False, comment="UID")
     app_id = Column(String(64), nullable=True, comment="Public API 可信 APP 归属")
     # 保存 Agent.slug 值；列名与契约字段 agent_id 一致。
     agent_id = Column(String(64), index=True, nullable=False, comment="Agent slug (agent_id)")
