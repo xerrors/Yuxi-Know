@@ -3,18 +3,18 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+
 import pytest
 import pytest_asyncio
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import async_sessionmaker
-
 from test.support.sqlite import create_utc_sqlite_engine
-from yuxi.modules.system.dashboard import DashboardService
-from yuxi.modules.agents.models.definitions import Agent
 from yuxi.infrastructure.postgres.base import Base
+from yuxi.modules.agents.models.definitions import Agent
+from yuxi.modules.agents.models.messages import Message, ToolCall
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.identity.models import Department, User
-from yuxi.modules.agents.models.messages import Message, ToolCall
+from yuxi.modules.system.services.dashboard import DashboardService
 from yuxi.shared.datetime import utc_now
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.unit]

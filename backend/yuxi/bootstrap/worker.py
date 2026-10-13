@@ -7,6 +7,15 @@ import asyncio
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.infrastructure.postgres.schema import require_current_schema
+from yuxi.infrastructure.worker_health import (
+    JOB_RECONCILIATION_HEALTH_KEY,
+    JOB_RECONCILIATION_HEALTH_TTL_SECONDS,
+    JOB_RECONCILIATION_SECONDS,
+    RUN_RECONCILIATION_SECONDS,
+    WORKER_RECONCILIATION_HEALTH_KEY,
+    WORKER_RECONCILIATION_HEALTH_TTL_SECONDS,
+    publish_worker_health,
+)
 from yuxi.modules.agents.services.cooperation import reconcile_stopped_trees, recover_cooperation_waits
 from yuxi.modules.agents.services.leases import (
     WORKER_ID,
@@ -15,22 +24,11 @@ from yuxi.modules.agents.services.leases import (
     release_idle_sandboxes,
 )
 from yuxi.modules.agents.services.scheduler import recover_pending_dispatches
-from yuxi.modules.agents.services.transport import (
-    RUN_RECONCILIATION_SECONDS,
-    WORKER_RECONCILIATION_HEALTH_KEY,
-    WORKER_RECONCILIATION_HEALTH_TTL_SECONDS,
-    publish_worker_health,
-)
 from yuxi.modules.extensions.mcp.service import ensure_builtin_mcp_servers_in_db
 from yuxi.modules.extensions.skills.builtin.sync import init_builtin_skills
 from yuxi.modules.identity.security import AuthUtils
 from yuxi.modules.schedules.service import claim_and_dispatch_due_jobs, recover_scheduled_dispatches
 from yuxi.workers.background_jobs import reconcile_and_publish_jobs
-from yuxi.workers.health import (
-    JOB_RECONCILIATION_HEALTH_KEY,
-    JOB_RECONCILIATION_HEALTH_TTL_SECONDS,
-    JOB_RECONCILIATION_SECONDS,
-)
 
 _RECONCILIATION_TASK_KEY = "agent_run_reconciliation_task"
 _SANDBOX_CLEANUP_TASK_KEY = "sandbox_cleanup_task"
@@ -49,7 +47,9 @@ async def _worker_startup(ctx):
     pg_manager.initialize()
     await require_current_schema(pg_manager)
     async with pg_manager.get_async_session_context() as session:
-        from yuxi.modules.system.options import ensure_options_in_db, invalidate_option_cache, system_options
+        from yuxi.bootstrap.options import ensure_options_in_db
+        from yuxi.modules.system.options import system_options
+        from yuxi.modules.system.services.options import invalidate_option_cache
 
         await ensure_options_in_db(session)
         await session.commit()
@@ -85,10 +85,14 @@ async def _worker_shutdown(ctx):
             task.cancel()
         if reconciliation_tasks:
             await asyncio.gather(*reconciliation_tasks, return_exceptions=True)
-    from yuxi.modules.agents.services.transport import close_queue_clients
+    from yuxi.infrastructure.redis.queue import close_queue_clients
 
-    await close_queue_clients()
-    await pg_manager.close()
+    # ARQ 在 on_shutdown 返回后关闭自己的消费池，单个清理失败不能中断该阶段。
+    for component, close in (("queue_clients", close_queue_clients), ("postgres", pg_manager.close)):
+        try:
+            await close()
+        except Exception as exc:
+            logger.error(f"Worker shutdown failed: component={component}, error_type={type(exc).__name__}")
 
 
 async def _reconcile_agent_run_leases_forever() -> None:

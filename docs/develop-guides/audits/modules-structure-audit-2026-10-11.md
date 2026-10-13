@@ -2,7 +2,7 @@
 
 ## 完成状态（更新于 2026-10-13）
 
-前六阶段及结构优化已合入 `main`；第七阶段对应 `feat/identity-usecase-transactions`，各阶段的提交或决策依据见下方。原始发现保留用于对照；代码行号和末尾问题计数属于 2026-10-11 审计快照。
+前八阶段已合入 `main`；第九阶段在主工作区完成，各阶段的提交或决策依据见下方。原始发现保留用于对照；代码行号和末尾问题计数属于 2026-10-11 审计快照。
 
 - **【已完成】第一阶段：死代码复核与清理**，提交 `7e97aef4`；有当前消费者的入口明确保留。
 - **【已完成】第二阶段：D1–D9 逐项复核与必要修复**，提交 `1432b719`；D1 原缺陷不成立，D9 原成因已更正。
@@ -12,11 +12,11 @@
 - **【已完成】第六阶段：Agent 事务与生命周期收敛**，提交 `660661c4`；依据见[事务与生命周期决策](../decisions/implemented/2026-10-12-agent-transaction-lifecycle.md)。
 - **【已完成】第七阶段：身份用例与事务归属收敛**，依据见[身份事务决策](../decisions/implemented/2026-10-13-identity-usecase-transactions.md)。
 - **【已完成】第八阶段：知识存储与业务链路收敛**，依据见[知识存储决策](../decisions/implemented/2026-10-13-knowledge-storage-usecases.md)。
-- **【待处理】步骤 9**：共享技术与跨域依赖及剩余条目，范围与验收见第七节。
+- **【已收敛并复核保留】第九阶段：共享技术与剩余审计**，依据见[共享技术决策](../decisions/implemented/2026-10-13-shared-technical-boundaries.md)。
 
-前八阶段已闭合模式 1/2、模式 8 的逐项复核、D1–D9、H1–H9 及所标明的运行、扩展与知识条目。模式 3–7 的跨域共享技术剩余项在 Step 9 处理；复合行只关闭已标明的子范围。
+第一至第五节的发现均有逐项结论：已修复、已清理、依据当前消费者保留或原问题不成立。复合条目的具体子范围分别说明，原始计数继续作为历史快照。
 
-`【已修复】` 表示有对应代码修复与验证；`【已清理】` 表示删除完成；`【已复核：保留】` 表示当前消费者要求保留；`【已复核：问题不成立】` 表示原缺陷被证据否定；`【部分已完成】` 与 `【待处理】` 表示仍有未闭合的范围。每阶段完成后按对应提交与证据更新下方条目。
+`【已修复】` 表示有对应代码修复与验证；`【已清理】` 表示删除完成；`【已复核：保留】` 表示当前消费者要求保留；`【已复核：问题不成立】` 表示原缺陷被证据否定；`【已收敛并复核保留】` 表示代码收敛与有依据的保留已分别说明；`【部分已完成】` 与 `【待处理】` 表示仍有未闭合范围。每阶段完成后按对应提交与证据更新下方条目。
 
 ## 方法与可信度
 
@@ -52,14 +52,14 @@
 - **【已收敛协议并复核保留】** **"幂等预检 → 锁 → 锁后复查" 调用点级样板**在 agents 全部入口重复约 13 处（复核新增）——这不是抽 helper 能解决的，是入口协议没有抽象表达。 **结果：共同比较由 receipts 叶子拥有，作用域、锁与锁后复查由各用例拥有；不引入隐藏提交点的回调框架。**
 - **【已收敛】** **终态收敛序列三份**：`_finish_run`（runner.py:428）与 `_finish_user_cancel`（:466）之外，`process_agent_run` 的 committed 路径（:815-838）还有第三份内联副本，且内联版独有终态一致性断言（复核新增）。 **结果：共用持久结算和提交后的释放/发布序列，checkpoint 交付核对 PG 终态，取消保留 writer flush 与 owner 裁决。**
 
-### 【部分已完成】模式 3：分层方向倒置与跨域循环
+### 【已收敛并复核保留】模式 3：分层方向倒置与跨域循环
 
-文件级真实 import 环仅 2 个（均在 options 聚合家族），但域级概念环遍布：
+原审计识别的两个 options 文件级环均已消除；跨域读模型及类型契约按以下实际责任保留：
 
-- **【部分已完成】** **repositories 反向依赖 services**：`agents/repositories/input.py:14`、`feedback.py:10`、`definitions.py:364`（函数内引真实用例逻辑，构成实质倒置）；`knowledge/repositories/bases.py:8` 同型。未成环仅因被依赖模块恰是纯叶子。 **【已收敛】agents 输入消息、作用域和权限移到叶子契约，治理/序列化移 service，仓储无 service 反向导入；【待处理，Step 9】knowledge 对 identity 共享授权服务的跨域依赖。**
-- **【部分已完成】** **靠函数内延迟 import 维持的环**：agents 域 14 处（cooperation ↔ inputs/turns/threads 双向）；knowledge 域 graphs ↔ implementations/milvus.py；**【已收敛】skills 包内 shared ↔ content，Skill 快照运行模块反向依赖工具注册；访问契约拆分与工具门控归属调整消除目标环**。新人无法区分"解环"与"惰性加载"——复核确认 agents 域 10+ 处延迟 import 中只有 1 处是真实解环。 **【已收敛】cooperation_notifications 拆出持久通知，核心只依赖通知，协作命令单向调用核心，相关 service 导入已提到模块级；【已收敛】knowledge 图层依赖 storage 公共装配，消除对 implementations 的反向引用。**
-- **【待处理】** **modules → 进程适配层反向依赖**：`background_jobs/registry.py:46` import bootstrap 的 JOB_DEFINITIONS（纯字符串表，可直接放 registry）；`system/readiness.py:20`、`agents/services/transport.py:11` import `yuxi.workers.health` 的健康键常量；另 3 处 TYPE_CHECKING 引用。
-- **【部分已完成】** **平级域互相穿透**：`background_jobs/dispatch.py:8` 取 agents 域的 `get_arq_pool`（本质是 infrastructure 级 ARQ 池访问器）；`identity/repositories/users.py:112-115` 直接 DELETE schedules 域的 ORM 表（软删使 DB 级联永不触发，应用层删除确属必要，但删除策略被两域共同拥有）；`system/repositories/dashboard.py:10-14` 直接 select agents ORM 并跨域构造 AgentRepository。 **【已收敛】identity 仓储不再导入 schedules ORM，删除账号 service 调用 schedules 清理并一起提交；其他域随 Step 9。**
+- **【已收敛并复核保留】** **repositories 反向依赖 services**：`agents/repositories/input.py:14`、`feedback.py:10`、`definitions.py:364`（函数内引真实用例逻辑，构成实质倒置）；`knowledge/repositories/bases.py:8` 同型。未成环仅因被依赖模块恰是纯叶子。 **【已收敛】agents 输入消息、作用域和权限移到叶子契约，治理/序列化移 service，仓储无 service 反向导入；【已收敛】共享授权校验归 identity/repositories/resource_grants，持有身份读取锁，知识仓储不再反向导入 service。**
+- **【已收敛并复核保留】** **靠函数内延迟 import 维持的环**：agents 域 14 处（cooperation ↔ inputs/turns/threads 双向）；knowledge 域 graphs ↔ implementations/milvus.py；**【已收敛】skills 包内 shared ↔ content，Skill 快照运行模块反向依赖工具注册；访问契约拆分与工具门控归属调整消除目标环**。新人无法区分"解环"与"惰性加载"——复核确认 agents 域 10+ 处延迟 import 中只有 1 处是真实解环。 **【已收敛】cooperation_notifications 拆出持久通知，核心只依赖通知，协作命令单向调用核心，相关 service 导入已提到模块级；【已收敛】knowledge 图层依赖 storage 公共装配，消除对 implementations 的反向引用。**
+- **【已收敛并复核保留】** **modules → 进程适配层反向依赖**：JobDefinition 与惰性字符串表均归 background_jobs/registry；有界健康协议归 infrastructure/worker_health，Compose 的 workers/health 只做执行入口。BackgroundJobContext 的 TYPE_CHECKING 引用保留 worker 执行上下文类型，不产生运行时导入。
+- **【已收敛并复核保留】** **平级域互相穿透**：`background_jobs/dispatch.py:8` 取 agents 域的 `get_arq_pool`（本质是 infrastructure 级 ARQ 池访问器）；`identity/repositories/users.py:112-115` 直接 DELETE schedules 域的 ORM 表（软删使 DB 级联永不触发，应用层删除确属必要，但删除策略被两域共同拥有）；`system/repositories/dashboard.py:10-14` 直接 select agents ORM 并跨域构造 AgentRepository。 **【已收敛】identity 仓储不再导入 schedules ORM，删除账号 service 调用 schedules 清理并一起提交；ARQ 连接归 infrastructure/redis/queue，Agent Run 与 BackgroundJob 各自拥有投递策略；Dashboard 仓储直接查询报表事实，移除跨域 AgentRepository 构造。跨域 SQL 是报表读模型的真实职责，保留。**
 
 ### 【已修复】模式 4：下划线私有属性构成跨域公共契约
 
@@ -67,9 +67,9 @@
 
 **修复结果：运行派生字段在 Context 中声明且排除用户配置，Skill 快照具有类型；本地、middleware 和 MCP 来源显式登记。缺装配与未知工具拒绝，禁用集合更名为 `disabled_mcp_tools`，动态 MCP 沿用同一来源记录。**
 
-### 【部分已完成】模式 5：同名异义与命名失真
+### 【已收敛并复核保留】模式 5：同名异义与命名失真
 
-- **【部分已完成】** **【已收敛】`KnowledgeExecutor` 区分执行器与 ORM，`KnowledgeGraphService` 表达图业务职责**；`modules/models` 域名与全仓 "models=ORM" 惯例撞车（ORM 被迫叫 tables.py，bootstrap 注册表 18 项里它是唯一例外）；`catalog`/`runtime` 在 extensions 两个子域与 agents.runtime 三方撞名，**【已收敛】工具门控归 tools/runtime，catalog/runtime 各自保留域命名空间；安装暂存更名 skills/install_draft.py**；`events.py` 是读取端而 `event_writer.py` 才写 Redis；`messages.py` docstring 说"读取"但 2/3 是 Run 结算写路径；**【复核保留】Skill 修订对应整包/单文件/根说明接口各自比较对象，目录算法已统一；409 是 HTTP 适配，领域冲突由服务返回，当前字段消费者与比较对象见 Skills 管理**。 **【已收敛】读取/订阅/写入分别命名 checkpoint_state、subscriptions、checkpoint_messages，审计读取拆为 message_audits；其他命名随 Step 8/9。**
+- **【已收敛并复核保留】** **【已收敛】`KnowledgeExecutor` 区分执行器与 ORM，`KnowledgeGraphService` 表达图业务职责**；`modules/models` 域名与全仓 "models=ORM" 惯例撞车（ORM 被迫叫 tables.py，bootstrap 注册表 18 项里它是唯一例外）；`catalog`/`runtime` 在 extensions 两个子域与 agents.runtime 三方撞名，**【已收敛】工具门控归 tools/runtime，catalog/runtime 各自保留域命名空间；安装暂存更名 skills/install_draft.py**；`events.py` 是读取端而 `event_writer.py` 才写 Redis；`messages.py` docstring 说"读取"但 2/3 是 Run 结算写路径；**【复核保留】Skill 修订对应整包/单文件/根说明接口各自比较对象，目录算法已统一；409 是 HTTP 适配，领域冲突由服务返回，当前字段消费者与比较对象见 Skills 管理**。 **【已收敛】读取/订阅/写入分别命名 checkpoint_state、subscriptions、checkpoint_messages，审计读取拆为 message_audits；模型域保留已文档化的 modules/models Python 入口，ORM 继续使用 tables.py；不同命名空间各自标明职责。**
 - **【已收敛并复核保留】** 16 个 repository 与 services 存在 4 对同名文件（definitions/public_items/references/state）；`repositories/state.py` 是唯一不接收 AsyncSession 的"仓储"（LangGraph checkpoint 包装）。 **结果：state 读视图更名 checkpoint_state；definitions/public_items/references 各自有持久查询和用例消费者。AgentStateRepository 由主动压缩消费 CompiledStateGraph，以保留 reducer/版本语义，不应改成 ORM Session 接口。**
 
 ### 【已收敛并复核保留】模式 6：路径与校验规则多处漂移
@@ -78,13 +78,13 @@
 - **【已收敛并复核保留】** workspace 路径校验 4 处各自实现（`://` 只有两处检查；子目录名校验三种机制三种错误类型；ELOOP 被翻译成两种异常）。 **结果：scope 与目录名按 owning 文件边界共用；目录 fd 原语保留 ELOOP，普通文件与远端 wire 映射权限异常，差异见 [沙盒机制](../../mechanisms/sandbox.md#挂载和文件-owner)。**
 - **【已修复】** **"用户可见路径" allowlist 三处手写且已漂移**（复核修正）：`present_artifacts.py` 缺 `..` 检查、`agents/services/artifacts.py` 缺 workdir 空值守卫、异常类型各异——`paths.py:88` 的 `is_runtime_path()` 已存在但无人复用。 **结果：产物发布/读取共用 normalize_artifact_path，拒绝跳转与空绑定，保留 HTTP 领域异常和工具 ValueError 的入口表达。**
 
-### 【部分已完成】模式 7：同一数据/契约的多份表示
+### 【已收敛并复核保留】模式 7：同一数据/契约的多份表示
 
 - **【已收敛并复核保留】** 摄取 chunk 使用 `IngestionChunk`，删除无人消费的文件名、source 和重复 id。PG 行、Milvus 列数组与公开检索结果保留明确转换；来源通过当前可见 PG 文件回读。
 - **【已收敛并复核保留】** 文件读取共用执行器实现；真实文件元数据、虚拟目录和公开列表继续保留各自字段。Milvus 文档与图谱的公共字段、索引和 embedding 装配只有 storage 一个 Owner，固定 schema 负例拒绝单侧漂移。
 - **【复核保留】** KB 列表读取持久统计避免逐库聚合，详情与文件页读取实时聚合；两者都由 `query_kb_file_stats` 定义字段，D4 在 owning transaction 更新失败后的持久投影，真实 PG/HTTP 用例验证最终一致。
 - **【已收敛】** Milvus/Neo4j 共用有界线程卸载实现，各自保留 8 个预算；取消等待不会提前释放运行线程容量。
-- **【待处理，Step 9】** advisory lock 四种调用姿势混用同一键空间（`hashtextextended` / 32 位 `hashtext` / 裸常量 / DDL与应用镜像常量），裸键至少 6 处无注册表。
+- **【已收敛并复核保留】** advisory lock 的配置同步与 checkpoint 建表裸值改为 owning 模块具名常量，保留原值；身份 DDL/应用和协作/回收共用原有常量。事务锁与 session 锁分别沿用事务结束和同连接显式释放；已有 hashtext/hashtextextended 的作用域与算法保留以兼容滚动实例，不另建可漂移注册表。配置同步与旧值互斥由真实 PG 独立连接验证；后续新键使用 owning 域前缀，不能只为命名统一迁移既有键。
 
 ### 【已完成复核与清理】模式 8：死代码与"仅测试供养"的生产代码
 
@@ -221,12 +221,12 @@ API Key 创建整个用例在 `api/routers/identity/users.py:150-200` 路由内�
 **extensions 域**
 
 - **【已收敛并复核保留】** skills：shared↔content 与 Skill 运行快照→工具注册的反向依赖已消除；SkillRuntimeSnapshot/RuntimeSkill 声明契约；内置与包 content_hash 共用目录/可执行位算法并修正注释；ADMIN_ROLES 使用身份权限叶子常量；安装暂存更名 install_draft。ResolvedSkill 来源字段和两张卡片的覆盖标记、uid 全集合投影补偿、不同发布点的覆盖/撤权回滚规则保留，均有当前消费者。远程安装和草稿已经共用 download_remote_skills，双下载管线结论不成立。来源/修订比较对象与保留理由见 [Skills 管理](../../agents/skills-management.md#运行时文件行为)。
-- **【部分已完成】** tools：**【已清理】tools/utils.py、debug 空壳注册导入与确认无消费者的 MCP 导出**；**【已修复】web_search 通过 registry 公共注册、返回容器/元数据独立、catalog 现读注册单一来源**；**【已修复】sandbox scope 只读取 Context，共用身份解析**；**【复核保留】get_common_kb_tools 与知识库包导出**（[工具系统](../../agents/tools-system.md#知识库工具)拥有正式 Python 扩展消费者）；**【待处理，Step 9】mark_for_improvement 的 runtime category 展示。**
+- **【已收敛并复核保留】** tools：**【已清理】tools/utils.py、debug 空壳注册导入与确认无消费者的 MCP 导出**；**【已修复】web_search 通过 registry 公共注册、返回容器/元数据独立、catalog 现读注册单一来源**；**【已修复】sandbox scope 只读取 Context，共用身份解析**；**【复核保留】get_common_kb_tools 与知识库包导出**（[工具系统](../../agents/tools-system.md#知识库工具)拥有正式 Python 扩展消费者）；**【复核：已不存在】mark_for_improvement 已为 builtin，与 ToolsCardList 的 builtin/knowledge 筛选一致。**
 - **【已清理】** mcp：工具加载 docstring 与真实参数一致，删除没有实体的 Global Cache & State 注释，缺失/停用 warning 由客户端加载边界统一表达。
 
 **workspace + identity 域**
 
-- **【部分已完成】** workspace↔agents 双向依赖（repository 级互指，复核补充 viewer.py:15 漏列）；**【已清理】workspace 顶层 `__init__.py` 零消费导出**；errors.py 只 re-export infrastructure 异常而领域异常住在 repository；**【复核保留】** identity 的 services/repositories 使用 namespace package，当前导入和打包消费者有效，不新增空文件或兼容导出；跨仓包形态随 Step 9 复核。
+- **【已收敛并复核保留】** runtime 路径映射归 workspace/runtime_paths，Viewer 不再导入 Agent runtime；ProjectHasPendingAgentWorkError 归 workspace/errors。agents 仓储不再导入 workspace 仓储，原仓储互指已不存在；Project 归档仍查询并锁定 Agent 事实以拒绝有未完成工作的删除，Workdir 授权 service 读取 Session，保留真实用例依赖。顶层死导出已清理。namespace package 的导入、打包与完整启动有效，不新增空文件或兼容导出。
 - **【已收敛】** identity/oidc.py 只保留配置与协议常量，登录与事务已归 services/oidc.py；配置由消费入口读取，API 启动仍执行 required 校验，移除 import 时固化单例。领域异常已统一。
 - **【已收敛】** 密码、OIDC 与初始化共用登录结果和 HTTP Token 模型，头像沿用 User 的公开 URL；真实 HTTP 验证本地/OIDC/个人资料一致。
 - **【已收敛】** `verify_api_key` 与 CLI 重放共用 `APIKey.is_valid()`，用户失效与身份种类仍按入口校验。
@@ -237,14 +237,14 @@ API Key 创建整个用例在 `api/routers/identity/users.py:150-200` 路由内�
 
 **五个小域 + 跨域**
 
-- **【待处理】** `modules/models` 域名撞车（复核降为中：ARCHITECTURE.md:45 有文字区分，纯认知负担）。
-- **【待处理】** 健康键契约住在 `workers/health.py`（含可执行 main），业务域反向 import；`create_arq_pool` 访问器住在 agents 业务域迫使 background_jobs 反向依赖；JOB_DEFINITIONS 纯字符串表住在 bootstrap。
-- **【待处理】** system 域两套分层并存；options 单文件混杂 + 与 documents/extensions 两个真实文件级 import 环（Option 契约放业务域是根因）；DashboardService 9 个方法 8 个转发（唯一价值是约定挂点）。
-- **【待处理】** embed 的 encode/aencode 两份 HTTP 主体；三域"PG 为源 Redis 为缓存"样板零共享（失效策略差异是有意的，重复的是容错样板）；`select_model`/`load_chat_model` 双入口的适用规则只能靠查 consumer 归纳；适配器 `raise Exception(err)` 吞掉异常类型。
+- **【已复核：保留】** modules/models 是模型供应商、聊天、embedding 与 rerank 的文档化 Python 入口；tables.py 拥有 ORM。架构说明明确区分，改域名会扩大扩展接口变更，保留命名空间。
+- **【已收敛】** 健康键归 infrastructure/worker_health，ARQ 连接归 infrastructure/redis/queue，JOB_DEFINITIONS 归 background_jobs/registry。并发初始化复用一个客户端；shutdown 保留关闭失败并清理共用 Redis。
+- **【已收敛并复核保留】** system/services/options 拥有 Option 读取对象、校验和管理员提交；repositories/options 拥有 SQL；bootstrap/options 显式同步域定义，system/options 只汇总定义。配置服务不反向导入域定义，两个环消失。DashboardService 归 services，保留 HTTP 用例入口和会话详情组装；统计转发维持路由与查询之间的稳定边界，无新增 facade。
+- **【已修复并复核保留】** 文本适配器重新抛出原异常，load_chat_model 与 select_model 明确分别服务完整 LangChain runtime 和文本任务。encode/aencode 共用 payload、解析、重试规则，保留同步 requests 与可取消 async httpx 传输及现有异常契约，真实 TCP 固定响应验证两侧成功、429 重试、400 和恢复。模型快照读取 fail-closed，Option 非敏感值缓存失败回源并用版本 CAS 防旧回填，知识配置读取可回源但删除/锁失败阻止修改；共用 Redis 连接已在基础设施，剩余容错是域策略，不引入泛型吞错包装。
 - **【已清理】** 模型适配层死代码群（resolve_model_spec/is_full/embed_state/同步 compute_score/未消费的包级惰性导出分支）；有消费者的 select_model 保留。
-- **【待处理】** documents 域硬编码 `"siliconflow-cn"` 供应商 ID 跨域直查（复核新增）。
-- **【部分已完成】** 幂等回执泄漏 schedules/workspace（模式 2）；advisory lock 键空间无约定；`_preprocessed_map` 等带内魔法键跨 router/utils 传递。 **【已收敛并复核保留】回执按模式 2 的明确契约和不同响应处理；【已收敛】协作/回收键；【待处理，Step 9】其余键空间与带内魔法键。**
-- **【待处理】** 分层模式不一致：knowledge/services 有 `__init__.py` 而 agents/workspace/identity 的 services/ 没有；agents 域内自身也不一致。
+- **【已收敛】** models/providers/service 拥有 DeepSeek OCR 当前支持的供应商凭据与端点解析，documents 只消费结果；provider/cache 和 service 共用 credentials 叶子解析，消除额外文件环。当前仅支持硅基流动的协议承诺保留，不添加供应商选择配置。
+- **【已收敛并复核保留】** 回执按模式 2、锁按模式 7 的约束保留。PREPROCESSED_UPLOADS_KEY 由知识上传元数据边界拥有，router 与元数据准备共用；`_preprocessed_map` 是 FileUploadModal 和持久 Job payload 的既有 wire 键，保留字节与 URL 导入语义，从单文件处理参数中过滤。
+- **【已复核：保留】** namespace package 与有显式导出的包均有有效 import/打包消费者；完整 unit 与 API/worker 启动验证导入，不为目录外观增加空文件。
 
 ---
 
@@ -252,15 +252,15 @@ API Key 创建整个用例在 `api/routers/identity/users.py:150-200` 路由内�
 
 - **【已完成复核与清理】死导出与死常量**：以模式 8 的逐项结论为准，有消费者的入口明确保留。
 - **【已清理并保留公开形状】`ATTACHMENT_ALLOWED_EXTENSIONS` 恒空配置壳**：常量删除，公开 limits 保持 `allowed_extensions: []`，上传不按后缀限制，解析能力在实际入口校验。
-- **【部分已完成】`commit_agent_definition` 之外的零星死参数**。 **【已清理】agents 的 commit 开关、无消费者 is_default 参数及透传；其余域随 Step 8–9。**
-- **【待处理】`_get_file_meta` 纯别名与 `del refresh`**。
+- **【已清理并复核保留】零星参数**：agents 的 commit 开关、无消费者 is_default 透传及 knowledge 的无效 refresh 参数删除；commit_agent_definition 的 user 仍由绑定刷新消费，其他明确测试/扩展参数按模式 8 保留。
+- **【已清理】`_get_file_meta` 纯别名与 `del refresh`**：下载直接调用 _load_file_meta，未使用 refresh 参数删除。
 - **【已清理】`MILVUS_AVAILABLE` 恒真守卫、`SOURCE_CITE_PROMPT`**。
-- **【待处理】`base.py` 类型注解失真与 `manager.aquery` 注解错误**。
-- **【待处理】`_enabled_mcps` 命名反义**。
+- **【已收敛】`base.py` 和 `manager.aquery` 注解**：KnowledgeExecutor 的配置读取返回 dict、查询返回 list，manager.aquery 返回 list[dict]；Step 8 已与实际消费者一致。
+- **【复核：已不存在】`_enabled_mcps`**：Step 5 已改为 disabled_mcp_tools，配置与工具过滤消费同一含义。
 - **【已复核：保留】promote_input 缺锁前检查**：先在授权 Thread 锁内重放，保留已删除/不可见资源的既有响应；该入口不增加锁前快速路径，真实 PG 与 worker 验证重放及提升/领取竞争。
 - **【已复核：保留】`get_pending_steer` 丢弃返回值**：runner 和 lease 恢复只取得 Input 行锁，以保持 Input→Run 锁序；其余消费者真实使用返回行，两个锁调用点已注释。
 - **【已清理】`SessionRepository.create_session` 与其返回值自校验**。
-- **【部分已完成】scheduler 之外三处裸 advisory 常量**：agents 协作树与 sandbox-release 共用 runtime_locks 的稳定键；身份最后超管 DDL/应用共用具名常量且保持原锁值，其他域键空间随 Step 9。
+- **【已收敛并复核保留】advisory 常量**：协作/回收、身份、配置同步与 checkpoint 各由 owning 模块的具名常量维护；其余按模式 7 保留哈希作用域与历史键值。
 - **【复核：已不存在】OIDC 两个近似重复函数**；当前入口按 start/callback/exchange 区分授权阶段。
 - **【已复核：保留】tool_result 排除语义**：有测试 fixture 专门写入验证，属于遗留数据防御。
 - **【已收敛】advisory lock 超管常量镜像的绑定注释**：DDL 与应用共用身份模型的具名常量，注释明确既有锁值的升级兼容约束。
@@ -361,13 +361,15 @@ API Key 创建整个用例在 `api/routers/identity/users.py:150-200` 路由内�
 
 结果：公共装配、有界卸载、图客户端/抽取模型复用、批量软删、评估 SQL 分页与分块契约已收敛；Manager 类型路由、公开形状转换和统计交付差异有当前消费者。真实 PG/Redis/HTTP 与图谱集成 76 项、完整 Milvus/图谱 E2E 和 non-slow unit 2747 项通过（60 项按环境跳过）。1,200 文件删除查询量固定，客户端并发与取消有独立负例，单侧 schema 漂移能恢复缺陷并被拒绝。命令、证据范围与保留取舍见[知识存储决策](../decisions/implemented/2026-10-13-knowledge-storage-usecases.md)。
 
-### Step 9：【待处理】共享技术依赖与剩余审计一起收尾
+### Step 9：【已收敛并复核保留】共享技术依赖与剩余审计一起收尾
 
 覆盖模式 3 剩余的健康键、ARQ 访问器、JOB_DEFINITIONS、system/dashboard 跨域查询、options 文件级环与平级域穿透；整理 models 的 sync/async HTTP、加载双入口、异常类型、PG/Redis 共用容错部分和 documents 供应商解析。共同技术/叶子契约回到合适位置，各域缓存失效及业务策略保留原 Owner。此组处理跨域 models/包命名、system/options facade、尚未归属的 API limits、category 标签、带内魔法键及局部清理；域内命名与文档由前面各组随实现完成。
 
 验收：符号/导入分析确认目标倒置和真实循环消失，完整 API/worker 启动证明 readiness、注册、能力发现与投递；真实故障/恢复证明异常与缓存结果。删除/改名搜索包括文档、注册、字符串导入、测试及协议消费者，明确保留的测试/扩展入口继续按当前承诺验证。
 
-最后对第一至第五节逐条闭合：复合条目按实际子范围标为修复、清理、有依据的保留/不成立，或明确未完成，不凭相关提交整行关闭；原问题计数保持历史快照。每组连续实施并验证、最终合为一个提交，更新 owning 文档、非平凡决策和本报告；逐项检查与验收属于组内工作，不再各列独立 Step。工程契约、相关真实链路、文档链接/build 和全新独立 Review 通过后交付，未运行与 skip 不记为通过。
+第一至第五节逐条闭合：复合条目按实际子范围标为修复、清理、有依据的保留/不成立，或明确未完成，不凭相关提交整行关闭；原问题计数保持历史快照。每组连续实施并验证、最终合为一个提交，更新 owning 文档、非平凡决策和本报告；逐项检查与验收属于组内工作，不再各列独立 Step。工程契约、相关真实链路、文档链接/build 和全新独立 Review 通过后交付，未运行与 skip 不记为通过。
+
+结果：完整 non-slow unit 2750 项、真实集成 20 项及完整 Milvus/图谱 E2E 1 项通过，60 项根目录相关 unit 按环境跳过；恢复无锁池初始化或异常改型包装的独立实验均被对应断言拒绝。实际验证命令见[共享技术决策](../decisions/implemented/2026-10-13-shared-technical-boundaries.md)。API 的分页 Query 限制、知识上传 100 MiB 与 Agent 附件 5 MiB 按各自输入/用例 Owner 保留，公开 limits 从附件服务生成；未发现需要中央配置的共同 consumer。
 
 ---
 

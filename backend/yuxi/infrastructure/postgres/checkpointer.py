@@ -1,8 +1,10 @@
 """LangGraph PostgreSQL checkpoint pool 的 saver 与建表生命周期。"""
 
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-
 from yuxi.infrastructure.observability.logging import logger
+
+# Session 锁值与已部署进程保持兼容；必须在同一物理连接释放。
+CHECKPOINTER_SETUP_LOCK_KEY = 94721802
 
 
 def get_langgraph_checkpointer(manager) -> AsyncPostgresSaver:
@@ -20,12 +22,12 @@ async def setup_langgraph_checkpointer(manager) -> AsyncPostgresSaver:
     checkpointer = manager.langgraph_checkpointer
     if not manager._langgraph_checkpointer_setup:
         async with manager.langgraph_pool.connection() as connection:
-            await connection.execute("SELECT pg_advisory_lock(94721802)")
+            await connection.execute(f"SELECT pg_advisory_lock({CHECKPOINTER_SETUP_LOCK_KEY})")
             try:
                 await checkpointer.setup()
             finally:
                 try:
-                    cursor = await connection.execute("SELECT pg_advisory_unlock(94721802)")
+                    cursor = await connection.execute(f"SELECT pg_advisory_unlock({CHECKPOINTER_SETUP_LOCK_KEY})")
                     row = await cursor.fetchone()
                     if not row or row[0] is not True:
                         raise RuntimeError("Failed to release LangGraph checkpoint advisory lock")

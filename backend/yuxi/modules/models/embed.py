@@ -98,6 +98,7 @@ class OtherEmbedding(BaseEmbeddingModel):
         return {"model": self.model, "input": message}
 
     def encode(self, message: list[str] | str) -> list[list[float]]:
+        """供同步解析及向量客户端在线程内调用，共用响应解析和重试策略。"""
         payload = self.build_payload(message)
         retry_index = 0
 
@@ -124,6 +125,7 @@ class OtherEmbedding(BaseEmbeddingModel):
                 raise ValueError(f"Embedding request failed: {e}")
 
     async def aencode(self, message: list[str] | str) -> list[list[float]]:
+        """供异步摄取调用，HTTP 等待及重试休眠均允许取消。"""
         payload = self.build_payload(message)
         self._log_long_inputs(message)
         async with httpx.AsyncClient() as client:

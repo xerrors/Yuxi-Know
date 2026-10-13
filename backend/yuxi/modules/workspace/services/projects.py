@@ -6,10 +6,10 @@ import uuid
 
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
-
+from yuxi.modules.workspace.errors import ProjectHasPendingAgentWorkError
 from yuxi.modules.workspace.models import Project
 from yuxi.modules.workspace.paths import allocate_default_user_workdir_path, normalize_workdir_path
-from yuxi.modules.workspace.repositories.projects import ProjectHasPendingAgentWorkError, ProjectRepository
+from yuxi.modules.workspace.repositories.projects import ProjectRepository
 from yuxi.modules.workspace.workdir import Workdir
 from yuxi.shared.datetime import utc_now
 from yuxi.shared.errors import InvalidInputError, InvalidOperationError, ResourceNotFoundError, StateConflictError

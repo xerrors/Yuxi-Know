@@ -10,7 +10,6 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
-
 from yuxi.api.dependencies.auth import get_admin_user, get_db, get_required_user
 from yuxi.api.dependencies.knowledge import (
     ensure_knowledge_base_permission as _ensure_knowledge_base_permission,
@@ -39,6 +38,7 @@ from yuxi.modules.knowledge.utils import (
     params_for_uploaded_document,
     parse_minio_url,
 )
+from yuxi.modules.knowledge.utils.kb_utils import PREPROCESSED_UPLOADS_KEY
 from yuxi.modules.knowledge.utils.sample_question_utils import (
     generate_knowledge_base_sample_questions,
     get_knowledge_base_sample_questions,
@@ -168,7 +168,7 @@ def _validate_uploaded_document_items(items: list[str], params: dict) -> None:
     if file_sizes is not None and not isinstance(file_sizes, dict):
         raise HTTPException(status_code=400, detail="params.file_sizes must be an object")
 
-    preprocessed_map = params.get("_preprocessed_map")
+    preprocessed_map = params.get(PREPROCESSED_UPLOADS_KEY)
     if preprocessed_map is not None and not isinstance(preprocessed_map, dict):
         raise HTTPException(status_code=400, detail="params._preprocessed_map must be an object")
 

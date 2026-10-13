@@ -108,9 +108,7 @@ class KnowledgeExecutor(ABC):
             "updated_by": str(meta.get("updated_by")) if meta.get("updated_by") else None,
         }
 
-    async def _load_file_meta(self, kb_id: str, file_id: str, *, refresh: bool = False) -> dict:
-        del refresh
-
+    async def _load_file_meta(self, kb_id: str, file_id: str) -> dict:
         from yuxi.modules.knowledge.repositories.files import KnowledgeFileRepository
 
         record = await KnowledgeFileRepository().get_by_file_id(file_id)
@@ -478,15 +476,12 @@ class KnowledgeExecutor(ABC):
         content_bytes = await self._read_minio_bytes(file_path)
         return content_bytes.decode("utf-8")
 
-    async def _get_file_meta(self, kb_id: str, file_id: str) -> dict:
-        return await self._load_file_meta(kb_id, file_id)
-
     @staticmethod
     def _original_file_path(file_meta: dict) -> str | None:
         return file_meta.get("minio_url") or file_meta.get("path")
 
     async def get_file_download(self, kb_id: str, file_id: str, variant: str = "original") -> dict:
-        file_meta = await self._get_file_meta(kb_id, file_id)
+        file_meta = await self._load_file_meta(kb_id, file_id)
         if file_meta.get("is_folder"):
             raise ValueError("Cannot download a folder")
         if variant not in {"original", "parsed"}:

@@ -4,8 +4,8 @@ from fastapi import FastAPI
 
 from yuxi.bootstrap.api import _close_neo4j_connection, _shutdown_component, _startup
 from yuxi.infrastructure.postgres.manager import pg_manager
+from yuxi.infrastructure.redis.queue import close_queue_clients
 from yuxi.modules.agents.runtime.sandbox import shutdown_sandbox_provider
-from yuxi.modules.agents.services.transport import close_queue_clients
 
 
 @asynccontextmanager

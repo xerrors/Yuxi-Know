@@ -17,14 +17,13 @@ from deepagents.backends.protocol import GlobResult, GrepResult, ReadResult
 from deepagents.backends.sandbox import MAX_BINARY_BYTES
 from langchain_core.messages import ToolMessage
 from langgraph.prebuilt.tool_node import ToolRuntime
-from yuxi.modules.agents.runtime.sandbox.backend import create_agent_composite_backend
 from yuxi.modules.agents.runtime.middlewares.filesystem import create_agent_filesystem_middleware
-from yuxi.modules.extensions.skills.runtime import sync_agent_context_skills
-from yuxi.modules.agents.runtime.sandbox import ProvisionerSandboxProvider, sandbox_id_for_thread
-from yuxi.modules.agents.runtime.sandbox.backend import ProvisionerSandboxBackend
-from yuxi.modules.agents.runtime.sandbox.provider import SandboxIdentityMismatchError
 from yuxi.modules.agents.runtime.middlewares.skills import SkillsMiddleware
-from yuxi.modules.agents.runtime.sandbox.paths import workdir_runtime_paths
+from yuxi.modules.agents.runtime.sandbox import ProvisionerSandboxProvider, sandbox_id_for_thread
+from yuxi.modules.agents.runtime.sandbox.backend import ProvisionerSandboxBackend, create_agent_composite_backend
+from yuxi.modules.agents.runtime.sandbox.provider import SandboxIdentityMismatchError
+from yuxi.modules.extensions.skills.runtime import sync_agent_context_skills
+from yuxi.modules.workspace.runtime_paths import workdir_runtime_paths
 
 WORKDIR_RELATIVE_PATH = "projects/11111111-1111-4111-8111-111111111111"
 WORKDIR_PATH = "/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111"
@@ -1773,8 +1772,8 @@ def test_authorized_snapshot_cleanup_failure_blocks_download(tmp_path) -> None:
 
 
 def test_workdir_paths_are_workspace_relative_and_reject_symlinks(monkeypatch, tmp_path) -> None:
-    from yuxi.modules.agents.runtime.sandbox import paths as backend_paths
     from yuxi.modules.workspace import paths
+    from yuxi.modules.workspace import runtime_paths as backend_paths
 
     monkeypatch.setattr(paths, "get_user_data_dir", lambda: tmp_path / "user-data")
     paths.ensure_user_workspace("user-1")

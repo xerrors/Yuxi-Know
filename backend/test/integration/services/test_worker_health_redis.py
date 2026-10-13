@@ -5,12 +5,12 @@ import uuid
 
 import pytest
 import pytest_asyncio
+import yuxi.workers.health as worker_health
 from arq import create_pool
 from arq.worker import Worker
-import yuxi.workers.health as worker_health
 from yuxi.infrastructure.redis import get_arq_redis_settings
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
+pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
 
 async def unused_job(ctx):

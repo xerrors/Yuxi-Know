@@ -6,21 +6,20 @@ import uuid
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from yuxi.modules.agents.services.thread_access import require_thread
-from yuxi.modules.agents.services.cooperation_notifications import notify_user_intervention, notify_turn_state
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.manager import pg_manager
-from yuxi.modules.agents.receipts import input_intent_hash, require_idempotency_key, require_receipt_replay
-from yuxi.modules.agents.services.run_creation import create_resume_run
 from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.turns import AgentTurn
+from yuxi.modules.agents.receipts import input_intent_hash, require_idempotency_key, require_receipt_replay
 from yuxi.modules.agents.repositories.input_receipt import AgentInputReceiptRepository
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
-from yuxi.modules.agents.services.scheduler import Dispatch, deliver
 from yuxi.modules.agents.scope import ActorScope
+from yuxi.modules.agents.services.cooperation_notifications import notify_turn_state, notify_user_intervention
+from yuxi.modules.agents.services.run_creation import create_resume_run
+from yuxi.modules.agents.services.scheduler import Dispatch, deliver
+from yuxi.modules.agents.services.thread_access import require_thread
 from yuxi.modules.agents.services.tracing import finish_turn_observation_if_terminal
 from yuxi.modules.agents.services.transport import publish_cancel_signals
 from yuxi.modules.workspace.services.bindings import resolve_session_workdir_binding
@@ -402,7 +401,7 @@ async def _clear_waitpoint_checkpoint(run: AgentRun) -> None:
     from yuxi.modules.agents.repositories.definitions import AgentRepository
     from yuxi.modules.agents.runtime.agent_backends import get_agent_backend
     from yuxi.modules.agents.runtime.checkpoint_cleanup import cancel_waitpoint_checkpoint
-    from yuxi.modules.agents.runtime.sandbox.paths import runtime_workdir_path
+    from yuxi.modules.workspace.runtime_paths import runtime_workdir_path
     from yuxi.modules.workspace.services.bindings import resolve_session_workdir_binding
 
     async with pg_manager.get_async_session_context() as db:

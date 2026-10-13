@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 import asyncio
 import tempfile
 import time
@@ -9,11 +7,11 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pandas as pd
+import pytest
 import yuxi.infrastructure.document_parsing.engines as engines
 import yuxi.infrastructure.document_parsing.parser as parser_unified
 from yuxi.infrastructure.document_parsing import ParseOptions
 from yuxi.modules.documents.service import parse
-
 
 PARSER_FIXTURES = Path(__file__).parents[2] / "data"
 
@@ -261,7 +259,7 @@ async def test_default_engine_resolves_system_ocr_config_before_conversion(tmp_p
         captured.update(engine=engine_id, kwargs=kwargs)
         return SimpleNamespace(process_file=lambda *args: "configured OCR text")
 
-    monkeypatch.setattr("yuxi.modules.system.options.Option.get", config)
+    monkeypatch.setattr("yuxi.modules.system.services.options.Option.get", config)
     monkeypatch.setattr("yuxi.modules.documents.service._build_processor_kwargs", kwargs)
     monkeypatch.setattr(engines, "get_engine", get_engine)
     result = await parse(str(source), tmp_path / "parsed", db=object())

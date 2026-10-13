@@ -13,8 +13,6 @@ from typing import Any
 from yuxi.infrastructure.filesystem import ensure_within_root, open_directory_fd, open_regular_file_fd, publish_directory_fd
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.modules.agents.runtime.sandbox.download import download_sandbox_directory
-from yuxi.modules.agents.runtime.sandbox.paths import normalize_runtime_path
-from yuxi.modules.agents.runtime.sandbox.paths import VIRTUAL_PATH_PREFIX
 from yuxi.modules.extensions.skills.install_draft import consume_installed_draft_items, load_and_select_draft_items
 from yuxi.modules.extensions.skills.package import (
     TEXT_FILE_EXTENSIONS,
@@ -27,6 +25,7 @@ from yuxi.modules.extensions.skills.package import (
 from yuxi.modules.extensions.skills.resolved import ResolvedSkill
 from yuxi.modules.identity.models import User
 from yuxi.modules.workspace.paths import ensure_user_workspace, user_workspace_dir
+from yuxi.modules.workspace.runtime_paths import VIRTUAL_PATH_PREFIX, normalize_runtime_path
 
 PERSONAL_SKILL_SOURCE_TYPE = "personal"
 

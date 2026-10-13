@@ -4,7 +4,6 @@ import inspect
 from collections.abc import Callable
 
 from fastapi import FastAPI
-
 from yuxi import get_version
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.manager import pg_manager
@@ -12,8 +11,8 @@ from yuxi.infrastructure.postgres.schema import require_current_schema
 from yuxi.modules.agents.runtime.sandbox import init_sandbox_provider
 from yuxi.modules.agents.services.transport import get_redis_client
 from yuxi.modules.extensions.mcp.service import ensure_builtin_mcp_servers_in_db
-from yuxi.modules.identity.security import AuthUtils
 from yuxi.modules.identity.oidc import get_oidc_config
+from yuxi.modules.identity.security import AuthUtils
 from yuxi.modules.models.providers.service import ensure_builtin_model_providers_in_db
 
 
@@ -50,7 +49,9 @@ async def _startup(app: FastAPI) -> None:
     pg_manager.initialize()
     await require_current_schema(pg_manager)
 
-    from yuxi.modules.system.options import ensure_options_in_db, invalidate_option_cache, system_options
+    from yuxi.bootstrap.options import ensure_options_in_db
+    from yuxi.modules.system.options import system_options
+    from yuxi.modules.system.services.options import invalidate_option_cache
 
     async with pg_manager.get_async_session_context() as session:
         await ensure_options_in_db(session)

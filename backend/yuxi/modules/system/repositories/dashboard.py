@@ -5,13 +5,11 @@ from typing import Any
 
 from sqlalchemy import Integer, String, and_, case, cast, distinct, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from yuxi.infrastructure.minio.client import normalize_public_minio_url
 from yuxi.modules.agents.models.definitions import Agent
 from yuxi.modules.agents.models.messages import AUDIT_MESSAGE_TYPES, Message, ToolCall
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.sessions import Session
-from yuxi.modules.agents.repositories.definitions import AgentRepository
 from yuxi.modules.identity.models import User
 from yuxi.shared.datetime import UTC, ensure_shanghai, format_utc_datetime, shanghai_now, utc_now
 
@@ -156,7 +154,7 @@ class DashboardRepository:
         agent_slugs = {agent_session.agent_id for agent_session, _ in rows if agent_session.agent_id}
         agents_by_slug: dict[str, Agent] = {}
         if agent_slugs:
-            agents = await AgentRepository(self.db_session).list_by_slugs(list(agent_slugs))
+            agents = (await self.db_session.scalars(select(Agent).where(Agent.slug.in_(agent_slugs)))).all()
             agents_by_slug = {agent.slug: agent for agent in agents}
 
         items = []
@@ -592,7 +590,10 @@ class DashboardRepository:
         if metric_type == "agents":
             agent_slugs = [category for category in categories if category]
             if agent_slugs:
-                agent_names = {agent.slug: agent.name for agent in await AgentRepository(self.db_session).list_by_slugs(agent_slugs)}
+                agent_names = {
+                    agent.slug: agent.name
+                    for agent in (await self.db_session.scalars(select(Agent).where(Agent.slug.in_(agent_slugs)))).all()
+                }
 
         time_data: dict[str, dict[str, int]] = {}
         for row in rows:
@@ -827,7 +828,7 @@ class DashboardRepository:
         agent_names_map = {}
         agent_avatars_map = {}
         if agent_slugs:
-            agents = await AgentRepository(self.db_session).list_by_slugs(agent_slugs)
+            agents = (await self.db_session.scalars(select(Agent).where(Agent.slug.in_(agent_slugs)))).all()
             agent_names_map = {a.slug: a.name for a in agents}
             agent_avatars_map = {a.slug: normalize_public_minio_url(a.icon) if a.icon else None for a in agents}
 

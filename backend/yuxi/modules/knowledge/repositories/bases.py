@@ -5,11 +5,10 @@ from typing import Any
 from sqlalchemy import String, cast, func, literal, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
-
 from yuxi.infrastructure.postgres.manager import pg_manager
-from yuxi.modules.identity.services.resource_grants import validate_shared_grants
-from yuxi.modules.knowledge.cache import cache_kb_config, delete_cached_kb_config, kb_config_cache_lock
+from yuxi.modules.identity.repositories.resource_grants import validate_shared_grants
 from yuxi.modules.knowledge.base import KBNameConflictError
+from yuxi.modules.knowledge.cache import cache_kb_config, delete_cached_kb_config, kb_config_cache_lock
 from yuxi.modules.knowledge.models import KnowledgeBase, KnowledgeFile, KnowledgeProjectionOutbox
 from yuxi.shared.datetime import utc_now
 

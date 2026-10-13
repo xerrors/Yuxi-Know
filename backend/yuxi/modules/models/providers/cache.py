@@ -15,6 +15,7 @@ from typing import Any
 
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.redis import sync_redis_client
+from yuxi.modules.models.providers.credentials import resolve_api_key
 
 REDIS_CACHE_KEY = "yuxi:model_cache"
 _CACHE_TTL_SECONDS = 5
@@ -143,8 +144,6 @@ class ModelCache:
         return grouped
 
     def rebuild(self, providers: list[Any]) -> None:
-        from yuxi.modules.models.providers.service import resolve_api_key
-
         new_cache: dict[str, ModelInfo] = {}
 
         for provider in providers:

@@ -4,16 +4,12 @@ from datetime import datetime
 
 from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from yuxi.modules.agents.models.inputs import AgentInput
 from yuxi.modules.agents.models.runs import AGENT_RUN_TERMINAL_STATUSES, AgentRun
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.models.turns import AgentTurn
+from yuxi.modules.workspace.errors import ProjectHasPendingAgentWorkError
 from yuxi.modules.workspace.models import Project
-
-
-class ProjectHasPendingAgentWorkError(Exception):
-    """Project 内仍有不能归档的执行或输入。"""
 
 
 class ProjectRepository:

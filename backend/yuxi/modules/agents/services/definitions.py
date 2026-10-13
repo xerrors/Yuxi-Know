@@ -2,27 +2,27 @@
 
 import asyncio
 import shutil
-
 from typing import Any
+
 from yuxi.infrastructure.observability.logging import logger
-from yuxi.modules.agents.permissions import is_builtin_agent, user_can_manage_agent, user_can_run_agent
-from yuxi.modules.identity.models import User
-from yuxi.modules.identity.permissions import normalize_permission_config, resolve_agent_permission
-from yuxi.modules.identity.permissions.resource_permission import ADMIN_ROLES
 from yuxi.infrastructure.runtime_settings import get_skill_data_dir
-from yuxi.modules.agents.repositories.definitions import AgentRepository, DEFAULT_SHARE_CONFIG
-from yuxi.modules.agents.runtime.context import filter_declared_config
 from yuxi.modules.agents.models.definitions import Agent
+from yuxi.modules.agents.permissions import is_builtin_agent, user_can_manage_agent, user_can_run_agent
+from yuxi.modules.agents.repositories.definitions import DEFAULT_SHARE_CONFIG, AgentRepository
 from yuxi.modules.agents.runtime.agent_backends import get_agent_backend
-from yuxi.modules.agents.services.configuration import prepare_agent_config_write, merge_agent_config_json
+from yuxi.modules.agents.runtime.context import filter_declared_config
+from yuxi.modules.agents.services.configuration import merge_agent_config_json, prepare_agent_config_write
+from yuxi.modules.extensions.skills.access import validate_skill_dependencies
 from yuxi.modules.extensions.skills.bound import publish_bound_skill
 from yuxi.modules.extensions.skills.install_draft import prepared_uploaded_skill
 from yuxi.modules.extensions.skills.package import parse_skill_dir_metadata
 from yuxi.modules.extensions.skills.projection import invalidate_skill_projections, refresh_committed_skill_projections
 from yuxi.modules.extensions.skills.repository import SkillRepository
-from yuxi.modules.extensions.skills.access import validate_skill_dependencies
+from yuxi.modules.identity.models import User
+from yuxi.modules.identity.permissions import normalize_permission_config, resolve_agent_permission
+from yuxi.modules.identity.permissions.resource_permission import ADMIN_ROLES
+from yuxi.modules.identity.repositories.resource_grants import validate_shared_grants
 from yuxi.modules.identity.repositories.users import UserRepository
-from yuxi.modules.identity.services.resource_grants import validate_shared_grants
 
 
 async def ensure_default_agent_definition(db, *, created_by: str | None = None) -> Agent:

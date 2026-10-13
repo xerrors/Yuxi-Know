@@ -1,14 +1,12 @@
 import pytest
-
 from yuxi.modules.agents.runtime.sandbox import backend as sandbox_backend
 from yuxi.modules.agents.runtime.state import merge_artifacts
-
 from yuxi.modules.extensions.tools.builtin.present_artifacts import (
     PresentArtifactsInput,
     _normalize_presented_artifact_path,
     present_artifacts,
 )
-from yuxi.modules.agents.runtime.sandbox.paths import CONVERSATION_HISTORY_DIR_NAME, LARGE_TOOL_RESULTS_DIR_NAME
+from yuxi.modules.workspace.runtime_paths import CONVERSATION_HISTORY_DIR_NAME, LARGE_TOOL_RESULTS_DIR_NAME
 
 
 def _runtime_with_thread(thread_id: str, uid: str = "user-1"):

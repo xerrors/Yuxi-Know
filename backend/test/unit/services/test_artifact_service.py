@@ -5,12 +5,11 @@ import threading
 from pathlib import Path
 
 import pytest
-
 import yuxi.modules.agents.services.artifacts as svc
 from yuxi.api.responses.files import render_file_result
-from yuxi.modules.agents.runtime.sandbox.paths import workspace_scope_from_runtime_path
 from yuxi.modules.extensions.skills import edit as skill_edit
 from yuxi.modules.workspace.errors import FileTransferLimitError
+from yuxi.modules.workspace.runtime_paths import workspace_scope_from_runtime_path
 from yuxi.modules.workspace.services.bindings import AuthorizedWorkdir
 from yuxi.modules.workspace.workdir import Workdir
 from yuxi.shared.errors import ContentTooLargeError, DomainError, InvalidOperationError, PermissionDeniedError, ResourceNotFoundError

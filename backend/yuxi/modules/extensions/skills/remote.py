@@ -13,10 +13,10 @@ from urllib.parse import urlparse
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.modules.agents.runtime.sandbox import ProvisionerSandboxBackend
 from yuxi.modules.agents.runtime.sandbox.download import download_sandbox_directory
-from yuxi.modules.agents.runtime.sandbox.paths import VIRTUAL_PATH_PREFIX
 from yuxi.modules.agents.runtime.sandbox.provider import get_sandbox_provider
 from yuxi.modules.extensions.options import remote_skill_source_policy
 from yuxi.modules.extensions.skills.package import is_valid_skill_slug
+from yuxi.modules.workspace.runtime_paths import VIRTUAL_PATH_PREFIX
 
 ANSI_ESCAPE_RE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
 CONTROL_SEQUENCE_RE = re.compile(r"\x1B\][^\x07]*(?:\x07|\x1B\\)|\x1B[\(\)][A-Za-z0-9]")

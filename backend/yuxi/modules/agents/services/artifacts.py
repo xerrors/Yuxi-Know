@@ -15,18 +15,18 @@ from yuxi.infrastructure.office_conversion import (
     convert_office_to_pdf,
     is_office_pdf_convertible,
 )
-from yuxi.modules.agents.runtime.sandbox.paths import (
+from yuxi.modules.extensions.skills.access import lock_accessible_shared_skill_for_file
+from yuxi.modules.extensions.skills.edit import open_shared_skill_dir
+from yuxi.modules.extensions.skills.models import Skill
+from yuxi.modules.identity.repositories.users import UserRepository
+from yuxi.modules.workspace.errors import FileTransferLimitError
+from yuxi.modules.workspace.runtime_paths import (
     VIRTUAL_SKILLS_PATH,
     is_runtime_path,
+    normalize_artifact_path,
     runtime_user_data_path,
     workspace_scope_from_runtime_path,
 )
-from yuxi.modules.extensions.skills.edit import open_shared_skill_dir
-from yuxi.modules.extensions.skills.models import Skill
-from yuxi.modules.extensions.skills.access import lock_accessible_shared_skill_for_file
-from yuxi.modules.identity.repositories.users import UserRepository
-from yuxi.modules.workspace.errors import FileTransferLimitError
-from yuxi.modules.agents.runtime.sandbox.paths import normalize_artifact_path
 from yuxi.modules.workspace.services.bindings import resolve_authorized_workdir
 from yuxi.shared.errors import (
     ContentTooLargeError,

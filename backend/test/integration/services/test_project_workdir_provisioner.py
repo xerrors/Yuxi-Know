@@ -9,11 +9,12 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker
-
 from test.support.sqlite import create_utc_sqlite_engine
 from yuxi.infrastructure.postgres.base import Base
+from yuxi.infrastructure.runtime_settings import get_skill_projection_dir, get_user_data_dir
 from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.agents.runtime.sandbox import ProvisionerSandboxBackend, get_sandbox_provider
+from yuxi.modules.extensions.skills.projection import get_user_skills_root_dir, sync_user_accessible_skills
 from yuxi.modules.workspace.models import Project
 from yuxi.modules.workspace.paths import (
     ensure_bound_user_workdir,
@@ -22,8 +23,6 @@ from yuxi.modules.workspace.paths import (
     user_workspace_dir,
     workspace_uid_dirname,
 )
-from yuxi.modules.extensions.skills.projection import get_user_skills_root_dir, sync_user_accessible_skills
-from yuxi.infrastructure.runtime_settings import get_skill_projection_dir, get_user_data_dir
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
@@ -317,11 +316,10 @@ async def test_ocr_directory_copy_is_visible_in_real_sandbox(tmp_path):
 
     from docx import Document
     from PIL import Image
-
     from yuxi.bootstrap.models import load_models
     from yuxi.infrastructure.postgres.manager import pg_manager
-    from yuxi.modules.agents.runtime.sandbox.paths import runtime_workdir_path
     from yuxi.modules.extensions.tools.builtin.ocr_parse_file import ocr_parse_file
+    from yuxi.modules.workspace.runtime_paths import runtime_workdir_path
 
     load_models()
     suffix = uuid.uuid4().hex

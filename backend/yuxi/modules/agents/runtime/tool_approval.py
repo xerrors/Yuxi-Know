@@ -2,7 +2,8 @@ from pathlib import PurePosixPath
 from typing import Literal
 
 from langchain.agents.middleware import HumanInTheLoopMiddleware
-from yuxi.modules.agents.runtime.sandbox.paths import normalize_runtime_path
+
+from yuxi.modules.workspace.runtime_paths import normalize_runtime_path
 
 ToolApprovalMode = Literal["default", "always_trust"]
 

@@ -13,8 +13,9 @@ import pytest
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from yuxi.infrastructure.runtime_settings import get_runtime_dir
-from yuxi.modules.system.options import get_option, invalidate_option_cache
 from yuxi.modules.system.models import ConfigOption
+from yuxi.modules.system.repositories.options import get_option
+from yuxi.modules.system.services.options import invalidate_option_cache
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 

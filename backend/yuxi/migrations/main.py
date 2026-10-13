@@ -10,8 +10,8 @@ from yuxi.bootstrap.environment import load_environment
 load_environment()
 
 from sqlalchemy import text
-
 from yuxi.bootstrap.models import load_models
+from yuxi.bootstrap.options import ensure_options_in_db
 from yuxi.infrastructure.postgres.base import BusinessBase, KnowledgeBase
 from yuxi.infrastructure.postgres.checkpointer import setup_langgraph_checkpointer
 from yuxi.infrastructure.postgres.manager import pg_manager
@@ -27,7 +27,6 @@ from yuxi.migrations.schema import (
     schema_migration_lock,
     upgrade_knowledge_name_schema,
 )
-from yuxi.modules.system.options import ensure_options_in_db
 
 
 async def _require_empty_database() -> None:

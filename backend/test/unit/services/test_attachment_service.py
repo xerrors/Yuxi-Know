@@ -7,10 +7,9 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-
 import yuxi.modules.agents.services.attachments as service
 from yuxi.modules.agents.models.attachments import AgentAttachment
-from yuxi.modules.agents.runtime.sandbox.paths import workdir_scope_from_runtime_path
+from yuxi.modules.workspace.runtime_paths import workdir_scope_from_runtime_path
 from yuxi.shared.errors import DomainError, InvalidInputError, ResourceNotFoundError, StateConflictError, UpstreamError
 
 pytestmark = pytest.mark.unit

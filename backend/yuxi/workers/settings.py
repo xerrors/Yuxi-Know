@@ -6,15 +6,14 @@ import os
 
 from arq import cron
 from arq.worker import func
-
 from yuxi.bootstrap.worker import _worker_shutdown, _worker_startup
 from yuxi.infrastructure.redis import get_arq_redis_settings
 from yuxi.infrastructure.runtime_settings import get_int_env
+from yuxi.infrastructure.worker_health import WORKER_HEALTH_INTERVAL_SECONDS, WORKER_HEALTH_KEY
 from yuxi.modules.agents.services.runner import MAX_RUN_TRIES, process_agent_run
 from yuxi.modules.background_jobs.dispatch import BACKGROUND_JOB_DEFAULT_TIMEOUT_SECONDS
 from yuxi.modules.knowledge.services.background_jobs import process_knowledge_projections
 from yuxi.workers.background_jobs import process_background_job
-from yuxi.workers.health import WORKER_HEALTH_INTERVAL_SECONDS, WORKER_HEALTH_KEY
 
 
 def worker_max_jobs() -> int:

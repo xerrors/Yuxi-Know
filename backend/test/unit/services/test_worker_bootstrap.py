@@ -6,9 +6,9 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-
 import yuxi.bootstrap.worker as worker_bootstrap
-from yuxi.modules.system import options as config_options
+from yuxi.bootstrap import options as config_options
+from yuxi.modules.system.services import options as option_values
 
 
 @pytest.fixture(autouse=True)
@@ -86,7 +86,7 @@ async def test_worker_startup_ensures_builtin_mcp_servers(monkeypatch: pytest.Mo
     monkeypatch.setattr(worker_bootstrap, "ensure_builtin_mcp_servers_in_db", fake_ensure_builtin_mcp_servers_in_db)
     monkeypatch.setattr(worker_bootstrap, "init_builtin_skills", fake_init_builtin_skills)
     monkeypatch.setattr(config_options, "ensure_options_in_db", fake_ensure_options_in_db)
-    monkeypatch.setattr(config_options, "invalidate_option_cache", fake_invalidate_option_cache)
+    monkeypatch.setattr(option_values, "invalidate_option_cache", fake_invalidate_option_cache)
     monkeypatch.setattr(worker_bootstrap, "recover_pending_dispatches", fake_recover_pending_dispatches)
     for name in ("reconcile_stopped_trees", "recover_cooperation_waits", "release_idle_sandboxes"):
         monkeypatch.setattr(worker_bootstrap, name, AsyncMock(return_value=[]))
@@ -143,13 +143,36 @@ async def test_worker_shutdown_closes_queue_clients_before_postgres(monkeypatch:
     async def fake_close_postgres():
         calls.append("postgres")
 
-    monkeypatch.setattr("yuxi.modules.agents.services.transport.close_queue_clients", fake_close_queue_clients)
+    monkeypatch.setattr("yuxi.infrastructure.redis.queue.close_queue_clients", fake_close_queue_clients)
     monkeypatch.setattr(worker_bootstrap.pg_manager, "close", fake_close_postgres)
 
     await worker_bootstrap._worker_shutdown({worker_bootstrap._RECONCILIATION_TASK_KEY: reconciliation_job})
 
     assert calls == ["redis", "postgres"]
     assert reconciliation_job.cancelled()
+
+
+@pytest.mark.asyncio
+async def test_worker_shutdown_closes_postgres_when_queue_close_fails(monkeypatch):
+    """队列清理失败仍释放数据库连接，记录故障并允许 ARQ 继续关闭消费池。"""
+    failure = ConnectionError("queue close failed")
+    postgres = AsyncMock()
+    monkeypatch.setattr("yuxi.infrastructure.redis.queue.close_queue_clients", AsyncMock(side_effect=failure))
+    monkeypatch.setattr(worker_bootstrap.pg_manager, "close", postgres)
+    errors = []
+    monkeypatch.setattr(worker_bootstrap.logger, "error", errors.append)
+    from arq.worker import Worker
+
+    async def unused_job(_ctx):
+        """仅用于构造真实 ARQ worker。"""
+
+    consumer_pool = AsyncMock()
+    worker = Worker(functions=[unused_job], redis_pool=consumer_pool, on_shutdown=worker_bootstrap._worker_shutdown, handle_signals=False)
+    await worker.close()
+    postgres.assert_awaited_once()
+    consumer_pool.close.assert_awaited_once_with(close_connection_pool=True)
+    assert worker._pool is None
+    assert errors == ["Worker shutdown failed: component=queue_clients, error_type=ConnectionError"]
 
 
 async def test_background_job_publication_failure_does_not_refresh_health(monkeypatch):

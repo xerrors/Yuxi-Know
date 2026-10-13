@@ -3,10 +3,8 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-
+import yuxi.infrastructure.worker_health as job_health
 import yuxi.modules.system.readiness as readiness_service
-import yuxi.workers.health as job_health
-
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.unit]
 

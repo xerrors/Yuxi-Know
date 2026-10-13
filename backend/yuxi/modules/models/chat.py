@@ -31,7 +31,7 @@ def load_chat_model(
     uid: str | None = None,
     **kwargs,
 ) -> BaseChatModel:
-    """加载模型：绑定 OpenCode 会话路由，登记需要在每次发送时签名的用户 UID。"""
+    """为 Agent runtime 返回完整 LangChain 模型，支持工具绑定、消息与流式协议。"""
     fully_specified_name = resolve_chat_model_spec(fully_specified_name)
     info = _require_chat_model_info(fully_specified_name)
 
@@ -99,7 +99,7 @@ def load_chat_model(
 def resolve_chat_model_spec(model_spec: str | None, *, fallback: str | None = None) -> str:
     """解析空模型配置，不吞掉已经配置但无效的模型值。
 
-    这里仅处理模型为空时的优先级：请求或配置值、调用方 fallback、系统默认模型；
+    这里仅处理模型为空时的优先级：请求或配置值、调用方显式 fallback；
     具体模型是否存在、是否为聊天模型仍由 model_cache 校验。
     """
     for candidate in (model_spec, fallback):
@@ -208,6 +208,7 @@ class LangChainChatAdapter:
         self.info = info or {}
 
     async def call(self, message, stream=False):
+        """文本任务入口；保留供应商异常类型供调用方判断与重试。"""
         messages = self._normalize_messages(message)
         try:
             if stream:
@@ -217,7 +218,7 @@ class LangChainChatAdapter:
         except Exception as e:
             err = f"Error calling model: {e}, URL: {self.base_url}, Model: {self.model_name}"
             logger.error(err)
-            raise Exception(err)
+            raise
 
     @staticmethod
     def _normalize_messages(message):
@@ -232,6 +233,7 @@ class LangChainChatAdapter:
 
 
 def select_model(model_spec: str, **kwargs) -> LangChainChatAdapter:
+    """为图抽取、评估等文本任务装配只消费 content 的轻量适配器。"""
     if not model_spec:
         raise ValueError("model_spec 不能为空")
 

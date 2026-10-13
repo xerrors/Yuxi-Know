@@ -8,18 +8,16 @@ from contextlib import suppress
 
 import asyncpg
 import pytest
-from yuxi.modules.agents.runtime.sandbox.paths import runtime_user_data_path
-from yuxi.modules.workspace.filesystem import Workspace
 from test.integration.api.helpers import delete_created_threads
+from yuxi.modules.workspace.filesystem import Workspace
+from yuxi.modules.workspace.runtime_paths import runtime_user_data_path
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
 
 async def test_unbound_full_key_uses_owners_product_thread_scope(test_client, admin_headers, api_key_factory):
     """CLI 登录签发的完整 Key 可创建产品 Thread，且不能伪造终端用户。"""
-    created_key = await api_key_factory(
-        {"request_id": str(uuid.uuid4()), "name": "CLI product scope", "access_level": "full"}
-    )
+    created_key = await api_key_factory({"request_id": str(uuid.uuid4()), "name": "CLI product scope", "access_level": "full"})
     assert created_key.response.json()["api_key"]["app_id"] is None
     key_headers = created_key.headers
     thread_id = None
@@ -91,7 +89,8 @@ async def test_agents_key_cannot_use_product_routes_or_spoof_source(test_client,
         conn = await asyncpg.connect(os.environ["POSTGRES_URL"].replace("+asyncpg", ""))
         try:
             stored = await conn.fetchrow(
-                "UPDATE sessions SET extra_metadata = jsonb_set(extra_metadata::jsonb, '{app_id}', to_jsonb($1::text))::json WHERE thread_id = $2 RETURNING app_id, extra_metadata",
+                "UPDATE sessions SET extra_metadata = jsonb_set(extra_metadata::jsonb, '{app_id}', to_jsonb($1::text))::json "
+                "WHERE thread_id = $2 RETURNING app_id, extra_metadata",
                 "integration-app",
                 product_thread_id,
             )

@@ -12,7 +12,6 @@ from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
 import httpx
-from pydantic import ValidationError
 from deepagents.backends import CompositeBackend
 from deepagents.backends.protocol import (
     ASYNC_GREP_TIMEOUT,
@@ -30,9 +29,9 @@ from deepagents.backends.protocol import (
 )
 from deepagents.backends.sandbox import MAX_BINARY_BYTES, BaseSandbox
 from deepagents.backends.utils import _get_file_type
+from pydantic import ValidationError
 
 from yuxi.infrastructure.observability.logging import logger
-from yuxi.modules.agents.runtime.sandbox.paths import VIRTUAL_PATH_PREFIX, VIRTUAL_SKILLS_PATH, normalize_runtime_path, runtime_workdir_path
 from yuxi.modules.agents.runtime.sandbox.provider import (
     get_sandbox_provider,
     sandbox_id_for_thread,
@@ -40,6 +39,7 @@ from yuxi.modules.agents.runtime.sandbox.provider import (
 )
 from yuxi.modules.workspace.errors import FileTransferLimitError
 from yuxi.modules.workspace.paths import validate_directory_name
+from yuxi.modules.workspace.runtime_paths import VIRTUAL_PATH_PREFIX, VIRTUAL_SKILLS_PATH, normalize_runtime_path, runtime_workdir_path
 
 if TYPE_CHECKING:
     from yuxi.modules.agents.runtime.context import BaseContext

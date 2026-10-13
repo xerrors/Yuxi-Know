@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.modules.models.providers.builtin import BUILTIN_PROVIDERS
 from yuxi.modules.models.providers.cache import USER_UID_SIGNATURE_SECRET_ENV
+from yuxi.modules.models.providers.credentials import resolve_api_key
 from yuxi.modules.models.providers.repository import (
     create_model_provider,
     delete_model_provider,
@@ -32,6 +33,15 @@ ALLOWED_EXTRA_BODY_FIELDS = {
     "thinking_budget",
 }
 _PROVIDER_ID_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{1,99}$")
+
+
+async def resolve_deepseek_ocr_credentials(db: AsyncSession) -> dict[str, str]:
+    """解析 DeepSeek OCR 当前支持的硅基流动凭据与请求端点。"""
+    provider = await get_model_provider_by_id(db, "siliconflow-cn")
+    api_key = resolve_api_key(provider) if provider and provider.is_enabled else None
+    if not api_key:
+        raise ValueError("siliconflow-cn 模型供应商凭证不可用")
+    return {"api_key": api_key, "api_url": f"{provider.base_url.rstrip('/')}/chat/completions"}
 
 
 def _normalize_list(value: Any) -> list:
@@ -227,15 +237,6 @@ def _normalize_payload(data: dict[str, Any], *, partial: bool = False) -> dict[s
         _validate_request_body_overrides_scope(payload.get("enabled_models"), payload.get("provider_type"))
 
     return payload
-
-
-def resolve_api_key(provider: ModelProvider) -> str | None:
-    """解析 provider 的 API Key，优先直接配置，其次从环境变量读取。"""
-    if provider.api_key:
-        return provider.api_key
-    if provider.api_key_env:
-        return os.getenv(provider.api_key_env)
-    return None
 
 
 def check_credential_status(provider: ModelProvider) -> str:

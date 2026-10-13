@@ -6,9 +6,8 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.agents.repositories.messages import MessageRepository
+from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.system.repositories.dashboard import DashboardRepository
 from yuxi.shared.datetime import format_utc_datetime
 

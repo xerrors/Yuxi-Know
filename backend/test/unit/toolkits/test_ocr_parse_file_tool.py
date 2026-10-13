@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import importlib
-from types import SimpleNamespace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
-
 import yuxi.modules.documents.service as ocr_service
 from yuxi.modules.extensions.tools.builtin.ocr_parse_file import ocr_parse_file
 
@@ -265,8 +264,8 @@ async def test_ocr_parse_file_rejects_directory(tmp_path, monkeypatch: pytest.Mo
 
 
 def _mock_system_options(monkeypatch: pytest.MonkeyPatch) -> None:
-    from yuxi.modules.system.options import Option
     from yuxi.modules.system.options import system_options
+    from yuxi.modules.system.services.options import Option
 
     async def get_options(option, _db=None):
         assert option is system_options

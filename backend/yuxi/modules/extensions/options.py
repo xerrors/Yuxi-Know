@@ -1,6 +1,6 @@
 """本模块拥有的管理员配置定义。"""
 
-from yuxi.modules.system.options import Option
+from yuxi.modules.system.services.options import Option
 
 remote_skill_source_policy = Option(
     key="remote_skill_source_policy",

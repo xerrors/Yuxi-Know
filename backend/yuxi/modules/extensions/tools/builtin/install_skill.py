@@ -5,10 +5,9 @@ from langchain_core.messages import ToolMessage
 from langgraph.prebuilt.tool_node import ToolRuntime
 from langgraph.types import Command
 from pydantic import BaseModel, Field
-
 from yuxi.infrastructure.observability.logging import logger
-from yuxi.modules.agents.runtime.sandbox.paths import VIRTUAL_PERSONAL_SKILLS_PATH
 from yuxi.modules.extensions.tools.registry import tool
+from yuxi.modules.workspace.runtime_paths import VIRTUAL_PERSONAL_SKILLS_PATH
 
 
 class InstallSkillInput(BaseModel):

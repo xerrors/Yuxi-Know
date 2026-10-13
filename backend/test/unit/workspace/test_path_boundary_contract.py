@@ -3,12 +3,11 @@
 from types import SimpleNamespace
 
 import pytest
-
-from yuxi.modules.agents.runtime.sandbox.paths import normalize_artifact_path, normalize_runtime_path
 from yuxi.modules.agents.runtime.tool_approval import _normalize_runtime_path
 from yuxi.modules.agents.services.artifacts import _normalize_artifact_path
 from yuxi.modules.extensions.tools.builtin.sandbox_scope import resolve_runtime_sandbox_scope, runtime_scope_value
 from yuxi.modules.workspace.paths import normalize_workspace_scope, validate_directory_name
+from yuxi.modules.workspace.runtime_paths import normalize_artifact_path, normalize_runtime_path
 from yuxi.shared.errors import PermissionDeniedError
 
 

@@ -3,9 +3,9 @@ from __future__ import annotations
 import asyncio
 
 from yuxi.modules.agents.repositories.sessions import SessionRepository
-from yuxi.modules.agents.runtime.sandbox.paths import runtime_path_for_workdir_scope, runtime_user_data_path
 from yuxi.modules.workspace.filesystem import Workspace
 from yuxi.modules.workspace.paths import validate_thread_id
+from yuxi.modules.workspace.runtime_paths import runtime_path_for_workdir_scope, runtime_user_data_path
 from yuxi.modules.workspace.services.bindings import resolve_authorized_workdir
 
 MENTION_EXCLUDE_DIRS = frozenset(

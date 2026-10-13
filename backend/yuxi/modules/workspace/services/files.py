@@ -9,13 +9,13 @@ from pathlib import Path, PurePosixPath
 from yuxi.infrastructure.file_preview import detect_preview_type, preview_too_large
 from yuxi.infrastructure.filesystem import await_io
 from yuxi.infrastructure.office_conversion import OfficeConversionError
-from yuxi.modules.agents.runtime.sandbox.paths import runtime_user_data_path
 from yuxi.modules.identity.models import User
 from yuxi.modules.workspace.errors import FileTransferLimitError
 from yuxi.modules.workspace.filesystem import Workspace
 from yuxi.modules.workspace.paths import ensure_user_workspace, normalize_workspace_scope, validate_directory_name
 from yuxi.modules.workspace.preview import preview_workspace_file
 from yuxi.modules.workspace.repositories.projects import ProjectRepository
+from yuxi.modules.workspace.runtime_paths import runtime_user_data_path
 from yuxi.modules.workspace.services.file_entries import file_entry, sort_file_entries
 from yuxi.shared.errors import (
     ContentTooLargeError,

@@ -9,12 +9,12 @@ from datetime import datetime
 import pytest
 from langchain_core.messages import ToolMessage
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-
-from test.e2e.e2e_helpers import public_message as _message, register_replay_provider as _provider
+from test.e2e.e2e_helpers import public_message as _message
+from test.e2e.e2e_helpers import register_replay_provider as _provider
 from test.e2e.e2e_helpers import wait_for_consumed_input
 from test.support.permission_convergence import SHARED, create_agent
-from yuxi.modules.agents.runtime.sandbox.paths import VIRTUAL_PATH_PREFIX
 from yuxi.modules.workspace.paths import user_workspace_dir
+from yuxi.modules.workspace.runtime_paths import VIRTUAL_PATH_PREFIX
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.e2e, pytest.mark.slow, pytest.mark.timeout(120)]
 

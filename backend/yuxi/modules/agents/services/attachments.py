@@ -8,7 +8,6 @@ from pathlib import Path
 from urllib.parse import quote, unquote
 
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from yuxi.infrastructure.document_parsing import IMAGE_FILE_EXTENSIONS, PDF_FILE_EXTENSIONS
 from yuxi.infrastructure.document_parsing.artifacts import local_image_links, resource_path
 from yuxi.infrastructure.document_parsing.engines import get_ocr_engines_for_extension
@@ -19,12 +18,12 @@ from yuxi.modules.agents.models.attachments import AgentAttachment
 from yuxi.modules.agents.repositories.attachments import AttachmentRepository
 from yuxi.modules.agents.repositories.input import AgentInputRepository
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
-from yuxi.modules.agents.services.thread_access import require_thread
-from yuxi.modules.agents.runtime.sandbox.paths import runtime_path_for_workdir_scope, workdir_scope_from_runtime_path
 from yuxi.modules.agents.scope import ActorScope
+from yuxi.modules.agents.services.thread_access import require_thread
 from yuxi.modules.system.options import system_options
 from yuxi.modules.workspace.filesystem import Workspace
 from yuxi.modules.workspace.paths import ensure_user_workspace
+from yuxi.modules.workspace.runtime_paths import runtime_path_for_workdir_scope, workdir_scope_from_runtime_path
 from yuxi.modules.workspace.workdir import Workdir
 from yuxi.shared.datetime import format_utc_datetime
 from yuxi.shared.errors import DomainError, InvalidInputError, InvalidOperationError, ResourceNotFoundError, StateConflictError

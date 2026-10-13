@@ -39,9 +39,9 @@ Yuxi 始终交付完整知识能力。API 注册知识库、图谱、评估、Da
 
 ### 业务模块
 
-- `modules/agents` 拥有 Input 接收、优先队列调度、Turn/Run、消息、事件、运行租约与 LangGraph Agent runtime。`services` 编排用例，`repositories` 查询持久状态，`models` 定义 ORM；`runtime/agent_backends` 拥有执行图实现与显式注册，`runtime/sandbox` 拥有沙盒执行、生命周期和虚拟路径；`runtime/middlewares` 拥有模型与工具策略，Context 装配留在 runtime，知识库可见范围解析由 knowledge service 拥有。
+- `modules/agents` 拥有 Input 接收、优先队列调度、Turn/Run、消息、事件、运行租约与 LangGraph Agent runtime。`services` 编排用例，`repositories` 查询持久状态，`models` 定义 ORM；`runtime/agent_backends` 拥有执行图实现与显式注册，`runtime/sandbox` 拥有沙盒执行与生命周期；`runtime/middlewares` 拥有模型与工具策略，Context 装配留在 runtime，知识库可见范围解析由 knowledge service 拥有。
 - `modules/knowledge` 拥有知识库、分块、检索、图谱与评估的业务状态；`modules/documents` 解析配置与 MinIO 输入，并按调用方指定的位置发布资源；`infrastructure/document_parsing` 只生成完整本地 Markdown 目录，`parser.py` 拥有格式转换，`artifacts.py` 拥有产物路径与引用，`engines/` 集中 OCR 契约、注册与实现。
-- `modules/workspace` 拥有 UserWorkspace 的路径映射、no-follow 文件操作、Workdir 和预览；Agent 沙盒的 runtime 虚拟路径由 `modules/agents/runtime/sandbox/paths.py` 拥有。
+- `modules/workspace` 拥有 UserWorkspace 的路径映射、no-follow 文件操作、Workdir 和预览；Agent 沙盒与 Viewer 共用的 runtime 虚拟路径映射由 `modules/workspace/runtime_paths.py` 拥有。
 - `modules/identity` 拥有用户、部门、权限、凭据与 OIDC 账号用例，以及 Public API 的 Key 校验与 App/end_user 身份解析；`modules/extensions` 拥有 Skills、MCP 与工具目录；`modules/models` 拥有模型适配和供应商配置。
 - `modules/schedules` 拥有用户定时 Agent 定义和 occurrence；`modules/background_jobs` 拥有任务登记、执行方上报的观察记录和取消意图；后台作业模块的 dispatch 与 registry 拥有提交和定义，`workers` 拥有领取、执行和失联维护；`modules/system` 拥有系统配置、Dashboard 与跨域共享资源所有权治理。
 

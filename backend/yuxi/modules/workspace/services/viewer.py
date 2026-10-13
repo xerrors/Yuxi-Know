@@ -10,12 +10,12 @@ from pathlib import PurePosixPath
 from yuxi.infrastructure.file_preview import preview_too_large
 from yuxi.infrastructure.filesystem import await_io
 from yuxi.infrastructure.office_conversion import OfficeConversionError
-from yuxi.modules.agents.runtime.sandbox.paths import is_runtime_path, runtime_path_for_workdir_scope
 from yuxi.modules.workspace.errors import FileTransferLimitError
 from yuxi.modules.workspace.preview import preview_workspace_file
+from yuxi.modules.workspace.runtime_paths import is_runtime_path, runtime_path_for_workdir_scope
 from yuxi.modules.workspace.services.bindings import AuthorizedWorkdir, resolve_authorized_workdir
-from yuxi.shared.datetime import utc_isoformat_from_timestamp
 from yuxi.modules.workspace.services.file_entries import file_entry, sort_file_entries
+from yuxi.shared.datetime import utc_isoformat_from_timestamp
 from yuxi.shared.errors import ContentTooLargeError, InvalidOperationError, PermissionDeniedError, ResourceNotFoundError, StateConflictError
 from yuxi.shared.files import MAX_FILE_PREVIEW_BYTES, FileInput, PreparedFile, PreviewResult, detect_media_type
 

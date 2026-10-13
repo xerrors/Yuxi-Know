@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import pytest
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import async_sessionmaker
-
-from test.support.sqlite import create_utc_sqlite_engine
-from yuxi.modules.system.options import ensure_options_in_db, update_option_value
-from yuxi.infrastructure.document_parsing.engines import ENGINE_SPECS
 import yuxi.modules.documents.service as ocr_service
+from sqlalchemy.ext.asyncio import async_sessionmaker
+from test.support.sqlite import create_utc_sqlite_engine
+from yuxi.bootstrap.options import ensure_options_in_db
+from yuxi.infrastructure.document_parsing.engines import ENGINE_SPECS
 from yuxi.infrastructure.postgres.base import Base
 from yuxi.modules.models.tables import ModelProvider
+from yuxi.modules.system.services.options import update_option_value
 
 
 @pytest_asyncio.fixture
@@ -111,6 +111,7 @@ async def test_resource_publication_reclaims_failed_or_cancelled_attempt(tmp_pat
     """上传线程完成后回收独占前缀，其他文档的资源仍然保留。"""
     import asyncio
     import threading
+
     from yuxi.infrastructure.document_parsing import ParseResult
     from yuxi.modules.documents import assets
 

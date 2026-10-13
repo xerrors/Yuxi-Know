@@ -1,6 +1,6 @@
 """本模块拥有的管理员配置定义。"""
 
-from yuxi.modules.system.options import Option
+from yuxi.modules.system.services.options import Option
 
 mineru_ocr_host_opts = Option(
     key="mineru_ocr_host_opts",

@@ -8,8 +8,11 @@ from yuxi.modules.knowledge.chunking.presets import resolve_chunk_processing_par
 from yuxi.shared.datetime import utc_isoformat
 from yuxi.shared.hashing import hashstr
 
+# Web 上传请求与持久 Job payload 的既有协议键；只在上传元数据边界读取。
+PREPROCESSED_UPLOADS_KEY = "_preprocessed_map"
+
 _DROPPED_PROCESSING_PARAM_KEYS = {
-    "_preprocessed_map",
+    PREPROCESSED_UPLOADS_KEY,
     "auto_index",
     "content_hashes",
     "file_sizes",
@@ -71,8 +74,8 @@ async def prepare_item_metadata(item: str, content_type: str, kb_id: str, params
         params: 处理参数，可选
     """
     # 检查是否有预处理信息 (针对 URL 转 HTML 文件的情况)
-    if params and "_preprocessed_map" in params and item in params["_preprocessed_map"]:
-        pre_info = params["_preprocessed_map"][item]
+    if params and PREPROCESSED_UPLOADS_KEY in params and item in params[PREPROCESSED_UPLOADS_KEY]:
+        pre_info = params[PREPROCESSED_UPLOADS_KEY][item]
 
         # 使用预处理信息
         filename = pre_info.get("filename", item)  # 通常是原始 URL

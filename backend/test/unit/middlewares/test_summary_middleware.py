@@ -5,14 +5,13 @@ import json
 from types import SimpleNamespace
 
 import pytest
-from langchain.agents.middleware.types import ExtendedModelResponse, ModelRequest, ModelResponse
 from deepagents.backends import CompositeBackend
 from deepagents.middleware.summarization import SummarizationMiddleware
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage, get_buffer_string
+from langchain.agents.middleware.types import ExtendedModelResponse, ModelRequest, ModelResponse
 from langchain_core.exceptions import ContextOverflowError
-
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage, get_buffer_string
 from yuxi.modules.agents.runtime.middlewares.summary import YuxiSummarizationMiddleware, create_summary_middleware
-from yuxi.modules.agents.runtime.sandbox.paths import workdir_runtime_paths
+from yuxi.modules.workspace.runtime_paths import workdir_runtime_paths
 
 WORKDIR_PATH = "/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111"
 VIRTUAL_PATH_LARGE_TOOL_RESULTS, VIRTUAL_PATH_CONVERSATION_HISTORY = workdir_runtime_paths(WORKDIR_PATH)

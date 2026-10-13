@@ -58,7 +58,7 @@ Session 通过 `project_id` 绑定 Project；Project 拥有这项绑定和 `work
 
 文件访问使用相对路径和 no-follow 原语，拒绝 `..`、符号链接、特殊文件和跨用户根目录。普通运行服务以 `1000:1000` 访问数据。
 
-runtime 绝对路径由 `sandbox/paths.normalize_runtime_path` 校验，UserWorkspace 和 Workdir 浏览 scope 由 `workspace/paths.normalize_workspace_scope` 校验；两者分别拒绝跳转、URL、反斜杠和 NUL，通过显式映射连接。产物登记与读取共用 `normalize_artifact_path`，要求非空 Workdir 绑定和当前用户可见 runtime 根。子目录名共用单组件校验；宿主 no-follow 与远端文件脚本都将链接拒绝翻译为权限异常。目录 fd 原语保留 ELOOP 供调用方识别，普通文件边界将它映射为 PermissionError。
+runtime 绝对路径由 `workspace/runtime_paths.normalize_runtime_path` 校验，UserWorkspace 和 Workdir 浏览 scope 由 `workspace/paths.normalize_workspace_scope` 校验；两者分别拒绝跳转、URL、反斜杠和 NUL，通过显式映射连接。产物登记与读取共用 `normalize_artifact_path`，要求非空 Workdir 绑定和当前用户可见 runtime 根。子目录名共用单组件校验；宿主 no-follow 与远端文件脚本都将链接拒绝翻译为权限异常。目录 fd 原语保留 ELOOP 供调用方识别，普通文件边界将它映射为 PermissionError。
 
 文件工具只从注入的 Context 读取 uid、runtime scope 和 Workdir，模型 state 与 configurable 不提供身份回退。Workspace 与 provisioner backend 分别提供宿主 scope 和 runtime 路径的操作；Workdir 的转发为每次操作附加已绑定根，Viewer 只能使用该受限视图，个人工作区使用 Workspace 的 uid 根。两套文件能力保留路径和返回类型差异，共用的条目字段与排序由 workspace service 维护。
 

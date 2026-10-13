@@ -7,17 +7,12 @@ import json
 import os
 
 from yuxi.infrastructure.observability.logging import logger
-from yuxi.infrastructure.redis import close_async_redis_client, create_arq_redis_pool, get_async_redis_client
-from yuxi.workers.health import WORKER_HEALTH_KEY
+from yuxi.infrastructure.redis import get_async_redis_client
+from yuxi.infrastructure.redis.queue import get_arq_pool
 
 RUN_CANCEL_KEY_TTL_SECONDS = int(os.getenv("RUN_CANCEL_KEY_TTL_SECONDS", "1800"))
 RUN_EVENTS_STREAM_TTL_SECONDS = int(os.getenv("RUN_EVENTS_STREAM_TTL_SECONDS", "7200"))
 RUN_EVENTS_STREAM_MAXLEN = int(os.getenv("RUN_EVENTS_STREAM_MAXLEN", "0"))
-RUN_RECONCILIATION_SECONDS = 30
-WORKER_RECONCILIATION_HEALTH_KEY = f"{WORKER_HEALTH_KEY}:lease-reconciliation"
-WORKER_RECONCILIATION_HEALTH_TTL_SECONDS = RUN_RECONCILIATION_SECONDS * 2 + 5
-
-_arq_pool = None
 
 
 def _cancel_key(run_id: str) -> str:
@@ -33,22 +28,6 @@ def _event_stream_key(run_id: str) -> str:
 async def get_redis_client():
     """取得当前进程共用的短期传输连接。"""
     return await get_async_redis_client()
-
-
-async def publish_worker_health(key: str, worker_id: str, ttl_seconds: int) -> None:
-    """按调用方指定的有界 TTL 续租 worker 能力事实。"""
-    redis = await get_redis_client()
-    await redis.set(key, worker_id, ex=ttl_seconds)
-
-
-async def get_arq_pool():
-    """复用当前进程的 ARQ 连接池。"""
-    global _arq_pool
-    if _arq_pool is not None:
-        return _arq_pool
-
-    _arq_pool = await create_arq_redis_pool()
-    return _arq_pool
 
 
 async def enqueue_agent_run(run_id: str) -> None:
@@ -179,15 +158,3 @@ async def list_recent_run_stream_events(run_id: str, *, limit: int = 100) -> lis
         if event is not None:
             events.append(event)
     return events
-
-
-async def close_queue_clients() -> None:
-    """关闭当前进程复用的 ARQ 与 Redis 连接。"""
-    global _arq_pool
-    if _arq_pool is not None:
-        try:
-            await _arq_pool.close()
-        except Exception:
-            pass
-        _arq_pool = None
-    await close_async_redis_client()

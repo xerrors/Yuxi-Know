@@ -8,13 +8,10 @@ from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.modules.agents.models.inputs import AgentInput
 from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.modules.agents.repositories.definitions import AgentRepository
-from yuxi.modules.agents.services.thread_access import require_thread
-from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.agents.repositories.state import AgentStateRepository
 from yuxi.modules.agents.runtime.agent_backends import AgentBackendNotFoundError, get_agent_backend
 from yuxi.modules.agents.runtime.context import DEFAULT_SUMMARY_THRESHOLD_K, BaseContext, prepare_agent_runtime_context
@@ -22,9 +19,11 @@ from yuxi.modules.agents.runtime.middlewares import create_summary_middleware_fr
 from yuxi.modules.agents.runtime.middlewares.token_usage import TOKEN_USAGE_CONTEXT_FIELDS
 from yuxi.modules.agents.runtime.sandbox import ProvisionerSandboxBackend, get_sandbox_provider
 from yuxi.modules.agents.runtime.sandbox.backend import create_agent_composite_backend
-from yuxi.modules.agents.runtime.sandbox.paths import runtime_workdir_path
+from yuxi.modules.agents.scope import ActorScope
+from yuxi.modules.agents.services.thread_access import require_thread
 from yuxi.modules.extensions.skills.projection import get_user_skills_root_dir
 from yuxi.modules.identity.models import User
+from yuxi.modules.workspace.runtime_paths import runtime_workdir_path
 from yuxi.modules.workspace.services.bindings import ensure_session_workdir_available
 from yuxi.shared.errors import ResourceNotFoundError, StateConflictError
 

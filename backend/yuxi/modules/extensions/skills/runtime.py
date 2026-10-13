@@ -8,16 +8,15 @@ from pathlib import Path
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from yuxi.infrastructure.filesystem import open_regular_file_fd
 from yuxi.infrastructure.observability.logging import logger
-from yuxi.modules.agents.runtime.sandbox.paths import VIRTUAL_PERSONAL_SKILLS_PATH, VIRTUAL_SKILLS_PATH
+from yuxi.modules.extensions.skills.access import lock_accessible_shared_skills_for_runtime, resolved_shared_skill
 from yuxi.modules.extensions.skills.package import normalize_string_list
 from yuxi.modules.extensions.skills.personal import list_personal_skills
 from yuxi.modules.extensions.skills.projection import refresh_user_skill_projection_async
 from yuxi.modules.extensions.skills.resolved import RuntimeSkill, SkillRuntimeSnapshot
-from yuxi.modules.extensions.skills.access import lock_accessible_shared_skills_for_runtime, resolved_shared_skill
 from yuxi.modules.identity.models import User
+from yuxi.modules.workspace.runtime_paths import VIRTUAL_PERSONAL_SKILLS_PATH, VIRTUAL_SKILLS_PATH
 
 
 async def sync_agent_context_skills(context) -> None:

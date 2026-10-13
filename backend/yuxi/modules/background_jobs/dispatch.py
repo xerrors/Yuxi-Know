@@ -5,7 +5,7 @@ import os
 from typing import Any
 
 from yuxi.infrastructure.observability.logging import logger
-from yuxi.modules.agents.services.transport import get_arq_pool
+from yuxi.infrastructure.redis.queue import get_arq_pool
 from yuxi.modules.background_jobs.registry import get_job_definition
 from yuxi.modules.background_jobs.service import BackgroundJob, job_tracker
 

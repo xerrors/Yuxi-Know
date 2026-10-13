@@ -2,4 +2,8 @@
 
 from yuxi.infrastructure.filesystem import FileTransferLimitError
 
-__all__ = ["FileTransferLimitError"]
+__all__ = ["FileTransferLimitError", "ProjectHasPendingAgentWorkError"]
+
+
+class ProjectHasPendingAgentWorkError(Exception):
+    """Project 内仍有不能归档的执行或输入。"""

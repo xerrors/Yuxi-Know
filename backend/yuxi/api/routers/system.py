@@ -13,11 +13,12 @@ from yuxi import get_version
 from yuxi.api.dependencies.auth import get_db, get_required_user, get_superadmin_user
 from yuxi.api.routers.agents.feedback import FeedbackPage
 from yuxi.infrastructure.observability.logging import LOG_FILE, logger
-from yuxi.modules.agents.services.feedback import list_feedback
 from yuxi.modules.agents.scope import ActorScope
+from yuxi.modules.agents.services.feedback import list_feedback
 from yuxi.modules.identity.models import User
-from yuxi.modules.system.options import invalidate_option_cache, system_options, update_option_value
+from yuxi.modules.system.options import system_options
 from yuxi.modules.system.readiness import get_readiness
+from yuxi.modules.system.services.options import save_configuration
 
 BRAND_STATIC_DIR = Path(__file__).resolve().parents[2] / "modules/system/static"
 
@@ -144,9 +145,7 @@ async def update_config_single(
     if not isinstance(key, str) or key not in {field["key"] for field in system_options.fields}:
         raise HTTPException(status_code=400, detail=f"未知配置项: {key}")
     try:
-        await update_option_value(db, system_options.key, {key: value}, current_user.username)
-        await db.commit()
-        await invalidate_option_cache(system_options.key)
+        await save_configuration(db, system_options.key, {key: value}, current_user.username)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _serialize_system_config(await system_options.get(db))
@@ -160,9 +159,7 @@ async def update_config_batch(
 ) -> dict:
     """批量更新配置项"""
     try:
-        await update_option_value(db, system_options.key, items, current_user.username)
-        await db.commit()
-        await invalidate_option_cache(system_options.key)
+        await save_configuration(db, system_options.key, items, current_user.username)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _serialize_system_config(await system_options.get(db))
@@ -290,7 +287,8 @@ async def get_config_options(
 ):
     """返回系统定义的通用配置表单和值。"""
 
-    from yuxi.modules.system.options import list_options, serialize_option
+    from yuxi.modules.system.repositories.options import list_options
+    from yuxi.modules.system.services.options import serialize_option
 
     return {"options": [serialize_option(record) for record in await list_options(db)]}
 
@@ -304,14 +302,12 @@ async def put_config_option(
 ):
     """保存一个通用配置项的 JSON 值。"""
 
-    from yuxi.modules.system.options import serialize_option, update_option_value
+    from yuxi.modules.system.services.options import serialize_option
 
     try:
-        record = await update_option_value(db, key, payload.value, current_user.username)
+        record = await save_configuration(db, key, payload.value, current_user.username)
         if record is None:
             raise HTTPException(status_code=404, detail=f"配置项不存在: {key}")
-        await db.commit()
-        await invalidate_option_cache(key)
         await db.refresh(record)
         return {"option": serialize_option(record)}
     except HTTPException:

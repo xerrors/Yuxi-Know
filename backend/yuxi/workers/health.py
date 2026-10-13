@@ -1,19 +1,9 @@
 """ARQ 消费心跳契约与轻量 Compose 健康检查。"""
 
-import os
 import sys
 
 from yuxi.infrastructure.redis import RedisConfig, sync_redis_client
-
-WORKER_HEALTH_CONTRACT = "agent-run-v1"
-WORKER_HEALTH_KEY = f"yuxi:worker:health:{WORKER_HEALTH_CONTRACT}"
-WORKER_HEALTH_INTERVAL_SECONDS = float(os.getenv("WORKER_HEALTH_INTERVAL_SECONDS", "5"))
-if not 0 < WORKER_HEALTH_INTERVAL_SECONDS <= 10:
-    raise ValueError("WORKER_HEALTH_INTERVAL_SECONDS 必须大于 0 且不超过 10")
-WORKER_HEALTH_MAX_TTL_MS = int((WORKER_HEALTH_INTERVAL_SECONDS + 1) * 1000)
-JOB_RECONCILIATION_SECONDS = 30.0
-JOB_RECONCILIATION_HEALTH_KEY = "yuxi:worker:health:background-job-reconciliation-v1"
-JOB_RECONCILIATION_HEALTH_TTL_SECONDS = int(JOB_RECONCILIATION_SECONDS * 2 + 5)
+from yuxi.infrastructure.worker_health import WORKER_HEALTH_KEY, WORKER_HEALTH_MAX_TTL_MS
 
 
 def main() -> int:

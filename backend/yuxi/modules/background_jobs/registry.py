@@ -43,11 +43,53 @@ class JobDefinition:
 
 def get_job_definition(job_type: str, handler_version: int = 1) -> JobDefinition:
     """返回当前 shipping JobDefinition，并拒绝未知类型或版本。"""
-    from yuxi.bootstrap.background_job_handlers import JOB_DEFINITIONS
-
     definition = JOB_DEFINITIONS.get(job_type)
     if definition is None:
         raise ValueError(f"Unknown job type: {job_type}")
     if definition.version != handler_version:
         raise ValueError(f"Unsupported handler version for {job_type}: {handler_version}; expected {definition.version}")
     return definition
+
+
+JOB_DEFINITIONS = {
+    definition.job_type: definition
+    for definition in (
+        JobDefinition(
+            "knowledge_ingest",
+            "yuxi.modules.knowledge.services.background_jobs",
+            "run_knowledge_ingest",
+            failure_function="fail_knowledge_file_job",
+        ),
+        JobDefinition(
+            "knowledge_parse",
+            "yuxi.modules.knowledge.services.background_jobs",
+            "run_knowledge_parse",
+            failure_function="fail_knowledge_file_job",
+        ),
+        JobDefinition(
+            "knowledge_index",
+            "yuxi.modules.knowledge.services.background_jobs",
+            "run_knowledge_index",
+            failure_function="fail_knowledge_file_job",
+        ),
+        JobDefinition(
+            "knowledge_graph_index",
+            "yuxi.modules.knowledge.services.background_jobs",
+            "run_knowledge_graph",
+        ),
+        JobDefinition(
+            "dataset_generation",
+            "yuxi.modules.knowledge.evaluation.service",
+            "run_dataset_generation_job",
+            success_function="finish_dataset_generation_job",
+            failure_function="fail_dataset_generation_job",
+        ),
+        JobDefinition(
+            "rag_evaluation",
+            "yuxi.modules.knowledge.evaluation.service",
+            "run_rag_evaluation_job",
+            success_function="finish_rag_evaluation_job",
+            failure_function="fail_rag_evaluation_job",
+        ),
+    )
+}

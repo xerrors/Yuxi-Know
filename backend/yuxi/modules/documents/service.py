@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from yuxi.infrastructure.document_parsing import OCR_FILE_EXTENSIONS, ParseOptions, ParseResult
 from yuxi.infrastructure.document_parsing.engines import ENGINE_SPECS, get_engine, get_engine_spec
 from yuxi.modules.documents.options import (
@@ -18,7 +17,7 @@ from yuxi.modules.documents.options import (
     paddleocr_api_opts,
     pp_structure_v3_ocr_host_opts,
 )
-from yuxi.modules.models.providers.service import get_model_provider_by_id, resolve_api_key
+from yuxi.modules.models.providers.service import resolve_deepseek_ocr_credentials
 from yuxi.modules.system.options import system_options
 
 
@@ -161,14 +160,7 @@ async def _build_processor_kwargs(db: AsyncSession, engine_id: str) -> dict[str,
         opts = await pp_structure_v3_ocr_host_opts.get(db)
         return {"server_url": opts["server_url"]} if opts["server_url"] else {}
     if engine_id == "deepseek_ocr":
-        provider = await get_model_provider_by_id(db, "siliconflow-cn")
-        api_key = resolve_api_key(provider) if provider and provider.is_enabled else None
-        if not api_key:
-            raise ValueError("siliconflow-cn 模型供应商凭证不可用")
-        return {
-            "api_key": api_key,
-            "api_url": f"{provider.base_url.rstrip('/')}/chat/completions",
-        }
+        return await resolve_deepseek_ocr_credentials(db)
     if engine_id in {"paddleocr_vl_1_6", "paddleocr_pp_ocrv6"}:
         opts = await paddleocr_api_opts.get(db)
         return {key: value for key, value in opts.items() if value}
