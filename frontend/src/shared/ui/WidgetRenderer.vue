@@ -78,9 +78,16 @@ const feedback = ref('')
 const preview = ref(null)
 const previewNode = computed(() => {
   if (!preview.value) return null
-  return { ...preview.value.images[preview.value.index], aspectRatio: undefined, fit: 'contain', caption: undefined }
+  return {
+    ...preview.value.images[preview.value.index],
+    aspectRatio: undefined,
+    fit: 'contain',
+    caption: undefined
+  }
 })
-watch([() => props.source, () => props.imageLoader, () => props.sourceImageLoader], () => { preview.value = null })
+watch([() => props.source, () => props.imageLoader, () => props.sourceImageLoader], () => {
+  preview.value = null
+})
 watch(preview, (value, _previous, onCleanup) => {
   if (!value) return
   window.addEventListener('keydown', handlePreviewKeydown)
@@ -282,14 +289,10 @@ function handleAction(text) {
   }
   .widget-card,
   .widget-col,
-  .widget-form,
   .widget-listviewitem {
     display: flex;
     flex-direction: column;
     gap: 12px;
-  }
-  .widget-form {
-    gap: 16px;
   }
   .widget-row {
     display: flex;
@@ -393,10 +396,6 @@ function handleAction(text) {
     --widget-tone: var(--gray-900);
     --widget-soft: var(--gray-100);
   }
-  .widget-tone-primary {
-    --widget-tone: var(--main-700);
-    --widget-soft: var(--main-50);
-  }
   .widget-tone-success {
     --widget-tone: var(--color-success-900);
     --widget-soft: var(--color-success-50);
@@ -432,39 +431,6 @@ function handleAction(text) {
     font-size: 13px;
     padding: 3px 10px;
   }
-  .widget-button {
-    align-self: flex-start;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    min-height: 40px;
-    max-width: 100%;
-    padding: 8px 14px;
-    font: inherit;
-    font-weight: 500;
-    line-height: 1.4;
-    border: 1px solid transparent;
-    border-radius: 8px;
-    cursor: pointer;
-    white-space: normal;
-    transition:
-      background-color 120ms,
-      border-color 120ms;
-  }
-  .widget-button svg {
-    flex-shrink: 0;
-  }
-  .widget-button.widget-size-sm {
-    min-height: 32px;
-    padding: 6px 10px;
-    font-size: 12px;
-  }
-  .widget-button.widget-size-lg {
-    min-height: 48px;
-    padding: 12px 18px;
-    font-size: 16px;
-  }
   .widget-variant-solid {
     background: var(--widget-tone);
     color: var(--widget-on-solid);
@@ -481,82 +447,14 @@ function handleAction(text) {
   .widget-badge.widget-variant-outline {
     border-color: var(--widget-tone);
   }
-  .widget-variant-ghost {
-    background: transparent;
-    color: var(--widget-tone);
-  }
-  .widget-button:hover:not(:disabled) {
-    background: var(--widget-soft);
-  }
-  .widget-button.widget-variant-solid:hover:not(:disabled) {
-    background: var(--gray-700);
-  }
-  .widget-button.widget-tone-primary.widget-variant-solid:hover:not(:disabled) {
-    background: var(--main-800);
-  }
-  .widget-button.widget-variant-outline:hover:not(:disabled) {
-    border-color: var(--widget-tone);
-  }
   .widget-pill {
     border-radius: 999px;
   }
-  .widget-block {
-    width: 100%;
-    align-self: stretch;
-  }
-  .widget-button:disabled,
   .widget-listitem-action:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
-  .widget-field {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    min-width: 0;
-  }
-  .widget-field > span {
-    font-size: 13px;
-    font-weight: 500;
-  }
-  .widget-required {
-    font-size: 12px;
-    font-weight: 400;
-    color: var(--widget-muted);
-  }
-  .widget-field input,
-  .widget-field textarea,
-  .widget-field select {
-    width: 100%;
-    min-width: 0;
-    min-height: 40px;
-    padding: 10px 12px;
-    font: inherit;
-    line-height: 1.5;
-    border: 1px solid var(--widget-border);
-    border-radius: 8px;
-    color: inherit;
-    background: var(--widget-field);
-    box-sizing: border-box;
-    transition: border-color 120ms;
-  }
-  .widget-field textarea {
-    resize: vertical;
-  }
-  .widget-field input::placeholder,
-  .widget-field textarea::placeholder {
-    color: var(--widget-muted);
-  }
-  .widget-field :is(input, textarea, select):hover:not(:disabled) {
-    border-color: var(--gray-400);
-  }
-  .widget-field :is(input, textarea, select):disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-  .widget-button:focus-visible,
   .widget-listitem-action:focus-visible,
-  .widget-field :is(input, textarea, select):focus-visible,
   summary:focus-visible {
     outline: 2px solid var(--main-700);
     outline-offset: 3px;
@@ -579,12 +477,6 @@ function handleAction(text) {
   @media (max-width: 480px) {
     .widget-card {
       padding: 16px;
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .widget-button,
-    .widget-field :is(input, textarea, select) {
-      transition: none;
     }
   }
 }

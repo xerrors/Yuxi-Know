@@ -10,14 +10,13 @@
     :style="nodeStyle"
     :role="node.type === 'ImageGroup' ? 'group' : undefined"
     :aria-label="node.type === 'ImageGroup' ? '图片组' : undefined"
-    @submit.prevent="submitForm"
   >
     <button
       v-if="node.type === 'ListViewItem' && node.onClickAction"
       type="button"
       class="widget-listitem-action"
       :disabled="disabled"
-      @click="clickButton"
+      @click="selectItem"
     >
       <WidgetNode
         v-for="(child, index) in node.children"
@@ -75,63 +74,11 @@
   >
   <hr v-else-if="node.type === 'Divider'" class="widget-divider" />
   <div v-else-if="node.type === 'Spacer'" class="widget-spacer" aria-hidden="true"></div>
-  <button
-    v-else-if="node.type === 'Button'"
-    :type="node.submit ? 'submit' : 'button'"
-    :class="[
-      'widget-button',
-      `widget-tone-${buttonColor}`,
-      `widget-variant-${node.variant || (buttonColor === 'primary' ? 'solid' : 'outline')}`,
-      `widget-size-${node.size || 'md'}`,
-      { 'widget-pill': node.pill, 'widget-block': node.block }
-    ]"
-    :disabled="disabled"
-    @click="clickButton"
-  >
-    <component v-if="node.iconStart" :is="icons[node.iconStart]" :size="16" aria-hidden="true" />
-    {{ node.label }}
-    <component v-if="node.iconEnd" :is="icons[node.iconEnd]" :size="16" aria-hidden="true" />
-  </button>
-  <label v-else-if="['Input', 'Textarea', 'Select'].includes(node.type)" class="widget-field">
-    <span>{{ node.label }}<span v-if="node.required" class="widget-required">（必填）</span></span>
-    <input
-      v-if="node.type === 'Input'"
-      :name="node.name"
-      v-model="fieldValue"
-      :placeholder="node.placeholder"
-      :required="node.required"
-      :disabled="disabled"
-      maxlength="4000"
-    />
-    <textarea
-      v-else-if="node.type === 'Textarea'"
-      :name="node.name"
-      v-model="fieldValue"
-      :placeholder="node.placeholder"
-      :required="node.required"
-      :disabled="disabled"
-      maxlength="4000"
-      rows="3"
-    ></textarea>
-    <select
-      v-else
-      :name="node.name"
-      v-model="fieldValue"
-      :required="node.required"
-      :disabled="disabled"
-    >
-      <option value="" disabled>{{ node.placeholder || '请选择' }}</option>
-      <option v-for="option in node.options" :key="option.value" :value="option.value">
-        {{ option.label }}
-      </option>
-    </select>
-  </label>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { BookOpen, FileText, Lightbulb, Info, Check, Plus, Search, ChevronRight } from '@lucide/vue'
-import { composeWidgetMessage } from '@/shared/lib/chatWidgets'
 import WidgetChart from '@/shared/ui/WidgetChart.vue'
 import WidgetImage from '@/shared/ui/WidgetImage.vue'
 const props = defineProps({
@@ -141,15 +88,13 @@ const props = defineProps({
   previewable: { type: Boolean, default: true }
 })
 const emit = defineEmits(['action', 'preview'])
-const fieldValue = ref(props.node.defaultValue || '')
 const containers = {
   Card: 'section',
   Row: 'div',
   Col: 'div',
   ListView: 'ul',
   ImageGroup: 'div',
-  ListViewItem: 'li',
-  Form: 'form'
+  ListViewItem: 'li'
 }
 const textTags = { Title: 'h3', Text: 'p', Caption: 'p' }
 const icons = {
@@ -163,9 +108,6 @@ const icons = {
   'chevron-right': ChevronRight
 }
 const iconSizes = { xs: 14, sm: 16, md: 20, lg: 24, xl: 32 }
-const buttonColor = computed(
-  () => props.node.color || (props.node.style === 'primary' ? 'primary' : 'secondary')
-)
 const nodeStyle = computed(() => {
   const node = props.node
   const style = {}
@@ -202,35 +144,8 @@ function previewImage(preview, index) {
   emit('preview', props.node.type === 'ImageGroup' ? { images: props.node.children, index } : preview)
 }
 
-/** 表单值仅写入可审阅草稿，提交前使用浏览器原生校验。 */
-function submitForm(event) {
-  if (props.disabled || props.node.type !== 'Form') return
-  if (!event.target.reportValidity()) return
-  emit('action', composeWidgetMessage(props.node.onSubmitAction, collectFields(event.target)))
-}
-
-/** 收集原生控件当前可见值，不把选择器占位文字当成用户选择。 */
-function collectFields(form) {
-  if (!form) return []
-  return [...form.querySelectorAll('input, textarea, select')].map((field) => {
-    let value = field.value
-    if (field.tagName === 'SELECT' && value) value = field.selectedOptions[0]?.textContent || ''
-    return {
-      label: field.closest('label').querySelector('span').textContent.replace('（必填）', ''),
-      value
-    }
-  })
-}
-
-/** 表单内普通动作也携带当前字段，所有动作仅产生草稿事件。 */
-function clickButton(event) {
-  if (!props.disabled && !props.node.submit)
-    emit(
-      'action',
-      composeWidgetMessage(
-        props.node.onClickAction,
-        collectFields(event.currentTarget.closest('form'))
-      )
-    )
+/** 将推荐项的续聊内容交给消息草稿。 */
+function selectItem() {
+  if (!props.disabled) emit('action', props.node.onClickAction.text)
 }
 </script>

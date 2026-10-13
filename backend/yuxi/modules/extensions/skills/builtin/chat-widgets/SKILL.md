@@ -1,6 +1,6 @@
 ---
 name: chat-widgets
-description: "普通聊天的分类数值比较、单图和图片组展示、推荐选项续聊使用本 Skill：用户给出各类数值并想直观比较时绘制柱状图；给出图片地址或沙盒图片文件时直接在对话中展示图片，多张图合为一个横向图片组；要从几个推荐或方案中选一个继续时展示可点击列表。这三类请求应主动读取并使用本 Skill，无需用户说组件、按钮、Skill 或 JSON。也支持时间趋势折线图和短表单；明确要求纯文字、源码或概念解释时使用 Markdown。"
+description: "普通聊天的分类数值比较、单图和图片组展示、推荐选项续聊使用本 Skill：用户给出各类数值并想直观比较时绘制柱状图；给出图片地址或沙盒图片文件时直接在对话中展示图片，多张图合为一个横向图片组；要从几个推荐或方案中选一个继续时展示可点击列表。这三类请求应主动读取并使用本 Skill，无需用户说组件、Skill 或 JSON。也支持时间趋势折线图；明确要求纯文字、源码或概念解释时使用 Markdown。"
 version: "2026.10.12"
 ---
 
@@ -207,22 +207,18 @@ version: "2026.10.12"
 | ImageGroup | `children`，至少一个 Image；统一 5:4 缩略图横向滑动，不显示滚动条或数量角标；支持作为根节点 |
 | Icon | `name`：book-open、document、lightbulb、info、check、plus、search、chevron-right；可选 `size`：xs、sm、md、lg、xl；`color` |
 | Divider、Spacer | 只有 `type`；分割线、弹性空白 |
-| Button | `label`；可选 `style`：primary、secondary；普通按钮必须有 `onClickAction`；`color`：primary、secondary；`variant`：solid、soft、outline、ghost；`size`：sm、md、lg；`pill`、`block`、`iconStart`、`iconEnd` |
-| Form | `children` 和 `onSubmitAction`；可选与 Row/Col 相同的布局属性；不可嵌套 |
-| Input、Textarea | Form 内使用；`name`、`label`；可选 `placeholder`、`defaultValue`、`required` |
-| Select | Form 内使用；`name`、`label`、`options: [{label,value}]`；可选 `placeholder`、`defaultValue`、`required` |
 
 `gap`、`padding` 为 0–8 整数，每单位 4px。`align` 为 start、center、end、baseline、stretch；`justify` 为 start、center、end、between、around、evenly；`flex` 为 0、1、"auto"。不要使用像素字符串、任意颜色或 CSS 对象。
 
 需要让标题占满一行剩余空间时，把 Title 放在 `{"type":"Col","flex":1,"children":[...]}` 中；文字组件保留文本属性，布局属性由外层 Row/Col 承载。
 
-文本 `size`：Title 支持 xs、sm、md、lg、xl、2xl；Text 支持 xs、sm、md、lg、xl；Caption 支持 sm、md、lg。`weight` 为 normal、medium、semibold、bold；`textAlign` 为 start、center、end。文本和 Icon 的 `color` 为 primary、secondary、tertiary、success、warning、danger、info；省略时沿用默认文本层次。图标名也用于按钮 iconStart/iconEnd。pill、block 为布尔值。Button 显式 color/variant 优先于 style；默认是 secondary outline，style:primary 默认使用 primary solid。
+文本 `size`：Title 支持 xs、sm、md、lg、xl、2xl；Text 支持 xs、sm、md、lg、xl；Caption 支持 sm、md、lg。`weight` 为 normal、medium、semibold、bold；`textAlign` 为 start、center、end。文本和 Icon 的 `color` 为 primary、secondary、tertiary、success、warning、danger、info；省略时沿用默认文本层次。pill 为布尔值。
 
-摘要用 Title（lg）+ Text + Caption；统计用 Row 和 Col（gap:1、flex:1）；推荐列表用可点击 ListViewItem，标题旁放 chevron-right，保留完整标题；短表单只放 2–4 个字段，用 Textarea 输入多行目标，提交按钮使用 block:true。每个组件保持一个主动作，辅助动作用 outline 或 ghost。双主题由前端调整表面、控件、边框与对比度，模型只选择语义颜色。
+摘要用 Title（lg）+ Text + Caption；统计用 Row 和 Col（gap:1、flex:1）；推荐列表用可点击 ListViewItem，标题旁放 chevron-right，保留完整标题。双主题由前端调整表面、控件、边框与对比度，模型只选择语义颜色。
 
 ## 图表与图片组合
 
-组件用于呈现内容，也可有下一步动作；不必为了使用组件而添加表单。比较分类用柱状图，观察时间趋势用折线图；Card 内放 Title、Caption、Chart，末尾按需要补充 Button。图片直接使用 Image 或 ImageGroup；需要短语时用 caption 放在图片左下角，详细说明和来源放围栏外。
+组件用于呈现内容。比较分类用柱状图，观察时间趋势用折线图；Card 内放 Title、Caption、Chart。图片直接使用 Image 或 ImageGroup；需要短语时用 caption 放在图片左下角，详细说明和来源放围栏外。
 
 Chart.data 为 0–60 个对象，每行只包含 xAxis 指定的类别列和 series 指定的数值列。类别为非空字符串，数值为有限数字（绝对值不超过 1e12），可以为 0 或负数。series 为 1–3 个 `{type:"bar"或"line",dataKey:"列名",label:"图例文字"}`；dataKey 唯一且不同于 xAxis。列名使用字母开头的字母/数字/下划线，最多 40 字符，禁用 constructor、prototype、__proto__。height 是 180–400 的整数像素值，默认 240；showLegend 默认 true。不要输出 ECharts option、formatter、函数或任意系列属性；单位放 Caption。未给出数据时不要编造结果，使用空 data 或明确标记示例数据。
 
@@ -236,65 +232,10 @@ Chart.data 为 0–60 个对象，每行只包含 xAxis 指定的类别列和 se
 
 Image 使用 src 或 path 之一，alt 描述图片内容。src 接受无凭据的 HTTPS URL 或同源 `/...` 路径；不能用协议相对 URL、data/file/javascript URL。path 使用已存在的沙盒虚拟绝对路径，例如 `{"type":"Image","path":"/home/gem/user-data/projects/<project-dir>/generated-image.png","alt":"生成的图片"}`，自定义虚拟根时沿用工具返回的真实路径。沙盒图片由当前会话鉴权读取，无需调用 present_artifacts；支持 user-data 和已授权 Skills 中的普通图片文件，临时目录图片先保存到 Workdir。直接填真实文件路径，不拼接 API URL 或 Token，不使用路径跳转或宿主机路径。只使用已知存在的图片地址，不猜测路径；图片来源和详细说明放围栏外，简短说明可用 caption。尚未实际读取图片时，alt 和说明沿用用户描述，保留已知内容。单张图片默认铺满正文宽度并保留原始宽高比；只有用户需要特定比例时才显式设置 aspectRatio，并按需要选择 cover 或 contain（默认）。ImageGroup 的缩略图统一使用 5:4 和 cover；点击后以完整比例预览，支持前后切换、方向键和 Esc 关闭。
 
-## 草稿动作与短表单
+## 推荐列表草稿动作
 
-动作只有 `{"type":"compose","text":"希望填写到下一条消息的内容"}`。普通 Button 的 `onClickAction` 填此对象；Form 的 `onSubmitAction` 填此对象，表单内提交按钮使用 `submit: true`，省略 `onClickAction`。表单内普通按钮也携带当前字段，但只有 submit 按钮触发必填校验。提交后前端把动作 text 和表单可见标签/值追加到消息草稿，用户检查后发送；点击本身不调用工具、不保存业务数据，也不表示任务完成。不要把这种按钮当成审批、支付、删除或权限确认。
+ListViewItem 的 onClickAction 只支持 `{"type":"compose","text":"希望填写到下一条消息的内容"}`。点击推荐项将 text 追加到消息草稿，用户检查后发送；点击本身不调用工具、不保存业务数据，也不表示任务完成。
 
-字段 name 使用字母开头的字母、数字和下划线，最多 40 字符且在围栏内唯一，避开 constructor、prototype。选择器最多 30 个非空、唯一 value 选项，默认值必须匹配选项。required 和 submit 使用 JSON 布尔值。单个文本最多 4000 字符，单个围栏最多 24000 字符、100 个节点、8 层；优先保持 3–5 项信息和 1 个主动作。
+需要收集信息时，在正文中提出简短问题，让用户在消息输入框回答。Button、Form、Input、Textarea、Select 不受支持。
 
-```widget
-{
-  "type": "Card",
-  "children": [
-    {
-      "type": "Title",
-      "value": "你想怎样开始研究？"
-    },
-    {
-      "type": "Caption",
-      "value": "填写后生成消息草稿，请检查后发送。"
-    },
-    {
-      "type": "Form",
-      "onSubmitAction": {
-        "type": "compose",
-        "text": "请按照以下偏好制定研究计划。"
-      },
-      "children": [
-        {
-          "type": "Input",
-          "name": "topic",
-          "label": "研究主题",
-          "required": true
-        },
-        {
-          "type": "Select",
-          "name": "depth",
-          "label": "研究深度",
-          "defaultValue": "quick",
-          "options": [
-            {
-              "label": "快速了解",
-              "value": "quick"
-            },
-            {
-              "label": "深入研究",
-              "value": "deep"
-            }
-          ]
-        },
-        {
-          "type": "Button",
-          "label": "填写到消息草稿",
-          "style": "primary",
-          "block": true,
-          "iconStart": "check",
-          "submit": true
-        }
-      ]
-    }
-  ]
-}
-```
-
-用户要直接继续某个方向时，用普通按钮：`{"type":"Button","label":"展开关键主题","onClickAction":{"type":"compose","text":"请展开上文的关键主题，并标注来源。"}}`。回答生成期间控件只读；围栏未闭合时显示生成状态，非法 JSON 或不支持的属性显示错误和原始内容。无法表达时改用普通 Markdown，复杂完整页面可作为独立交付物，不补造组件或宣称按钮已执行。
+单个文本最多 4000 字符，单个围栏最多 24000 字符、100 个节点、8 层；优先保持 3–5 项信息。回答生成期间推荐项只读；围栏未闭合时显示生成状态，非法 JSON 或不支持的组件、属性显示错误和原始内容。无法表达时改用普通 Markdown，复杂完整页面可作为独立交付物。

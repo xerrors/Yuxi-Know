@@ -143,9 +143,8 @@ watch(
   .widget-image-caption {
     position: absolute;
     bottom: 10px;
-    display: flex;
-    align-items: center;
-    gap: 5px;
+    left: 10px;
+    display: block;
     max-width: calc(100% - 20px);
     box-sizing: border-box;
     padding: 5px 10px;
@@ -157,11 +156,6 @@ watch(
     font-size: 12px;
     line-height: 1.4;
     pointer-events: none;
-  }
-
-  .widget-image-caption {
-    left: 10px;
-    display: block;
     text-align: left;
     overflow: hidden;
     white-space: nowrap;

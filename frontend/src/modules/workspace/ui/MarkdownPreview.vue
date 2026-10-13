@@ -232,8 +232,6 @@ const collectExistingWidgets = (root) => {
   root.querySelectorAll('.widget-preview-render').forEach((preview) => {
     if (preview.parentElement !== root) return
     const key = getWidgetPreviewKey(preview)
-    if (!key) return
-
     const previews = previewsByKey.get(key) || []
     previews.push(preview)
     previewsByKey.set(key, previews)
@@ -291,7 +289,7 @@ const replaceHtmlPreservingWidgets = (html) => {
     if (!(node instanceof Element) || !node.matches('.widget-preview-render')) return false
 
     const key = getWidgetPreviewKey(node)
-    return key && existingPreviews.get(key)?.some((preview) => preview.isConnected)
+    return existingPreviews.get(key)?.some((preview) => preview.isConnected)
   })
 
   if (!hasReusablePreview) {
@@ -308,7 +306,7 @@ const replaceHtmlPreservingWidgets = (html) => {
     }
 
     const key = getWidgetPreviewKey(nextNode)
-    const reusablePreview = key ? findReusableWidget(existingPreviews, key) : null
+    const reusablePreview = findReusableWidget(existingPreviews, key)
     if (!reusablePreview) {
       pendingNodes.push(nextNode)
       return
@@ -328,7 +326,7 @@ const replaceHtmlPreservingWidgets = (html) => {
   return true
 }
 
-/** 保留未变组件的输入值，并卸载已经移除的 Vue 实例。 */
+/** 保留未变组件的交互状态，并卸载已经移除的 Vue 实例。 */
 const enhanceWidgets = () => {
   const root = previewRef.value
   for (const slot of widgetMounts) {
