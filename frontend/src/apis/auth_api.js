@@ -2,14 +2,7 @@
  * 认证相关 API
  */
 
-import {
-  apiAdminGet,
-  apiDelete,
-  apiGet,
-  apiPost,
-  apiPut,
-  apiSuperAdminGet,
-} from './base'
+import { apiAdminGet, apiDelete, apiGet, apiPost, apiPut, apiSuperAdminGet } from './base'
 
 /**
  * 获取 OIDC 配置
@@ -49,6 +42,11 @@ async function getUserAccessOptions() {
   return apiAdminGet('/api/auth/users/access-options')
 }
 
+/** 先撤销当前 OIDC 会话，返回受信任的认证中心退出地址。 */
+async function logoutOIDC() {
+  return apiPost('/api/auth/oidc/logout', {})
+}
+
 async function exchangeOIDCCode(code) {
   return apiPost('/api/auth/oidc/exchange-code', { code }, {}, false)
 }
@@ -73,7 +71,14 @@ async function getUsers({ skip = 0, limit = 100 } = {}) {
   return apiGet(`/api/auth/users?${params}`)
 }
 
-async function getUsersPage({ offset = 0, limit = 50, search, departmentId, role, userKind = 'human' } = {}) {
+async function getUsersPage({
+  offset = 0,
+  limit = 50,
+  search,
+  departmentId,
+  role,
+  userKind = 'human'
+} = {}) {
   const params = new URLSearchParams({ offset: String(offset), limit: String(limit) })
   if (search) params.set('search', search)
   if (departmentId) params.set('department_id', String(departmentId))
@@ -116,7 +121,6 @@ async function checkUid(uid) {
   return apiSuperAdminGet(`/api/auth/check-uid/${encodeURIComponent(uid)}`)
 }
 
-
 async function getCLIAuthSession(userCode) {
   const encoded = encodeURIComponent(userCode)
   return apiGet(`/api/auth/cli/sessions/${encoded}`)
@@ -145,6 +149,7 @@ export const authApi = {
   getOIDCLoginUrl,
   getUserAccessOptions,
   exchangeOIDCCode,
+  logoutOIDC,
   getCLIAuthSession,
   approveCLIAuthSession
 }

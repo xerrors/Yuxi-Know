@@ -259,3 +259,38 @@ class CLIAuthSession(Base):
             "approved_at": format_utc_datetime(self.approved_at),
             "consumed_at": format_utc_datetime(self.consumed_at),
         }
+
+
+class OIDCIdentity(Base):
+    """issuer 和 subject 共同拥有外部身份，注销后映射仍保留。"""
+
+    __tablename__ = "oidc_identities"
+    __table_args__ = (UniqueConstraint("issuer", "subject", name="uq_oidc_identity"),)
+    id = Column(Integer, primary_key=True)
+    issuer = Column(String(512), nullable=False)
+    subject = Column(String(255), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+
+
+class OIDCSession(Base):
+    """本地 OIDC JWT 的可撤销会话，保留远端 sid 和认证签发时间。"""
+
+    __tablename__ = "oidc_sessions"
+    id = Column(String(64), primary_key=True)
+    identity_id = Column(Integer, ForeignKey("oidc_identities.id", ondelete="CASCADE"), nullable=False, index=True)
+    provider_sid = Column(String(255), nullable=True, index=True)
+    issued_at = Column(DateTime(timezone=True), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class OIDCLogout(Base):
+    """标准登出通知的去重与短期阻断记录，和会话撤销同事务提交。"""
+
+    __tablename__ = "oidc_logouts"
+    id = Column(String(64), primary_key=True)
+    issuer = Column(String(512), nullable=False, index=True)
+    subject = Column(String(255), nullable=True)
+    provider_sid = Column(String(255), nullable=True)
+    issued_at = Column(DateTime(timezone=True), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)

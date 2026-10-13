@@ -390,6 +390,8 @@ jobs:
         run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/services/test_identity_admin_service.py test/integration/services/test_api_key_user_lifecycle.py test/integration/api/test_apikey_router.py -q
       - name: Verify atomic OIDC login on isolated PostgreSQL schema
         run: docker compose exec -T -e TEST_USERNAME= -e TEST_PASSWORD= api uv run --no-sync --no-dev pytest test/integration/services/test_oidc_login_transaction.py -q
+      - name: Verify OIDC callback proxy log and cache boundaries
+        run: python3 scripts/verify_oidc_proxy.py
       - name: Verify password login state and HTTP contract
         run: docker compose exec -T -e TEST_USERNAME= -e TEST_PASSWORD= api uv run --no-sync --no-dev pytest test/integration/services/test_password_login_boundary.py -q
       - name: Verify Workdir and Skill authorization

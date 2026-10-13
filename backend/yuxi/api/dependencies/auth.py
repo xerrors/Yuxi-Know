@@ -96,6 +96,25 @@ async def get_current_user(
             headers={"X-Lock-Remaining": str(user.get_remaining_lock_time())},
         )
 
+    if payload.get("oidc_sid"):
+        from yuxi.modules.identity.oidc import oidc_config
+        from yuxi.modules.identity.repositories.oidc import OIDCRepository
+        from yuxi.shared.errors import PermissionDeniedError
+
+        try:
+            if not oidc_config.enabled:
+                raise PermissionDeniedError("OIDC 未启用")
+            await OIDCRepository(db).active_session(payload["oidc_sid"], user.id, oidc_config.issuer_url)
+        except PermissionDeniedError as exc:
+            raise credentials_exception from exc
+    elif payload.get("auth_method") != "password":
+        from yuxi.modules.identity.models import OIDCIdentity
+
+        # 旧标准账号及同名绑定账号的 JWT 无法证明登录来源，升级后必须重新认证。
+        bound = await db.scalar(select(OIDCIdentity.id).where(OIDCIdentity.user_id == user.id).limit(1))
+        if bound or (user.uid and user.uid.startswith("oidc:")):
+            raise credentials_exception
+    request.state.jwt_payload = payload
     return user
 
 

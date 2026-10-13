@@ -1,0 +1,119 @@
+{
+  "realm": "yuxi-enterprise",
+  "displayName": "Yuxi 示例企业",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "resetPasswordAllowed": false,
+  "rememberMe": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "bruteForceProtected": true,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 28800,
+  "groups": [
+    {
+      "name": "研发部"
+    },
+    {
+      "name": "产品部"
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "yuxi-dev",
+      "name": "yuxi-dev",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "${YUXI_CLIENT_SECRET}",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "${YUXI_REDIRECT_URI}"
+      ],
+      "webOrigins": [],
+      "defaultClientScopes": [
+        "profile",
+        "email"
+      ],
+      "optionalClientScopes": [],
+      "protocolMappers": [
+        {
+          "name": "department",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "department",
+            "claim.name": "department",
+            "jsonType.label": "String",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "multivalued": "false"
+          }
+        }
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "${YUXI_LOGOUT_REDIRECT_URI}",
+        "backchannel.logout.url": "http://api:5050/api/auth/oidc/backchannel-logout",
+        "backchannel.logout.session.required": "true"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "demo.dev",
+      "enabled": true,
+      "email": "dev@example.invalid",
+      "emailVerified": true,
+      "firstName": "示例",
+      "lastName": "研发部员工",
+      "attributes": {
+        "department": [
+          "研发部"
+        ]
+      },
+      "groups": [
+        "/研发部"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${EMPLOYEE_DEV_PASSWORD}",
+          "temporary": false
+        }
+      ],
+      "requiredActions": []
+    },
+    {
+      "username": "demo.product",
+      "enabled": true,
+      "email": "product@example.invalid",
+      "emailVerified": true,
+      "firstName": "示例",
+      "lastName": "产品部员工",
+      "attributes": {
+        "department": [
+          "产品部"
+        ]
+      },
+      "groups": [
+        "/产品部"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${EMPLOYEE_PRODUCT_PASSWORD}",
+          "temporary": false
+        }
+      ],
+      "requiredActions": []
+    }
+  ]
+}

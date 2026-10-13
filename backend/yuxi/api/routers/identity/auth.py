@@ -1,7 +1,7 @@
 import re
 from typing import Literal
 
-from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Request, UploadFile, status
+from fastapi import Response, Form, APIRouter, Body, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, ConfigDict, Field
@@ -15,6 +15,7 @@ from yuxi.api.routers.identity.oidc import (
     oidc_callback_handler,
     oidc_exchange_code_handler,
     oidc_login_url_handler,
+    oidc_logout_handler,
 )
 from yuxi.api.uploads import read_upload_with_limit
 from yuxi.infrastructure.minio import upload_image_to_minio
@@ -849,18 +850,40 @@ async def get_oidc_config():
 
 
 @auth.get("/oidc/login-url")
-async def get_oidc_login_url(redirect_path: str = "/"):
+async def get_oidc_login_url(request: Request, response: Response):
     """获取 OIDC 登录 URL"""
-    return await oidc_login_url_handler(redirect_path)
+    return await oidc_login_url_handler(request, response)
 
 
 @auth.get("/oidc/callback", response_class=RedirectResponse)
-async def oidc_callback(code: str, state: str, db: AsyncSession = Depends(get_db)):
+async def oidc_callback(request: Request, code: str = Query(default="", max_length=2048), state: str = Query(default="", max_length=128),
+                        error: str = Query(default="", max_length=128), db: AsyncSession = Depends(get_db)):
     """处理 OIDC 回调 - 重定向到前端 Vue 路由"""
-    return await oidc_callback_handler(code, state, db)
+    return await oidc_callback_handler(code, state, request, db, error)
 
 
 @auth.post("/oidc/exchange-code", response_model=OIDCLoginResponse)
-async def oidc_exchange_code(code: str = Body(..., embed=True)):
+async def oidc_exchange_code(request: Request, response: Response, code: str = Body(..., embed=True, min_length=1, max_length=128),
+                             db: AsyncSession = Depends(get_db)):
     """使用一次性 code 交换 OIDC 登录数据"""
-    return await oidc_exchange_code_handler(code)
+    return await oidc_exchange_code_handler(code, request, response, db)
+
+
+@auth.post("/oidc/logout")
+async def oidc_logout(request: Request, response: Response, user=Depends(get_required_user), db=Depends(get_db)):
+    """当前用户主动退出 OIDC 会话。"""
+    response.headers["Cache-Control"] = "no-store"
+    return await oidc_logout_handler(request, db)
+
+
+@auth.post("/oidc/backchannel-logout")
+async def oidc_backchannel_logout(logout_token: str = Form(..., max_length=16384), db=Depends(get_db)):
+    """接收认证中心签名的标准登出通知。"""
+    from yuxi.modules.identity.services.oidc import OIDCService
+    from yuxi.shared.errors import DomainError
+
+    try:
+        await OIDCService(db).backchannel_logout(logout_token)
+    except DomainError as exc:
+        raise HTTPException(400, "OIDC 登出通知无效") from exc
+    return Response(status_code=200, headers={"Cache-Control": "no-store"})

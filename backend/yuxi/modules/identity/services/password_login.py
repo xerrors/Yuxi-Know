@@ -64,7 +64,7 @@ async def login_with_password(db: AsyncSession, identifier: str, password: str, 
     user.last_login = utc_now()
     await repository.save(user)
     await clear_login_failures(client_ip, identifier)
-    access_token = AuthUtils.create_access_token({"sub": str(user.id)})
+    access_token = AuthUtils.create_access_token({"sub": str(user.id), "auth_method": "password"})
     department_name = await DepartmentRepository(db).get_name_by_id(user.department_id) if user.department_id else None
     await db.commit()
     return PasswordLoginResult(user, access_token, department_name)

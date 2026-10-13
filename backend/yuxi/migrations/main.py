@@ -25,7 +25,6 @@ from yuxi.migrations.schema import (
     ensure_knowledge_schema,
     record_schema_version,
     schema_migration_lock,
-    upgrade_feedback_schema,
     upgrade_knowledge_name_schema,
 )
 from yuxi.modules.system.options import ensure_options_in_db
@@ -67,15 +66,8 @@ async def main() -> None:
                 versions = {}
             if versions == current:
                 return
-            if versions in (
-                {"business": 8, "knowledge": 3},
-                {"business": 8, "knowledge": KNOWLEDGE_SCHEMA_VERSION},
-                {"business": BUSINESS_SCHEMA_VERSION, "knowledge": 3},
-            ):
-                if versions["business"] == 8:
-                    await upgrade_feedback_schema(pg_manager)
-                if versions["knowledge"] == 3:
-                    await upgrade_knowledge_name_schema(pg_manager)
+            if versions == {"business": BUSINESS_SCHEMA_VERSION, "knowledge": 3}:
+                await upgrade_knowledge_name_schema(pg_manager)
                 return
             if versions:
                 raise RuntimeError(f"Unsupported Yuxi schema versions: {versions}; required {current}")

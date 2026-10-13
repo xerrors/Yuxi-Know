@@ -26,94 +26,58 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/modules/identity/model/user'
-import { useAgentStore } from '@/modules/agents/model/agent'
 import { authApi } from '@/apis/auth_api'
-import { message } from 'ant-design-vue'
 import { clearAutoStartAttempt } from '@/modules/identity/model/oidcAutoStart'
 
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
-const agentStore = useAgentStore()
-
-// 状态
 const loading = ref(true)
 const error = ref(false)
 const errorTitle = ref('登录失败')
-const errorMessage = ref('处理登录请求时发生错误')
+const errorMessage = ref('请返回登录页重试')
+let active = true
+onUnmounted(() => {
+  active = false
+})
+const goToLogin = () => router.replace('/login')
 
-// 返回登录页
-const goToLogin = () => {
-  router.push('/login')
-}
-
-// 处理 OIDC 回调 - 从 URL 参数中获取一次性 code
-const handleCallback = async () => {
+onMounted(async () => {
+  const originalToken = userStore.token
+  const code = route.query.code
+  await router.replace({ path: route.path, query: {} })
+  if (!active) return
   try {
-    const code = route.query.code
-
-    // 检查必要的参数
-    if (!code || typeof code !== 'string') {
-      loading.value = false
-      error.value = true
-      errorTitle.value = '参数错误'
-      errorMessage.value = '缺少有效的登录 code，请重新登录'
+    if (originalToken) {
+      await router.replace('/agent')
       return
     }
-
-    const tokenData = await authApi.exchangeOIDCCode(code)
-
-    await router.replace({ path: route.path, query: {} })
-
-    // 统一更新响应式会话与持久 token
-    userStore.applySession({ ...tokenData, role: tokenData.role || 'user' })
-
-    // 显示成功消息
-    message.success('登录成功')
-
-    // 获取重定向路径并清理 OIDC 相关标记
-    const redirectPath = sessionStorage.getItem('oidc_redirect') || '/'
+    if (typeof code !== 'string' || !code) throw new Error('缺少有效的登录 code，请重新登录')
+    const response = await authApi.exchangeOIDCCode(code)
+    if (!active || userStore.token !== originalToken) return
+    userStore.applySession(response)
+    const redirect = sessionStorage.getItem('oidc_redirect') || '/agent'
     sessionStorage.removeItem('oidc_redirect')
     clearAutoStartAttempt()
-
-    loading.value = false
-
-    // 延迟跳转，让用户看到成功提示
-    setTimeout(async () => {
-      // 跳转
-      if (redirectPath === '/') {
-        try {
-          await agentStore.initialize()
-          router.push('/agent')
-        } catch (err) {
-          console.error('获取智能体信息失败:', err)
-          router.push('/agent')
-        }
-      } else {
-        router.push(redirectPath)
-      }
-    }, 500)
+    const target =
+      redirect.startsWith('/') &&
+      !redirect.startsWith('//') &&
+      !redirect.includes('\\') &&
+      ![...redirect].some((char) => char.charCodeAt(0) < 32)
+        ? redirect
+        : '/agent'
+    await router.replace(target === '/' ? '/agent' : target)
   } catch (err) {
-    console.error('OIDC 回调处理失败:', err)
+    if (active) {
+      error.value = true
+      errorMessage.value = err.message || '登录失败，请重试'
+    }
+  } finally {
     loading.value = false
-    error.value = true
-    errorTitle.value = '登录失败'
-    errorMessage.value = err?.message || '处理登录请求时发生错误，请重试'
   }
-}
-
-// 组件挂载时处理回调
-onMounted(async () => {
-  // 如果已登录，跳转到首页
-  if (userStore.isLoggedIn) {
-    router.push('/')
-    return
-  }
-
-  await handleCallback()
 })
 </script>
 

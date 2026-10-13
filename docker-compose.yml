@@ -88,7 +88,7 @@ services:
       LANGGRAPH_POSTGRES_POOL_TIMEOUT_SECONDS: ${API_LANGGRAPH_POSTGRES_POOL_TIMEOUT_SECONDS:-30}
       REDIS_MAX_CONNECTIONS: ${API_REDIS_MAX_CONNECTIONS:-256}
     # endregion api_envs
-    command: uv run --no-sync --no-dev uvicorn yuxi.api.main:app --host 0.0.0.0 --port 5050 --reload --reload-dir /app/yuxi --timeout-graceful-shutdown 5
+    command: uv run --no-sync --no-dev uvicorn yuxi.api.main:app --no-access-log --host 0.0.0.0 --port 5050 --reload --reload-dir /app/yuxi --timeout-graceful-shutdown 5
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5050/api/system/ready || exit 1"]

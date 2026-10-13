@@ -3,6 +3,7 @@
 import logging
 import time
 from collections.abc import Callable
+from posixpath import normpath
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -53,10 +54,15 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
         process_time = time.perf_counter() - start_time
         process_time_ms = int(process_time * 1000)  # 转换为毫秒
 
+        query = request.url.query
+        # 代理可转发原始多斜杠 URI；分类使用归一化路径，日志仍保留请求路径。
+        path = normpath("/" + request.url.path.lstrip("/"))
+        if path.startswith(("/api/auth/oidc/", "/auth/oidc/")):
+            query = ""
         # 格式化日志消息，添加处理时间
         log_message = (
             f"{client_ip}:{request.client.port if request.client else 'unknown'} - "
-            f'"{request.method} {request.url.path}{"?" + request.url.query if request.url.query else ""} '
+            f'"{request.method} {request.url.path}{"?" + query if query else ""} '
             f'HTTP/{request.scope["http_version"]}" '
             f"{response.status_code} - {process_time_ms}ms"
         )

@@ -108,7 +108,8 @@ class PostgresManager(metaclass=SingletonMeta):
             await session.commit()
         except Exception as e:
             await session.rollback()
-            logger.error(f"PostgreSQL async operation failed: {e}")
+            # HTTP 校验和 SQL 异常可携带密码、授权码与参数，只记录异常类型。
+            logger.error(f"PostgreSQL async operation failed: {type(e).__name__}")
             raise
         finally:
             await session.close()

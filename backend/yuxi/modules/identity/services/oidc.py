@@ -1,119 +1,163 @@
-"""OIDC 登录用例拥有身份写入与成功响应的事务边界。"""
+"""OIDC 登录、结果发布和可撤销会话的事务用例。"""
 
-from yuxi.infrastructure.observability.logging import logger
+import base64
+import hashlib
+import json
+import secrets
+from urllib.parse import urlencode, urlsplit
+
+from sqlalchemy import select
+
+from yuxi.infrastructure.oidc.client import client
+from yuxi.infrastructure.redis import get_async_redis_client
 from yuxi.modules.identity import oidc
+from yuxi.modules.identity.models import Department
+from yuxi.modules.identity.repositories.oidc import OIDCRepository
 from yuxi.modules.identity.security import AuthUtils
+from yuxi.shared.datetime import utc_now
+from yuxi.shared.errors import PermissionDeniedError, StateConflictError, UpstreamError
+from yuxi.infrastructure.observability.logging import logger
+
+_MATCH = """
+local raw = redis.call('GET', KEYS[1])
+if not raw then return false end
+local item = cjson.decode(raw)
+if item.browser ~= ARGV[1] then return false end
+if ARGV[2] == 'consume' then redis.call('DEL', KEYS[1]) end
+return raw
+"""
 
 
-async def build_oidc_login_response(db, extracted_info: dict) -> tuple[dict | None, str | None]:
-    """完成身份校验、开户与响应装配后统一提交，失败统一回滚。"""
-    try:
-        response, error = await _prepare_oidc_login_response(db, extracted_info)
-        if error:
-            await db.rollback()
-        else:
-            await db.commit()
-        return response, error
-    except BaseException:
-        await db.rollback()
-        raise
+class OIDCService:
+    """短期浏览器事务存 Redis，身份与撤销事实存 PostgreSQL。"""
 
+    def __init__(self, db=None):
+        self.db = db
+        self.config = oidc.oidc_config
+        self.repo = OIDCRepository(db)
+        namespace = hashlib.sha256(
+            (self.config.issuer_url + "\0" + self.config.client_id + "\0" + self.config.redirect_uri).encode()
+        ).hexdigest()
+        self.prefix = "yuxi:oidc:" + namespace + ":"
 
-async def _prepare_oidc_login_response(db, extracted_info: dict) -> tuple[dict | None, str | None]:
-    """验证账号绑定并构造一次性 code 的登录数据。"""
-    # 查找用户：总是先通过 sub 查找，保证绑定关系可验证
-    sub = extracted_info["sub"]
-    user_by_sub = await oidc.find_user_by_oidc_sub(db, sub)
+    async def start(self, browser):
+        """一次授权固定 nonce、PKCE verifier 和原始浏览器。"""
+        self.require_enabled()
+        metadata = await client.metadata(self.config)
+        verifier = secrets.token_urlsafe(48)
+        nonce, state = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
+        payload = {"browser": self.fingerprint(browser), "nonce": nonce, "verifier": verifier}
+        redis = await get_async_redis_client()
+        await redis.set(self.prefix + "state:" + state, json.dumps(payload), ex=oidc.STATE_TTL)
+        params = {
+            "client_id": self.config.client_id,
+            "response_type": "code",
+            "scope": self.config.scopes,
+            "redirect_uri": self.config.redirect_uri,
+            "state": state,
+            "nonce": nonce,
+            "code_challenge": base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode(),
+            "code_challenge_method": "S256",
+        }
+        if self.config.force_prompt_login:
+            params["prompt"] = "login"
+        return metadata["authorization_endpoint"] + "?" + urlencode(params)
 
-    if oidc.oidc_config.use_raw_username:
-        # 使用原始用户名模式
-        username = extracted_info["username"]
-        user = None
-        if username:
-            user_by_name = await oidc.find_oidc_user_by_raw_username(db, username)
-            if user_by_name and user_by_name.user_kind == "end_user":
-                return None, "终端用户不能用于 OIDC 登录"
-            if user_by_name and user_by_name.is_deleted:
-                user_by_name = None
+    async def callback(self, code, state, browser, denied=False):
+        """原子消费 state，验证全部远端证据后提交身份，再发布结果。"""
+        self.require_enabled()
+        transaction = await self.record("state", state, browser, consume=True)
+        if denied or not code:
+            raise PermissionDeniedError("登录已取消，请重新登录")
+        claims, userinfo = await client.authenticate(self.config, code, transaction)
+        try:
+            session, user = await self.repo.create_session(self.config, claims, userinfo)
+            token = AuthUtils.create_access_token(
+                {"sub": str(user.id), "oidc_sid": session.id}, expires_delta=session.expires_at - utc_now()
+            )
+            payload = {"browser": transaction["browser"], "user_id": user.id, "session_id": session.id, "token": token}
+            await self.db.commit()
+        except BaseException:
+            await self.db.rollback()
+            raise
+        result = secrets.token_urlsafe(32)
+        redis = await get_async_redis_client()
+        await redis.set(self.prefix + "result:" + result, json.dumps(payload), ex=oidc.RESULT_TTL)
+        return result
 
-            if user_by_sub:
-                # sub 已经绑定到一个用户
-                if user_by_name and user_by_sub.id == user_by_name.id:
-                    # sub 绑定的用户就是找到的用户名用户 -> 验证通过
-                    user = user_by_name
-                    logger.info(f"OIDC user logged in with raw username: {username} (sub: {sub})")
-                else:
-                    # sub 已经绑定到另一个用户，存在冲突，拒绝登录
-                    conflict_name = user_by_sub.username if not user_by_name else user_by_name.username
-                    logger.warning(
-                        f"OIDC sub {sub} is already bound to a different user, "
-                        f"login rejected to prevent account hijacking (conflict: {conflict_name})"
-                    )
-                    return None, "OIDC标识已绑定到其他账号，请联系管理员处理绑定冲突"
-            else:
-                # sub 尚未绑定到任何用户
-                if user_by_name:
-                    # 用户名存在，且 sub 没有绑定 -> 允许登录，并创建绑定记录
-                    # 在不修改表结构的情况下，我们创建一个占位用户 oidc:{sub} 来记录绑定关系
-                    # 这个占位用户不会被用来登录，仅用于存储sub -> 用户的绑定关系
-                    user = user_by_name
-                    logger.info(f"Binding new OIDC sub {sub} to existing user with raw username: {username}")
-                    # 创建绑定占位用户（后台静默创建，不影响现有用户）
-                    await oidc.create_oidc_binding_placeholder(db, sub, user_by_name)
-                else:
-                    # 用户名不存在，需要创建新用户
-                    if oidc.oidc_config.auto_create_user:
-                        user = None  # 让后续逻辑创建
-                    else:
-                        return None, "用户不存在，请联系管理员开通账号"
-        else:
-            # 没有获取到 username，回退到按sub查找
-            user = user_by_sub
-    else:
-        # 标准 OIDC 模式，通过 sub 查找
-        user = user_by_sub
+    async def exchange(self, code, browser):
+        """幂等恢复同一登录结果，每次兑换重新检查账号及会话撤销。"""
+        self.require_enabled()
+        payload = await self.record("result", code, browser)
+        _, user = await self.repo.active_session(payload["session_id"], payload["user_id"], self.config.issuer_url, lock=True)
+        department = (
+            await self.db.scalar(select(Department.name).where(Department.id == user.department_id)) if user.department_id else None
+        )
+        response = {
+            "access_token": payload["token"],
+            "token_type": "bearer",
+            "user_id": user.id,
+            "uid": user.uid,
+            "username": user.username,
+            "phone_number": user.phone_number,
+            "avatar": user.avatar,
+            "role": user.role,
+            "department_id": user.department_id,
+            "department_name": department,
+        }
+        await self.db.rollback()
+        return response
 
-    if user:
-        await oidc.update_oidc_user_login(db, user)
-        logger.info(f"OIDC user logged in: {user.username}")
-    elif oidc.oidc_config.auto_create_user:
-        deleted_user = await oidc.find_deleted_oidc_user_by_sub(db, sub)
-        if deleted_user:
-            user = await oidc.restore_deleted_oidc_user(db, deleted_user, extracted_info)
-            logger.info(f"OIDC deleted user restored and logged in: {user.username}")
-        else:
-            # 从用户信息中获取部门信息
-            dept_name = extracted_info.get("department_name")
-            dept_desc = extracted_info.get("department_description")
-            dept = await oidc.get_or_create_oidc_department(db, dept_name, dept_desc)
-            department_id = dept.id if dept else None
-            user = await oidc.create_oidc_user(db, extracted_info, department_id)
-    else:
-        return None, "用户未注册，请联系管理员开通账号"
+    async def logout(self, session_id, user_id):
+        """先撤销本地登录，认证中心不可达时仍保持本地退出生效。"""
+        await self.repo.revoke_session(session_id, user_id)
+        await self.db.commit()
+        if not self.config.enabled:
+            return {"logout_url": None, "provider_logout_available": False}
+        try:
+            metadata = await client.metadata(self.config)
+        except UpstreamError:
+            logger.warning("OIDC 本地会话已撤销，认证中心登出端点暂不可用")
+            return {"logout_url": None, "provider_logout_available": False}
+        endpoint = metadata.get("end_session_endpoint")
+        if not endpoint:
+            return {"logout_url": None, "provider_logout_available": False}
+        callback = urlsplit(self.config.redirect_uri)
+        logout_url = (
+            endpoint
+            + "?"
+            + urlencode({"client_id": self.config.client_id, "post_logout_redirect_uri": f"{callback.scheme}://{callback.netloc}/login"})
+        )
 
-    if user.user_kind == "end_user":
-        return None, "终端用户不能用于 OIDC 登录"
-    if user.is_deleted:
-        return None, "该账户已注销"
+        return {"logout_url": logout_url, "provider_logout_available": True}
 
-    token_data = {"sub": str(user.id)}
-    jwt_token = AuthUtils.create_access_token(token_data)
+    async def backchannel_logout(self, token):
+        """只有专用签名通知可以撤销对应提供商的会话。"""
+        self.require_enabled()
+        claims = await client.verify(self.config, token, logout=True)
+        try:
+            await self.repo.backchannel_logout(self.config, claims)
+            await self.db.commit()
+        except BaseException:
+            await self.db.rollback()
+            raise
 
-    department_name = None
-    if user.department_id:
-        department_name = await oidc.get_oidc_department_name(db, user.department_id)
+    def require_enabled(self):
+        """关闭集成同时拒绝现有 OIDC 结果兑换。"""
+        if not self.config.enabled:
+            raise PermissionDeniedError("OIDC 登录未启用")
 
-    response_data = {
-        "access_token": jwt_token,
-        "token_type": "bearer",
-        "user_id": user.id,
-        "username": user.username,
-        "uid": user.uid,
-        "phone_number": user.phone_number,
-        "avatar": user.avatar,
-        "role": user.role,
-        "department_id": user.department_id,
-        "department_name": department_name,
-    }
+    @staticmethod
+    def fingerprint(value):
+        """短期存储只保存浏览器关联摘要。"""
+        return hashlib.sha256(value.encode()).hexdigest()
 
-    return response_data, None
+    async def record(self, kind, code, browser, consume=False):
+        """错误浏览器不能消耗合法事务；state 只允许成功消费一次。"""
+        if not code or not browser:
+            raise StateConflictError("登录会话已失效，请重新登录")
+        redis = await get_async_redis_client()
+        raw = await redis.eval(_MATCH, 1, self.prefix + kind + ":" + code, self.fingerprint(browser), "consume" if consume else "read")
+        if not raw:
+            raise StateConflictError("登录会话已失效，请重新登录")
+        return json.loads(raw)

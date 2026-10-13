@@ -113,20 +113,6 @@ async def create_business_tables(manager):
     logger.info("PostgreSQL business tables created")
 
 
-async def upgrade_feedback_schema(manager) -> None:
-    """8→9 原子新增反馈表，失败时保留版本与所有原有数据。"""
-    from yuxi.bootstrap.models import load_models
-    from yuxi.modules.agents.models.feedback import AgentFeedbackRecord
-
-    load_models()
-    manager._check_initialized()
-    async with manager.async_engine.begin() as conn:
-        await conn.run_sync(lambda sync_conn: AgentFeedbackRecord.__table__.create(sync_conn, checkfirst=True))
-        await conn.execute(
-            text(f"UPDATE {SCHEMA_VERSION_TABLE} SET version = 9, applied_at = CURRENT_TIMESTAMP WHERE domain = 'business' AND version = 8")
-        )
-
-
 async def upgrade_knowledge_name_schema(manager) -> None:
     """3→4 原子约束活动知识库名称，存量重名时保留原数据与版本。"""
     manager._check_initialized()

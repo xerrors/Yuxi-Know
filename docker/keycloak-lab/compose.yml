@@ -1,0 +1,59 @@
+name: yuxi-enterprise-sso
+services:
+  postgres:
+    image: postgres:16.10
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U keycloak -d keycloak]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    networks: [database]
+    logging: &logs
+      driver: json-file
+      options: {max-size: 10m, max-file: "2"}
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.0@sha256:27b3230fbabb8c9ff3c66c864cf09dcd8a41aca82e5100679d109ef0eeb05741
+    command: [start-dev, --import-realm]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:?}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:?}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:?}
+      KC_HOSTNAME: ${SSO_URL:?}
+      KC_HEALTH_ENABLED: "true"
+      KC_HTTP_ENABLED: "true"
+      KC_HTTP_PORT: "39090"
+      KC_HTTP_ACCESS_LOG_ENABLED: "false"
+      YUXI_REDIRECT_URI: ${YUXI_REDIRECT_URI:?}
+      YUXI_LOGOUT_REDIRECT_URI: ${YUXI_LOGOUT_REDIRECT_URI:?}
+      YUXI_CLIENT_SECRET: ${YUXI_CLIENT_SECRET:?}
+      EMPLOYEE_DEV_PASSWORD: ${EMPLOYEE_DEV_PASSWORD:?}
+      EMPLOYEE_PRODUCT_PASSWORD: ${EMPLOYEE_PRODUCT_PASSWORD:?}
+    ports:
+      - "127.0.0.1:39090:39090"
+    volumes:
+      - ./seed:/opt/keycloak/data/import:ro
+    depends_on:
+      postgres: {condition: service_healthy}
+    restart: unless-stopped
+    networks:
+      sso:
+        aliases: [auth.yuxi.test]
+      database:
+    logging: *logs
+networks:
+  database:
+    internal: true
+  sso:
+    # 实验 API 通过 external network 加入。
+volumes:
+  postgres-data:

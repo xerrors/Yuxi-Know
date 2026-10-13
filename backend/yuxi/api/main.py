@@ -171,6 +171,9 @@ app.add_middleware(LoginRateLimitMiddleware)
 async def add_app_source_header(request: Request, call_next):
     """仅回显已认证 API Key 绑定的调用来源。"""
     response = await call_next(request)
+    if request.url.path.startswith("/api/auth/oidc/"):
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Referrer-Policy"] = "no-referrer"
     app_id = getattr(request.state, "app_id", None)
     if app_id:
         response.headers["X-App-Id"] = app_id
@@ -182,6 +185,7 @@ if __name__ == "__main__":
         "yuxi.api.main:app",
         host="0.0.0.0",
         port=5050,
+        access_log=False,
         reload=True,
         reload_dirs=["yuxi"],
     )

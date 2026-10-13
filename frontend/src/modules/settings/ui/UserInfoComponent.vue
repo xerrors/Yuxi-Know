@@ -70,6 +70,7 @@
 <script setup>
 import { computed, inject, ref, useSlots } from 'vue'
 import { useRouter } from 'vue-router'
+import { authApi } from '@/apis/auth_api'
 import { useUserStore } from '@/modules/identity/model/user'
 import { useInfoStore } from '@/modules/settings/model/info'
 import DebugComponent from '@/modules/settings/ui/DebugComponent.vue'
@@ -119,11 +120,18 @@ const userRoleText = computed(() => {
 })
 
 // 退出登录
-const logout = () => {
-  userStore.logout()
-  message.success('已退出登录')
-  // 跳转到首页
-  router.push('/login')
+const logout = async () => {
+  try {
+    const result = await authApi.logoutOIDC()
+    userStore.logout()
+    if (result.provider_logout_available === false) {
+      message.warning('已退出 Yuxi；认证中心会话未退出')
+    }
+    if (result.logout_url) window.location.assign(result.logout_url)
+    else await router.push('/login')
+  } catch (error) {
+    message.error(error.message || '退出未完成，请重试')
+  }
 }
 
 // 前往登录页
