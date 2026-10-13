@@ -3,18 +3,15 @@
 提供部门的增删改查接口，仅超级管理员可访问
 """
 
-import re
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.api.dependencies.auth import get_admin_user, get_db, get_superadmin_user
 from yuxi.modules.identity.models import User
+from yuxi.modules.identity.services import administration
 from yuxi.modules.identity.repositories.departments import DepartmentRepository
-from yuxi.modules.identity.repositories.users import UserRepository
 from yuxi.modules.identity.services.administration import IdentityConflictError, create_department_with_admin
-from yuxi.modules.identity.services.usernames import is_valid_phone_number
 
 # 创建路由器
 department = APIRouter(prefix="/departments", tags=["department"])
@@ -84,58 +81,11 @@ async def create_department(
     current_user: User = Depends(get_superadmin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """创建新部门，同时创建该部门的管理员"""
-    dept_repo = DepartmentRepository(db)
-    user_repo = UserRepository(db)
-
-    # 检查部门名称是否已存在
-    if await dept_repo.exists_by_name(department_data.name):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="部门名称已存在")
-
-    # 验证管理员 uid 格式
-    admin_uid = department_data.admin_uid
-    if not re.match(r"^[a-zA-Z0-9_]+$", admin_uid):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="用户ID只能包含字母、数字和下划线",
-        )
-
-    if len(admin_uid) < 3 or len(admin_uid) > 20:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="用户ID长度必须在3-20个字符之间",
-        )
-
-    # 检查 uid 是否已存在
-    if await user_repo.exists_by_uid(admin_uid):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="用户ID已存在",
-        )
-
-    # 检查手机号是否已存在（如果提供了）
-    admin_phone = department_data.admin_phone
-    if admin_phone:
-        if not is_valid_phone_number(admin_phone):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="手机号格式不正确")
-        if await user_repo.exists_by_phone(admin_phone):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="手机号已存在",
-            )
-
+    """适配部门与首位管理员的原子创建。"""
     try:
-        created = await create_department_with_admin(
-            db,
-            name=department_data.name,
-            description=department_data.description,
-            admin_uid=admin_uid,
-            admin_password=department_data.admin_password,
-            admin_phone=admin_phone,
-        )
+        created = await create_department_with_admin(db, **department_data.model_dump())
     except IdentityConflictError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-
     return {**created.department.to_dict(), "user_count": 1}
 
 
@@ -146,33 +96,7 @@ async def update_department(
     current_user: User = Depends(get_superadmin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """更新部门信息"""
-    repository = DepartmentRepository(db)
-    department = await repository.get_by_id(department_id)
-
-    if not department:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="部门不存在")
-
-    updates = {}
-    # 如果要修改名称，检查新名称是否已存在
-    if department_data.name and department_data.name != department.name:
-        existing = await repository.get_by_name(department_data.name)
-        if existing:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="部门名称已存在")
-        updates["name"] = department_data.name
-
-    if department_data.description is not None:
-        updates["description"] = department_data.description
-
-    department = await repository.update(department_id, updates)
-    if department is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="部门不存在")
-
-    # 获取部门下用户数量
-    user_count = await repository.count_users(department_id)
-    await db.commit()
-
-    return {**department.to_dict(), "user_count": user_count}
+    return await administration.update_department(db, department_id=department_id, **department_data.model_dump())
 
 
 @department.delete("/{department_id}", status_code=status.HTTP_200_OK)
@@ -181,21 +105,4 @@ async def delete_department(
     current_user: User = Depends(get_superadmin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """删除部门"""
-    repository = DepartmentRepository(db)
-    # 检查部门是否存在
-    department = await repository.get_by_id(department_id)
-
-    if not department:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="部门不存在")
-
-    if department.id == 1:  # 默认部门的ID为1
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="默认部门不允许删除")
-
-    deletion = await repository.delete_and_migrate_users(department_id)
-    if deletion is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="部门不存在")
-
-    await db.commit()
-
-    return {"success": True, "message": "部门已删除"}
+    return await administration.delete_department(db, department_id=department_id)

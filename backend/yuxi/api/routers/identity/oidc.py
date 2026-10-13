@@ -17,7 +17,8 @@ NO_STORE = {"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"}
 
 async def get_oidc_config_handler():
     """公共配置只暴露入口开关和显示名。"""
-    return {"enabled": oidc.oidc_config.enabled, "provider_name": oidc.oidc_config.provider_name}
+    config = oidc.get_oidc_config()
+    return {"enabled": config.enabled, "provider_name": config.provider_name}
 
 
 async def oidc_login_url_handler(request, response):
@@ -28,7 +29,13 @@ async def oidc_login_url_handler(request, response):
     url = await OIDCService().start(browser)
     response.headers.update(NO_STORE)
     response.set_cookie(
-        oidc.COOKIE_NAME, browser, max_age=600, httponly=True, secure=oidc.oidc_config.secure_cookie, samesite="lax", path="/api/auth/oidc"
+        oidc.COOKIE_NAME,
+        browser,
+        max_age=600,
+        httponly=True,
+        secure=oidc.get_oidc_config().secure_cookie,
+        samesite="lax",
+        path="/api/auth/oidc",
     )
     return {"login_url": url}
 

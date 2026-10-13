@@ -13,13 +13,12 @@ from yuxi.modules.agents.services.environment import read_agent_env, write_agent
 from yuxi.modules.identity.models import User
 from yuxi.modules.identity.preferences import UserConfig, UserConfigSchema
 from yuxi.modules.identity.repositories.api_keys import (
-    APIKeyDepartmentConflict,
-    APIKeyIdempotencyConflict,
     APIKeyRepository,
-    APIKeySubjectUnavailable,
 )
-from yuxi.modules.identity.security import AuthUtils
-from yuxi.shared.datetime import coerce_any_to_utc_datetime, format_utc_datetime
+from yuxi.modules.identity.services import api_keys as api_key_service
+from yuxi.modules.identity.services.api_keys import get_accessible_api_key
+from yuxi.modules.identity.services.preferences import save_user_config
+from yuxi.shared.datetime import format_utc_datetime
 
 user_router = APIRouter(prefix="/user", tags=["user"])
 
@@ -98,7 +97,7 @@ async def update_user_config(
     current_user: User = Depends(get_logged_in_user),
     db: AsyncSession = Depends(get_db),
 ):
-    user_config = await UserConfig(uid=current_user.uid, schema=data).save(db)
+    user_config = await save_user_config(db, uid=current_user.uid, schema=data)
     return user_config.dump_config()
 
 
@@ -148,51 +147,7 @@ async def create_api_key(
     current_user: User = Depends(get_required_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if data.user_id and data.user_id != current_user.id and current_user.role != "superadmin":
-        raise HTTPException(status_code=403, detail="无权为其他用户创建 API Key")
-    if data.access_level == "agents" and not data.app_id:
-        raise HTTPException(status_code=422, detail="Agents API Key 必须填写 app_id")
-
-    target_user_id = data.user_id or current_user.id
-
-    full_key, key_hash, key_prefix = AuthUtils.derive_api_key(
-        f"user-request:{data.request_id}",
-        target_user_id,
-    )
-    expires_at = None
-    if data.expires_at:
-        aware_dt = coerce_any_to_utc_datetime(data.expires_at)
-        if aware_dt:
-            expires_at = aware_dt
-
-    try:
-        api_key = await APIKeyRepository(db).create(
-            key_hash=key_hash,
-            key_prefix=key_prefix,
-            request_id=data.request_id,
-            name=data.name,
-            user_id=target_user_id,
-            department_id=data.department_id,
-            expires_at=expires_at,
-            created_by=str(current_user.id),
-            access_level=data.access_level,
-            app_id=data.app_id,
-        )
-        await db.commit()
-    except APIKeyIdempotencyConflict as exc:
-        await db.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    except APIKeySubjectUnavailable as exc:
-        await db.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except APIKeyDepartmentConflict as exc:
-        await db.rollback()
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-
-    return APIKeyCreateResponse(
-        api_key=APIKeyResponse(**api_key.to_dict()),
-        secret=full_key,
-    )
+    return await api_key_service.create_api_key(db, actor=current_user, **data.model_dump())
 
 
 @user_router.get("/apikey/{api_key_id}", response_model=dict)
@@ -212,28 +167,7 @@ async def update_api_key(
     current_user: User = Depends(get_required_user),
     db: AsyncSession = Depends(get_db),
 ):
-    repository = APIKeyRepository(db)
-    api_key = await get_accessible_api_key(repository, api_key_id, current_user)
-    access_level = data.access_level or api_key.access_level
-    app_id = data.app_id if "app_id" in data.model_fields_set else api_key.app_id
-    if access_level == "agents" and not app_id:
-        raise HTTPException(status_code=422, detail="Agents API Key 必须填写 app_id")
-
-    updates = {}
-    if data.name is not None:
-        updates["name"] = data.name
-    if data.expires_at is not None:
-        aware_dt = coerce_any_to_utc_datetime(data.expires_at)
-        updates["expires_at"] = aware_dt if aware_dt else None
-    if data.is_enabled is not None:
-        updates["is_enabled"] = data.is_enabled
-    if data.access_level is not None:
-        updates["access_level"] = data.access_level
-    if "app_id" in data.model_fields_set:
-        updates["app_id"] = data.app_id
-
-    api_key = await repository.update(api_key, updates)
-    return {"api_key": api_key.to_dict()}
+    return await api_key_service.update_api_key(db, actor=current_user, api_key_id=api_key_id, updates=data.model_dump(exclude_unset=True))
 
 
 @user_router.delete("/apikey/{api_key_id}", response_model=dict)
@@ -242,10 +176,7 @@ async def delete_api_key(
     current_user: User = Depends(get_required_user),
     db: AsyncSession = Depends(get_db),
 ):
-    repository = APIKeyRepository(db)
-    api_key = await get_accessible_api_key(repository, api_key_id, current_user)
-
-    await repository.delete(api_key)
+    await api_key_service.revoke_api_key(db, actor=current_user, api_key_id=api_key_id)
     return {"success": True}
 
 
@@ -266,17 +197,3 @@ async def update_agent_env(
 ):
     result = await write_agent_env(db, uid=current_user.uid, env=data.env)
     return AgentEnvResponse(env=result.env, updated_at=format_utc_datetime(result.updated_at))
-
-
-async def get_accessible_api_key(repository: APIKeyRepository, api_key_id: int, current_user: User):
-    """读取当前用户可见的 API Key，并保持既有错误状态码。"""
-    access = await repository.get_accessible(
-        api_key_id=api_key_id,
-        requester_user_id=current_user.id,
-        is_superadmin=current_user.role == "superadmin",
-    )
-    if access.api_key is not None:
-        return access.api_key
-    if not access.exists:
-        raise HTTPException(status_code=404, detail="API Key 不存在")
-    raise HTTPException(status_code=403, detail="无权操作此 API Key")

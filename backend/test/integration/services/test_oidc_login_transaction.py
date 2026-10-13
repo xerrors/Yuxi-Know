@@ -30,6 +30,7 @@ from yuxi.modules.identity import oidc
 from yuxi.modules.identity.models import Department, OIDCIdentity, OIDCLogout, OIDCSession, RevokedAccessToken, User
 from yuxi.modules.identity.security import AuthUtils
 from yuxi.modules.identity.services import oidc as service
+from yuxi.modules.identity.services import login_limits
 from yuxi.shared.datetime import utc_now
 from yuxi.shared.errors import DomainError
 
@@ -58,7 +59,7 @@ async def scenario(monkeypatch):
         client_secret="fixture-secret",
         redirect_uri=origin + "/api/auth/oidc/callback",
     )
-    monkeypatch.setattr(oidc, "oidc_config", config)
+    monkeypatch.setattr(oidc, "get_oidc_config", lambda: config)
     monkeypatch.setattr(service, "client", OIDCClient())
 
     async def get_redis():
@@ -66,6 +67,7 @@ async def scenario(monkeypatch):
         return redis
 
     monkeypatch.setattr(service, "get_async_redis_client", get_redis)
+    monkeypatch.setattr(login_limits, "get_async_redis_client", get_redis)
     current = {"subject": "fixture-sub", "sid": "fixture-sid", "claims": {}, "userinfo": {}, "keys": [jwk], "calls": 0}
     codes = {}
     app = FastAPI()
@@ -572,7 +574,9 @@ async def test_password_logout_revokes_only_current_token_and_preserves_oidc_ses
         (await db.get(User, enterprise["user_id"])).password_hash = AuthUtils.hash_password("fixture-local-password")
         await db.commit()
     credentials = {"username": enterprise["uid"], "password": "fixture-local-password"}
-    first = (await scenario["http"].post("/api/auth/token", data=credentials)).json()["access_token"]
+    first_response = await scenario["http"].post("/api/auth/token", data=credentials)
+    assert first_response.status_code == 200, first_response.text
+    first = first_response.json()["access_token"]
     second = (await scenario["http"].post("/api/auth/token", data=credentials)).json()["access_token"]
     assert first != second
     assert (await scenario["http"].get("/api/auth/me", headers={"Authorization": "Bearer " + first + "="})).status_code == 200
@@ -583,3 +587,27 @@ async def test_password_logout_revokes_only_current_token_and_preserves_oidc_ses
         assert (await scenario["http"].get("/api/auth/me", headers={"Authorization": "Bearer " + token})).status_code == 200
     async with scenario["db"]() as db:
         assert await db.scalar(select(func.count()).select_from(RevokedAccessToken)) == 1
+
+
+async def test_password_oidc_and_me_share_profile_and_public_avatar(scenario, monkeypatch):
+    """两种登录和个人资料使用同一公开身份，不泄露 MinIO 内部头像 URL。"""
+    monkeypatch.setenv("MINIO_PUBLIC_URL", "/minio")
+    enterprise, code = await login(scenario)
+    async with scenario["db"]() as db:
+        user = await db.get(User, enterprise["user_id"])
+        user.avatar = "http://minio:9000/public/avatar/fixture.png"
+        user.password_hash = AuthUtils.hash_password("fixture-local-password")
+        await db.commit()
+    oidc_response = await scenario["http"].post("/api/auth/oidc/exchange-code", json={"code": code})
+    password_response = await scenario["http"].post(
+        "/api/auth/token",
+        data={"username": enterprise["uid"], "password": "fixture-local-password"},
+    )
+    assert oidc_response.status_code == password_response.status_code == 200
+    oidc_result, password_result = oidc_response.json(), password_response.json()
+    assert set(oidc_result) == set(password_result)
+    for field in ("user_id", "uid", "username", "phone_number", "avatar", "role", "department_id", "department_name", "token_type"):
+        assert oidc_result[field] == password_result[field]
+    assert oidc_result["avatar"] == "/minio/public/avatar/fixture.png"
+    profile = await scenario["http"].get("/api/auth/me", headers={"Authorization": "Bearer " + oidc_result["access_token"]})
+    assert profile.status_code == 200 and profile.json()["avatar"] == oidc_result["avatar"]

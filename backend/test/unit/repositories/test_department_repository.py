@@ -72,3 +72,16 @@ async def test_delete_department_migrates_users_and_revokes_department_keys(depa
     assert persisted_key.is_enabled is False
     assert persisted_key.revoked_at is not None
     assert persisted_key.department_id is None
+
+
+@pytest.mark.parametrize("operation", ["create", "update", "delete", "delete_and_migrate_users"])
+async def test_department_writes_require_callers_transaction(operation):
+    """写入不能以仓储私有会话提前提交调用方的部门事实。"""
+    repository = DepartmentRepository()
+    with pytest.raises(RuntimeError, match="部门写入需要调用方事务"):
+        if operation == "create":
+            await repository.create({"name": "unowned"})
+        elif operation == "update":
+            await repository.update(1, {"name": "unowned"})
+        else:
+            await getattr(repository, operation)(1)

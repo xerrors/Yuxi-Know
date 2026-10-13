@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from test.support.sqlite import create_utc_sqlite_engine
 
 from yuxi.modules.identity.preferences import UserConfig, UserConfigSchema
+from yuxi.modules.identity.services.preferences import save_user_config
 from yuxi.infrastructure.postgres.base import Base
 from yuxi.modules.identity.models import Department, User
 from yuxi.modules.identity.models import UserConfig as UserConfigRecord
@@ -53,7 +54,7 @@ async def test_user_config_load_returns_defaults_without_creating_row(session):
 async def test_user_config_save_persists_user_specific_values(session):
     db, user = session
 
-    saved = await UserConfig(uid=user.uid, schema=UserConfigSchema(enable_memory=False)).save(db)
+    saved = await save_user_config(db, uid=user.uid, schema=UserConfigSchema(enable_memory=False))
     loaded = await UserConfig.load(db, user.uid)
 
     assert saved.dump_config()["enable_memory"] is False

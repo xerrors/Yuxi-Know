@@ -15,6 +15,7 @@ from yuxi.modules.identity.models import Department
 from yuxi.modules.identity.repositories.oidc import OIDCRepository
 from yuxi.modules.identity.security import AuthUtils
 from yuxi.shared.datetime import utc_now
+from yuxi.modules.identity.services.login import login_result
 from yuxi.shared.errors import PermissionDeniedError, StateConflictError
 
 _MATCH = """
@@ -32,7 +33,7 @@ class OIDCService:
 
     def __init__(self, db=None):
         self.db = db
-        self.config = oidc.oidc_config
+        self.config = oidc.get_oidc_config()
         self.repo = OIDCRepository(db)
         namespace = hashlib.sha256(
             (self.config.issuer_url + "\0" + self.config.client_id + "\0" + self.config.redirect_uri).encode()
@@ -92,18 +93,7 @@ class OIDCService:
         department = (
             await self.db.scalar(select(Department.name).where(Department.id == user.department_id)) if user.department_id else None
         )
-        response = {
-            "access_token": payload["token"],
-            "token_type": "bearer",
-            "user_id": user.id,
-            "uid": user.uid,
-            "username": user.username,
-            "phone_number": user.phone_number,
-            "avatar": user.avatar,
-            "role": user.role,
-            "department_id": user.department_id,
-            "department_name": department,
-        }
+        response = login_result(user, payload["token"], department)
         await self.db.rollback()
         return response
 

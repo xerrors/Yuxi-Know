@@ -5,12 +5,11 @@ from __future__ import annotations
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.modules.identity.models import UserConfig as UserConfigRecord
-from yuxi.shared.datetime import format_utc_datetime, utc_now
+from yuxi.shared.datetime import format_utc_datetime
 
 
 class UserConfigSchema(BaseModel):
@@ -40,35 +39,6 @@ class UserConfig:
             schema=UserConfigSchema(enable_memory=bool(record.enable_memory)),
             updated_at=record.updated_at,
         )
-
-    async def save(self, db: AsyncSession) -> UserConfig:
-        now = utc_now()
-        result = await db.execute(
-            update(UserConfigRecord).where(UserConfigRecord.uid == self.uid).values(enable_memory=self.schema.enable_memory, updated_at=now)
-        )
-        if result.rowcount == 0:
-            db.add(
-                UserConfigRecord(
-                    uid=self.uid,
-                    enable_memory=self.schema.enable_memory,
-                    created_at=now,
-                    updated_at=now,
-                )
-            )
-        try:
-            await db.commit()
-        except IntegrityError:
-            await db.rollback()
-            now = utc_now()
-            retry_result = await db.execute(
-                update(UserConfigRecord)
-                .where(UserConfigRecord.uid == self.uid)
-                .values(enable_memory=self.schema.enable_memory, updated_at=now)
-            )
-            if retry_result.rowcount == 0:
-                raise
-            await db.commit()
-        return type(self)(uid=self.uid, schema=self.schema, updated_at=now)
 
     def dump_config(self) -> dict[str, str | bool | None]:
         return {

@@ -104,3 +104,23 @@ async def test_required_startup_component_failure_still_releases_every_runtime_c
     assert app.state.startup_components == {"default_agents": {"status": "error", "required": True, "code": "RuntimeError"}}
     assert "password" not in str(exc_info.value)
     assert released == ["sandbox_provider", "queue_clients", "neo4j", "postgres"]
+
+
+async def test_invalid_oidc_configuration_blocks_startup_before_database(monkeypatch):
+    """延迟配置读取仍在启动阶段拒绝不完整的 OIDC 信任根。"""
+    monkeypatch.setenv("API_KEY_DERIVATION_SECRET", "fixture-api-key-secret-at-least-thirty-two-characters")
+    monkeypatch.setenv("JWT_SECRET_KEY", "fixture-jwt-secret-at-least-thirty-two-characters")
+    monkeypatch.setenv("SANDBOX_PROVISIONER_TOKEN", "fixture-sandbox-token-at-least-thirty-two-characters")
+    monkeypatch.setenv("OIDC_ENABLED", "true")
+    monkeypatch.setenv("OIDC_ISSUER_URL", "")
+
+    def forbidden_initialize():
+        """无效配置不能进入数据库装配。"""
+        raise AssertionError("database startup must not begin")
+
+    monkeypatch.setattr(api_bootstrap.pg_manager, "initialize", forbidden_initialize)
+    app = FastAPI()
+    with pytest.raises(api_bootstrap.RequiredStartupComponentError, match="component=oidc_config, type=ValueError"):
+        await api_bootstrap._startup(app)
+    assert app.state.startup_complete is False
+    assert app.state.startup_components["oidc_config"] == {"status": "error", "required": True, "code": "ValueError"}

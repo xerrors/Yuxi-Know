@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from yuxi.modules.identity.models import APIKey, User
 from yuxi.modules.identity.repositories.api_keys import APIKeyRepository
 from yuxi.modules.identity.repositories.users import UserRepository
-from yuxi.shared.datetime import utc_now
 
 DEFAULT_END_USER_ID = "__default__"
 
@@ -26,16 +25,7 @@ async def verify_api_key(key: str, db: AsyncSession) -> tuple[User | None, APIKe
 
     api_key = await APIKeyRepository(db).get_by_hash(key_hash)
 
-    if api_key is None:
-        return None, None
-
-    if not api_key.is_enabled or api_key.revoked_at is not None:
-        return None, None
-
-    if api_key.expires_at and utc_now() > api_key.expires_at:
-        return None, None
-
-    if not api_key.user_id:
+    if api_key is None or not api_key.is_valid():
         return None, None
 
     user = await UserRepository(db).get_by_id(api_key.user_id)

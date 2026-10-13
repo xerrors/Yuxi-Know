@@ -6,13 +6,12 @@ from contextlib import asynccontextmanager
 from datetime import datetime as dt
 from typing import Annotated, Any
 
-from sqlalchemy import delete, func, or_, select, text
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.infrastructure.postgres.manager import pg_manager
-from yuxi.modules.identity.models import APIKey, User
-from yuxi.modules.schedules.models import ScheduledAgentJob
+from yuxi.modules.identity.models import APIKey, User, IDENTITY_CHANGE_LOCK_KEY
 from yuxi.shared.datetime import utc_now
 from yuxi.shared.hashing import hash_id
 
@@ -88,22 +87,6 @@ class UserRepository:
             .with_for_update(read=True)
             .execution_options(populate_existing=True)
         )
-
-    @staticmethod
-    async def _revoke_api_keys(session: AsyncSession, user_id: int, revoked_at: dt) -> None:
-        """撤销用户的全部 API Key，并保留已有撤销时间。"""
-
-        api_key_result = await session.execute(select(APIKey).where(APIKey.user_id == user_id))
-        for api_key in api_key_result.scalars().all():
-            api_key.is_enabled = False
-            if api_key.revoked_at is None:
-                api_key.revoked_at = revoked_at
-
-    @staticmethod
-    async def _delete_scheduled_jobs(session: AsyncSession, uid: str) -> None:
-        """账号删除时移除任务定义，数据库级联清理调度历史。"""
-
-        await session.execute(delete(ScheduledAgentJob).where(ScheduledAgentJob.uid == str(uid)))
 
     async def get_by_id_with_db(self, db: AsyncSession, id: int) -> User | None:
         """使用指定的 db 根据 ID 获取用户"""
@@ -257,19 +240,18 @@ class UserRepository:
             user.password_hash = "DELETED"
             user.avatar = None
             await self._revoke_api_keys(session, user.id, user.deleted_at)
-            await self._delete_scheduled_jobs(session, user.uid)
             await session.flush()
 
     async def lock_identity_changes(self) -> None:
         """删除身份前按共同顺序取得事务锁。"""
         async with self._session(write=True) as session:
             if session.get_bind().dialect.name == "postgresql":
-                await session.execute(text("SELECT pg_advisory_xact_lock(1498765386)"))
+                await session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": IDENTITY_CHANGE_LOCK_KEY})
 
     async def ensure_deletable_superadmin(self, session, user: User) -> None:
         """保留至少一个未删除的系统管理员。"""
         if session.get_bind().dialect.name == "postgresql":
-            await session.execute(text("SELECT pg_advisory_xact_lock(1498765386)"))
+            await session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": IDENTITY_CHANGE_LOCK_KEY})
         if user.role == "superadmin" and not user.is_deleted:
             survivor = await session.scalar(
                 select(User.id)
@@ -320,3 +302,13 @@ class UserRepository:
             return
         async with pg_manager.get_async_session_context() as session:
             yield session
+
+    @staticmethod
+    async def _revoke_api_keys(session: AsyncSession, user_id: int, revoked_at: dt) -> None:
+        """撤销用户的全部 API Key，并保留已有撤销时间。"""
+
+        api_key_result = await session.execute(select(APIKey).where(APIKey.user_id == user_id))
+        for api_key in api_key_result.scalars().all():
+            api_key.is_enabled = False
+            if api_key.revoked_at is None:
+                api_key.revoked_at = revoked_at

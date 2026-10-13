@@ -15,7 +15,7 @@ from yuxi.modules.identity.repositories.users import UserRepository
 from yuxi.modules.identity.models import APIKey, User
 from yuxi.modules.identity.security import AuthUtils
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
+pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
 
 async def _create_user(factory: async_sessionmaker) -> int:

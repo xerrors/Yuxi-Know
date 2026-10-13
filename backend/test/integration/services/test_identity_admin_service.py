@@ -21,13 +21,13 @@ from yuxi.bootstrap.models import load_models
 from yuxi.infrastructure.postgres.base import Base
 from yuxi.modules.identity.models import Department, User
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
+pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
 
 async def test_user_conflict_rolls_back_new_department() -> None:
     """管理员插入失败时不得留下无管理员部门。"""
 
-    unique = uuid.uuid4().hex[:12]
+    unique = uuid.uuid4().hex[:8]
     conflict_department_name = f"uow-conflict-{unique}"
     attempted_department_name = f"uow-attempt-{unique}"
     conflicting_username = f"uow_admin_{unique}"

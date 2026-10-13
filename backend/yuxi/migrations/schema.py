@@ -8,11 +8,12 @@ from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.base import BusinessBase, KnowledgeBase
 from yuxi.infrastructure.postgres.schema import SCHEMA_VERSION_TABLE
 from yuxi.modules.agents.models.runs import AGENT_RUN_TERMINAL_STATUSES
+from yuxi.modules.identity.models import IDENTITY_CHANGE_LOCK_KEY
 
 AGENT_RUN_TERMINAL_STATUS_SQL = ", ".join(f"'{status}'" for status in AGENT_RUN_TERMINAL_STATUSES)
 
 IDENTITY_PERMISSION_STATEMENTS = (
-    """
+    f"""
     CREATE FUNCTION yuxi_guard_identity() RETURNS trigger LANGUAGE plpgsql AS $$
     BEGIN
         IF TG_OP = 'UPDATE' AND
@@ -22,7 +23,7 @@ IDENTITY_PERMISSION_STATEMENTS = (
         END IF;
         IF OLD.role = 'superadmin' AND OLD.is_deleted = 0 THEN
             IF TG_OP = 'DELETE' OR NEW.is_deleted <> 0 THEN
-                PERFORM pg_advisory_xact_lock(1498765386);
+                PERFORM pg_advisory_xact_lock({IDENTITY_CHANGE_LOCK_KEY});
                 IF NOT EXISTS (SELECT 1 FROM users WHERE role = 'superadmin' AND is_deleted = 0 AND id <> OLD.id) THEN
                     RAISE EXCEPTION '必须至少保留一个有效系统管理员' USING ERRCODE = '23514';
                 END IF;

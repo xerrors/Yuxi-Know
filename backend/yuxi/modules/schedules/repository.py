@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.modules.agents.models.inputs import AgentInput
@@ -193,3 +193,8 @@ class ScheduledAgentRepository:
         job.deleted_at = utc_now()
         job.updated_at = job.deleted_at
         await self.db.flush()
+
+
+async def delete_user_schedules(db: AsyncSession, *, uid: str) -> None:
+    """账号删除事务移除其任务定义，历史由外键级联清理。"""
+    await db.execute(delete(ScheduledAgentJob).where(ScheduledAgentJob.uid == uid))

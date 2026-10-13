@@ -12,6 +12,7 @@ from yuxi.migrations.schema import IDENTITY_PERMISSION_STATEMENTS
 
 @pytest.mark.asyncio
 @pytest.mark.integration
+@pytest.mark.self_managed_resources
 async def test_role_downgrade_and_concurrent_last_superadmin_deletion():
     """两个连接竞争删除时仍保留一个有效账号，直接 SQL 不能降级。"""
     schema = f"permission_{uuid.uuid4().hex}"

@@ -4,7 +4,7 @@ from datetime import timedelta
 
 import pytest
 import pytest_asyncio
-from fastapi import HTTPException
+from yuxi.shared.errors import PermissionDeniedError
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from test.support.sqlite import create_utc_sqlite_engine
@@ -140,7 +140,7 @@ async def test_api_key_without_user_binding_is_rejected_before_department_mappin
 async def test_create_api_key_rejects_mismatched_department(session):
     db = session["db"]
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(PermissionDeniedError) as exc:
         await create_api_key(
             APIKeyCreate(
                 request_id="request-wrong-department",
@@ -151,7 +151,7 @@ async def test_create_api_key_rejects_mismatched_department(session):
             db=db,
         )
 
-    assert exc.value.status_code == 403
+    assert exc.value.message
 
 
 async def test_create_api_key_allows_current_user_department(session):
@@ -167,9 +167,9 @@ async def test_create_api_key_allows_current_user_department(session):
         db=db,
     )
 
-    assert response.api_key.user_id == session["regular_user"].id
-    assert response.api_key.department_id == session["dept_a"].id
-    assert response.secret.startswith(response.api_key.key_prefix)
+    assert response["api_key"]["user_id"] == session["regular_user"].id
+    assert response["api_key"]["department_id"] == session["dept_a"].id
+    assert response["secret"].startswith(response["api_key"]["key_prefix"])
 
 
 async def test_api_key_repository_enforces_requester_visibility(session):
@@ -197,9 +197,9 @@ async def test_api_key_repository_enforces_requester_visibility(session):
     assert foreign_access.api_key is None
     assert foreign_access.exists is True
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(PermissionDeniedError) as exc:
         await get_accessible_api_key(repository, api_key.id, session["dept_b_admin"])
-    assert exc.value.status_code == 403
+    assert exc.value.message
 
     superadmin_access = await repository.get_accessible(
         api_key_id=api_key.id,

@@ -13,6 +13,7 @@ from yuxi.modules.agents.runtime.sandbox import init_sandbox_provider
 from yuxi.modules.agents.services.transport import get_redis_client
 from yuxi.modules.extensions.mcp.service import ensure_builtin_mcp_servers_in_db
 from yuxi.modules.identity.security import AuthUtils
+from yuxi.modules.identity.oidc import get_oidc_config
 from yuxi.modules.models.providers.service import ensure_builtin_model_providers_in_db
 
 
@@ -36,6 +37,13 @@ async def _startup(app: FastAPI) -> None:
         name="security_secrets",
         required=True,
         operation=AuthUtils.require_security_secrets,
+    )
+
+    await _initialize_startup_component(
+        app,
+        name="oidc_config",
+        required=True,
+        operation=get_oidc_config,
     )
 
     # Schema 只由 Compose 中的 schema-init 修改；运行进程仅校验兼容版本。

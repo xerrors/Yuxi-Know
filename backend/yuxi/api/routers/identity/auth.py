@@ -18,9 +18,9 @@ from yuxi.api.routers.identity.oidc import (
     oidc_logout_handler,
 )
 from yuxi.api.uploads import read_upload_with_limit
-from yuxi.infrastructure.minio import upload_image_to_minio
-from yuxi.infrastructure.minio.client import normalize_public_minio_url
 from yuxi.modules.identity.models import User
+from yuxi.modules.identity.services.login import login_result
+from yuxi.modules.identity.services import users as user_service
 from yuxi.modules.identity.repositories.departments import DepartmentRepository
 from yuxi.modules.identity.repositories.users import UserRepository
 from yuxi.modules.identity.security import AuthUtils
@@ -29,7 +29,6 @@ from yuxi.modules.identity.services.administration import (
     SystemAlreadyInitializedError,
     initialize_system_admin,
     list_managed_users_page,
-    lock_member_management,
 )
 from yuxi.modules.identity.services.cli_auth import (
     CLI_AUTH_POLL_INTERVAL_SECONDS,
@@ -145,21 +144,6 @@ class OIDCConfigResponse(BaseModel):
     provider_name: str | None = "OIDC登录"
 
 
-class OIDCLoginResponse(BaseModel):
-    """OIDC 登录响应"""
-
-    access_token: str
-    token_type: str
-    user_id: int
-    username: str
-    uid: str
-    phone_number: str | None = None
-    avatar: str | None = None
-    role: str
-    department_id: int | None = None
-    department_name: str | None = None
-
-
 class CLIAuthSessionCreate(BaseModel):
     key_name: str | None = Field(default=None, max_length=100)
 
@@ -243,21 +227,7 @@ async def login_for_access_token(
             detail = "登录标识或密码错误" if error.reason == "unknown_account" else "用户名或密码错误"
         raise HTTPException(status_code=code, detail=detail, headers=headers) from error
 
-    user = result.user
-    access_token = result.access_token
-    department_name = result.department_name
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user_id": user.id,
-        "username": user.username,
-        "uid": user.uid,
-        "phone_number": user.phone_number,
-        "avatar": normalize_public_minio_url(user.avatar),
-        "role": user.role,
-        "department_id": user.department_id,
-        "department_name": department_name,
-    }
+    return result
 
 
 # =============================================================================
@@ -356,16 +326,7 @@ async def initialize_admin(admin_data: InitializeAdmin, db: AsyncSession = Depen
     token_data = {"sub": str(new_admin.id)}
     access_token = AuthUtils.create_access_token(token_data)
 
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user_id": new_admin.id,
-        "username": new_admin.username,
-        "uid": new_admin.uid,
-        "phone_number": new_admin.phone_number,
-        "avatar": new_admin.avatar,
-        "role": new_admin.role,
-    }
+    return login_result(new_admin, access_token, created.department.name)
 
 
 # 路由：获取当前用户信息
@@ -392,48 +353,8 @@ async def update_profile(
     current_user: User = Depends(get_required_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """更新当前用户的个人资料"""
-    user_repository = UserRepository(db)
-
-    # 更新用户名（仅允许修改显示名，不修改 user_id）
-    if profile_data.username is not None:
-        # 验证用户名格式
-        is_valid, error_msg = validate_username(profile_data.username)
-        if not is_valid:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=error_msg,
-            )
-
-        # 检查用户名是否已被其他用户使用
-        existing_user = await user_repository.get_by_username(profile_data.username, exclude_user_id=current_user.id)
-        if existing_user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="用户名已存在",
-            )
-
-        current_user.username = profile_data.username
-
-    # 更新手机号
-    if profile_data.phone_number is not None:
-        # 如果手机号不为空，验证格式
-        if profile_data.phone_number and not is_valid_phone_number(profile_data.phone_number):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="手机号格式不正确")
-
-        # 检查手机号是否已被其他用户使用
-        if profile_data.phone_number:
-            existing_phone = await user_repository.get_by_phone_excluding(profile_data.phone_number, current_user.id)
-            if existing_phone:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="手机号已被其他用户使用")
-
-        current_user.phone_number = profile_data.phone_number
-
-    await user_repository.save(current_user)
-
-    await db.commit()
-
-    return current_user.to_dict()
+    """适配用户写入请求与领域结果。"""
+    return await user_service.update_profile(db, current_user=current_user, **profile_data.model_dump())
 
 
 # 路由：创建新用户（管理员权限）
@@ -448,90 +369,8 @@ async def create_user(
     current_user: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """创建新用户（管理员权限）"""
-    try:
-        current_user, _ = await lock_member_management(db, actor_id=current_user.id)
-    except PermissionError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
-    user_repo = UserRepository(db)
-
-    # 验证用户名
-    is_valid, error_msg = validate_username(user_data.username)
-    if not is_valid:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error_msg,
-        )
-
-    # 检查用户名是否已存在
-    if await user_repo.get_by_username(user_data.username) is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="用户名已存在",
-        )
-
-    # 检查手机号是否已存在（如果提供了）
-    if user_data.phone_number:
-        if await user_repo.exists_by_phone(user_data.phone_number):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="手机号已存在",
-            )
-
-    # 生成唯一的 uid
-    existing_uids = await user_repo.get_all_uids()
-    uid = generate_unique_uid(user_data.username, existing_uids)
-
-    # 创建新用户
-    hashed_password = AuthUtils.hash_password(user_data.password)
-
-    # 检查角色权限
-    # 管理员只能创建普通用户
-    if current_user.role == "admin" and user_data.role != "user":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="管理员只能创建普通用户账户",
-        )
-
-    # 部门分配逻辑
-    if current_user.role == "superadmin":
-        # 超级管理员创建用户时，使用指定的部门或默认部门
-        department_id = user_data.department_id
-        if department_id is None:
-            # 获取默认部门
-            dept_repo = DepartmentRepository(db)
-            departments = await dept_repo.list_departments()
-            default_dept = next((d for d in departments if d.name == "默认部门"), None)
-            department_id = default_dept.id if default_dept else None
-    else:
-        # 普通管理员创建用户时，自动继承该管理员的部门
-        department_id = current_user.department_id
-        if department_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="管理员必须属于部门才能创建用户",
-            )
-        # 非超级管理员不能指定部门
-        if user_data.department_id is not None:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="普通管理员不能指定部门",
-            )
-
-    new_user = await user_repo.create(
-        {
-            "username": user_data.username,
-            "uid": uid,
-            "phone_number": user_data.phone_number,
-            "password_hash": hashed_password,
-            "role": user_data.role,
-            "department_id": department_id,
-        }
-    )
-
-    await db.commit()
-
-    return new_user.to_dict()
+    """适配用户写入请求与领域结果。"""
+    return await user_service.create_user(db, current_user=current_user, **user_data.model_dump())
 
 
 @auth.get("/users/page", response_model=UserPageResponse)
@@ -585,16 +424,6 @@ async def read_users(
     return users
 
 
-def _ensure_user_in_current_department(current_user: User, target_user: User) -> None:
-    if current_user.role == "superadmin":
-        return
-    if target_user.department_id != current_user.department_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="只能管理本部门用户",
-        )
-
-
 @auth.get("/users/access-options", response_model=list[UserAccessOption])
 async def read_user_access_options(
     skip: int = 0,
@@ -628,7 +457,7 @@ async def read_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="用户不存在",
         )
-    _ensure_user_in_current_department(current_user, user)
+    user_service.ensure_user_in_current_department(current_user, user)
     return user.to_dict()
 
 
@@ -640,77 +469,8 @@ async def update_user(
     current_user: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    user_repository = UserRepository(db)
-    try:
-        current_user, user = await lock_member_management(db, actor_id=current_user.id, member_id=user_id)
-    except LookupError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except PermissionError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
-
-    _ensure_user_in_current_department(current_user, user)
-
-    # 检查权限
-    if user.role == "superadmin" and current_user.role != "superadmin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="只有超级管理员才能修改超级管理员账户",
-        )
-
-    if current_user.role == "admin":
-        if user.role != "user":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="管理员只能修改普通用户账户",
-            )
-
-    if current_user.role != "superadmin" and user_data.password is not None:
-        raise HTTPException(status_code=403, detail="普通管理员不能重置已有成员密码")
-    if user_data.role is not None:
-        if current_user.role != "superadmin":
-            raise HTTPException(status_code=403, detail="只有系统管理员可以提升角色")
-        from yuxi.modules.identity.services.administration import promote_user_role
-
-        try:
-            await promote_user_role(db, user=user, role=user_data.role)
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-    # 更新信息
-    if user_data.username is not None:
-        # 检查用户名是否已被其他用户使用
-        existing_user = await user_repository.get_by_username(user_data.username, exclude_user_id=user_id)
-        if existing_user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="用户名已存在",
-            )
-        user.username = user_data.username
-
-    if user_data.password is not None:
-        user.password_hash = AuthUtils.hash_password(user_data.password)
-
-    if user_data.phone_number is not None:
-        user.phone_number = user_data.phone_number
-
-    if user_data.avatar is not None:
-        user.avatar = user_data.avatar
-
-    # 部门修改权限控制（只有超级管理员可以修改用户部门）
-    if user_data.department_id is not None and user_data.department_id != user.department_id:
-        if current_user.role != "superadmin":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="只有超级管理员才能修改用户部门",
-            )
-
-        user.department_id = user_data.department_id
-
-    await user_repository.save(user)
-
-    await db.commit()
-
-    return user.to_dict()
+    """适配用户写入请求与领域结果。"""
+    return await user_service.update_user(db, current_user=current_user, user_id=user_id, **user_data.model_dump())
 
 
 # 路由：删除用户（管理员权限）
@@ -720,44 +480,8 @@ async def delete_user(
     current_user: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    user_repository = UserRepository(db)
-    try:
-        current_user, user = await lock_member_management(db, actor_id=current_user.id, member_id=user_id)
-    except LookupError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except PermissionError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
-
-    _ensure_user_in_current_department(current_user, user)
-
-    if current_user.role == "admin" and user.role != "user":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="管理员只能删除普通用户账户",
-        )
-
-    # 不能删除自己的账户
-    if user.id == current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="不能删除自己的账户",
-        )
-
-    # 检查是否已经被删除
-    if user.is_deleted:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="该用户已经被删除",
-        )
-
-    try:
-        await user_repository.delete_for_admin(user)
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-
-    await db.commit()
-
-    return {"success": True, "message": "用户已删除"}
+    """适配用户写入请求与领域结果。"""
+    return await user_service.delete_user(db, current_user=current_user, user_id=user_id)
 
 
 # 路由：验证用户名并生成user_id
@@ -817,16 +541,7 @@ async def upload_user_avatar(
             max_size_bytes=5 * 1024 * 1024,
             too_large_message="文件大小不能超过5MB",
         )
-        avatar_url = await upload_image_to_minio(
-            content,
-            object_prefix=f"avatar/{current_user.id}",
-            max_size_bytes=5 * 1024 * 1024,
-            too_large_message="文件大小不能超过5MB",
-        )
-
-        current_user.avatar = avatar_url
-        await UserRepository(db).save(current_user)
-        await db.commit()
+        avatar_url = await user_service.upload_avatar(db, current_user=current_user, content=content)
 
         return {"success": True, "avatar_url": avatar_url, "message": "头像上传成功"}
 
@@ -856,15 +571,24 @@ async def get_oidc_login_url(request: Request, response: Response):
 
 
 @auth.get("/oidc/callback", response_class=RedirectResponse)
-async def oidc_callback(request: Request, code: str = Query(default="", max_length=2048), state: str = Query(default="", max_length=128),
-                        error: str = Query(default="", max_length=128), db: AsyncSession = Depends(get_db)):
+async def oidc_callback(
+    request: Request,
+    code: str = Query(default="", max_length=2048),
+    state: str = Query(default="", max_length=128),
+    error: str = Query(default="", max_length=128),
+    db: AsyncSession = Depends(get_db),
+):
     """处理 OIDC 回调 - 重定向到前端 Vue 路由"""
     return await oidc_callback_handler(code, state, request, db, error)
 
 
-@auth.post("/oidc/exchange-code", response_model=OIDCLoginResponse)
-async def oidc_exchange_code(request: Request, response: Response, code: str = Body(..., embed=True, min_length=1, max_length=128),
-                             db: AsyncSession = Depends(get_db)):
+@auth.post("/oidc/exchange-code", response_model=Token)
+async def oidc_exchange_code(
+    request: Request,
+    response: Response,
+    code: str = Body(..., embed=True, min_length=1, max_length=128),
+    db: AsyncSession = Depends(get_db),
+):
     """使用一次性 code 交换 OIDC 登录数据"""
     return await oidc_exchange_code_handler(code, request, response, db)
 

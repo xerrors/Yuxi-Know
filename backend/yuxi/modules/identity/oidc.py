@@ -95,4 +95,6 @@ class OIDCConfig(BaseModel):
         return self.redirect_uri.startswith("https://")
 
 
-oidc_config = OIDCConfig.from_env()
+def get_oidc_config() -> OIDCConfig:
+    """在实际配置消费入口读取环境，导入模型不触发部署校验。"""
+    return OIDCConfig.from_env()

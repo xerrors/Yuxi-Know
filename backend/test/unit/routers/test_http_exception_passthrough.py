@@ -65,8 +65,8 @@ import yuxi.api.routers.system as system_router
         (
             auth_router.upload_user_avatar,
             {"file": UploadFile(filename="avatar.png", file=BytesIO(b"image")), "db": None},
-            auth_router,
-            "upload_image_to_minio",
+            auth_router.user_service,
+            "upload_avatar",
         ),
     ],
 )

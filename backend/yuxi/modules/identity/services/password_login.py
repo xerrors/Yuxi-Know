@@ -5,12 +5,12 @@ from typing import Literal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from yuxi.modules.identity.models import User
 from yuxi.modules.identity.repositories.departments import DepartmentRepository
 from yuxi.modules.identity.repositories.users import UserRepository
 from yuxi.modules.identity.security import AuthUtils
 from yuxi.modules.identity.services.login_limits import check_login_rate_limit, clear_login_failures, record_login_failure
 from yuxi.shared.datetime import utc_now
+from yuxi.modules.identity.services.login import login_result
 
 
 @dataclass
@@ -21,16 +21,7 @@ class PasswordLoginRejected(Exception):
     remaining_seconds: int | None = None
 
 
-@dataclass
-class PasswordLoginResult:
-    """已提交登录状态对应的身份与令牌。"""
-
-    user: User
-    access_token: str
-    department_name: str | None
-
-
-async def login_with_password(db: AsyncSession, identifier: str, password: str, client_ip: str) -> PasswordLoginResult:
+async def login_with_password(db: AsyncSession, identifier: str, password: str, client_ip: str) -> dict:
     """执行密码登录，提交失败计数或成功状态后才返回结果。"""
     allowed, retry_after = await check_login_rate_limit(client_ip, identifier)
     if not allowed:
@@ -67,4 +58,4 @@ async def login_with_password(db: AsyncSession, identifier: str, password: str, 
     access_token = AuthUtils.create_access_token({"sub": str(user.id), "auth_method": "password"})
     department_name = await DepartmentRepository(db).get_name_by_id(user.department_id) if user.department_id else None
     await db.commit()
-    return PasswordLoginResult(user, access_token, department_name)
+    return login_result(user, access_token, department_name)

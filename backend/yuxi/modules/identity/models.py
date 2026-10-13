@@ -25,6 +25,9 @@ MAX_LOGIN_FAILED_ATTEMPTS = 5
 LOGIN_LOCK_DURATION_SECONDS = 300
 
 
+IDENTITY_CHANGE_LOCK_KEY = 1498765386  # 与数据库身份触发器共用，升级不得改变已有键。
+
+
 class Department(Base):
     """部门模型"""
 

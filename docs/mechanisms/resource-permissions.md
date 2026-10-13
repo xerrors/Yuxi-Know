@@ -10,6 +10,8 @@
 
 部门管理员只能创建、修改基本资料和删除本部门普通成员。初始密码在创建时设置，已有成员密码、角色和部门归属由系统管理员管理。部门成员管理权只作用于账号；私有 Agent、会话和文件各自执行资源隔离。成员操作在获得事务锁后重新读取操作者和目标账号，等待期间失效的权限不会沿用。平台不提供模拟其他用户登录的入口。删除账号保留其资源定义，共享定义由其他获授权管理员维护，私有定义由系统管理员治理。
 
+用户管理 service 拥有资料、头像引用、成员创建、修改与删除的提交点。账号删除在同一事务撤销 API Key 并调用 schedules 仓储删除任务及调度历史；后续清理失败时回滚账号和凭据。部门变更由组织管理 service 提交；部门删除迁移成员并撤销绑定该部门的凭据。用户偏好保存通过唯一 UID 的原子 upsert 完成，仓储写入不提交调用方事务。
+
 ## 共享资源
 
 共享 Agent、知识库和 Skill 使用 version 2 的 `read_scope` 与 `manage_scope`。读取包含使用，管理包含编辑、删除和共享配置写入。普通用户的权限上限为读取；管理员所有者和系统管理员隐含拥有管理权，其他管理员需要同时命中读取与管理范围。全员或部门管理范围只对管理员生效，指定管理用户必须为有效管理员。
@@ -42,6 +44,7 @@ HTTP 查询、worker 准备、定时触发、等待恢复、模型和工具边�
 ## 源码定位与验证
 
 - [权限解析](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/identity/permissions/resource_permission.py)拥有角色上限、范围关系和私有可见性；[Agent repository](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/repositories/definitions.py)拥有定义写入和共享定义授权事务。
+- [用户用例](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/identity/services/users.py)拥有成员与资料事务；[系统资源治理](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/system/services/resource_ownership.py)编排跨域所有权转移，Agent 与 Skill 保留各自的投影发布入口。
 - [身份 schema](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/migrations/schema.py)拥有角色与有效系统管理员约束；[授权中间件](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/runtime/middlewares/authorization.py)拥有模型和工具执行边界。
 - [HTTP 验收](https://github.com/xerrors/Yuxi/blob/main/backend/test/integration/api/test_permission_convergence.py)回读定义与账号；[身份并发测试](https://github.com/xerrors/Yuxi/blob/main/backend/test/integration/identity/test_identity_permission_constraints.py)使用两个 PostgreSQL 连接；[撤权 E2E](https://github.com/xerrors/Yuxi/blob/main/backend/test/e2e/test_permission_revocation_e2e.py)回读运行终态、工具结果和文件。
 

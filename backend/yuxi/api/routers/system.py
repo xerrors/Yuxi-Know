@@ -359,7 +359,7 @@ async def transfer_resource_owner(
     db: AsyncSession = Depends(get_db),
 ):
     """系统管理员转移一个共享资源。"""
-    from yuxi.modules.identity.services.resource_ownership import transfer_shared_resource
+    from yuxi.modules.system.services.resource_ownership import transfer_shared_resource
 
     try:
         await transfer_shared_resource(db, kind=kind, resource_id=resource_id, owner_uid=payload.owner_uid, actor=current_user)

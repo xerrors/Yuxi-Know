@@ -63,3 +63,15 @@ def test_automatic_username_binding_is_not_a_configuration_bypass(monkeypatch):
     monkeypatch.setenv("OIDC_USE_RAW_USERNAME", "true")
     with pytest.raises(ValueError, match="已退役"):
         OIDCConfig.from_env()
+
+
+def test_oidc_configuration_is_read_at_consumer_boundary(monkeypatch):
+    """模块导入后的配置读取仍校验当前环境，不沿用旧单例。"""
+    from yuxi.modules.identity.oidc import get_oidc_config
+
+    monkeypatch.setenv("OIDC_ENABLED", "false")
+    assert get_oidc_config().enabled is False
+    monkeypatch.setenv("OIDC_ENABLED", "true")
+    monkeypatch.setenv("OIDC_ISSUER_URL", "")
+    with pytest.raises(ValueError, match="完整"):
+        get_oidc_config()

@@ -17,7 +17,6 @@ from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.repositories.input import AgentInputRepository
 from yuxi.modules.agents.repositories.input_receipt import AgentInputReceiptRepository
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
-from yuxi.modules.identity.repositories.users import UserRepository
 import yuxi.modules.schedules.service as service
 from yuxi.modules.schedules.service import _claim_due_run, _create_run_record
 from yuxi.modules.agents.models.runs import AgentRun
@@ -417,11 +416,13 @@ async def test_transient_dispatch_failure_is_recovered_exactly_once(monkeypatch)
 
 
 @pytest.mark.asyncio
+@pytest.mark.self_managed_resources
 async def test_account_soft_deletion_removes_scheduled_job_history():
     """真实账号软删除必须同步移除任务定义与调度历史。"""
     database_url = os.environ["POSTGRES_URL"]
     engine = create_async_engine(database_url, poolclass=NullPool)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    actor_uid = f"scheduled-admin-{uuid.uuid4()}"
     uid = f"scheduled-cascade-{uuid.uuid4()}"
     project_id = str(uuid.uuid4())
     job_id = str(uuid.uuid4())
@@ -430,6 +431,7 @@ async def test_account_soft_deletion_removes_scheduled_job_history():
     try:
         async with session_factory() as db:
             db.add(User(username=uid, uid=uid, password_hash="test", role="user"))
+            db.add(User(username=actor_uid, uid=actor_uid, password_hash="test", role="admin"))
             await db.flush()
             db.add(
                 Project(
@@ -482,8 +484,10 @@ async def test_account_soft_deletion_removes_scheduled_job_history():
         async with session_factory() as db:
             user = await db.scalar(select(User).where(User.uid == uid).with_for_update())
             assert user is not None
-            await UserRepository(db).delete_for_admin(user)
-            await db.commit()
+            from yuxi.modules.identity.services.users import delete_user
+
+            actor = await db.scalar(select(User).where(User.uid == actor_uid))
+            await delete_user(db, current_user=actor, user_id=user.id)
 
         async with session_factory() as db:
             user = await db.scalar(select(User).where(User.uid == uid))
@@ -496,6 +500,6 @@ async def test_account_soft_deletion_removes_scheduled_job_history():
             await db.execute(delete(ScheduledAgentRun).where(ScheduledAgentRun.id == run_id))
             await db.execute(delete(ScheduledAgentJob).where(ScheduledAgentJob.id == job_id))
             await db.execute(delete(Project).where(Project.id == project_id))
-            await db.execute(delete(User).where(User.uid == uid))
+            await db.execute(delete(User).where(User.uid.in_([uid, actor_uid])))
             await db.commit()
         await engine.dispose()

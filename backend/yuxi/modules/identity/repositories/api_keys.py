@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from yuxi.modules.identity.models import APIKey, User
 from yuxi.shared.hashing import json_intent_hash
 from yuxi.shared.datetime import utc_now
+from yuxi.shared.errors import StateConflictError, ResourceNotFoundError, PermissionDeniedError
 
 
 @dataclass(frozen=True)
@@ -20,15 +21,15 @@ class APIKeyAccessResult:
     exists: bool
 
 
-class APIKeyIdempotencyConflict(Exception):
+class APIKeyIdempotencyConflict(StateConflictError):
     """同一幂等请求 ID 被用于不同的 API Key 创建意图。"""
 
 
-class APIKeySubjectUnavailable(Exception):
+class APIKeySubjectUnavailable(ResourceNotFoundError):
     """API Key 关联用户不存在或已删除。"""
 
 
-class APIKeyDepartmentConflict(Exception):
+class APIKeyDepartmentConflict(PermissionDeniedError):
     """API Key 部门与关联用户当前部门不一致。"""
 
 
@@ -42,31 +43,6 @@ class APIKeyRepository:
         """按凭据摘要读取 API Key。"""
         result = await self.db_session.execute(select(APIKey).where(APIKey.key_hash == key_hash))
         return result.scalar_one_or_none()
-
-    @staticmethod
-    def _intent_hash(
-        *,
-        name: str,
-        user_id: int,
-        department_id: int | None,
-        expires_at: datetime | None,
-        created_by: str,
-        access_level: str = "full",
-        app_id: str | None = None,
-    ) -> str:
-        """稳定标识原始创建意图，不受资源后续可变字段影响。"""
-
-        payload = {
-            "name": name,
-            "user_id": user_id,
-            "department_id": department_id,
-            "expires_at": expires_at.isoformat() if expires_at else None,
-            "created_by": created_by,
-        }
-        if access_level != "full" or app_id is not None:
-            payload["access_level"] = access_level
-            payload["app_id"] = app_id
-        return json_intent_hash(payload)
 
     async def list_visible(self, *, requester_user_id: int, is_superadmin: bool, skip: int, limit: int) -> tuple[list[APIKey], int]:
         """列出请求者可见的 API Key 并返回总数。"""
@@ -175,10 +151,10 @@ class APIKeyRepository:
         return api_key
 
     async def update(self, api_key: APIKey, data: dict[str, Any]) -> APIKey:
-        """更新并提交 API Key。"""
+        """更新 API Key，提交由用例负责。"""
         for key, value in data.items():
             setattr(api_key, key, value)
-        await self.db_session.commit()
+        await self.db_session.flush()
         await self.db_session.refresh(api_key)
         return api_key
 
@@ -187,4 +163,29 @@ class APIKeyRepository:
 
         api_key.is_enabled = False
         api_key.revoked_at = utc_now()
-        await self.db_session.commit()
+        await self.db_session.flush()
+
+    @staticmethod
+    def _intent_hash(
+        *,
+        name: str,
+        user_id: int,
+        department_id: int | None,
+        expires_at: datetime | None,
+        created_by: str,
+        access_level: str = "full",
+        app_id: str | None = None,
+    ) -> str:
+        """稳定标识原始创建意图，不受资源后续可变字段影响。"""
+
+        payload = {
+            "name": name,
+            "user_id": user_id,
+            "department_id": department_id,
+            "expires_at": expires_at.isoformat() if expires_at else None,
+            "created_by": created_by,
+        }
+        if access_level != "full" or app_id is not None:
+            payload["access_level"] = access_level
+            payload["app_id"] = app_id
+        return json_intent_hash(payload)

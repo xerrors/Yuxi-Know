@@ -1,5 +1,6 @@
 """组织与初始身份管理用例的事务 Owner。"""
 
+import re
 from dataclasses import dataclass
 
 from sqlalchemy import text
@@ -11,6 +12,8 @@ from yuxi.modules.identity.repositories.departments import DepartmentRepository
 from yuxi.modules.identity.repositories.users import UserRepository
 from yuxi.modules.identity.security import AuthUtils
 from yuxi.shared.datetime import utc_now
+from yuxi.shared.errors import InvalidOperationError, ResourceNotFoundError
+from yuxi.modules.identity.services.usernames import is_valid_phone_number
 
 _INITIALIZATION_LOCK_KEY = 0x59555849
 
@@ -77,6 +80,27 @@ async def create_department_with_admin(
 
     password_hash = AuthUtils.hash_password(admin_password)
     try:
+        dept_repo = DepartmentRepository(db)
+        user_repo = UserRepository(db)
+
+        if await dept_repo.exists_by_name(name):
+            raise InvalidOperationError("部门名称已存在")
+
+        if not re.match(r"^[a-zA-Z0-9_]+$", admin_uid):
+            raise InvalidOperationError("用户ID只能包含字母、数字和下划线")
+
+        if len(admin_uid) < 3 or len(admin_uid) > 20:
+            raise InvalidOperationError("用户ID长度必须在3-20个字符之间")
+
+        if await user_repo.exists_by_uid(admin_uid):
+            raise InvalidOperationError("用户ID已存在")
+
+        if admin_phone:
+            if not is_valid_phone_number(admin_phone):
+                raise InvalidOperationError("手机号格式不正确")
+            if await user_repo.exists_by_phone(admin_phone):
+                raise InvalidOperationError("手机号已存在")
+
         try:
             department = await DepartmentRepository(db).create(
                 {
@@ -154,27 +178,63 @@ async def initialize_system_admin(
         raise
 
 
-async def lock_member_management(db: AsyncSession, *, actor_id: int, member_id: int | None = None) -> tuple[User, User | None]:
-    """按共同锁序取得目标和操作人的当前身份，持有到写入事务结束。"""
-    repo = UserRepository(db)
-    await repo.lock_identity_changes()
-    member = await repo.get_active_by_id(member_id, for_update=True) if member_id is not None else None
-    if member_id is not None and member is None:
-        raise LookupError("用户不存在")
-    actor = await repo.get_active_by_id(actor_id, for_update=True)
-    if actor is None or actor.role not in {"admin", "superadmin"} or actor.user_kind != "human":
-        raise PermissionError("当前管理员身份已失效")
-    return actor, member
+async def update_department(db: AsyncSession, *, department_id: int, name: str | None = None, description: str | None = None) -> dict:
+    """更新部门信息"""
+    try:
+        repository = DepartmentRepository(db)
+        department = await repository.get_by_id(department_id)
+
+        if not department:
+            raise ResourceNotFoundError("部门不存在")
+
+        updates = {}
+        if name and name != department.name:
+            existing = await repository.get_by_name(name)
+            if existing:
+                raise InvalidOperationError("部门名称已存在")
+            updates["name"] = name
+
+        if description is not None:
+            updates["description"] = description
+
+        department = await repository.update(department_id, updates)
+        if department is None:
+            raise ResourceNotFoundError("部门不存在")
+
+        user_count = await repository.count_users(department_id)
+        await db.commit()
+
+        return {**department.to_dict(), "user_count": user_count}
+    except IntegrityError as exc:
+        await db.rollback()
+        raise InvalidOperationError("部门名称或关联数据与现有约束冲突") from exc
+    except BaseException:
+        await db.rollback()
+        raise
 
 
-async def promote_user_role(db: AsyncSession, *, user: User, role: str) -> None:
-    """只提升有效产品用户角色，持久化前锁定当前身份。"""
-    from sqlalchemy import select
+async def delete_department(db: AsyncSession, *, department_id: int) -> dict:
+    """删除部门"""
+    try:
+        repository = DepartmentRepository(db)
+        department = await repository.get_by_id(department_id)
 
-    current = await db.scalar(select(User).where(User.id == user.id).with_for_update().execution_options(populate_existing=True))
-    ranks = {"user": 0, "admin": 1, "superadmin": 2}
-    if current is None or current.is_deleted or current.user_kind != "human":
-        raise ValueError("只能提升有效产品用户角色")
-    if role not in ranks or ranks[role] < ranks[current.role]:
-        raise ValueError("角色只允许提升，禁止降级")
-    current.role = role
+        if not department:
+            raise ResourceNotFoundError("部门不存在")
+
+        if department.id == 1:  # 默认部门的ID为1
+            raise InvalidOperationError("默认部门不允许删除")
+
+        deletion = await repository.delete_and_migrate_users(department_id)
+        if deletion is None:
+            raise ResourceNotFoundError("部门不存在")
+
+        await db.commit()
+
+        return {"success": True, "message": "部门已删除"}
+    except IntegrityError as exc:
+        await db.rollback()
+        raise InvalidOperationError("部门名称或关联数据与现有约束冲突") from exc
+    except BaseException:
+        await db.rollback()
+        raise

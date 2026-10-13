@@ -27,15 +27,6 @@ class DepartmentRepository:
     def __init__(self, db_session: AsyncSession | None = None):
         self.db_session = db_session
 
-    @asynccontextmanager
-    async def _session(self) -> AsyncIterator[AsyncSession]:
-        """复用请求会话，未注入时创建独立事务会话。"""
-        if self.db_session is not None:
-            yield self.db_session
-            return
-        async with pg_manager.get_async_session_context() as session:
-            yield session
-
     async def get_by_id(self, id: int) -> Department | None:
         """根据 ID 获取部门"""
         async with self._session() as session:
@@ -90,7 +81,7 @@ class DepartmentRepository:
 
     async def create(self, data: dict[str, Any]) -> Department:
         """创建部门"""
-        async with self._session() as session:
+        async with self._session(write=True) as session:
             department = Department(**data)
             session.add(department)
             await session.flush()
@@ -99,7 +90,7 @@ class DepartmentRepository:
 
     async def update(self, id: int, data: dict[str, Any]) -> Department | None:
         """更新部门"""
-        async with self._session() as session:
+        async with self._session(write=True) as session:
             result = await session.execute(select(Department).where(Department.id == id))
             department = result.scalar_one_or_none()
             if department is None:
@@ -113,7 +104,7 @@ class DepartmentRepository:
 
     async def delete(self, id: int) -> bool:
         """删除部门"""
-        async with self._session() as session:
+        async with self._session(write=True) as session:
             result = await session.execute(select(Department).where(Department.id == id))
             department = result.scalar_one_or_none()
             if department is None:
@@ -124,7 +115,7 @@ class DepartmentRepository:
 
     async def delete_and_migrate_users(self, id: int, *, default_department_id: int = 1) -> DepartmentDeletionResult | None:
         """迁移部门用户、删除关联 API Key，并原子删除部门。"""
-        async with self._session() as session:
+        async with self._session(write=True) as session:
             result = await session.execute(select(Department).where(Department.id == id))
             department = result.scalar_one_or_none()
             if department is None:
@@ -153,3 +144,14 @@ class DepartmentRepository:
         async with self._session() as session:
             result = await session.execute(select(Department.id).where(Department.name == name))
             return result.scalar_one_or_none() is not None
+
+    @asynccontextmanager
+    async def _session(self, *, write: bool = False) -> AsyncIterator[AsyncSession]:
+        """复用请求会话，未注入时创建独立事务会话。"""
+        if write and self.db_session is None:
+            raise RuntimeError("部门写入需要调用方事务")
+        if self.db_session is not None:
+            yield self.db_session
+            return
+        async with pg_manager.get_async_session_context() as session:
+            yield session
