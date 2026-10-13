@@ -2,17 +2,82 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import String, cast, func, literal, select, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.identity.services.resource_grants import validate_shared_grants
 from yuxi.modules.knowledge.cache import cache_kb_config, delete_cached_kb_config, kb_config_cache_lock
 from yuxi.modules.knowledge.base import KBNameConflictError
-from yuxi.modules.knowledge.models import KnowledgeBase
+from yuxi.modules.knowledge.models import KnowledgeBase, KnowledgeFile, KnowledgeProjectionOutbox
+from yuxi.shared.datetime import utc_now
 
 
 class KnowledgeBaseRepository:
+    async def name_exists(self, name: str) -> bool:
+        """按有效名称唯一索引检查重名，不读取知识库全表。"""
+        async with pg_manager.get_async_session_context() as session:
+            return bool(
+                await session.scalar(
+                    select(
+                        select(KnowledgeBase.id)
+                        .where(
+                            func.lower(KnowledgeBase.name) == name.lower(),
+                            KnowledgeBase.deleted_at.is_(None),
+                        )
+                        .exists()
+                    )
+                )
+            )
+
+    async def mark_deleted(self, kb_id: str) -> None:
+        """原子隐藏知识库与文件，批量登记幂等外部清理意图。"""
+        async with kb_config_cache_lock(kb_id):
+            await delete_cached_kb_config(kb_id)
+            async with pg_manager.get_async_session_context() as session:
+                kb = await session.scalar(select(KnowledgeBase).where(KnowledgeBase.kb_id == kb_id).with_for_update())
+                if kb is None:
+                    return
+                kb.deleted_at = kb.deleted_at or utc_now()
+                await session.execute(
+                    insert(KnowledgeProjectionOutbox)
+                    .values(
+                        event_key=f"knowledge_base:{kb_id}:deleted",
+                        kb_id=kb_id,
+                        aggregate_id=kb_id,
+                        generation=1,
+                        operation="knowledge_base_deleted",
+                    )
+                    .on_conflict_do_nothing(index_elements=["event_key"])
+                )
+                # UPDATE 的行锁保持到 outbox INSERT 完成；只有目标 KB 的文件参与事务。
+                await session.execute(
+                    update(KnowledgeFile)
+                    .where(KnowledgeFile.kb_id == kb_id)
+                    .values(
+                        deleted_at=func.coalesce(KnowledgeFile.deleted_at, utc_now()),
+                        status="deleted",
+                        projection_status="pending",
+                        projection_error=None,
+                    )
+                )
+                generation = func.coalesce(KnowledgeFile.generation, 1)
+                await session.execute(
+                    insert(KnowledgeProjectionOutbox)
+                    .from_select(
+                        ["event_key", "kb_id", "aggregate_id", "generation", "operation"],
+                        select(
+                            literal("file:") + KnowledgeFile.file_id + ":g" + cast(generation, String) + ":deleted",
+                            KnowledgeFile.kb_id,
+                            KnowledgeFile.file_id,
+                            generation,
+                            literal("file_deleted"),
+                        ).where(KnowledgeFile.kb_id == kb_id),
+                    )
+                    .on_conflict_do_nothing(index_elements=["event_key"])
+                )
+
     async def count_by_type(self) -> list[tuple[str, int]]:
         """按知识库类型聚合数量。"""
         async with pg_manager.get_async_session_context() as session:
@@ -102,7 +167,7 @@ class KnowledgeBaseRepository:
                 kb.additional_params = additional_params
             return kb
 
-    async def delete(self, kb_id: str) -> None:
+    async def purge(self, kb_id: str) -> None:
         async with kb_config_cache_lock(kb_id):
             await delete_cached_kb_config(kb_id)
             async with pg_manager.get_async_session_context() as session:

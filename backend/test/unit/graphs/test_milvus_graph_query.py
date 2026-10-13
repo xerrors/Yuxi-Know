@@ -6,7 +6,7 @@ import pytest
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from yuxi.modules.knowledge.graphs.milvus_graph_service import MilvusGraphService
+from yuxi.modules.knowledge.graphs.service import KnowledgeGraphService
 from yuxi.modules.knowledge.graphs.milvus_graph_vector_store import MilvusGraphVectorStore
 
 pytestmark = pytest.mark.usefixtures("milvus_graph_projection_lock")
@@ -37,7 +37,7 @@ def test_milvus_graph_service_delete_file_graph_uses_scoped_streaming_queries():
     session.execute_write.side_effect = lambda func: func(tx)
     driver = MagicMock()
     driver.session.return_value = session
-    service = MilvusGraphService(neo4j_connection=SimpleNamespace(driver=driver))
+    service = KnowledgeGraphService(neo4j_connection=SimpleNamespace(driver=driver))
 
     service._delete_file_graph_from_neo4j("kb_test", "file_1", ["chunk_1"])
 
@@ -112,7 +112,7 @@ def test_milvus_graph_service_delete_file_graph_uses_scoped_streaming_queries():
     ],
 )
 def test_milvus_graph_service_process_query_result(payload, limit, exclude_chunk, expected_node_ids, expected_edge_ids):
-    service = MilvusGraphService()
+    service = KnowledgeGraphService()
     result = service._process_query_result(payload, limit=limit, kb_id="kb_test", exclude_chunk=exclude_chunk)
 
     assert [node["id"] for node in result["nodes"]] == expected_node_ids
@@ -121,7 +121,7 @@ def test_milvus_graph_service_process_query_result(payload, limit, exclude_chunk
 
 @pytest.mark.parametrize("max_depth", [1, 2, 3])
 def test_milvus_graph_service_build_query_uses_requested_depth(max_depth):
-    service = MilvusGraphService()
+    service = KnowledgeGraphService()
 
     query = service._build_query("kb_test", "entity", limit=20, max_depth=max_depth)
 
@@ -132,7 +132,7 @@ def test_milvus_graph_service_build_query_uses_requested_depth(max_depth):
 
 
 def test_milvus_graph_service_build_query_excludes_chunks_from_entire_path():
-    service = MilvusGraphService()
+    service = KnowledgeGraphService()
 
     query = service._build_query("kb_test", "entity", limit=20, max_depth=3, exclude_chunk=True)
 
@@ -154,7 +154,7 @@ def test_milvus_graph_service_query_nodes_sync_returns_complete_multi_hop_path()
     session.run.return_value = query_result
     driver = MagicMock()
     driver.session.return_value = session
-    service = MilvusGraphService(neo4j_connection=SimpleNamespace(driver=driver))
+    service = KnowledgeGraphService(neo4j_connection=SimpleNamespace(driver=driver))
 
     result = service._query_nodes_sync(
         "kb_test",
@@ -180,7 +180,7 @@ def test_milvus_graph_service_query_nodes_sync_caps_max_depth():
     session.run.return_value = query_result
     driver = MagicMock()
     driver.session.return_value = session
-    service = MilvusGraphService(neo4j_connection=SimpleNamespace(driver=driver))
+    service = KnowledgeGraphService(neo4j_connection=SimpleNamespace(driver=driver))
 
     service._query_nodes_sync(
         "kb_test",
@@ -205,7 +205,7 @@ def test_milvus_graph_service_query_nodes_sync_caps_max_depth():
     ],
 )
 async def test_milvus_graph_service_early_returns_empty_for_missing_kb_id(method, kwargs, expected):
-    service = MilvusGraphService()
+    service = KnowledgeGraphService()
     assert await getattr(service, method)(kb_id=None, **kwargs) == expected
 
 
@@ -242,7 +242,7 @@ def test_graph_ppr_ranks_chunk_nodes_from_seed_entities():
         ],
     }
 
-    ranked = MilvusGraphService.rank_chunks_by_ppr(subgraph, {"seed": 1.0}, top_k=2, damping=0.85)
+    ranked = KnowledgeGraphService.rank_chunks_by_ppr(subgraph, {"seed": 1.0}, top_k=2, damping=0.85)
 
     assert [chunk_id for chunk_id, _ in ranked] == ["chunk_a", "chunk_b"]
 
@@ -252,7 +252,7 @@ async def test_delete_file_graph_initializes_vector_store_outside_event_loop(mon
     import threading
     from contextlib import asynccontextmanager
     from unittest.mock import AsyncMock
-    import yuxi.modules.knowledge.graphs.milvus_graph_service as module
+    import yuxi.modules.knowledge.graphs.service as module
 
     loop_thread = threading.get_ident()
     store = SimpleNamespace(delete_graph_records=AsyncMock())
@@ -271,7 +271,7 @@ async def test_delete_file_graph_initializes_vector_store_outside_event_loop(mon
         yield ["entity-1"], ["triple-1"], ["chunk-1"]
 
     monkeypatch.setattr(module, "MilvusGraphVectorStore", create_store)
-    service = MilvusGraphService(graph_repo=SimpleNamespace(delete_file_references=references))
+    service = KnowledgeGraphService(graph_repo=SimpleNamespace(delete_file_references=references))
     deleted = []
     service._delete_file_graph_from_neo4j = lambda *args: deleted.append(args)
     await service.delete_file_graph("kb-1", "file-1", generation=2)

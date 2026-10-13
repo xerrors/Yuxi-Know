@@ -212,3 +212,33 @@ def test_normalizer_limits_match_graph_column_lengths():
 def test_normalize_extraction_result_rejects_invalid_payload(payload):
     with pytest.raises(ValueError):
         normalize_extraction_result(payload, "llm")
+
+
+def test_normalized_relations_deduplicate_only_same_direction_and_label():
+    """实体别名合并属性，重复关系去重，反向和不同类型保持独立。"""
+    from yuxi.modules.knowledge.graphs.graph_utils import build_graph_payload
+
+    result = normalize_extraction_result(
+        {
+            "entities": [
+                {"text": "Alpha", "attributes": [{"text": "one", "label": "tag"}]},
+                {"text": " ALPHA ", "attributes": [{"text": "two", "label": "tag"}]},
+                {"text": "Beta"},
+            ],
+            "relations": [
+                {"source": "Alpha", "target": "Beta", "label": "LINKS", "text": "first"},
+                {"source": " ALPHA ", "target": "Beta", "label": "LINKS", "text": "duplicate"},
+                {"source": "Beta", "target": "Alpha", "label": "LINKS", "text": "reverse"},
+                {"source": "Alpha", "target": "Beta", "label": "KNOWS", "text": "different"},
+            ],
+        },
+        "llm",
+    )
+    payload = build_graph_payload(result)
+    assert [(e["id"], e["text"]) for e in payload["entities"]] == [("e1", "Alpha"), ("e2", "Beta")]
+    assert payload["entities"][0]["attributes"] == [{"text": "one", "label": "tag"}, {"text": "two", "label": "tag"}]
+    assert [(r["source"], r["target"], r["label"], r["text"]) for r in payload["relations"]] == [
+        ("e1", "e2", "LINKS", "first"),
+        ("e2", "e1", "LINKS", "reverse"),
+        ("e1", "e2", "KNOWS", "different"),
+    ]

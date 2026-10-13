@@ -8,7 +8,6 @@ import uuid
 from datetime import UTC, timedelta
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import select
 
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.manager import pg_manager
@@ -20,10 +19,15 @@ from yuxi.modules.knowledge.evaluation.benchmark_generation import (
     normalize_generation_concurrency_count,
 )
 from yuxi.modules.knowledge.evaluation.evaluator import aggregate_metrics, evaluate_question
-from yuxi.modules.knowledge.models import EvaluationDataset, EvaluationRun
 from yuxi.modules.knowledge.repositories.bases import KnowledgeBaseRepository
 from yuxi.modules.knowledge.repositories.chunks import KnowledgeChunkRepository
-from yuxi.modules.knowledge.repositories.evaluation import EvaluationRepository
+from yuxi.modules.knowledge.repositories.evaluation import (
+    EvaluationRepository,
+    finish_dataset_generation_job as finish_dataset_generation_job,
+    fail_dataset_generation_job as fail_dataset_generation_job,
+    finish_rag_evaluation_job as finish_rag_evaluation_job,
+    fail_rag_evaluation_job as fail_rag_evaluation_job,
+)
 from yuxi.modules.knowledge.runtime import knowledge_base as kb_manager
 from yuxi.modules.models import select_model
 
@@ -92,18 +96,6 @@ class EvaluationService:
             "retrieved_chunks": item.retrieved_chunks,
             "metrics": item.metrics or {},
         }
-
-    def _matches_result_filter(self, item, result_filter: str) -> bool:
-        """判断评估结果是否符合指定筛选条件。"""
-        if result_filter == "all":
-            return True
-
-        metrics = item.metrics or {}
-        answer_error = metrics.get("score", 1.0) <= 0.5
-        if result_filter == "answer_errors":
-            return answer_error
-
-        return answer_error or metrics.get("recall@10", 1.0) < 1
 
     def _normalize_run_name(self, name: str | None, run_id: str) -> str:
         run_name = (name or "").strip()
@@ -871,26 +863,9 @@ class EvaluationService:
 
         await self._sync_evaluation_run(row)
         start_idx = (page - 1) * page_size
-        if result_filter != "all":
-            total = 0
-            paged_items = []
-            offset = 0
-            batch_size = 200
-            while True:
-                batch = await self.eval_repo.list_run_items(run_id, offset, batch_size)
-                if not batch:
-                    break
-                for item in batch:
-                    if not self._matches_result_filter(item, result_filter):
-                        continue
-                    if start_idx <= total < start_idx + page_size:
-                        paged_items.append(self._run_item_to_dict(item))
-                    total += 1
-                offset += batch_size
-        else:
-            total = await self.eval_repo.count_run_items(run_id)
-            details = await self.eval_repo.list_run_items(run_id, start_idx, page_size)
-            paged_items = [self._run_item_to_dict(item) for item in details]
+        total = await self.eval_repo.count_run_items(run_id, result_filter=result_filter)
+        details = await self.eval_repo.list_run_items(run_id, start_idx, page_size, result_filter=result_filter)
+        paged_items = [self._run_item_to_dict(item) for item in details]
         return {
             "run_id": row.run_id,
             "name": self._run_name_from_row(row),
@@ -926,61 +901,6 @@ async def run_dataset_generation_job(context: BackgroundJobContext):
     return await EvaluationService()._generate_dataset_job(context)
 
 
-async def finish_dataset_generation_job(session, job_record, result) -> None:
-    """在 BackgroundJob 成功事务内提交数据集完成事实。"""
-    if not isinstance(result, dict) or result.get("dataset_id") != (job_record.payload or {}).get("dataset_id"):
-        raise ValueError("Dataset generation result does not match BackgroundJob payload")
-    dataset = await session.scalar(select(EvaluationDataset).where(EvaluationDataset.dataset_id == result["dataset_id"]).with_for_update())
-    if dataset is None:
-        raise ValueError("Dataset not found during BackgroundJob completion")
-    dataset.item_count = int(result["item_count"])
-    dataset.build_metadata = dict(result["build_metadata"])
-
-
-async def fail_dataset_generation_job(session, job_record, error: str) -> None:
-    """在 BackgroundJob 失败事务内收敛数据集构建状态。"""
-    dataset_id = (job_record.payload or {}).get("dataset_id")
-    dataset = await session.scalar(select(EvaluationDataset).where(EvaluationDataset.dataset_id == dataset_id).with_for_update())
-    if dataset is None:
-        return
-    metadata = dict(dataset.build_metadata or {})
-    if metadata.get("status") == "completed":
-        return
-    metadata.update(
-        status="failed",
-        job_id=job_record.id,
-        progress=100,
-        error_message=error,
-        message=error,
-    )
-    dataset.build_metadata = metadata
-
-
 async def run_rag_evaluation_job(context: BackgroundJobContext):
     """从持久 payload 重建 RAG 评估 Handler。"""
     return await EvaluationService()._run_evaluation_job(context)
-
-
-async def finish_rag_evaluation_job(session, job_record, result) -> None:
-    """在 BackgroundJob 成功事务内提交评估 Run 完成事实。"""
-    if not isinstance(result, dict) or result.get("run_id") != (job_record.payload or {}).get("run_id"):
-        raise ValueError("Evaluation result does not match BackgroundJob payload")
-    run = await session.scalar(select(EvaluationRun).where(EvaluationRun.run_id == result["run_id"]).with_for_update())
-    if run is None:
-        raise ValueError("EvaluationRun not found during BackgroundJob completion")
-    run.status = "completed"
-    run.completed_items = int(result["completed_items"])
-    run.metrics = dict(result["metrics"])
-    run.overall_score = result["overall_score"]
-    run.completed_at = utc_now()
-
-
-async def fail_rag_evaluation_job(session, job_record, error: str) -> None:
-    """在 BackgroundJob 失败事务内收敛评估 Run。"""
-    run_id = (job_record.payload or {}).get("run_id")
-    run = await session.scalar(select(EvaluationRun).where(EvaluationRun.run_id == run_id).with_for_update())
-    if run is None or run.status == "completed":
-        return
-    run.status = "failed"
-    run.metrics = {"error": error}
-    run.completed_at = utc_now()

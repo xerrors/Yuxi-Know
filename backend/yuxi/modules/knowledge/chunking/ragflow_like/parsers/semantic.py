@@ -147,18 +147,12 @@ def chunk_markdown(markdown_content: str, parser_config: dict[str, Any] | None =
 
     # 延迟加载重型资源，仅在没有注入 embed_fn 时触发
     if embed_fn is None:
-        try:
-            from yuxi.modules.models.embed import select_embedding_model
+        from yuxi.modules.models.embed import select_embedding_model
 
-            embed_model_id = parser_config.get("embed_model_id")
-            if not embed_model_id:
-                raise ValueError("语义切分缺少 embed_model_id")
-            logger.info(f"语义切分加载Embedding模型: {embed_model_id}")
-            embed_model = select_embedding_model(embed_model_id)
-            embed_fn = embed_model.encode
-        except Exception as e:
-            logger.error(f"加载 Embedding 模型失败: {e}。将退化为简单切分。")
-            embed_fn = None
+        embed_model_id = parser_config.get("embed_model_id")
+        if not embed_model_id:
+            raise ValueError("语义切分缺少 embed_model_id")
+        embed_fn = select_embedding_model(embed_model_id).encode
 
     md = MarkdownIt("commonmark").enable("table")
     md.use(dollarmath_plugin, allow_space=True, allow_digits=True)

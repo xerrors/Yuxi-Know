@@ -1,9 +1,9 @@
 from types import SimpleNamespace
 
-from yuxi.modules.knowledge.base import KnowledgeBase
+from yuxi.modules.knowledge.base import KnowledgeExecutor
 
 
-class FakeKnowledgeBase(KnowledgeBase):
+class FakeKnowledgeBase(KnowledgeExecutor):
     """提供不依赖外部服务的知识库实现。"""
 
     @property

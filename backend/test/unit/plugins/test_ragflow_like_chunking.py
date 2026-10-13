@@ -4,15 +4,14 @@ import random
 
 import pytest
 from yuxi.modules.knowledge.chunking.ragflow_like import nlp
-from yuxi.modules.knowledge.chunking.ragflow_like.dispatcher import chunk_markdown
+from yuxi.modules.knowledge.chunking.dispatcher import chunk_markdown
 from yuxi.modules.knowledge.chunking.ragflow_like.nlp import bullets_category, count_tokens
-from yuxi.modules.knowledge.chunking.ragflow_like.presets import (
+from yuxi.modules.knowledge.chunking.presets import (
     CHUNK_ENGINE_VERSION,
     CHUNK_PRESET_IDS,
     CHUNK_PRESETS,
     ensure_chunk_defaults_in_additional_params,
     get_chunk_preset_options,
-    get_default_chunk_parser_config,
     map_to_internal_parser_id,
     normalize_chunk_preset_id,
     resolve_chunk_processing_params,
@@ -260,11 +259,6 @@ def test_chunk_preset_options_include_description() -> None:
     assert [option["value"] for option in options] == list(CHUNK_PRESETS)
     assert {option["value"] for option in options} == CHUNK_PRESET_IDS
     assert all(isinstance(option.get("description"), str) and option["description"] for option in options)
-
-
-def test_chunk_preset_defaults_only_include_strategy_specific_fields() -> None:
-    for preset_id in CHUNK_PRESET_IDS:
-        assert get_default_chunk_parser_config(preset_id) == {}
 
 
 def test_laws_chunking_should_prefer_article_level_before_item_level() -> None:

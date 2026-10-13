@@ -26,7 +26,7 @@ import yuxi.api.routers.system as system_router
         (
             knowledge_router.configure_graph_build,
             {"kb_id": "kb-1", "data": {}},
-            knowledge_router.MilvusGraphService,
+            knowledge_router.KnowledgeGraphService,
             "configure",
         ),
         (
@@ -153,7 +153,7 @@ def test_graph_configuration_error_response(monkeypatch, error, status_code, det
     app = FastAPI()
     app.include_router(knowledge_router.knowledge)
     app.dependency_overrides[knowledge_router.require_knowledge_base_manage] = lambda: SimpleNamespace(uid="user-1")
-    monkeypatch.setattr(knowledge_router.MilvusGraphService, "configure", AsyncMock(side_effect=error))
+    monkeypatch.setattr(knowledge_router.KnowledgeGraphService, "configure", AsyncMock(side_effect=error))
 
     response = TestClient(app).post("/knowledge/knowledge-bases/kb-1/graph-build/config", json={})
 

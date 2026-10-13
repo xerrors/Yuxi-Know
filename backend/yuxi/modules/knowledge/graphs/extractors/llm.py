@@ -36,23 +36,6 @@ MAX_EXTRACTION_TIMEOUT_SECONDS = 600.0
 class LLMGraphExtractor(GraphExtractor):
     extractor_type = "llm"
 
-    def _resolve_timeout_seconds(self) -> float:
-        raw = self.options.get("timeout_seconds", DEFAULT_EXTRACTION_TIMEOUT_SECONDS)
-        # bool 是 int 的子类：float(True) == 1.0 会被区间校验放行，配出一个 1 秒的超时，
-        # 构建时每块必超时——配置保存成功、整个图谱全挂，是最难排查的失败形态。
-        if isinstance(raw, bool):
-            raise ValueError("LLM 抽取器 timeout_seconds 必须是数字")
-        try:
-            timeout = float(raw)
-        except (TypeError, ValueError, OverflowError) as exc:
-            # 超大整数（JSON 里合法）会在 float() 上抛 OverflowError，必须与 TypeError 同等对待，
-            # 否则它会穿透到路由的兜底分支变成 500，而非法配置应当是 400。
-            raise ValueError("LLM 抽取器 timeout_seconds 必须是数字") from exc
-        # NaN 与 ±inf 会让下面的区间比较全部为 False，必须显式挡掉
-        if not math.isfinite(timeout) or timeout <= 0 or timeout > MAX_EXTRACTION_TIMEOUT_SECONDS:
-            raise ValueError(f"LLM 抽取器 timeout_seconds 必须大于 0 且不超过 {MAX_EXTRACTION_TIMEOUT_SECONDS:g} 秒")
-        return timeout
-
     def validate_options(self) -> None:
         if not self.options.get("model_spec"):
             raise ValueError("LLM 抽取器需要 model_spec")
@@ -78,15 +61,22 @@ class LLMGraphExtractor(GraphExtractor):
                 'LLM 抽取器 model_params 不支持顶层 enable_thinking，请写在 extra_body 中，例如 {"extra_body": {"enable_thinking": false}}'
             )
 
+    def __init__(self, options: dict[str, Any] | None = None):
+        """每个构建任务保留一个模型客户端，供分块并发调用。"""
+        super().__init__(options)
+        self._model = None
+
     async def extract(self, text: str, *, chunk_metadata: dict[str, Any] | None = None) -> dict[str, Any]:
-        self.validate_options()
-        model = select_model(
-            model_spec=self.options["model_spec"],
-            timeout=self._resolve_timeout_seconds(),
-            model_params=self.options.get("model_params") or {},
-        )
+        """使用任务内复用的客户端抽取单个分块。"""
+        if self._model is None:
+            self.validate_options()
+            self._model = select_model(
+                model_spec=self.options["model_spec"],
+                timeout=self._resolve_timeout_seconds(),
+                model_params=self.options.get("model_params") or {},
+            )
         prompt = self._build_prompt(text)
-        response = await model.call(prompt, stream=False)
+        response = await self._model.call(prompt, stream=False)
         parsed = json_repair.loads(response.content if response else "")
         return parsed
 
@@ -96,3 +86,20 @@ class LLMGraphExtractor(GraphExtractor):
         if schema:
             extraction_prompt = f"{extraction_prompt}\n{SCHEMA_INSTRUCTION.format(schema=schema)}"
         return f"{extraction_prompt}\n\n文本：\n{text}"
+
+    def _resolve_timeout_seconds(self) -> float:
+        raw = self.options.get("timeout_seconds", DEFAULT_EXTRACTION_TIMEOUT_SECONDS)
+        # bool 是 int 的子类：float(True) == 1.0 会被区间校验放行，配出一个 1 秒的超时，
+        # 构建时每块必超时——配置保存成功、整个图谱全挂，是最难排查的失败形态。
+        if isinstance(raw, bool):
+            raise ValueError("LLM 抽取器 timeout_seconds 必须是数字")
+        try:
+            timeout = float(raw)
+        except (TypeError, ValueError, OverflowError) as exc:
+            # 超大整数（JSON 里合法）会在 float() 上抛 OverflowError，必须与 TypeError 同等对待，
+            # 否则它会穿透到路由的兜底分支变成 500，而非法配置应当是 400。
+            raise ValueError("LLM 抽取器 timeout_seconds 必须是数字") from exc
+        # NaN 与 ±inf 会让下面的区间比较全部为 False，必须显式挡掉
+        if not math.isfinite(timeout) or timeout <= 0 or timeout > MAX_EXTRACTION_TIMEOUT_SECONDS:
+            raise ValueError(f"LLM 抽取器 timeout_seconds 必须大于 0 且不超过 {MAX_EXTRACTION_TIMEOUT_SECONDS:g} 秒")
+        return timeout

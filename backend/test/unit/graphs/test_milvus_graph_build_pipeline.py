@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 from yuxi.modules.knowledge.graphs.extractors import GraphExtractorFactory, normalize_extraction_result
-from yuxi.modules.knowledge.graphs.milvus_graph_service import MilvusGraphService
+from yuxi.modules.knowledge.graphs.service import KnowledgeGraphService
 from yuxi.modules.knowledge.graphs.milvus_graph_vector_store import MilvusGraphVectorStore
 
 pytestmark = pytest.mark.usefixtures("milvus_graph_projection_lock")
@@ -171,7 +171,7 @@ async def test_graph_build_keeps_extraction_concurrency_full_while_writes_are_bl
     extractor = Extractor()
     monkeypatch.setattr(GraphExtractorFactory, "create", lambda extractor_type, options: extractor)
     monkeypatch.setattr(
-        "yuxi.modules.knowledge.graphs.milvus_graph_service.GRAPH_EXTRACTION_RETRY_DELAYS_SECONDS",
+        "yuxi.modules.knowledge.graphs.service.GRAPH_EXTRACTION_RETRY_DELAYS_SECONDS",
         (0, 0),
     )
 
@@ -197,7 +197,7 @@ async def test_graph_build_keeps_extraction_concurrency_full_while_writes_are_bl
 
     graph_repo = GraphRepo()
     graph_vector_store = SimpleNamespace(upsert_graph_records=AsyncMock())
-    service = MilvusGraphService(
+    service = KnowledgeGraphService(
         kb_repo=Repo(),
         chunk_repo=chunk_repo,
         graph_repo=graph_repo,
@@ -266,7 +266,7 @@ async def test_graph_build_cancellation_stops_backpressured_extraction_queue(mon
 
     context = Context()
     monkeypatch.setattr(GraphExtractorFactory, "create", lambda extractor_type, options: Extractor())
-    service = MilvusGraphService(
+    service = KnowledgeGraphService(
         kb_repo=Repo(),
         chunk_repo=chunk_repo,
         graph_repo=SimpleNamespace(),
@@ -348,7 +348,7 @@ async def test_graph_build_indexes_vectors_after_structure_write(monkeypatch):
 
     graph_repo = GraphRepo()
     vector_store = SimpleNamespace(upsert_graph_records=AsyncMock())
-    service = MilvusGraphService(
+    service = KnowledgeGraphService(
         kb_repo=SimpleNamespace(get_by_kb_id=AsyncMock(return_value=kb)),
         chunk_repo=chunk_repo,
         graph_repo=graph_repo,
@@ -427,7 +427,7 @@ async def test_graph_build_fails_after_three_vector_attempts(monkeypatch):
             return 0
 
     graph_repo = GraphRepo()
-    service = MilvusGraphService(
+    service = KnowledgeGraphService(
         kb_repo=SimpleNamespace(get_by_kb_id=AsyncMock(return_value=kb)),
         chunk_repo=chunk_repo,
         graph_repo=graph_repo,
@@ -479,7 +479,7 @@ async def test_graph_reconcile_skips_completed_structure(monkeypatch):
             chunk.graph_indexed = True
             return 1
 
-    service = MilvusGraphService(
+    service = KnowledgeGraphService(
         kb_repo=SimpleNamespace(get_by_kb_id=AsyncMock(return_value=kb)),
         chunk_repo=chunk_repo,
         graph_repo=GraphRepo(),
@@ -504,7 +504,7 @@ async def test_milvus_graph_service_configure_rejects_spacy():
         async def update(self, kb_id, data):
             raise AssertionError("unsupported extractor should not be persisted")
 
-    service = MilvusGraphService(kb_repo=Repo())
+    service = KnowledgeGraphService(kb_repo=Repo())
 
     with pytest.raises(ValueError, match="不支持的图谱抽取器类型"):
         await service.configure(
@@ -547,7 +547,7 @@ async def test_milvus_graph_service_configure_persists_updated_concurrency():
         count_by_kb_id=AsyncMock(return_value=(3, 2)),
         count_vector_statuses_by_kb_id=AsyncMock(return_value={"pending": 0, "processing": 0, "indexed": 5, "failed": 0}),
     )
-    service = MilvusGraphService(kb_repo=Repo(), chunk_repo=chunk_repo, graph_repo=graph_repo)
+    service = KnowledgeGraphService(kb_repo=Repo(), chunk_repo=chunk_repo, graph_repo=graph_repo)
 
     await service.configure(
         "kb_test",
@@ -595,7 +595,7 @@ async def test_graph_status_reports_latest_successful_run_as_completed():
         count_by_kb_id=AsyncMock(return_value=(3, 2)),
         count_vector_statuses_by_kb_id=AsyncMock(return_value={"pending": 0, "processing": 0, "indexed": 5, "failed": 0}),
     )
-    service = MilvusGraphService(kb_repo=Repo(), chunk_repo=chunk_repo, graph_repo=graph_repo)
+    service = KnowledgeGraphService(kb_repo=Repo(), chunk_repo=chunk_repo, graph_repo=graph_repo)
 
     status = await service.get_status("kb_test", job_tracker=JobTracker())
 
@@ -611,7 +611,7 @@ def test_milvus_graph_service_writes_chunk_entity_and_relation():
     driver = MagicMock()
     driver.session.return_value = session
     connection = SimpleNamespace(driver=driver)
-    service = MilvusGraphService(neo4j_connection=connection)
+    service = KnowledgeGraphService(neo4j_connection=connection)
     chunk = SimpleNamespace(
         chunk_id="chunk_1",
         file_id="file_1",

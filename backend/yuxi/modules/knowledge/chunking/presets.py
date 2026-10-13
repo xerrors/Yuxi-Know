@@ -77,11 +77,6 @@ def map_to_internal_parser_id(preset_id: str) -> str:
     return normalized
 
 
-def get_default_chunk_parser_config(preset_id: str) -> dict[str, Any]:
-    normalize_chunk_preset_id(preset_id)
-    return {}
-
-
 def ensure_chunk_defaults_in_additional_params(additional_params: dict[str, Any] | None) -> dict[str, Any]:
     params = dict(additional_params or {})
     params["chunk_preset_id"] = normalize_chunk_preset_id(params.get("chunk_preset_id"))
@@ -109,7 +104,7 @@ def resolve_chunk_processing_params(
             preset_id = value
     preset_id = normalize_chunk_preset_id(preset_id)
 
-    parser_config = get_default_chunk_parser_config(preset_id)
+    parser_config: dict[str, Any] = {}
 
     kb_parser_config = kb_additional.get("chunk_parser_config")
     if isinstance(kb_parser_config, dict):

@@ -26,7 +26,7 @@ from yuxi.modules.knowledge.implementations.milvus import MilvusKB
 from yuxi.modules.knowledge.models import KnowledgeBase, KnowledgeFile
 from yuxi.modules.knowledge.repositories import bases as bases_repository
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
+pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
 
 @pytest_asyncio.fixture
@@ -205,7 +205,7 @@ async def test_empty_file_patch_preserves_current_chunk_configuration(boundary):
 @pytest.mark.parametrize("invalid", [False, 0, []])
 async def test_invalid_file_patch_leaves_persisted_configuration_unchanged(boundary, invalid):
     """假值非法补丁也必须拒绝，不能被空值继承逻辑忽略。"""
-    from yuxi.modules.knowledge.chunking.ragflow_like.presets import ChunkConfigError
+    from yuxi.modules.knowledge.chunking.presets import ChunkConfigError
 
     _, factory = boundary
     original = {"chunk_preset_id": "book"}

@@ -29,8 +29,8 @@ from yuxi.modules.background_jobs.service import job_tracker
 from yuxi.modules.identity.models import User
 from yuxi.modules.identity.permissions import ResourcePermission, resolve_knowledge_base_permission
 from yuxi.modules.knowledge.base import KBNameConflictError, KBNotFoundError
-from yuxi.modules.knowledge.chunking.ragflow_like.presets import get_chunk_preset_options, normalize_chunk_preset_id
-from yuxi.modules.knowledge.graphs.milvus_graph_service import GRAPH_TASK_TYPE, MilvusGraphService
+from yuxi.modules.knowledge.chunking.presets import get_chunk_preset_options, normalize_chunk_preset_id
+from yuxi.modules.knowledge.graphs.service import GRAPH_TASK_TYPE, KnowledgeGraphService
 from yuxi.modules.knowledge.read_models import KnowledgeBaseDetail
 from yuxi.modules.knowledge.runtime import knowledge_base as knowledge_base_manager
 from yuxi.modules.knowledge.utils import (
@@ -353,7 +353,7 @@ async def delete_knowledge_base(kb_id: str, current_user: User = Depends(require
 @knowledge.get("/knowledge-bases/{kb_id}/graph-build/status")
 async def get_graph_build_status(kb_id: str, current_user: User = Depends(require_knowledge_base_read)):
     try:
-        return await MilvusGraphService().get_status(kb_id, job_tracker=job_tracker)
+        return await KnowledgeGraphService().get_status(kb_id, job_tracker=job_tracker)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except HTTPException:
@@ -370,7 +370,7 @@ async def configure_graph_build(
     current_user: User = Depends(require_knowledge_base_manage),
 ):
     try:
-        config = await MilvusGraphService().configure(
+        config = await KnowledgeGraphService().configure(
             kb_id,
             extractor_type=data.get("extractor_type"),
             extractor_options=data.get("extractor_options") or {},
@@ -400,7 +400,7 @@ async def index_graph_build(
         if not knowledge_base:
             raise HTTPException(status_code=404, detail=f"知识库 {kb_id} 不存在")
 
-        service = MilvusGraphService()
+        service = KnowledgeGraphService()
         graph_status = await service.get_status(kb_id)
         if not graph_status.get("locked"):
             raise HTTPException(status_code=400, detail="请先确认并锁定图谱抽取配置")
@@ -430,7 +430,7 @@ async def get_graph_build_failed_chunks(
     current_user: User = Depends(require_knowledge_base_read),
 ):
     try:
-        return await MilvusGraphService().get_failed_chunk_samples(kb_id, limit=max(1, min(limit, 10)))
+        return await KnowledgeGraphService().get_failed_chunk_samples(kb_id, limit=max(1, min(limit, 10)))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except HTTPException:
@@ -451,7 +451,7 @@ async def reset_graph_build(
         if await _has_running_graph_build_job(kb_id):
             raise HTTPException(status_code=409, detail="该知识库存在正在运行的图谱构建任务，无法重置")
 
-        return await MilvusGraphService().reset(
+        return await KnowledgeGraphService().reset(
             kb_id,
             clear_extraction_result=bool(data.get("clear_extraction_result", True)),
             clear_config=bool(data.get("clear_config", False)),

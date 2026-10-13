@@ -2,7 +2,7 @@
 
 状态：implemented
 类型：feature
-Owner：backend/yuxi/modules/knowledge/chunking/ragflow_like/dispatcher.py
+Owner：backend/yuxi/modules/knowledge/chunking/dispatcher.py
 
 ## 问题
 

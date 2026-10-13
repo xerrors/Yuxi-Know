@@ -11,9 +11,10 @@
 - **【已完成】第五阶段：运行、Skill 与工具边界收敛**，提交 `af8b6afd`；依据见[运行扩展决策](../decisions/implemented/2026-10-12-runtime-extension-contracts.md)。
 - **【已完成】第六阶段：Agent 事务与生命周期收敛**，提交 `660661c4`；依据见[事务与生命周期决策](../decisions/implemented/2026-10-12-agent-transaction-lifecycle.md)。
 - **【已完成】第七阶段：身份用例与事务归属收敛**，依据见[身份事务决策](../decisions/implemented/2026-10-13-identity-usecase-transactions.md)。
-- **【待处理】步骤 8–9**：知识存储与业务、共享技术与跨域依赖及剩余条目，范围与验收见第七节。
+- **【已完成】第八阶段：知识存储与业务链路收敛**，依据见[知识存储决策](../decisions/implemented/2026-10-13-knowledge-storage-usecases.md)。
+- **【待处理】步骤 9**：共享技术与跨域依赖及剩余条目，范围与验收见第七节。
 
-前七阶段已闭合模式 1/2、模式 8 的逐项复核、D1–D9、H1–H7/H9 及所标明的运行与扩展条目。模式 3–7 的复合剩余项、H8、知识与共享技术条目继续处理；复合行只关闭已标明的子范围。
+前八阶段已闭合模式 1/2、模式 8 的逐项复核、D1–D9、H1–H9 及所标明的运行、扩展与知识条目。模式 3–7 的跨域共享技术剩余项在 Step 9 处理；复合行只关闭已标明的子范围。
 
 `【已修复】` 表示有对应代码修复与验证；`【已清理】` 表示删除完成；`【已复核：保留】` 表示当前消费者要求保留；`【已复核：问题不成立】` 表示原缺陷被证据否定；`【部分已完成】` 与 `【待处理】` 表示仍有未闭合的范围。每阶段完成后按对应提交与证据更新下方条目。
 
@@ -55,8 +56,8 @@
 
 文件级真实 import 环仅 2 个（均在 options 聚合家族），但域级概念环遍布：
 
-- **【部分已完成】** **repositories 反向依赖 services**：`agents/repositories/input.py:14`、`feedback.py:10`、`definitions.py:364`（函数内引真实用例逻辑，构成实质倒置）；`knowledge/repositories/bases.py:8` 同型。未成环仅因被依赖模块恰是纯叶子。 **【已收敛】agents 输入消息、作用域和权限移到叶子契约，治理/序列化移 service，仓储无 service 反向导入；【待处理，Step 8】knowledge。**
-- **【部分已完成】** **靠函数内延迟 import 维持的环**：agents 域 14 处（cooperation ↔ inputs/turns/threads 双向）；knowledge 域 graphs ↔ implementations/milvus.py；**【已收敛】skills 包内 shared ↔ content，Skill 快照运行模块反向依赖工具注册；访问契约拆分与工具门控归属调整消除目标环**。新人无法区分"解环"与"惰性加载"——复核确认 agents 域 10+ 处延迟 import 中只有 1 处是真实解环。 **【已收敛】cooperation_notifications 拆出持久通知，核心只依赖通知，协作命令单向调用核心，相关 service 导入已提到模块级；【待处理，Step 8】knowledge 图依赖。**
+- **【部分已完成】** **repositories 反向依赖 services**：`agents/repositories/input.py:14`、`feedback.py:10`、`definitions.py:364`（函数内引真实用例逻辑，构成实质倒置）；`knowledge/repositories/bases.py:8` 同型。未成环仅因被依赖模块恰是纯叶子。 **【已收敛】agents 输入消息、作用域和权限移到叶子契约，治理/序列化移 service，仓储无 service 反向导入；【待处理，Step 9】knowledge 对 identity 共享授权服务的跨域依赖。**
+- **【部分已完成】** **靠函数内延迟 import 维持的环**：agents 域 14 处（cooperation ↔ inputs/turns/threads 双向）；knowledge 域 graphs ↔ implementations/milvus.py；**【已收敛】skills 包内 shared ↔ content，Skill 快照运行模块反向依赖工具注册；访问契约拆分与工具门控归属调整消除目标环**。新人无法区分"解环"与"惰性加载"——复核确认 agents 域 10+ 处延迟 import 中只有 1 处是真实解环。 **【已收敛】cooperation_notifications 拆出持久通知，核心只依赖通知，协作命令单向调用核心，相关 service 导入已提到模块级；【已收敛】knowledge 图层依赖 storage 公共装配，消除对 implementations 的反向引用。**
 - **【待处理】** **modules → 进程适配层反向依赖**：`background_jobs/registry.py:46` import bootstrap 的 JOB_DEFINITIONS（纯字符串表，可直接放 registry）；`system/readiness.py:20`、`agents/services/transport.py:11` import `yuxi.workers.health` 的健康键常量；另 3 处 TYPE_CHECKING 引用。
 - **【部分已完成】** **平级域互相穿透**：`background_jobs/dispatch.py:8` 取 agents 域的 `get_arq_pool`（本质是 infrastructure 级 ARQ 池访问器）；`identity/repositories/users.py:112-115` 直接 DELETE schedules 域的 ORM 表（软删使 DB 级联永不触发，应用层删除确属必要，但删除策略被两域共同拥有）；`system/repositories/dashboard.py:10-14` 直接 select agents ORM 并跨域构造 AgentRepository。 **【已收敛】identity 仓储不再导入 schedules ORM，删除账号 service 调用 schedules 清理并一起提交；其他域随 Step 9。**
 
@@ -68,7 +69,7 @@
 
 ### 【部分已完成】模式 5：同名异义与命名失真
 
-- **【部分已完成】** `KnowledgeBase` 同名三义（抽象执行器 / ORM 表 / 声明式基类）；`MilvusGraphService` 主体是 Neo4j Cypher；`modules/models` 域名与全仓 "models=ORM" 惯例撞车（ORM 被迫叫 tables.py，bootstrap 注册表 18 项里它是唯一例外）；`catalog`/`runtime` 在 extensions 两个子域与 agents.runtime 三方撞名，**【已收敛】工具门控归 tools/runtime，catalog/runtime 各自保留域命名空间；安装暂存更名 skills/install_draft.py**；`events.py` 是读取端而 `event_writer.py` 才写 Redis；`messages.py` docstring 说"读取"但 2/3 是 Run 结算写路径；**【复核保留】Skill 修订对应整包/单文件/根说明接口各自比较对象，目录算法已统一；409 是 HTTP 适配，领域冲突由服务返回，当前字段消费者与比较对象见 Skills 管理**。 **【已收敛】读取/订阅/写入分别命名 checkpoint_state、subscriptions、checkpoint_messages，审计读取拆为 message_audits；其他命名随 Step 8/9。**
+- **【部分已完成】** **【已收敛】`KnowledgeExecutor` 区分执行器与 ORM，`KnowledgeGraphService` 表达图业务职责**；`modules/models` 域名与全仓 "models=ORM" 惯例撞车（ORM 被迫叫 tables.py，bootstrap 注册表 18 项里它是唯一例外）；`catalog`/`runtime` 在 extensions 两个子域与 agents.runtime 三方撞名，**【已收敛】工具门控归 tools/runtime，catalog/runtime 各自保留域命名空间；安装暂存更名 skills/install_draft.py**；`events.py` 是读取端而 `event_writer.py` 才写 Redis；`messages.py` docstring 说"读取"但 2/3 是 Run 结算写路径；**【复核保留】Skill 修订对应整包/单文件/根说明接口各自比较对象，目录算法已统一；409 是 HTTP 适配，领域冲突由服务返回，当前字段消费者与比较对象见 Skills 管理**。 **【已收敛】读取/订阅/写入分别命名 checkpoint_state、subscriptions、checkpoint_messages，审计读取拆为 message_audits；其他命名随 Step 8/9。**
 - **【已收敛并复核保留】** 16 个 repository 与 services 存在 4 对同名文件（definitions/public_items/references/state）；`repositories/state.py` 是唯一不接收 AsyncSession 的"仓储"（LangGraph checkpoint 包装）。 **结果：state 读视图更名 checkpoint_state；definitions/public_items/references 各自有持久查询和用例消费者。AgentStateRepository 由主动压缩消费 CompiledStateGraph，以保留 reducer/版本语义，不应改成 ORM Session 接口。**
 
 ### 【已收敛并复核保留】模式 6：路径与校验规则多处漂移
@@ -79,11 +80,11 @@
 
 ### 【部分已完成】模式 7：同一数据/契约的多份表示
 
-- **【部分已完成】** chunk 被 4 类字典形态建模（摄取平铺 / PG 记录 / 检索三元组 4 处手写副本 / schema 转换），摄取侧 `filename`/`source` 字段无任何读取者——而检索侧 `metadata.source` 硬编码 `"未知来源"`（见下文缺陷 D1），来源未接通的原结论已由 D1 复核否定；四类表示的收敛仍待处理。
-- **【待处理】** 同一 KnowledgeFile 行共 5 种 dict 形状；**Milvus collection schema、索引参数（IVF_FLAT nlist=1024、SPARSE_INVERTED_INDEX）、embedding 函数装配在 implementations/milvus.py 与 graphs/milvus_graph_vector_store.py 逐字两份**（复核新增，数据层契约一旦单侧修改即静默分叉）。
-- **【部分已完成】** KB 统计数字一份聚合 + 两条交付路径（列表页读持久化快照、详情页读实时聚合），后台失败收敛绕过统计刷新的漂移点已修复（D4）；双交付路径本身未收敛。
-- **【待处理】** "信号量 + to_thread 卸载"约 40 行并发原语在 knowledge 两个文件逐字两份。
-- **【待处理】** advisory lock 四种调用姿势混用同一键空间（`hashtextextended` / 32 位 `hashtext` / 裸常量 / DDL与应用镜像常量），裸键至少 6 处无注册表。
+- **【已收敛并复核保留】** 摄取 chunk 使用 `IngestionChunk`，删除无人消费的文件名、source 和重复 id。PG 行、Milvus 列数组与公开检索结果保留明确转换；来源通过当前可见 PG 文件回读。
+- **【已收敛并复核保留】** 文件读取共用执行器实现；真实文件元数据、虚拟目录和公开列表继续保留各自字段。Milvus 文档与图谱的公共字段、索引和 embedding 装配只有 storage 一个 Owner，固定 schema 负例拒绝单侧漂移。
+- **【复核保留】** KB 列表读取持久统计避免逐库聚合，详情与文件页读取实时聚合；两者都由 `query_kb_file_stats` 定义字段，D4 在 owning transaction 更新失败后的持久投影，真实 PG/HTTP 用例验证最终一致。
+- **【已收敛】** Milvus/Neo4j 共用有界线程卸载实现，各自保留 8 个预算；取消等待不会提前释放运行线程容量。
+- **【待处理，Step 9】** advisory lock 四种调用姿势混用同一键空间（`hashtextextended` / 32 位 `hashtext` / 裸常量 / DDL与应用镜像常量），裸键至少 6 处无注册表。
 
 ### 【已完成复核与清理】模式 8：死代码与"仅测试供养"的生产代码
 
@@ -151,9 +152,11 @@ API Key 创建整个用例在 `api/routers/identity/users.py:150-200` 路由内�
 
 **收敛结果：access 拥有权限、依赖及带锁读取，builtin/sync 拥有内置同步，shared 保留共享安装与治理用例，content 拥有不可变内容发布；包内消费者直接使用职责 Owner。现有扩展/测试的 shared 显式导出保留，依据见 [Skills 管理](../../agents/skills-management.md#运行时文件行为)。**
 
-### 【待处理】H8. knowledge 图层复制了实现层的存储装配知识【复核确认高并扩展】
+### 【已收敛】H8. knowledge 图层复制了实现层的存储装配知识【复核确认高并扩展】
 
 40 行并发原语逐字两份（模式 7）之外，复核新增：`_get_embedding_function` 与 Milvus collection schema/索引参数在 `implementations/milvus.py` 与 `graphs/milvus_graph_vector_store.py` 各一份——这是比信号量副本更接近数据层的漂移风险。伴随 `MilvusGraphVectorStore` 构造含真实 RPC（`db.list_database`）却在每次图检索时随意 new。
+
+完成依据：公共 schema、索引和 embedding 归 `knowledge/storage/milvus.py`，并发预算归 `storage/offload.py`。文档、实体、三元组的固定 schema 断言和单侧漂移负例独立验证装配；Milvus 执行器复用图服务与向量客户端，初始化取消先等线程落定并保存客户端，再释放锁。
 
 ### 【已收敛并复核保留】H9. 幂等回执五份 + 预检样板 13 处（模式 2 的主实例）【agents 内部三份经复核降为中：漂移是潜在的而非现行 bug；跨域泄漏两份维持中】
 
@@ -204,16 +207,16 @@ API Key 创建整个用例在 `api/routers/identity/users.py:150-200` 路由内�
 
 **knowledge 域**
 
-- **【待处理】** "删除知识库"的软删除事实由 `KnowledgeFileRepository` 拥有（files.py:894-945 锁 KB 行写 tombstone），`KnowledgeBaseRepository.delete` 反是仅清理任务用的硬删除。
-- **【待处理】** manager.py（1330 行"上帝门面"）：真正的用例流程住在根目录而非 services/（与 ARCHITECTURE.md:95 表述错位）；约 9 个纯转发方法 + 6 处重复的两行惯用法；`manager.aquery -> str` 注解与实际 `list[dict]` 返回不符（4 个生产调用方）。
-- **【待处理】** 文件状态词表散落（FileStatus 常量 7 值 vs 仓储裸写 9 值，"done" 仅文件夹写入者却作 indexed 别名被读）；状态筛选两条链路映射不同——复核确认**当前无用户可见分叉**（搜索链路无人传 status），但属遗留兼容的潜在分叉。
-- **【待处理】** 三个 abstract 方法唯一真实实现只读 PG/MinIO 不触碰 Milvus（抽象点过时）；同一 ORM 行 5 种表示。
-- **【待处理】** 授权落点复核确认可辩护（ARCHITECTURE.md:42 明文"可见范围解析由 knowledge service 拥有"，未发现绕过路径），残余问题是与第 117 行跨域概括的措辞张力。
-- **【部分已完成】** 重名检查全表扫描与读取 `_initialized` 的结构问题仍待处理；**【已修复】缺 unique 约束（D3）**。
-- **【待处理】** 大 KB 删除是重事务 + N+1（每文件 2 次往返、逐行 FOR UPDATE，复核新增）。
-- **【待处理】** evaluation 四个作业钩子绕过 repository 直改 ORM（同域知识文件侧钩子是委托风格）；LLM 抽取器每 chunk 重建模型实例并打 INFO 日志（万级 chunk 即万次构造）；评估筛选 service 层全量扫描分页。
-- **【待处理】** chunking：semantic 预设的 `embed_model_id` 隐式跨层契约（缺参时 ERROR 日志后静默退化为长度切分）；`get_default_chunk_parser_config` 恒返回 `{}` 名实不符；chunking 包是空 facade、移植/自有边界无标注（自有胶水 presets.py 混在移植子树内、移植 parsers 反向依赖自有 source_spans）；检索参数默认值两套（面板 0.0/50 vs 运行时回退 0.2/recall_top_k，仅存量 KB 触发且面板显示与运行时脱节）。
-- **【部分已完成】** graphs：`build_graph_payload` 去重分支与 utils 层的用例归属仍待处理；**【已修复】领域 HTTPException**（模式 1）；**【已清理】`supported_types`、`get_whitelist_info` 与确认无消费者的导出**（模式 8）。
+- **【已收敛】** `KnowledgeBaseRepository.mark_deleted` 拥有 KB/文件 tombstone 和批量 outbox；清理任务用 `purge` 明确表达最终物理删除。
+- **【已收敛并复核保留】** Manager 保留配置、类型分派、权限摘要和公开响应；文件操作转发负责取得当前 executor，避免路由/工具重复装配。移除统计空转发，修正 aquery 返回类型；统计列表保留批量读取持久投影，详情/文件页读实时聚合，后台失败与成功用同一聚合 Owner 更新持久值，保留 D4 事务证据。
+- **【已收敛】** `file_status.py` 汇总当前写入状态和历史 `done/failed` 读取映射，列表与跨库搜索使用相同映射。目录继续写 `done`，存量文件状态不自动迁移。
+- **【已收敛并复核保留】** PG/MinIO 文件读写归 `KnowledgeExecutor`，删除仅 Milvus 实现的旧抽象钩子；摄取使用 `IngestionChunk`，删除无人读取的 filename/source 和重复 id。PG 字段、Milvus 列数组、检索 metadata、虚拟目录与 HTTP 文件列表的转换保留当前消费者和各自公开字段，见[知识库机制](../../mechanisms/knowledge-base.md#存储装配与内部边界)。
+- **【复核保留】** 可见范围仍由 knowledge service 拥有；identity 的共享授权校验依赖属于跨域治理，留在 Step 9 复核，不将现有授权边界内联到知识路由。
+- **【已收敛】** 名称预检使用有效名称索引对应的 EXISTS，移除全表扫描和私有 `_initialized` 读取；D3 的数据库唯一约束继续拒绝并发冲突。
+- **【已收敛】** 大 KB 删除使用批量 UPDATE 与 INSERT SELECT；1,200 文件真实 PG 测试证明查询量固定、outbox 幂等及其他 KB 行锁不阻塞删除。
+- **【已收敛】** 评估四个钩子的持久化归 repository，保留 registry 要求的 service 导出以参与 BackgroundJob 原事务；筛选分页归 SQL。图抽取任务复用模型客户端；正常并发和首次初始化取消均有生命周期负例。
+- **【已收敛】** chunking 入口与 presets 归应用层，ragflow_like 明确为本地适配且保留 source_spans 契约；移除恒为空的伪默认函数。语义分块显式接收模型 spec，模型故障显式失败。检索从同一 dataclass 叠加默认、持久选项和请求，不改写存量配置。
+- **【已收敛并复核保留】** `KnowledgeGraphService` 协调 PG/Neo4j/Milvus，graphs 不再反向引用 implementations；归一化边界统一实体/关系去重，payload 只转换局部 ID。graph_utils 内均为纯转换、标识与 Cypher 模板，保留图域内工具归属；没有额外用例副作用需要搬迁。
 
 **extensions 域**
 
@@ -348,13 +351,15 @@ API Key 创建整个用例在 `api/routers/identity/users.py:150-200` 路由内�
 
 结果：身份写用例与仓储提交边界、凭据签发和登录投影已收敛；OIDC 的 Redis/PG 存储、短期重放协议和 namespace package 经复核保留。完整 non-slow unit **2741 passed / 60 skipped**，真实 HTTP/PG/Redis/MinIO **61 passed**；恢复仓储内部 commit 的独立负向试验在数据库回读断言失败。CLI 提交失败负例暴露并闭合回滚缺口；旧测试的调用路径与 OIDC Redis 事件循环绑定已修正后复验。命令、取舍与未验证范围见[身份事务决策](../decisions/implemented/2026-10-13-identity-usecase-transactions.md)。
 
-### Step 8：【待处理】知识存储与业务用例一起收敛
+### Step 8：【已收敛并复核保留】知识存储与业务用例一起收敛
 
 覆盖 H8、模式 7 及 knowledge 剩余问题。统一 Milvus schema/索引/embedding 装配与并发卸载原语、图客户端生命周期、chunk/KnowledgeFile 内部表示；必要的摄取、持久化、检索与公开形状通过明确转换保留。graphs/implementation 依赖、过时抽象、`build_graph_payload` 去重和 graph_utils 用例归属随同一知识链路处理。
 
 整理 manager 门面/转发、软删归属、状态词表与历史映射、统计交付、重名全表扫描/_initialized、删除 N+1、evaluation 钩子/分页、每 chunk 模型重建、chunking 隐式参数/降级/移植边界及检索默认值。KnowledgeBase 多义、MilvusGraphService 命名、类型注解、相关死辅助与文档在所属实现一并处理；D3 唯一约束与 D4 失败统计保持有效，存量配置不静默迁移。
 
 验收：真实 HTTP/PG/worker、Milvus 和图谱验证摄取、各检索模式及来源、索引、软删、统计、分页和失败恢复；独立固定输入验证分块、检索与图谱去重，回读节点/边/文件关联。实际测量客户端重建、并发预算、大 KB 查询/锁范围；单侧装配漂移有负例，配置错误与降级可观察，面板与运行默认值一致。可选服务缺失明确记为未验证。
+
+结果：公共装配、有界卸载、图客户端/抽取模型复用、批量软删、评估 SQL 分页与分块契约已收敛；Manager 类型路由、公开形状转换和统计交付差异有当前消费者。真实 PG/Redis/HTTP 与图谱集成 76 项、完整 Milvus/图谱 E2E 和 non-slow unit 2747 项通过（60 项按环境跳过）。1,200 文件删除查询量固定，客户端并发与取消有独立负例，单侧 schema 漂移能恢复缺陷并被拒绝。命令、证据范围与保留取舍见[知识存储决策](../decisions/implemented/2026-10-13-knowledge-storage-usecases.md)。
 
 ### Step 9：【待处理】共享技术依赖与剩余审计一起收尾
 

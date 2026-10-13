@@ -123,13 +123,13 @@ async def select_graph_enhanced_chunks(
     if context_count <= 1:
         return [anchor_chunk]
 
-    from yuxi.modules.knowledge.graphs.milvus_graph_service import MilvusGraphService
+    from yuxi.modules.knowledge.graphs.service import KnowledgeGraphService
 
     anchor_entity_ids = _chunk_entity_ids(anchor_chunk)
     if not anchor_entity_ids:
         return None
 
-    graph_service = MilvusGraphService()
+    graph_service = KnowledgeGraphService()
     selected = [anchor_chunk]
     selected_ids = {str(anchor_chunk.get("id"))}
     seed_weights = {entity_id: 1.0 for entity_id in anchor_entity_ids}

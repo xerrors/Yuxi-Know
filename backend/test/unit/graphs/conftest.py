@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from yuxi.modules.knowledge.graphs import milvus_graph_service
-from yuxi.modules.knowledge.graphs.milvus_graph_service import MilvusGraphService
+from yuxi.modules.knowledge.graphs import service as milvus_graph_service
+from yuxi.modules.knowledge.graphs.service import KnowledgeGraphService
 
 
 @pytest.fixture
@@ -19,4 +19,4 @@ def milvus_graph_projection_lock(monkeypatch):
         yield
 
     monkeypatch.setattr(milvus_graph_service, "knowledge_projection_lock", lock)
-    monkeypatch.setattr(MilvusGraphService, "_filter_visible_subgraph", AsyncMock(side_effect=lambda kb_id, result: result))
+    monkeypatch.setattr(KnowledgeGraphService, "_filter_visible_subgraph", AsyncMock(side_effect=lambda kb_id, result: result))

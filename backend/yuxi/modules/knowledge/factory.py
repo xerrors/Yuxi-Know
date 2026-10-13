@@ -1,23 +1,23 @@
 from yuxi.infrastructure.observability.logging import logger
-from yuxi.modules.knowledge.base import KBNotFoundError, KnowledgeBase
+from yuxi.modules.knowledge.base import KBNotFoundError, KnowledgeExecutor
 
 
 class KnowledgeBaseFactory:
     """知识库工厂类，负责创建不同类型的知识库实例"""
 
     # 注册的知识库类型映射 {kb_type: kb_class}
-    _kb_types: dict[str, type[KnowledgeBase]] = {}
+    _kb_types: dict[str, type[KnowledgeExecutor]] = {}
 
     @classmethod
-    def register(cls, kb_class: type[KnowledgeBase]):
+    def register(cls, kb_class: type[KnowledgeExecutor]):
         """
         注册知识库类型
 
         Args:
             kb_class: 知识库类
         """
-        if not issubclass(kb_class, KnowledgeBase):
-            raise ValueError("Knowledge base class must inherit from KnowledgeBase")
+        if not issubclass(kb_class, KnowledgeExecutor):
+            raise ValueError("Knowledge base class must inherit from KnowledgeExecutor")
         if not kb_class.kb_type:
             raise ValueError("Knowledge base class must define kb_type")
 
@@ -25,7 +25,7 @@ class KnowledgeBaseFactory:
         # logger.info(f"Registered knowledge base type: {kb_class.kb_type}")
 
     @classmethod
-    def create(cls, kb_type: str, work_dir: str, **kwargs) -> KnowledgeBase:
+    def create(cls, kb_type: str, work_dir: str, **kwargs) -> KnowledgeExecutor:
         """
         创建知识库实例
 
@@ -75,7 +75,7 @@ class KnowledgeBaseFactory:
         return result
 
     @classmethod
-    def get_kb_class(cls, kb_type: str) -> type[KnowledgeBase]:
+    def get_kb_class(cls, kb_type: str) -> type[KnowledgeExecutor]:
         """
         获取指定类型的知识库类。
 

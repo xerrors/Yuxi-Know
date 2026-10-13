@@ -13,7 +13,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 from test.integration.api.helpers import create_api_user, create_department, delete_department_by_id, delete_user_by_id
 from test.support.knowledge import default_embedding_model_spec
-from yuxi.modules.knowledge.chunking.ragflow_like.presets import CHUNK_PRESET_IDS
+from yuxi.modules.knowledge.chunking.presets import CHUNK_PRESET_IDS
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
@@ -135,9 +135,7 @@ async def test_admin_can_manage_knowledge_bases(test_client, admin_headers, know
     try:
         async with engine.connect() as connection:
             row = (
-                await connection.execute(
-                    text("SELECT name, description FROM knowledge_bases WHERE kb_id = :kb_id"), {"kb_id": kb_id}
-                )
+                await connection.execute(text("SELECT name, description FROM knowledge_bases WHERE kb_id = :kb_id"), {"kb_id": kb_id})
             ).one()
             assert row.name == knowledge_base_resource["name"]
             assert row.description == "Updated by pytest"

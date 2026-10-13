@@ -17,9 +17,10 @@ from test.integration.support.postgres_schema import create_isolated_manager as 
 from test.integration.support.postgres_schema import drop_isolated_schema as _drop_isolated_schema
 
 from yuxi.infrastructure.postgres.manager import pg_manager
+from yuxi.infrastructure.redis import close_async_redis_client
 from yuxi.api.routers.knowledge import management as knowledge_router
 from yuxi.infrastructure.filesystem import await_io
-from yuxi.modules.knowledge.graphs.milvus_graph_service import MilvusGraphService
+from yuxi.modules.knowledge.graphs.service import KnowledgeGraphService
 from yuxi.migrations.schema import create_knowledge_tables, ensure_knowledge_schema
 from yuxi.modules.knowledge.implementations.milvus import MilvusKB
 from yuxi.modules.knowledge.models import (
@@ -31,8 +32,8 @@ from yuxi.modules.knowledge.models import (
     KnowledgeProjectionOutbox,
 )
 from yuxi.modules.knowledge.repositories import files
-from yuxi.modules.knowledge.repositories.bases import KnowledgeBaseRepository
 from yuxi.modules.knowledge.repositories.chunks import KnowledgeChunkRepository
+from yuxi.modules.knowledge.repositories.bases import KnowledgeBaseRepository
 from yuxi.modules.knowledge.repositories.files import KnowledgeFileRepository
 from yuxi.modules.knowledge.repositories.graphs import KnowledgeGraphRepository
 from yuxi.modules.knowledge.services import background_jobs
@@ -59,6 +60,7 @@ async def database(monkeypatch):
     try:
         yield sessions
     finally:
+        await close_async_redis_client()
         await _drop_isolated_schema(schema, admin, engine)
 
 
@@ -139,7 +141,7 @@ async def test_deleted_knowledge_base_rejects_activation_and_new_files(database)
     await _file()
     repo = KnowledgeFileRepository()
     generation = await repo.begin_index_generation(kb_id="kb-test", file_id="file-test")
-    await repo.mark_deleted_by_kb_id("kb-test")
+    await KnowledgeBaseRepository().mark_deleted("kb-test")
     with pytest.raises(ValueError, match="deleted"):
         await repo.finish_index_generation(kb_id="kb-test", file_id="file-test", generation=generation, chunk_count=1, token_count=2)
     with pytest.raises(ValueError, match="deleted"):
@@ -431,7 +433,7 @@ async def test_graph_pending_candidates_and_counts_use_only_visible_active_gener
 
 async def test_graph_parallel_vector_cancel_drains_both_branches_before_cleanup(database, monkeypatch, tmp_path):
     """真实图谱并行循环取消后，PG 清理等待较慢写分支落地。"""
-    from yuxi.modules.knowledge.graphs import milvus_graph_service as graph_module
+    from yuxi.modules.knowledge.graphs import service as graph_module
 
     await _file()
     started, release = threading.Event(), threading.Event()
@@ -466,7 +468,9 @@ async def test_graph_parallel_vector_cancel_drains_both_branches_before_cleanup(
         count_graph_indexed_by_kb_id=AsyncMock(return_value=0),
         list_graph_pending_by_kb_id=AsyncMock(return_value=[]),
     )
-    service = MilvusGraphService(chunk_repo=chunks, graph_repo=graph_repo, graph_vector_store=SimpleNamespace(upsert_graph_records=upsert))
+    service = KnowledgeGraphService(
+        chunk_repo=chunks, graph_repo=graph_repo, graph_vector_store=SimpleNamespace(upsert_graph_records=upsert)
+    )
     monkeypatch.setattr(
         service,
         "_get_milvus_kb",

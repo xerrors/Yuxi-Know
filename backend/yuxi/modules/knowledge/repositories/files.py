@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.background_jobs.models import BackgroundJobRecord
+from yuxi.modules.knowledge.file_status import FileStatus, status_filter_values
 from yuxi.modules.knowledge.models import KnowledgeBase, KnowledgeFile, KnowledgeProjectionOutbox
 from yuxi.shared.datetime import utc_now
 
@@ -325,13 +326,8 @@ class KnowledgeFileRepository:
 
     @staticmethod
     def _status_condition(status: str | None):
-        if not status or status == "all":
-            return None
-        if status == "indexed":
-            return KnowledgeFile.status.in_(["indexed", "done"])
-        if status == "error_indexing":
-            return KnowledgeFile.status.in_(["error_indexing", "failed"])
-        return KnowledgeFile.status == status
+        values = status_filter_values(status)
+        return KnowledgeFile.status.in_(values) if values else None
 
     @staticmethod
     def _parent_condition(parent_id: str | None):
@@ -674,7 +670,7 @@ class KnowledgeFileRepository:
             self._enqueue_generation_cleanup(session, record, int(record.active_generation))
             record.active_generation = generation
             record.building_generation = None
-            record.status = "indexed"
+            record.status = FileStatus.INDEXED
             record.chunk_count = chunk_count
             record.token_count = token_count
             record.projection_status = "ready"
@@ -826,7 +822,7 @@ class KnowledgeFileRepository:
             generation = int(record.generation or 1)
             event_key = f"file:{file_id}:g{generation}:deleted"
             record.deleted_at = utc_now()
-            record.status = "deleted"
+            record.status = FileStatus.DELETED
             record.projection_status = "pending"
             record.projection_error = None
             existing = await session.scalar(select(KnowledgeProjectionOutbox).where(KnowledgeProjectionOutbox.event_key == event_key))
@@ -847,59 +843,6 @@ class KnowledgeFileRepository:
         record = await self.get_by_file_id(file_id, include_deleted=True)
         if record is not None:
             await self.mark_deleted(kb_id=record.kb_id, file_id=file_id)
-
-    async def mark_deleted_by_kb_id(self, kb_id: str) -> list[str]:
-        """在缓存锁内隐藏知识库及全部文件，并登记可重试清理意图。"""
-        from yuxi.modules.knowledge.cache import delete_cached_kb_config, kb_config_cache_lock
-
-        async with kb_config_cache_lock(kb_id):
-            await delete_cached_kb_config(kb_id)
-            return await self._mark_knowledge_base_deleted(kb_id)
-
-    async def _mark_knowledge_base_deleted(self, kb_id: str) -> list[str]:
-        """在同一事务提交 KB、File tombstone 和外部清理意图。"""
-        event_keys: list[str] = []
-        async with pg_manager.get_async_session_context() as session:
-            kb = await session.scalar(select(KnowledgeBase).where(KnowledgeBase.kb_id == kb_id).with_for_update())
-            if kb is None:
-                return []
-            kb.deleted_at = kb.deleted_at or utc_now()
-            knowledge_base_key = f"knowledge_base:{kb_id}:deleted"
-            existing = await session.scalar(
-                select(KnowledgeProjectionOutbox).where(KnowledgeProjectionOutbox.event_key == knowledge_base_key)
-            )
-            if existing is None:
-                session.add(
-                    KnowledgeProjectionOutbox(
-                        event_key=knowledge_base_key,
-                        kb_id=kb_id,
-                        aggregate_id=kb_id,
-                        generation=1,
-                        operation="knowledge_base_deleted",
-                    )
-                )
-            event_keys.append(knowledge_base_key)
-            result = await session.execute(select(KnowledgeFile).where(KnowledgeFile.kb_id == kb_id).with_for_update())
-            for record in result.scalars().all():
-                generation = int(record.generation or 1)
-                event_key = f"file:{record.file_id}:g{generation}:deleted"
-                record.deleted_at = utc_now()
-                record.status = "deleted"
-                record.projection_status = "pending"
-                record.projection_error = None
-                existing = await session.scalar(select(KnowledgeProjectionOutbox).where(KnowledgeProjectionOutbox.event_key == event_key))
-                if existing is None:
-                    session.add(
-                        KnowledgeProjectionOutbox(
-                            event_key=event_key,
-                            kb_id=kb_id,
-                            aggregate_id=record.file_id,
-                            generation=generation,
-                            operation="file_deleted",
-                        )
-                    )
-                event_keys.append(event_key)
-        return event_keys
 
     async def delete_by_kb_id(self, kb_id: str) -> None:
         async with pg_manager.get_async_session_context() as session:

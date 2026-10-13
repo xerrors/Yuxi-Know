@@ -1,3 +1,5 @@
+import pytest
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 from yuxi.modules.knowledge.implementations.milvus import MilvusKB
@@ -62,7 +64,9 @@ class FakeCollection:
 def make_kb(collection: FakeCollection) -> MilvusKB:
     """构造使用指定假集合的轻量 Milvus 知识库。"""
     kb = MilvusKB.__new__(MilvusKB)
-    kb._get_embedding_function = lambda embedding_model_spec, **kwargs: lambda texts: [[0.1, 0.2] for _ in texts]
+    from yuxi.modules.knowledge.graphs.service import KnowledgeGraphService
+
+    kb.graph_service = KnowledgeGraphService(graph_vector_store=SimpleNamespace())
 
     async def get_collection(kb_id: str, embedding_model_spec: str | None):
         """返回当前测试固定的集合。"""
@@ -84,3 +88,12 @@ def make_kb(collection: FakeCollection) -> MilvusKB:
     kb._hydrate_chunk_sources = hydrate_chunk_sources
     kb._build_active_generation_expr = active_generation_expr
     return kb
+
+
+@pytest.fixture(autouse=True)
+def fake_milvus_embedding(monkeypatch):
+    """检索单测注入固定编码器；真实模型协议由 E2E 覆盖。"""
+    monkeypatch.setattr(
+        "yuxi.modules.knowledge.implementations.milvus.get_embedding_function",
+        lambda spec, **kwargs: lambda texts: [[0.1, 0.2] for _ in texts],
+    )

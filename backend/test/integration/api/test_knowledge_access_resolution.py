@@ -59,5 +59,5 @@ async def test_knowledge_tools_reject_access_after_http_revocation(test_client, 
         )
         assert denied.status_code == 404, denied.text
     finally:
-        await repository.delete(kb_id)
+        await repository.purge(kb_id)
         await pg_manager.close()

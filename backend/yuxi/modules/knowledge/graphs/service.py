@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-import weakref
 from typing import Any
 
 from yuxi.infrastructure.filesystem import await_io
@@ -30,11 +29,11 @@ from yuxi.modules.knowledge.repositories.bases import KnowledgeBaseRepository
 from yuxi.modules.knowledge.repositories.chunks import KnowledgeChunkRepository
 from yuxi.modules.knowledge.repositories.graphs import KnowledgeGraphRepository
 from yuxi.modules.knowledge.repositories.projections import knowledge_projection_lock
+from yuxi.modules.knowledge.storage.offload import run_milvus_query_io, run_neo4j_query_io
 from yuxi.shared.datetime import utc_isoformat
 
 GRAPH_CONFIG_KEY = "graph_build_config"
 GRAPH_TASK_TYPE = "knowledge_graph_index"
-NEO4J_QUERY_OFFLOAD_LIMIT = 8
 # 数据库游标每次预取的 chunk 数量边界，只控制查询频率和单页内存，不限制 LLM 并发。
 # 实际 LLM 并发只由 extractor_options.concurrency_count 决定；预取量会按其两倍动态计算后落在此范围内。
 GRAPH_BUILD_FETCH_MIN_SIZE = 100
@@ -46,49 +45,9 @@ GRAPH_VECTOR_LEASE_SECONDS = 300
 GRAPH_VECTOR_FLUSH_INTERVAL_SECONDS = 0.2
 GRAPH_EXTRACTION_MAX_ATTEMPTS = 3
 GRAPH_EXTRACTION_RETRY_DELAYS_SECONDS = (2.0, 10.0)
-_neo4j_query_offload_semaphore_refs: dict[
-    int,
-    tuple[weakref.ReferenceType[asyncio.AbstractEventLoop], weakref.ReferenceType[asyncio.Semaphore]],
-] = {}
 
 
-def _get_neo4j_query_offload_semaphore() -> asyncio.Semaphore:
-    loop = asyncio.get_running_loop()
-    loop_id = id(loop)
-    entry = _neo4j_query_offload_semaphore_refs.get(loop_id)
-    if entry is not None:
-        loop_ref, semaphore_ref = entry
-        semaphore = semaphore_ref()
-        if loop_ref() is loop and semaphore is not None:
-            return semaphore
-
-    semaphore = asyncio.Semaphore(NEO4J_QUERY_OFFLOAD_LIMIT)
-
-    def cleanup(ref, stale_loop_id=loop_id):
-        current_entry = _neo4j_query_offload_semaphore_refs.get(stale_loop_id)
-        if current_entry is not None and current_entry[1] is ref:
-            _neo4j_query_offload_semaphore_refs.pop(stale_loop_id, None)
-
-    _neo4j_query_offload_semaphore_refs[loop_id] = (weakref.ref(loop), weakref.ref(semaphore, cleanup))
-    return semaphore
-
-
-async def _run_neo4j_query_io(func, /, *args, **kwargs):
-    semaphore = _get_neo4j_query_offload_semaphore()
-    await semaphore.acquire()
-    task = asyncio.create_task(asyncio.to_thread(func, *args, **kwargs))
-
-    def release_capacity(completed_task: asyncio.Task):
-        semaphore.release()
-        if completed_task.cancelled():
-            return
-        completed_task.exception()
-
-    task.add_done_callback(release_capacity)
-    return await asyncio.shield(task)
-
-
-class MilvusGraphService:
+class KnowledgeGraphService:
     def __init__(
         self,
         *,
@@ -120,11 +79,12 @@ class MilvusGraphService:
         return self._graph_vector_store
 
     async def get_graph_vector_store(self) -> MilvusGraphVectorStore:
+        """首次构造在线程中落定；取消前完成缓存赋值，避免重复构造。"""
         if self._graph_vector_store is not None:
             return self._graph_vector_store
         async with self._graph_vector_store_lock:
             if self._graph_vector_store is None:
-                self._graph_vector_store = await asyncio.to_thread(MilvusGraphVectorStore)
+                await await_io(run_milvus_query_io(lambda: self.graph_vector_store))
         return self._graph_vector_store
 
     @property
@@ -670,7 +630,6 @@ class MilvusGraphService:
         graph_payload: dict[str, Any],
     ) -> list[dict[str, Any]]:
         records = []
-        seen_triple_ids: set[str] = set()
         extractor_type = graph_payload["metadata"].get("extractor_type", "unknown")
         for relation in relations:
             source_record = entity_record_by_local_id[relation["source"]]
@@ -684,9 +643,6 @@ class MilvusGraphService:
                 target_record["normalized_name"],
                 target_record["label"],
             )
-            if triple_id in seen_triple_ids:
-                continue
-            seen_triple_ids.add(triple_id)
             content = f"{source_record['normalized_name']} → {relation_type} → {target_record['normalized_name']}"
             records.append(
                 {
@@ -824,7 +780,7 @@ class MilvusGraphService:
         label = safe_neo4j_label(effective_kb_id)
         limit = max_nodes
         try:
-            result = await _run_neo4j_query_io(
+            result = await run_neo4j_query_io(
                 self._query_nodes_sync,
                 effective_kb_id,
                 label,
@@ -918,7 +874,7 @@ class MilvusGraphService:
         RETURN graph_nodes AS nodes, collect(DISTINCT rel) AS edges
         """
         try:
-            result = await _run_neo4j_query_io(
+            result = await run_neo4j_query_io(
                 self._query_seed_subgraph_sync,
                 kb_id,
                 cypher,
@@ -1035,7 +991,7 @@ class MilvusGraphService:
         ORDER BY node_label
         """
         try:
-            records = await _run_neo4j_query_io(self._get_labels_sync, cypher, effective_kb_id)
+            records = await run_neo4j_query_io(self._get_labels_sync, cypher, effective_kb_id)
             return [record["node_label"] for record in records]
         except Exception as e:
             logger.error(f"Failed to get Milvus graph labels: {e}")
@@ -1063,7 +1019,7 @@ class MilvusGraphService:
         ORDER BY count DESC
         """
         try:
-            return await _run_neo4j_query_io(self._get_stats_sync, stats_cypher, label_cypher)
+            return await run_neo4j_query_io(self._get_stats_sync, stats_cypher, label_cypher)
         except Exception as e:
             logger.error(f"Failed to get Milvus graph stats: {e}")
             return {"total_nodes": 0, "total_edges": 0, "entity_types": []}

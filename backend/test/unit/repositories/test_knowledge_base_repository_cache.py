@@ -105,7 +105,7 @@ async def test_cache_invalidation_failure_aborts_before_knowledge_base_update(mo
 
 
 @pytest.mark.asyncio
-async def test_delete_holds_cache_lock_through_knowledge_base_commit(monkeypatch):
+async def test_purge_holds_cache_lock_through_knowledge_base_commit(monkeypatch):
     events = []
     row = SimpleNamespace(kb_id="kb_1")
     session = _FakeSession(row, events)
@@ -117,7 +117,7 @@ async def test_delete_holds_cache_lock_through_knowledge_base_commit(monkeypatch
 
     monkeypatch.setattr(repository_module, "delete_cached_kb_config", fake_delete_cached)
 
-    await KnowledgeBaseRepository().delete("kb_1")
+    await KnowledgeBaseRepository().purge("kb_1")
 
     assert session.deleted == [row]
     assert events == [

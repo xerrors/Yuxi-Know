@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 from yuxi.modules.knowledge.graphs.extractors import GraphExtractorFactory, LLMGraphExtractor
-from yuxi.modules.knowledge.graphs.milvus_graph_service import MilvusGraphService
+from yuxi.modules.knowledge.graphs.service import KnowledgeGraphService
 
 pytestmark = pytest.mark.usefixtures("milvus_graph_projection_lock")
 
@@ -175,9 +175,9 @@ async def test_graph_extraction_retries_twice_before_third_attempt_succeeds(monk
         mark_graph_extraction_failed=AsyncMock(),
         update_extraction_result=AsyncMock(),
     )
-    service = MilvusGraphService(chunk_repo=chunk_repo)
+    service = KnowledgeGraphService(chunk_repo=chunk_repo)
     monkeypatch.setattr(
-        "yuxi.modules.knowledge.graphs.milvus_graph_service.GRAPH_EXTRACTION_RETRY_DELAYS_SECONDS",
+        "yuxi.modules.knowledge.graphs.service.GRAPH_EXTRACTION_RETRY_DELAYS_SECONDS",
         (0, 0),
     )
 

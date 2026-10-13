@@ -1,3 +1,3 @@
-from yuxi.modules.knowledge.graphs.milvus_graph_service import MilvusGraphService
+from yuxi.modules.knowledge.graphs.service import KnowledgeGraphService
 
-__all__ = ["MilvusGraphService"]
+__all__ = ["KnowledgeGraphService"]

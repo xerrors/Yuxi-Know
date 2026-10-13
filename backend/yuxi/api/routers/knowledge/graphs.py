@@ -5,13 +5,13 @@ from yuxi.api.dependencies.knowledge import require_knowledge_base_read
 from yuxi.api.responses.knowledge import serialize_knowledge_base
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.modules.identity.models import User
-from yuxi.modules.knowledge.graphs.milvus_graph_service import MilvusGraphService
+from yuxi.modules.knowledge.graphs.service import KnowledgeGraphService
 from yuxi.modules.knowledge.runtime import knowledge_base
 
 graph = APIRouter(prefix="/graph", tags=["graph"])
 
 
-async def _get_graph_service(kb_id: str) -> MilvusGraphService:
+async def _get_graph_service(kb_id: str) -> KnowledgeGraphService:
     kb_info = await knowledge_base.get_knowledge_base_info(kb_id)
     if not kb_info:
         raise HTTPException(status_code=404, detail="Knowledge base not found")
@@ -20,7 +20,7 @@ async def _get_graph_service(kb_id: str) -> MilvusGraphService:
     if kb_type != "milvus":
         raise HTTPException(status_code=404, detail="Graph API only supports Milvus knowledge bases")
 
-    return MilvusGraphService(kb_id=kb_id)
+    return KnowledgeGraphService(kb_id=kb_id)
 
 
 @graph.get("/list")

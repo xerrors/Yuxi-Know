@@ -1,9 +1,9 @@
 from typing import Any
 
-from yuxi.modules.knowledge.base import KnowledgeBase
+from yuxi.modules.knowledge.base import KnowledgeExecutor
 
 
-class ReadOnlyConnectors(KnowledgeBase):
+class ReadOnlyConnectors(KnowledgeExecutor):
     """只读外部检索连接器基类。
 
     这类知识库只负责保存连接参数和执行 Query，不承载文档上传、解析、索引和文件预览能力。
@@ -16,14 +16,6 @@ class ReadOnlyConnectors(KnowledgeBase):
     @staticmethod
     def _readonly_error() -> ValueError:
         return ValueError("只读检索连接器不支持该操作")
-
-    async def _create_kb_instance(self, kb_id: str, embedding_model_spec: str | None) -> Any:
-        del kb_id, embedding_model_spec
-        return None
-
-    async def _initialize_kb_instance(self, instance: Any) -> None:
-        del instance
-        return None
 
     async def add_file_record(
         self,

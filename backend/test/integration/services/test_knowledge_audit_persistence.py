@@ -31,6 +31,10 @@ async def test_retrieval_to_agent_reference_uses_postgres_filename(monkeypatch, 
             db.add(KnowledgeFile(file_id="file-1", kb_id="kb-source", filename="当前文档.md", status="indexed"))
             await db.flush()
             db.add(KnowledgeChunk(chunk_id="chunk-1", file_id="file-1", kb_id="kb-source", chunk_index=0, content="权威正文"))
+        monkeypatch.setattr(
+            "yuxi.modules.knowledge.implementations.milvus.get_embedding_function",
+            lambda spec, **kwargs: lambda texts: [[0.1, 0.2] for _ in texts],
+        )
         kb = make_kb(FakeCollection())
         kb._hydrate_chunk_sources = MilvusKB._hydrate_chunk_sources.__get__(kb)
         kb._build_active_generation_expr = MilvusKB._build_active_generation_expr.__get__(kb)

@@ -21,7 +21,7 @@ from yuxi.bootstrap.models import load_models
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.knowledge.graphs.extractors import normalize_extraction_result
 from yuxi.modules.knowledge.graphs.graph_utils import graph_entity_collection_name, graph_triple_collection_name
-from yuxi.modules.knowledge.graphs.milvus_graph_service import MilvusGraphService
+from yuxi.modules.knowledge.graphs.service import KnowledgeGraphService
 from yuxi.modules.knowledge.graphs.milvus_graph_vector_store import MilvusGraphVectorStore
 from yuxi.modules.knowledge.models import KnowledgeProjectionOutbox
 from yuxi.modules.knowledge.repositories.chunks import KnowledgeChunkRepository
@@ -365,15 +365,22 @@ async def test_worker_index_and_all_search_modes_use_text_constraints(e2e_client
             assert invalid.status_code == 400, invalid.text
 
         graph_repo = KnowledgeGraphRepository()
-        graph_service = MilvusGraphService(graph_vector_store=graph_store)
+        graph_service = KnowledgeGraphService(graph_vector_store=graph_store)
 
         async def seed_file_graph(filename="match.md", attribute="public-A"):
             """为 active Chunk 发布真实 PG/Neo4j/图向量，验证代次与文件删除。"""
             [chunk] = await repository.list_by_file_id(file_ids[filename])
             payload = normalize_extraction_result(
                 {
-                    "entities": [{"text": "Alpha", "attributes": [{"text": attribute}]}, {"text": "Beta"}],
-                    "relations": [{"source": "Alpha", "target": "Beta", "text": "links"}],
+                    "entities": [
+                        {"text": "Alpha", "attributes": [{"text": attribute}]},
+                        {"text": "Beta"},
+                        {"text": " ALPHA ", "attributes": [{"text": attribute}]},
+                    ],
+                    "relations": [
+                        {"source": "Alpha", "target": "Beta", "text": "links"},
+                        {"source": " ALPHA ", "target": "Beta", "text": "duplicate links"},
+                    ],
                 },
                 "llm",
             )

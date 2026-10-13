@@ -16,14 +16,15 @@ from yuxi.modules.identity.permissions import (
     normalize_permission_config,
     resolve_knowledge_base_permission,
 )
-from yuxi.modules.knowledge.base import KBNameConflictError, KBNotFoundError, KnowledgeBase
+from yuxi.modules.knowledge.base import KBNameConflictError, KBNotFoundError, KnowledgeExecutor
 from yuxi.modules.knowledge.cache import (
     cache_kb_config,
     get_cached_kb_config,
     kb_config_cache_lock,
     serialize_kb_config,
 )
-from yuxi.modules.knowledge.chunking.ragflow_like.presets import ChunkConfigError, deep_merge
+from yuxi.modules.knowledge.chunking.presets import ChunkConfigError, deep_merge
+from yuxi.modules.knowledge.file_status import status_filter_values
 from yuxi.modules.knowledge.factory import KnowledgeBaseFactory
 from yuxi.modules.knowledge.read_models import KnowledgeBaseConfig, KnowledgeBaseDetail, KnowledgeBaseSummary
 from yuxi.modules.knowledge.schemas import FindOutputSchema, OpenOutputSchema
@@ -51,7 +52,7 @@ class KnowledgeBaseManager:
         os.makedirs(work_dir, exist_ok=True)
 
         # 知识库实例缓存 {kb_type: kb_instance}
-        self.kb_instances: dict[str, KnowledgeBase] = {}
+        self.kb_instances: dict[str, KnowledgeExecutor] = {}
         self._kb_instance_lock = asyncio.Lock()
 
     async def initialize(self):
@@ -97,7 +98,7 @@ class KnowledgeBaseManager:
         if failures:
             raise RuntimeError(f"Used knowledge backends failed to initialize: {', '.join(sorted(failures))}")
 
-    async def _get_or_create_kb_instance(self, kb_type: str) -> KnowledgeBase:
+    async def _get_or_create_kb_instance(self, kb_type: str) -> KnowledgeExecutor:
         """
         获取或创建知识库实例
 
@@ -179,7 +180,7 @@ class KnowledgeBaseManager:
             additional_params=additional_params,
         )
 
-    async def get_kb_executor(self, kb_id: str) -> KnowledgeBase:
+    async def get_kb_executor(self, kb_id: str) -> KnowledgeExecutor:
         """获取知识库类型执行器。"""
         config = await self.get_kb_config(kb_id)
         return await self._get_or_create_kb_instance(config.kb_type)
@@ -434,19 +435,9 @@ class KnowledgeBaseManager:
 
     async def knowledge_base_name_exists(self, name: str) -> bool:
         """检查知识库名称是否已存在"""
-        from yuxi.infrastructure.postgres.manager import pg_manager
         from yuxi.modules.knowledge.repositories.bases import KnowledgeBaseRepository
 
-        # 确保 pg_manager 已初始化
-        if not pg_manager._initialized:
-            pg_manager.initialize()
-
-        kb_repo = KnowledgeBaseRepository()
-        rows = await kb_repo.get_all()
-        for row in rows:
-            if (row.name or "").lower() == name.lower():
-                return True
-        return False
+        return await KnowledgeBaseRepository().name_exists(name)
 
     async def create_folder(
         self,
@@ -558,9 +549,9 @@ class KnowledgeBaseManager:
 
     async def delete_knowledge_base(self, kb_id: str) -> dict:
         """提交知识库不可见事实；外部存储清理由 durable outbox 重放。"""
-        from yuxi.modules.knowledge.repositories.files import KnowledgeFileRepository
+        from yuxi.modules.knowledge.repositories.bases import KnowledgeBaseRepository
 
-        await KnowledgeFileRepository().mark_deleted_by_kb_id(kb_id)
+        await KnowledgeBaseRepository().mark_deleted(kb_id)
         return {"message": "删除成功"}
 
     async def cleanup_deleted_knowledge_base(self, kb_id: str) -> None:
@@ -575,9 +566,9 @@ class KnowledgeBaseManager:
             raise ValueError("Cannot clean a visible knowledge base")
         executor = await self._get_or_create_kb_instance(record.kb_type)
         await executor.cleanup_knowledge_base_resources(kb_id)
-        await repository.delete(kb_id)
+        await repository.purge(kb_id)
 
-    async def get_cleanup_executor(self, kb_id: str) -> KnowledgeBase | None:
+    async def get_cleanup_executor(self, kb_id: str) -> KnowledgeExecutor | None:
         """清理任务读取 tombstone，不使用可见配置缓存。"""
         from yuxi.modules.knowledge.repositories.bases import KnowledgeBaseRepository
 
@@ -664,7 +655,7 @@ class KnowledgeBaseManager:
             additional_params=config.additional_params,
         )
 
-    async def aquery(self, query_text: str, kb_id: str, **kwargs) -> str:
+    async def aquery(self, query_text: str, kb_id: str, **kwargs) -> list[dict[str, Any]]:
         """异步查询知识库"""
         config = await self.get_kb_config(kb_id)
         executor = await self._get_or_create_kb_instance(config.kb_type)
@@ -736,14 +727,11 @@ class KnowledgeBaseManager:
             "path_prefix": getattr(record, "path_prefix", None),
         }
 
-    async def _get_knowledge_base_file_stats(self, kb_id: str) -> dict[str, int]:
-        from yuxi.modules.knowledge.repositories.files import KnowledgeFileRepository
-
-        return await KnowledgeFileRepository().get_kb_file_stats(kb_id)
-
     async def get_knowledge_base_info(self, kb_id: str, include_files: bool = False) -> KnowledgeBaseDetail | None:
         """获取知识库详情。"""
         from yuxi.modules.knowledge.repositories.bases import KnowledgeBaseRepository
+
+        from yuxi.modules.knowledge.repositories.files import KnowledgeFileRepository
 
         kb_repo = KnowledgeBaseRepository()
         kb = await kb_repo.get_by_kb_id(kb_id)
@@ -754,8 +742,6 @@ class KnowledgeBaseManager:
         files_truncated = False
         files_page_size = None
         if include_files:
-            from yuxi.modules.knowledge.repositories.files import KnowledgeFileRepository
-
             repo = KnowledgeFileRepository()
             records, total = await repo.list_documents(kb_id=kb_id, page=1, page_size=500)
             files = {
@@ -777,7 +763,7 @@ class KnowledgeBaseManager:
             files_truncated = total > len(records)
             files_page_size = 500
 
-        file_stats = await self._get_knowledge_base_file_stats(kb_id)
+        file_stats = await KnowledgeFileRepository().get_kb_file_stats(kb_id)
         return KnowledgeBaseDetail(
             **self._knowledge_base_read_fields(kb, stats=file_stats),
             sample_questions=tuple(kb.sample_questions or []),
@@ -888,7 +874,7 @@ class KnowledgeBaseManager:
         normalized_offset = max(offset or 0, 0)
         normalized_limit = min(max(limit or 300, 1), KB_FILE_SEARCH_SCAN_LIMIT)
         normalized_query = (query or "").strip().lower()
-        accepted_statuses = self._normalize_file_status_filter(status)
+        accepted_statuses = status_filter_values(status)
 
         repo = KnowledgeFileRepository()
         all_files = []
@@ -939,15 +925,6 @@ class KnowledgeBaseManager:
             "limit": normalized_limit,
             "has_more": normalized_offset + normalized_limit < total,
         }
-
-    @staticmethod
-    def _normalize_file_status_filter(status: str | None) -> set[str] | None:
-        if not status or status == "all":
-            return None
-        return {
-            "indexed": {"indexed"},
-            "error_indexing": {"error_indexing"},
-        }.get(status, {status})
 
     @staticmethod
     async def _search_kb_files(

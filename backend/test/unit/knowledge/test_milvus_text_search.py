@@ -1,3 +1,4 @@
+from test.unit.support.milvus import fake_milvus_embedding as fake_milvus_embedding
 import json
 from unittest.mock import AsyncMock
 
@@ -118,3 +119,20 @@ def test_database_operations_use_own_connection_and_fail_closed(monkeypatch, mod
     with pytest.raises(RuntimeError, match="database unavailable"):
         instance._init_connection()
     assert selected == {"own": "target"}
+
+
+async def test_legacy_empty_options_use_panel_defaults_and_preserve_saved_overrides():
+    """存量空配置与面板一致，显式保存值继续覆盖默认值。"""
+    collection = FakeCollection(distance=0.1)
+    kb = make_kb(collection)
+    panel = {item["key"]: item["default"] for item in kb.get_query_params_config("db")["options"]}
+    assert panel["similarity_threshold"] == 0.0
+    assert panel["bm25_top_k"] == 50
+    config = make_query_config()
+    assert len(await kb.aquery("query", "db", config=config)) == 1
+    await kb.aquery("query", "db", config=config, search_mode="keyword")
+    assert collection.search_calls[-1]["limit"] == 50
+    config.query_params["options"] = {"similarity_threshold": 0.2, "bm25_top_k": 7}
+    assert await kb.aquery("query", "db", config=config) == []
+    await kb.aquery("query", "db", config=config, search_mode="keyword")
+    assert collection.search_calls[-1]["limit"] == 7

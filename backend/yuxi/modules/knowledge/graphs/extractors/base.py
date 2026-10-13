@@ -76,7 +76,7 @@ def normalize_extraction_result(result: dict[str, Any], extractor_type: str) -> 
         else:
             _merge_attributes(existing, normalized_entity)
 
-        for ref in _entity_refs(entity, existing):
+        for ref in _entity_refs(entity, normalized_entity):
             entity_refs[ref] = existing
         return existing
 
@@ -84,6 +84,7 @@ def normalize_extraction_result(result: dict[str, Any], extractor_type: str) -> 
         add_entity(entity, f"entities[{index}]")
 
     normalized_relations = []
+    seen_relations = set()
     dropped_relations = 0
     for index, relation in enumerate(relations):
         if not isinstance(relation, dict):
@@ -111,6 +112,10 @@ def normalize_extraction_result(result: dict[str, Any], extractor_type: str) -> 
         if source is None or target is None or len(label) > MAX_RELATION_TYPE_LENGTH:
             dropped_relations += 1
             continue
+        relation_key = (_entity_key(source), label, _entity_key(target))
+        if relation_key in seen_relations:
+            continue
+        seen_relations.add(relation_key)
         normalized_relations.append(
             {
                 "source": source,

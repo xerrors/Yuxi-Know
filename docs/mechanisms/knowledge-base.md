@@ -41,6 +41,20 @@ flowchart LR
 
 未删除知识库的名称由 PostgreSQL 唯一索引约束，名称不区分大小写，已删除名称可复用。并发创建或重命名冲突返回 HTTP 409，冲突事务不改变已有记录。
 
+## 存储装配与内部边界
+
+`KnowledgeExecutor` 表示按知识库类型复用的执行器，`KnowledgeBase` ORM 表示 PostgreSQL 配置行。Manager 保留配置解析、类型选择、权限摘要和公开结果装配；文件移动、读取等转发入口负责取得当前类型执行器。`services/access.py` 拥有用户可见范围，路由与 Agent 工具共同消费该入口。
+
+文档与图谱通过 `knowledge/storage/milvus.py` 装配中文正文、embedding、BM25 函数和索引。文档、实体和三元组各自保留已有列顺序及来源字段。新集合采用统一字段定义，已有集合不自动重建。Milvus 与 Neo4j 查询分别使用每事件循环 8 个线程的预算；调用方取消等待后，实际线程退出才归还容量。
+
+Milvus 执行器持有 `KnowledgeGraphService`，首次图检索在线程内初始化图向量客户端，后续请求复用。Neo4j 连接由基础设施管理，图谱服务协调 PG 事实与 Neo4j/Milvus 投影。一次图谱构建复用一个抽取模型客户端；模型 JSON 归一化负责实体属性合并和关系去重，图 payload 转换只分配局部 ID。
+
+分块入口和配置位于 `chunking/dispatcher.py` 与 `chunking/presets.py`。`ragflow_like` 是借鉴 RAGFlow 思路并经过本地修改的适配实现；其中 parser 使用 Yuxi 的 `source_spans` 保留原文定位，不能按未修改的第三方 vendor 整体替换。语义分块通过 `chunk_parser_config.embed_model_id` 接收模型 spec；索引用例在未指定时注入系统 embedding 配置。缺失模型或装配故障使索引失败，不产出普通切分结果。固定输入的分块和来源范围由 parser 测试拥有。
+
+摄取 chunk 字典、PostgreSQL 行、Milvus 列数组与检索结果各自服务不同边界：dispatcher 生成内容与来源范围，Milvus 执行器明确转换为 PG 字段和向量列，检索再从 PG 补全当前可见文件来源。文件元数据、目录投影和 HTTP 列表保持各自需要的字段，不把虚拟目录当作持久化文件。运行时查询以 `MilvusRetrievalConfig` 为默认值，再叠加持久化选项和本次请求；面板使用同一默认配置。已有显式配置继续生效，未保存的阈值与 BM25 数量分别取 0.0 和 50。
+
+知识库软删除由 `KnowledgeBaseRepository.mark_deleted` 在一个事务中写入 KB、文件 tombstone 和批量 outbox，清理任务完成外部删除后调用 `purge`。评估成功/失败钩子在后台任务的 owning transaction 中调用 repository 持久化，筛选和分页由 PostgreSQL 执行。
+
 ## 文档状态机
 
 上传、解析和索引是三个可以分别观察的动作：
@@ -60,7 +74,7 @@ stateDiagram-v2
     indexing --> uploaded: 缺少 Markdown 产物
 ```
 
-历史 `failed`、`done` 状态只作为兼容输入。`parsing` 和 `indexing` 表示当前动作已经抢到执行权；没有抢到允许状态的并发请求会失败，同一文件不会由两个动作同时推进。
+`file_status.py` 拥有当前写入状态和历史读取映射。目录写入 `done`；普通文件的历史 `done` 按 `indexed`、`failed` 按 `error_indexing` 筛选，文件列表与跨库搜索使用同一映射。`parsing` 和 `indexing` 表示当前动作已经抢到执行权；没有抢到允许状态的并发请求会失败，同一文件不会由两个动作同时推进。
 
 - `uploaded`：原文件和文件记录存在，尚未完成解析；
 - `parsed`：解析后的 Markdown 路径已写入文件记录；
@@ -136,7 +150,7 @@ Agent 的 `knowledges` 只能缩小用户已有权限。协作会话继承派发
 | 维护任务 | 起点与职责 | 继续追踪 |
 | --- | --- | --- |
 | 管理配置、文件列表和检索调度 | [Manager](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/knowledge/manager.py) 读取配置、查询可见性并选择 executor | repositories 拥有持久查询；base 与 implementations 拥有文件处理和具体存储操作 |
-| 异步导入、解析、索引和图谱构建 | [知识库作业 service](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/knowledge/services/background_jobs.py) 组织领域动作、进度和失败结论 | background_jobs registry/worker 拥有调度与 lease；文档处理由 Manager 分派，图谱构建直接调用 MilvusGraphService |
+| 异步导入、解析、索引和图谱构建 | [知识库作业 service](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/knowledge/services/background_jobs.py) 组织领域动作、进度和失败结论 | background_jobs registry/worker 拥有调度与 lease；文档处理由 Manager 分派，图谱构建直接调用 KnowledgeGraphService |
 | Agent 或 Public API 的知识能力 | [访问 service](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/knowledge/services/access.py) 计算当前权限与所选范围的交集；[工具 service](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/knowledge/services/tools.py) 组织领域工具操作 | extensions 工具与 Public 路由适配调用，执行时复查可见性与文档归属 |
 
 Agent Context 中的资源选项查询用于配置界面；执行权限仍由访问 service 与实际读取边界核验。增加用例时沿上述 Owner 修改，状态与持久化查询继续留在其负责的领域实现。

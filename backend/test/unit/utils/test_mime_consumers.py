@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from yuxi.infrastructure.minio.client import MinIOClient
-from yuxi.modules.knowledge.base import KnowledgeBase
+from yuxi.modules.knowledge.base import KnowledgeExecutor
 from yuxi.shared import files
 
 
@@ -50,5 +50,5 @@ async def test_knowledge_download_uses_shared_fallback_and_preserves_metadata_ty
         return b"# hello"
 
     owner = SimpleNamespace(_get_file_meta=get_metadata, _original_file_path=lambda _meta: source, _read_minio_bytes=read_bytes)
-    result = await KnowledgeBase.get_file_download(owner, "kb-1", "file-1")
+    result = await KnowledgeExecutor.get_file_download(owner, "kb-1", "file-1")
     assert result == {"filename": "report.MD", "content": b"# hello", "media_type": expected}

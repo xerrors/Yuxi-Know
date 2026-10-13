@@ -2,7 +2,7 @@
 
 import pytest
 
-from yuxi.modules.knowledge.chunking.ragflow_like.dispatcher import _build_chunk_records, chunk_markdown
+from yuxi.modules.knowledge.chunking.dispatcher import _build_chunk_records, chunk_markdown
 from yuxi.modules.knowledge.chunking.ragflow_like.parsers import semantic
 from yuxi.modules.knowledge.chunking.source_spans import LocatedText, SourceText
 
@@ -16,7 +16,7 @@ def test_blank_lines_and_repeated_chunks_keep_distinct_source_locations():
 def test_overlap_can_start_before_previous_chunk_end():
     """从前一块终点搜索会丢失的重叠，仍定位到原文行。"""
     source = SourceText("甲\n乙\n丙")
-    records = _build_chunk_records([source[:3], source[2:]], "file", "text.md", source)
+    records = _build_chunk_records([source[:3], source[2:]], "file", source)
     assert [(row["start_line"], row["end_line"]) for row in records] == [(1, 2), (2, 3)]
 
 
@@ -37,7 +37,6 @@ def test_rewritten_semantic_block_uses_token_source_map():
     records = _build_chunk_records(
         [LocatedText("# Table KV\n- 名称: 测试", (2, 5))],
         "file",
-        "text.md",
         "# 标题\n\n<table>\n<tr><td>测试</td></tr>\n</table>",
     )
     assert (records[0]["start_line"], records[0]["end_line"]) == (3, 5)
@@ -47,7 +46,7 @@ def test_rewritten_semantic_block_uses_token_source_map():
 def test_chunk_without_source_mapping_is_rejected(content):
     """缺少切分来源时，即使字符串恰好匹配也不能猜测位置。"""
     with pytest.raises(ValueError, match="无法.*定位"):
-        _build_chunk_records([content], "file", "text.md", "实际内容")
+        _build_chunk_records([content], "file", "实际内容")
 
 
 def test_repeated_multiline_chunks_keep_parser_boundaries():
@@ -80,7 +79,7 @@ def test_separator_overlap_keeps_repeated_source_locations():
 
 def test_symbol_lines_keep_source_boundaries_after_blank_line_removal():
     """纯符号首尾行仍属于片段，不能仅定位到字母数字正文。"""
-    records = chunk_markdown("```\n\nhello\n\n```", "file", "text.md", {"chunk_preset_id": "general"})
+    records = chunk_markdown("```\n\nhello\n\n```", "file", "code.md", {"chunk_preset_id": "general"})
     assert (records[0]["start_line"], records[0]["end_line"]) == (1, 5)
 
 
@@ -88,7 +87,7 @@ def test_long_semantic_code_keeps_fences_without_source_failure():
     """长代码块切分后，围栏子块仍保存有效来源。"""
     source = "```python\nprint(1)\nprint(2)\nprint(3)\n```"
     chunks = semantic.chunk_markdown(source, {"chunk_token_num": 2}, embed_fn=lambda _: [])
-    records = _build_chunk_records(chunks, "file", "code.md", source)
+    records = _build_chunk_records(chunks, "file", source)
     assert records[0]["start_line"] == 1
     assert records[-1]["end_line"] == 5
     assert all(row["start_line"] > 0 and row["end_line"] >= row["start_line"] for row in records)
@@ -121,6 +120,6 @@ def test_semantic_fence_uses_parser_closing_boundary(closing):
     """更长或缩进的围栏由 Markdown parser 认定，未闭合时不保存虚构行。"""
     source = "```python\nprint(1)\nprint(2)\n" + closing
     chunks = semantic.chunk_markdown(source, {"chunk_token_num": 2}, embed_fn=lambda _: [])
-    records = _build_chunk_records(chunks, "file", "code.md", source)
+    records = _build_chunk_records(chunks, "file", source)
     assert records[0]["start_line"] == 1
     assert records[-1]["end_line"] == (4 if closing else 3)

@@ -51,16 +51,16 @@ async def test_concurrent_executor_construction_is_deduplicated(tmp_path, monkey
 async def test_delete_knowledge_base_commits_tombstone_before_any_external_cleanup(tmp_path, monkeypatch):
     """删除请求只提交事实；外部清理通过 outbox，不阻塞不可见提交。"""
     manager = KnowledgeBaseManager(str(tmp_path))
-    repository = SimpleNamespace(mark_deleted_by_kb_id=AsyncMock(return_value=["knowledge_base:kb_1:deleted"]))
+    repository = SimpleNamespace(mark_deleted=AsyncMock(return_value=["knowledge_base:kb_1:deleted"]))
     monkeypatch.setattr(
-        "yuxi.modules.knowledge.repositories.files.KnowledgeFileRepository",
+        "yuxi.modules.knowledge.repositories.bases.KnowledgeBaseRepository",
         lambda: repository,
     )
     executor = AsyncMock(side_effect=RuntimeError("Milvus offline"))
     monkeypatch.setattr(manager, "get_kb_executor", executor)
     result = await manager.delete_knowledge_base("kb_1")
     assert result == {"message": "删除成功"}
-    repository.mark_deleted_by_kb_id.assert_awaited_once_with("kb_1")
+    repository.mark_deleted.assert_awaited_once_with("kb_1")
     executor.assert_not_awaited()
 
 

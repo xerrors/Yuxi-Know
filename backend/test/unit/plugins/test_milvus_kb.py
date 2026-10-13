@@ -1,3 +1,5 @@
+from test.unit.support.milvus import fake_milvus_embedding as fake_milvus_embedding
+from yuxi.modules.knowledge.storage.milvus import CONTENT_ANALYZER_PARAMS
 import asyncio
 import threading
 import types
@@ -8,10 +10,9 @@ import pytest
 from pymilvus import CollectionSchema, DataType, FieldSchema, Function, FunctionType
 
 import yuxi.modules.knowledge.implementations.milvus as milvus_module
-from yuxi.modules.knowledge.base import FileStatus, KnowledgeBase
+from yuxi.modules.knowledge.base import FileStatus, KnowledgeExecutor
 from yuxi.modules.knowledge.chunking.ragflow_like.nlp import count_tokens
 from yuxi.modules.knowledge.implementations.milvus import (
-    CONTENT_ANALYZER_PARAMS,
     CONTENT_SPARSE_FIELD,
     VECTOR_METRIC_TYPE,
     MilvusKB,
@@ -25,6 +26,7 @@ from test.unit.support.milvus import (
     make_kb,
     make_query_config,
 )
+
 
 def test_milvus_retrieval_config_exposes_graph_and_dependencies(monkeypatch):
     monkeypatch.setattr(milvus_module.model_cache, "get_all_specs", lambda _type=None: [])
@@ -160,7 +162,6 @@ def patch_chunk_records(monkeypatch, records):
 
 def make_chunk(index: int, content: str = "content") -> dict:
     return {
-        "id": f"id-{index}",
         "chunk_id": f"chunk-{index}",
         "file_id": "file-1",
         "chunk_index": index,
@@ -196,7 +197,7 @@ async def test_cleanup_knowledge_base_resources_offloads_milvus_cleanup(monkeypa
             record_cleanup("drop_graph_collections")
 
     monkeypatch.setattr(
-        "yuxi.modules.knowledge.graphs.milvus_graph_vector_store.MilvusGraphVectorStore",
+        "yuxi.modules.knowledge.graphs.service.MilvusGraphVectorStore",
         FakeGraphVectorStore,
     )
 
@@ -204,12 +205,15 @@ async def test_cleanup_knowledge_base_resources_offloads_milvus_cleanup(monkeypa
         calls.append("delete_base")
         return {"message": "删除成功"}
 
-    monkeypatch.setattr(KnowledgeBase, "cleanup_knowledge_base_resources", delete_base)
+    monkeypatch.setattr(KnowledgeExecutor, "cleanup_knowledge_base_resources", delete_base)
 
+    from yuxi.modules.knowledge.graphs.service import KnowledgeGraphService
+
+    kb.graph_service = KnowledgeGraphService()
     result = await kb.cleanup_knowledge_base_resources("db")
 
     assert result == {"message": "删除成功"}
-    assert calls == ["has_collection", "drop_collection", "graph_init", "drop_graph_collections", "delete_base"]
+    assert calls == ["graph_init", "has_collection", "drop_collection", "drop_graph_collections", "delete_base"]
     assert cleanup_threads
     assert all(thread_id != event_loop_thread for thread_id in cleanup_threads)
 
@@ -346,7 +350,7 @@ async def test_index_file_persists_chunk_stats(monkeypatch):
     kb._get_or_create_milvus_collection = get_collection
     kb._read_markdown_from_minio = read_markdown
     kb._split_text_into_chunks = lambda text, file_id, filename, params: chunks
-    kb._get_embedding_function = lambda embedding_model_spec: embedding_function
+    monkeypatch.setattr(milvus_module, "get_embedding_function", lambda embedding_model_spec: embedding_function)
     kb.delete_file_chunks_only = delete_file_chunks_only
     kb._embed_and_store_chunks = embed_and_store_chunks
 
@@ -417,7 +421,7 @@ async def test_cancellation_marks_file_retryable(monkeypatch, operation, expecte
             await asyncio.Event().wait()
 
         kb._get_or_create_milvus_collection = get_collection
-        kb._get_embedding_function = lambda embedding_model_spec: None
+        monkeypatch.setattr(milvus_module, "get_embedding_function", lambda embedding_model_spec: None)
         kb._read_markdown_from_minio = cancelled_step
 
         async def get_system_options(_option, _db=None):
@@ -491,7 +495,7 @@ async def test_delete_file_commits_invisibility_without_external_cleanup(monkeyp
     file_repo = FakeKnowledgeFileRepository({"file-1": make_file_record(chunk_count=2, token_count=10)})
     patch_file_repository(monkeypatch, file_repo)
     monkeypatch.setattr(
-        "yuxi.modules.knowledge.graphs.milvus_graph_service.MilvusGraphService.delete_file_graph",
+        "yuxi.modules.knowledge.graphs.service.KnowledgeGraphService.delete_file_graph",
         AsyncMock(side_effect=error),
     )
     kb = make_kb(FakeCollection())
@@ -520,7 +524,7 @@ async def test_knowledge_base_cleanup_stops_when_collection_drop_fails(monkeypat
         lambda: types.SimpleNamespace(drop_graph_collections=graph_cleanup),
     )
     base_cleanup = AsyncMock(return_value={"message": "success"})
-    monkeypatch.setattr(KnowledgeBase, "cleanup_knowledge_base_resources", base_cleanup)
+    monkeypatch.setattr(KnowledgeExecutor, "cleanup_knowledge_base_resources", base_cleanup)
     kb = make_kb(FakeCollection())
     kb.connection_alias = "test-connection"
 
@@ -609,7 +613,7 @@ async def test_insert_chunks_to_stores_writes_pg_first_then_milvus_upsert(monkey
     # PG 为权威源先行落库，Milvus 只做派生索引
     assert event_log == ["pg", "milvus"]
     assert len(collection.upsert_calls) == 1
-    assert collection.upsert_calls[0][0] == ["id-0", "id-1", "id-2"]
+    assert collection.upsert_calls[0][0] == ["chunk-0", "chunk-1", "chunk-2"]
     assert collection.upsert_calls[0][5] == embeddings
     assert collection.insert_calls == []
 
@@ -771,11 +775,12 @@ async def test_graph_retrieval_limits_reach_query_executors(monkeypatch, exceeds
     )
     graph_service = types.SimpleNamespace(query_and_rank_chunks_by_ppr=AsyncMock(return_value=[("chunk-1", 0.5)]))
     monkeypatch.setattr("yuxi.modules.knowledge.graphs.milvus_graph_vector_store.MilvusGraphVectorStore", lambda: vector_store)
-    monkeypatch.setattr("yuxi.modules.knowledge.graphs.milvus_graph_service.MilvusGraphService", lambda: graph_service)
     chunk = types.SimpleNamespace(chunk_id="chunk-1", file_id="file-1", chunk_index=0, content="graph result")
     repository = types.SimpleNamespace(list_by_chunk_ids=AsyncMock(return_value=[chunk]))
     monkeypatch.setattr(milvus_module, "KnowledgeChunkRepository", lambda: repository)
     kb = make_kb(FakeCollection())
+    kb.graph_service = graph_service
+    graph_service.get_graph_vector_store = AsyncMock(return_value=vector_store)
     params = {
         "graph_entity_top_k": 1_000_000 if exceeds_limit else 7,
         "graph_triple_top_k": 1_000_000 if exceeds_limit else 8,
@@ -818,7 +823,7 @@ async def test_query_failure_is_not_an_empty_result(search_mode):
 
 async def test_query_without_matches_still_returns_empty_list():
     """成功检索但低于阈值仍属于正常空结果。"""
-    result = await make_kb(FakeCollection(distance=0.1)).aquery("query", "db", config=make_query_config())
+    result = await make_kb(FakeCollection(distance=0.1)).aquery("query", "db", config=make_query_config(), similarity_threshold=0.2)
 
     assert result == []
 
@@ -1037,8 +1042,7 @@ async def test_document_preview_location_requires_matching_index_snapshot(monkey
         extraction_result=None,
     )
     monkeypatch.setattr(
-        milvus_module,
-        "KnowledgeChunkRepository",
+        "yuxi.modules.knowledge.repositories.chunks.KnowledgeChunkRepository",
         lambda: types.SimpleNamespace(
             list_by_file_id=AsyncMock(return_value=[chunk]),
         ),
@@ -1111,7 +1115,6 @@ async def test_query_filters_orphaned_chunks_from_search_results(monkeypatch):
             ]
 
     kb = MilvusKB.__new__(MilvusKB)
-    kb._get_embedding_function = lambda embedding_model_spec, **kwargs: lambda texts: [[0.1, 0.2] for _ in texts]
 
     async def get_collection(kb_id: str):
         del kb_id

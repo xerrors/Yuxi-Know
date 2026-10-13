@@ -7,7 +7,7 @@ from types import MethodType, SimpleNamespace
 import pytest
 
 from yuxi.modules.extensions.tools.knowledge import tools
-from yuxi.modules.knowledge.base import KnowledgeBase
+from yuxi.modules.knowledge.base import KnowledgeExecutor
 from yuxi.modules.knowledge.manager import KnowledgeBaseManager
 from yuxi.modules.knowledge.read_models import KnowledgeBaseDetail
 
@@ -150,7 +150,7 @@ async def test_query_kb_returns_search_schema_without_sandbox_paths(monkeypatch)
     async def _fake_retriever(query_text: str, **kwargs):
         assert query_text == "auth"
         assert kwargs == {}
-        return KnowledgeBase.build_search_output(
+        return KnowledgeExecutor.build_search_output(
             "db-1",
             [
                 {
@@ -181,7 +181,7 @@ async def test_query_kb_returns_search_schema_without_sandbox_paths(monkeypatch)
 async def test_query_kb_allows_dify_knowledge_base(monkeypatch) -> None:
     async def _fake_retriever(query_text: str, **kwargs):
         assert query_text == "auth"
-        return KnowledgeBase.build_search_output(
+        return KnowledgeExecutor.build_search_output(
             "db-1",
             [
                 {
@@ -234,7 +234,7 @@ async def test_query_kb_returns_plain_result_without_path_injection(monkeypatch)
 async def test_query_kb_maps_full_doc_id_and_chunk_metadata(monkeypatch) -> None:
     async def _fake_retriever(query_text: str, **kwargs):
         assert query_text == "auth"
-        return KnowledgeBase.build_search_output(
+        return KnowledgeExecutor.build_search_output(
             "db-1",
             [
                 {

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
+from yuxi.shared.datetime import utc_now
 
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.knowledge.models import EvaluationDataset, EvaluationDatasetItem, EvaluationRun, EvaluationRunItem
@@ -185,20 +186,24 @@ class EvaluationRepository:
         await session.flush()
         return record
 
-    async def list_run_items(self, run_id: str, offset: int = 0, limit: int = 100) -> list[EvaluationRunItem]:
+    async def list_run_items(
+        self, run_id: str, offset: int = 0, limit: int = 100, *, result_filter: str = "all"
+    ) -> list[EvaluationRunItem]:
         async with pg_manager.get_async_session_context() as session:
             result = await session.execute(
                 select(EvaluationRunItem)
-                .where(EvaluationRunItem.run_id == run_id)
+                .where(EvaluationRunItem.run_id == run_id, *self._result_filters(result_filter))
                 .order_by(EvaluationRunItem.item_index.asc())
                 .offset(offset)
                 .limit(limit)
             )
             return list(result.scalars().all())
 
-    async def count_run_items(self, run_id: str) -> int:
+    async def count_run_items(self, run_id: str, *, result_filter: str = "all") -> int:
         async with pg_manager.get_async_session_context() as session:
-            result = await session.execute(select(func.count(EvaluationRunItem.id)).where(EvaluationRunItem.run_id == run_id))
+            result = await session.execute(
+                select(func.count(EvaluationRunItem.id)).where(EvaluationRunItem.run_id == run_id, *self._result_filters(result_filter))
+            )
             return int(result.scalar() or 0)
 
     async def delete_all(self) -> None:
@@ -207,3 +212,68 @@ class EvaluationRepository:
             await session.execute(delete(EvaluationRun))
             await session.execute(delete(EvaluationDatasetItem))
             await session.execute(delete(EvaluationDataset))
+
+    @staticmethod
+    def _result_filters(result_filter: str) -> list:
+        """在 SQL 中筛选后分页，缺失指标保留历史默认分值。"""
+        if result_filter == "all":
+            return []
+        answer_error = func.coalesce(EvaluationRunItem.metrics["score"].as_float(), 1.0) <= 0.5
+        if result_filter == "answer_errors":
+            return [answer_error]
+        return [or_(answer_error, func.coalesce(EvaluationRunItem.metrics["recall@10"].as_float(), 1.0) < 1)]
+
+
+async def finish_dataset_generation_job(session, job_record, result) -> None:
+    """在 BackgroundJob 成功事务内提交数据集完成事实。"""
+    if not isinstance(result, dict) or result.get("dataset_id") != (job_record.payload or {}).get("dataset_id"):
+        raise ValueError("Dataset generation result does not match BackgroundJob payload")
+    dataset = await session.scalar(select(EvaluationDataset).where(EvaluationDataset.dataset_id == result["dataset_id"]).with_for_update())
+    if dataset is None:
+        raise ValueError("Dataset not found during BackgroundJob completion")
+    dataset.item_count = int(result["item_count"])
+    dataset.build_metadata = dict(result["build_metadata"])
+
+
+async def fail_dataset_generation_job(session, job_record, error: str) -> None:
+    """在 BackgroundJob 失败事务内收敛数据集构建状态。"""
+    dataset_id = (job_record.payload or {}).get("dataset_id")
+    dataset = await session.scalar(select(EvaluationDataset).where(EvaluationDataset.dataset_id == dataset_id).with_for_update())
+    if dataset is None:
+        return
+    metadata = dict(dataset.build_metadata or {})
+    if metadata.get("status") == "completed":
+        return
+    metadata.update(
+        status="failed",
+        job_id=job_record.id,
+        progress=100,
+        error_message=error,
+        message=error,
+    )
+    dataset.build_metadata = metadata
+
+
+async def finish_rag_evaluation_job(session, job_record, result) -> None:
+    """在 BackgroundJob 成功事务内提交评估 Run 完成事实。"""
+    if not isinstance(result, dict) or result.get("run_id") != (job_record.payload or {}).get("run_id"):
+        raise ValueError("Evaluation result does not match BackgroundJob payload")
+    run = await session.scalar(select(EvaluationRun).where(EvaluationRun.run_id == result["run_id"]).with_for_update())
+    if run is None:
+        raise ValueError("EvaluationRun not found during BackgroundJob completion")
+    run.status = "completed"
+    run.completed_items = int(result["completed_items"])
+    run.metrics = dict(result["metrics"])
+    run.overall_score = result["overall_score"]
+    run.completed_at = utc_now()
+
+
+async def fail_rag_evaluation_job(session, job_record, error: str) -> None:
+    """在 BackgroundJob 失败事务内收敛评估 Run。"""
+    run_id = (job_record.payload or {}).get("run_id")
+    run = await session.scalar(select(EvaluationRun).where(EvaluationRun.run_id == run_id).with_for_update())
+    if run is None or run.status == "completed":
+        return
+    run.status = "failed"
+    run.metrics = {"error": error}
+    run.completed_at = utc_now()

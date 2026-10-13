@@ -1,6 +1,6 @@
 """图谱构建相关的纯函数工具集。
 
-将数据变换逻辑从 MilvusGraphService 中抽离，
+将数据变换逻辑从 KnowledgeGraphService 中抽离，
 使 service 类专注于 I/O 和业务编排。
 """
 
@@ -45,48 +45,18 @@ def graph_triple_collection_name(kb_id: str) -> str:
 def build_graph_payload(normalized_result: dict[str, Any]) -> dict[str, Any]:
     """将抽取器产出的标准化结果转换为 Neo4j 写入所需的图结构。
 
-    返回的 entities 已完成去重合并：同名同 label 的实体只保留一份，
-    属性（attributes）取并集。
+    输入经过 normalize_extraction_result；这里只分配局部 ID 并转换关系引用。
     """
-    entities: list[dict[str, Any]] = []
-    entity_by_key: dict[tuple[str, str], dict[str, Any]] = {}
-
-    def add_entity(entity: dict[str, Any]) -> str:
-        key = (normalize_entity_name(entity["text"]), entity.get("label") or "Entity")
-        existing = entity_by_key.get(key)
-        if existing is not None:
-            known_attributes = {(attr["text"], attr["label"]) for attr in existing.get("attributes") or []}
-            for attribute in entity.get("attributes") or []:
-                attribute_key = (attribute["text"], attribute["label"])
-                if attribute_key not in known_attributes:
-                    existing.setdefault("attributes", []).append(attribute)
-                    known_attributes.add(attribute_key)
-            return existing["id"]
-
-        graph_entity = {
-            "id": f"e{len(entities) + 1}",
-            "text": entity["text"],
-            "label": entity.get("label") or "Entity",
-            "attributes": list(entity.get("attributes") or []),
+    entities = [{**entity, "id": f"e{index}"} for index, entity in enumerate(normalized_result["entities"], 1)]
+    entity_ids = {(normalize_entity_name(entity["text"]), entity["label"]): entity["id"] for entity in entities}
+    relations = [
+        {
+            **relation,
+            "source": entity_ids[(normalize_entity_name(relation["source"]["text"]), relation["source"]["label"])],
+            "target": entity_ids[(normalize_entity_name(relation["target"]["text"]), relation["target"]["label"])],
         }
-        entities.append(graph_entity)
-        entity_by_key[key] = graph_entity
-        return graph_entity["id"]
-
-    for entity in normalized_result["entities"]:
-        add_entity(entity)
-
-    relations = []
-    for relation in normalized_result["relations"]:
-        relations.append(
-            {
-                "source": add_entity(relation["source"]),
-                "target": add_entity(relation["target"]),
-                "text": relation["text"],
-                "label": relation.get("label") or "RELATED_TO",
-            }
-        )
-
+        for relation in normalized_result["relations"]
+    ]
     return {"entities": entities, "relations": relations, "metadata": normalized_result["metadata"]}
 
 

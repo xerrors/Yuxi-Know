@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.manager import pg_manager
-from yuxi.modules.knowledge.graphs.milvus_graph_service import MilvusGraphService
+from yuxi.modules.knowledge.graphs.service import KnowledgeGraphService
 from yuxi.modules.knowledge.models import KnowledgeProjectionOutbox
 from yuxi.modules.knowledge.repositories.files import KnowledgeFileRepository
 from yuxi.modules.knowledge.repositories.projections import knowledge_projection_lock
@@ -370,7 +370,7 @@ async def run_knowledge_graph(context: BackgroundJobContext) -> dict:
     """根据持久 action 重建图谱构建或向量修复任务。"""
     payload = context.payload
     kb_id = payload["kb_id"]
-    service = MilvusGraphService()
+    service = KnowledgeGraphService()
     if payload.get("action") == "reconcile":
         mode = payload.get("reconcile_mode") or "failed"
         await context.set_progress(5.0, "准备修复图谱向量索引")

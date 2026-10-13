@@ -2,7 +2,7 @@
 
 状态：implemented
 类型：bug-fix
-Owner：backend/yuxi/modules/knowledge/chunking/ragflow_like/presets.py
+Owner：backend/yuxi/modules/knowledge/chunking/presets.py
 
 ## 问题
 

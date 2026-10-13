@@ -8,22 +8,13 @@ from uuid import uuid4
 
 from yuxi.infrastructure.filesystem import await_io
 from yuxi.infrastructure.observability.logging import logger
-from yuxi.modules.knowledge.chunking.ragflow_like.presets import ensure_chunk_defaults_in_additional_params
+from yuxi.modules.knowledge.chunking.presets import ensure_chunk_defaults_in_additional_params
+from yuxi.modules.knowledge.file_status import FileStatus
 from yuxi.modules.knowledge.read_models import KnowledgeBaseConfig
 from yuxi.modules.knowledge.schemas import FindOutputSchema, FindWindowSchema, SearchOutputSchema, SearchResultSchema
 from yuxi.modules.knowledge.utils import resolve_processing_params, sanitize_processing_params
 from yuxi.shared.datetime import utc_isoformat
 from yuxi.shared.files import detect_media_type
-
-
-class FileStatus:
-    UPLOADED = "uploaded"
-    PARSING = "parsing"
-    PARSED = "parsed"
-    ERROR_PARSING = "error_parsing"
-    INDEXING = "indexing"
-    INDEXED = "indexed"
-    ERROR_INDEXING = "error_indexing"
 
 
 class KnowledgeBaseException(Exception):
@@ -44,7 +35,7 @@ class KBNameConflictError(KnowledgeBaseException):
     pass
 
 
-class KnowledgeBase(ABC):
+class KnowledgeExecutor(ABC):
     """知识库抽象基类，定义统一接口"""
 
     kb_type = ""
@@ -145,30 +136,6 @@ class KnowledgeBase(ABC):
         if cls.apply_chunk_defaults:
             return ensure_chunk_defaults_in_additional_params(params)
         return params
-
-    @abstractmethod
-    async def _create_kb_instance(self, kb_id: str, embedding_model_spec: str | None) -> Any:
-        """
-        创建底层知识库实例
-
-        Args:
-            kb_id: 知识库ID
-            embedding_model_spec: 嵌入模型配置
-
-        Returns:
-            底层知识库实例
-        """
-        pass
-
-    @abstractmethod
-    async def _initialize_kb_instance(self, instance: Any) -> None:
-        """
-        初始化底层知识库实例
-
-        Args:
-            instance: 底层知识库实例
-        """
-        pass
 
     async def add_file_record(
         self,
@@ -814,7 +781,7 @@ class KnowledgeBase(ABC):
             "parent_id": parent_id,
             "kb_id": kb_id,
             "created_at": utc_isoformat(),
-            "status": "done",
+            "status": FileStatus.FOLDER_READY,
             "path": folder_name,
             "file_type": "folder",
             "created_by": operator_id,
@@ -977,58 +944,73 @@ class KnowledgeBase(ABC):
                 raise ValueError(f"File {file_id} not found")
             return self._file_record_to_meta(record)
 
-    @abstractmethod
     async def delete_file(self, kb_id: str, file_id: str) -> None:
-        """
-        删除文件
+        """先提交删除事实，再清理派生存储；失败时保留可重试 outbox。"""
+        from yuxi.modules.knowledge.repositories.files import KnowledgeFileRepository
 
-        Args:
-            kb_id: 知识库ID
-            file_id: 文件ID
-        """
-        pass
+        await KnowledgeFileRepository().mark_deleted(kb_id=kb_id, file_id=file_id)
 
-    @abstractmethod
     async def get_file_basic_info(self, kb_id: str, file_id: str) -> dict:
-        """
-        获取文件基本信息（仅元数据）
+        """获取文件基本信息（仅元数据）"""
+        return {"meta": await self._load_file_meta(kb_id, file_id)}
 
-        Args:
-            kb_id: 知识库ID
-            file_id: 文件ID
-
-        Returns:
-            dict: 包含文件基本信息的字典
-        """
-        pass
-
-    @abstractmethod
     async def get_file_content(self, kb_id: str, file_id: str) -> dict:
-        """
-        获取文件内容信息（chunks和lines）
+        """获取文件内容信息（chunks和lines）"""
+        file_meta = await self._load_file_meta(kb_id, file_id)
+        return await self._get_file_content_from_meta(file_id, file_meta)
 
-        Args:
-            kb_id: 知识库ID
-            file_id: 文件ID
-
-        Returns:
-            dict: 包含文件内容信息的字典
-        """
-        pass
-
-    @abstractmethod
     async def get_file_info(self, kb_id: str, file_id: str) -> dict:
-        """
-        获取文件完整信息（基本信息+内容信息）
+        """获取文件完整信息（基本信息+内容信息）"""
+        file_meta = await self._load_file_meta(kb_id, file_id)
+        content_info = await self._get_file_content_from_meta(file_id, file_meta)
+        return {"meta": file_meta, **content_info}
 
-        Args:
-            kb_id: 知识库ID
-            file_id: 文件ID
+    async def _get_file_content_from_meta(self, file_id: str, file_meta: dict) -> dict:
+        """读取完整解析文本，并校验片段行号与文件快照属于同一入库代次。"""
+        from yuxi.modules.knowledge.repositories.chunks import KnowledgeChunkRepository
 
-        Returns:
-            dict: 包含文件信息和chunks的字典
-        """
-        pass
+        content_info = {"lines": [], "line_location": {"available": False, "reason": "content_unavailable"}}
+        location_reason = "document_not_indexed" if file_meta.get("status") not in {"indexed", "done"} else ""
+        try:
+            chunks = await KnowledgeChunkRepository().list_by_file_id(file_id)
+            if not location_reason and any(chunk.generation != file_meta.get("active_generation") for chunk in chunks):
+                location_reason = "index_changed"
+            content_info["lines"] = [
+                {
+                    "id": chunk.chunk_id,
+                    "content": chunk.content,
+                    "chunk_order_index": chunk.chunk_index,
+                    "start_line": chunk.start_line,
+                    "end_line": chunk.end_line,
+                    "start_char_pos": chunk.start_char_pos,
+                    "end_char_pos": chunk.end_char_pos,
+                    "start_token_pos": chunk.start_token_pos,
+                    "end_token_pos": chunk.end_token_pos,
+                    "graph_indexed": chunk.graph_indexed,
+                    "ent_ids": chunk.ent_ids,
+                    "tags": chunk.tags,
+                    "extraction_result": chunk.extraction_result,
+                }
+                for chunk in chunks
+            ]
+        except Exception as e:
+            location_reason = "chunks_unavailable"
+            logger.error(f"Failed to get file content from PostgreSQL: {e}")
+
+        if not content_info["lines"]:
+            logger.warning(f"No chunks found in PostgreSQL for file {file_id}, file may not have been indexed")
+
+        # Try to read markdown content if available
+        if file_meta.get("markdown_file"):
+            try:
+                content = await self._read_markdown_from_minio(file_meta["markdown_file"])
+                content_info["content"] = content
+            except Exception as e:
+                logger.error(f"Failed to read markdown file for {file_id}: {e}")
+
+        if content_info.get("content"):
+            content_info["line_location"] = {"available": not location_reason, "reason": location_reason or None}
+        return content_info
 
     async def _persist_file_meta(self, file_id: str, meta: dict) -> None:
         """Persist one file metadata record without storing it on the KB instance."""

@@ -2,16 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import os
-from functools import partial
 from typing import Any
 
 from pymilvus import (
     Collection,
-    CollectionSchema,
     DataType,
     FieldSchema,
-    Function,
-    FunctionType,
     connections,
     db,
     utility,
@@ -20,13 +16,14 @@ from pymilvus import (
 from yuxi.infrastructure.filesystem import await_io
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.modules.knowledge.graphs.graph_utils import graph_entity_collection_name, graph_triple_collection_name
-from yuxi.modules.knowledge.implementations.milvus import (
-    CONTENT_ANALYZER_PARAMS,
-    CONTENT_SPARSE_FIELD,
+from yuxi.modules.knowledge.storage.milvus import (
     VECTOR_METRIC_TYPE,
-    _run_milvus_query_io,
+    content_fields,
+    embedding_field,
+    create_collection,
+    get_embedding_function,
 )
-from yuxi.modules.models.embed import select_embedding_model
+from yuxi.modules.knowledge.storage.offload import run_milvus_query_io
 from yuxi.modules.models.providers.cache import model_cache
 from yuxi.shared.hashing import hashstr
 
@@ -67,7 +64,7 @@ class MilvusGraphVectorStore:
         else:
             raise ValueError(f"Unsupported graph vector record type: {record_type}")
 
-        embed = self._get_embedding_function(embedding_model_spec)
+        embed = get_embedding_function(embedding_model_spec)
         embeddings = await embed([record["content"] for record in records])
         if record_type == "entity":
             await await_io(asyncio.to_thread(self._upsert_entities, collection, records, embeddings))
@@ -95,7 +92,7 @@ class MilvusGraphVectorStore:
         top_k: int,
     ) -> list[dict[str, Any]]:
         collection_name = graph_entity_collection_name(kb_id)
-        has_collection = await _run_milvus_query_io(utility.has_collection, collection_name, using=self.connection_alias)
+        has_collection = await run_milvus_query_io(utility.has_collection, collection_name, using=self.connection_alias)
         if not has_collection:
             return []
         return await self._search_graph_collection(
@@ -115,7 +112,7 @@ class MilvusGraphVectorStore:
         top_k: int,
     ) -> list[dict[str, Any]]:
         collection_name = graph_triple_collection_name(kb_id)
-        has_collection = await _run_milvus_query_io(utility.has_collection, collection_name, using=self.connection_alias)
+        has_collection = await run_milvus_query_io(utility.has_collection, collection_name, using=self.connection_alias)
         if not has_collection:
             return []
         return await self._search_graph_collection(
@@ -136,11 +133,6 @@ class MilvusGraphVectorStore:
                 logger.error(f"Failed to drop Milvus graph collection {collection_name}: {exc}")
                 raise
 
-    def _get_embedding_function(self, embedding_model_spec: str):
-        model = select_embedding_model(embedding_model_spec)
-        batch_size = int(getattr(model, "batch_size", 40) or 40)
-        return partial(model.abatch_encode, batch_size=batch_size)
-
     async def _search_graph_collection(
         self,
         *,
@@ -152,9 +144,9 @@ class MilvusGraphVectorStore:
     ) -> list[dict[str, Any]]:
         if top_k <= 0:
             return []
-        embed = self._get_embedding_function(embedding_model_spec)
+        embed = get_embedding_function(embedding_model_spec)
         query_embedding = await embed([query_text])
-        return await _run_milvus_query_io(
+        return await run_milvus_query_io(
             self._search_graph_collection_sync,
             collection_name,
             query_embedding,
@@ -200,35 +192,16 @@ class MilvusGraphVectorStore:
 
     def _get_or_create_entity_collection(self, kb_id: str, embedding_info: Any) -> Collection:
         collection_name = graph_entity_collection_name(kb_id)
-        fields = [
-            FieldSchema(name="id", dtype=DataType.VARCHAR, max_length=100, is_primary=True),
-            FieldSchema(
-                name="content",
-                dtype=DataType.VARCHAR,
-                max_length=65535,
-                enable_analyzer=True,
-                analyzer_params=CONTENT_ANALYZER_PARAMS,
-            ),
-            FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=embedding_info.dimension or 1024),
-            FieldSchema(name=CONTENT_SPARSE_FIELD, dtype=DataType.SPARSE_FLOAT_VECTOR),
-        ]
+        fields = [*content_fields(), embedding_field(embedding_info.dimension or 1024)]
         return self._get_or_create_collection(collection_name, fields, embedding_info)
 
     def _get_or_create_triple_collection(self, kb_id: str, embedding_info: Any) -> Collection:
         collection_name = graph_triple_collection_name(kb_id)
         fields = [
-            FieldSchema(name="id", dtype=DataType.VARCHAR, max_length=100, is_primary=True),
-            FieldSchema(
-                name="content",
-                dtype=DataType.VARCHAR,
-                max_length=65535,
-                enable_analyzer=True,
-                analyzer_params=CONTENT_ANALYZER_PARAMS,
-            ),
+            *content_fields(),
             FieldSchema(name="source_id", dtype=DataType.VARCHAR, max_length=100),
             FieldSchema(name="target_id", dtype=DataType.VARCHAR, max_length=100),
-            FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=embedding_info.dimension or 1024),
-            FieldSchema(name=CONTENT_SPARSE_FIELD, dtype=DataType.SPARSE_FLOAT_VECTOR),
+            embedding_field(embedding_info.dimension or 1024),
         ]
         return self._get_or_create_collection(collection_name, fields, embedding_info)
 
@@ -236,28 +209,12 @@ class MilvusGraphVectorStore:
         if utility.has_collection(collection_name, using=self.connection_alias):
             return Collection(name=collection_name, using=self.connection_alias)
 
-        bm25_function = Function(
-            name="content_bm25",
-            input_field_names=["content"],
-            output_field_names=[CONTENT_SPARSE_FIELD],
-            function_type=FunctionType.BM25,
-        )
-        schema = CollectionSchema(
+        return create_collection(
+            collection_name,
             fields=fields,
             description=f"Knowledge graph collection {collection_name} using {embedding_info.model_id}",
-            functions=[bm25_function],
+            using=self.connection_alias,
         )
-        collection = Collection(name=collection_name, schema=schema, using=self.connection_alias)
-        collection.create_index("embedding", {"metric_type": VECTOR_METRIC_TYPE, "index_type": "IVF_FLAT", "params": {"nlist": 1024}})
-        collection.create_index(
-            CONTENT_SPARSE_FIELD,
-            {
-                "metric_type": "BM25",
-                "index_type": "SPARSE_INVERTED_INDEX",
-                "params": {"inverted_index_algo": "DAAT_MAXSCORE"},
-            },
-        )
-        return collection
 
     def _upsert_entities(self, collection: Collection, records: list[dict[str, Any]], embeddings: list) -> None:
         collection.upsert(

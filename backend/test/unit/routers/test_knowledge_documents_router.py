@@ -323,8 +323,8 @@ async def test_reconcile_graph_build_mutates_state_only_after_unique_job_is_crea
 
     monkeypatch.setattr(knowledge_router, "_has_running_graph_build_job", fake_has_running_graph_build_job)
     monkeypatch.setattr(knowledge_router.knowledge_base_manager, "get_knowledge_base_info", fake_get_knowledge_base_info)
-    monkeypatch.setattr(knowledge_router, "MilvusGraphService", FakeGraphService)
-    monkeypatch.setattr(knowledge_job_service, "MilvusGraphService", FakeGraphService)
+    monkeypatch.setattr(knowledge_router, "KnowledgeGraphService", FakeGraphService)
+    monkeypatch.setattr(knowledge_job_service, "KnowledgeGraphService", FakeGraphService)
     monkeypatch.setattr(knowledge_router, "submit_job", fake_enqueue_unique_by_payload)
 
     result = await knowledge_router.reconcile_graph_build(

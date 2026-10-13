@@ -4,18 +4,14 @@ import os
 import re
 import time
 import traceback
-import weakref
-from dataclasses import MISSING, dataclass, field, fields
-from functools import partial
+from dataclasses import MISSING, asdict, dataclass, field, fields
 from typing import Any
 
 from pymilvus import (
     AnnSearchRequest,
     Collection,
-    CollectionSchema,
     DataType,
     FieldSchema,
-    Function,
     FunctionType,
     LexicalHighlighter,
     WeightedRanker,
@@ -26,8 +22,8 @@ from pymilvus import (
 
 from yuxi.infrastructure.filesystem import await_io
 from yuxi.infrastructure.observability.logging import logger
-from yuxi.modules.knowledge.base import FileStatus, KnowledgeBase
-from yuxi.modules.knowledge.chunking.ragflow_like.dispatcher import chunk_markdown
+from yuxi.modules.knowledge.base import FileStatus, KnowledgeExecutor
+from yuxi.modules.knowledge.chunking.dispatcher import IngestionChunk, chunk_markdown
 from yuxi.modules.knowledge.chunking.ragflow_like.nlp import count_tokens
 from yuxi.modules.knowledge.read_models import KnowledgeBaseConfig
 from yuxi.modules.knowledge.repositories.chunks import KnowledgeChunkRepository
@@ -38,56 +34,22 @@ from yuxi.modules.system.options import system_options
 from yuxi.shared.datetime import utc_isoformat
 from yuxi.shared.hashing import hashstr
 
-CONTENT_SPARSE_FIELD = "content_sparse"
-CONTENT_ANALYZER_PARAMS = {"type": "chinese"}
-VECTOR_METRIC_TYPE = "COSINE"
+from yuxi.modules.knowledge.storage.milvus import (
+    CONTENT_SPARSE_FIELD,
+    VECTOR_METRIC_TYPE,
+    content_fields,
+    embedding_field,
+    create_collection,
+    get_embedding_function,
+)
+from yuxi.modules.knowledge.storage.offload import run_milvus_query_io
+
 MILVUS_CHUNK_EMBED_BATCH_SIZE = 200
-MILVUS_QUERY_OFFLOAD_LIMIT = 8
 # Milvus 为派生索引：PG 先行落库（权威源），Milvus upsert 失败有限次重试，
 # 重试耗尽则抛错由上层标记文件状态；不回滚 PG（避免单边数据）。
 # 重新索引时 PG batch_upsert 与 Milvus upsert 均按主键幂等，重跑即可收敛。
 MILVUS_CHUNK_UPSERT_ATTEMPTS = 3
 MILVUS_CHUNK_UPSERT_RETRY_DELAY_SECONDS = 1.0
-_milvus_query_offload_semaphore_refs: dict[
-    int,
-    tuple[weakref.ReferenceType[asyncio.AbstractEventLoop], weakref.ReferenceType[asyncio.Semaphore]],
-] = {}
-
-
-def _get_milvus_query_offload_semaphore() -> asyncio.Semaphore:
-    loop = asyncio.get_running_loop()
-    loop_id = id(loop)
-    entry = _milvus_query_offload_semaphore_refs.get(loop_id)
-    if entry is not None:
-        loop_ref, semaphore_ref = entry
-        semaphore = semaphore_ref()
-        if loop_ref() is loop and semaphore is not None:
-            return semaphore
-
-    semaphore = asyncio.Semaphore(MILVUS_QUERY_OFFLOAD_LIMIT)
-
-    def cleanup(ref, stale_loop_id=loop_id):
-        current_entry = _milvus_query_offload_semaphore_refs.get(stale_loop_id)
-        if current_entry is not None and current_entry[1] is ref:
-            _milvus_query_offload_semaphore_refs.pop(stale_loop_id, None)
-
-    _milvus_query_offload_semaphore_refs[loop_id] = (weakref.ref(loop), weakref.ref(semaphore, cleanup))
-    return semaphore
-
-
-async def _run_milvus_query_io(func, /, *args, **kwargs):
-    semaphore = _get_milvus_query_offload_semaphore()
-    await semaphore.acquire()
-    task = asyncio.create_task(asyncio.to_thread(func, *args, **kwargs))
-
-    def release_capacity(completed_task: asyncio.Task):
-        semaphore.release()
-        if completed_task.cancelled():
-            return
-        completed_task.exception()
-
-    task.add_done_callback(release_capacity)
-    return await asyncio.shield(task)
 
 
 @dataclass(kw_only=True)
@@ -305,7 +267,7 @@ def _retrieval_config_options() -> list[dict[str, Any]]:
     return options
 
 
-class MilvusKB(KnowledgeBase):
+class MilvusKB(KnowledgeExecutor):
     """基于 Milvus 的生产级向量库"""
 
     MAX_FINAL_TOP_K = 100
@@ -342,6 +304,9 @@ class MilvusKB(KnowledgeBase):
 
         # 存储集合映射 {kb_id: Collection}
         self.collections: dict[str, Any] = {}
+        from yuxi.modules.knowledge.graphs.service import KnowledgeGraphService
+
+        self.graph_service = KnowledgeGraphService()
 
         # 初始化连接
         self._init_connection()
@@ -393,49 +358,19 @@ class MilvusKB(KnowledgeBase):
         embedding_dim = embedding_info.dimension or 1024
         model_name = embedding_info.model_id
 
-        # 定义集合Schema
-        fields = [
-            FieldSchema(name="id", dtype=DataType.VARCHAR, max_length=100, is_primary=True),
-            FieldSchema(
-                name="content",
-                dtype=DataType.VARCHAR,
-                max_length=65535,
-                enable_analyzer=True,
-                enable_match=True,
-                analyzer_params=CONTENT_ANALYZER_PARAMS,
-            ),
-            FieldSchema(name="chunk_id", dtype=DataType.VARCHAR, max_length=100),
-            FieldSchema(name="file_id", dtype=DataType.VARCHAR, max_length=100),
-            FieldSchema(name="chunk_index", dtype=DataType.INT64),
-            FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=embedding_dim),
-            FieldSchema(name="generation", dtype=DataType.INT64),
-            FieldSchema(name=CONTENT_SPARSE_FIELD, dtype=DataType.SPARSE_FLOAT_VECTOR),
-        ]
-        bm25_function = Function(
-            name="content_bm25",
-            input_field_names=["content"],
-            output_field_names=[CONTENT_SPARSE_FIELD],
-            function_type=FunctionType.BM25,
-        )
-
-        schema = CollectionSchema(
-            fields=fields,
+        collection = create_collection(
+            collection_name,
+            fields=[
+                *content_fields(),
+                FieldSchema(name="chunk_id", dtype=DataType.VARCHAR, max_length=100),
+                FieldSchema(name="file_id", dtype=DataType.VARCHAR, max_length=100),
+                FieldSchema(name="chunk_index", dtype=DataType.INT64),
+                embedding_field(embedding_dim),
+                FieldSchema(name="generation", dtype=DataType.INT64),
+            ],
             description=f"Knowledge base collection for {kb_id} using {model_name}",
-            functions=[bm25_function],
+            using=self.connection_alias,
         )
-
-        # 创建集合
-        collection = Collection(name=collection_name, schema=schema, using=self.connection_alias)
-
-        # 创建索引
-        index_params = {"metric_type": VECTOR_METRIC_TYPE, "index_type": "IVF_FLAT", "params": {"nlist": 1024}}
-        collection.create_index("embedding", index_params)
-        sparse_index_params = {
-            "metric_type": "BM25",
-            "index_type": "SPARSE_INVERTED_INDEX",
-            "params": {"inverted_index_algo": "DAAT_MAXSCORE"},
-        }
-        collection.create_index(CONTENT_SPARSE_FIELD, sparse_index_params)
 
         logger.info(f"Created new Milvus collection: {collection_name} '{model_name=}', {embedding_dim=}")
 
@@ -470,15 +405,6 @@ class MilvusKB(KnowledgeBase):
         await asyncio.to_thread(instance.load)
         logger.info("Milvus collection loaded into memory")
 
-    def _get_embedding_function(self, embedding_model_spec: str, *, sync: bool = False):
-        """获取 embedding 编码函数。sync=True 返回同步版本，否则返回异步版本。"""
-        from yuxi.modules.models.embed import select_embedding_model
-
-        model = select_embedding_model(embedding_model_spec)
-        batch_size = int(getattr(model, "batch_size", 40) or 40)
-        method = model.batch_encode if sync else model.abatch_encode
-        return partial(method, batch_size=batch_size)
-
     async def _get_or_create_milvus_collection(self, kb_id: str, embedding_model_spec: str | None):
         """获取或创建 Milvus 集合"""
         if kb_id in self.collections:
@@ -510,17 +436,17 @@ class MilvusKB(KnowledgeBase):
 
         return await asyncio.to_thread(load_existing_collection)
 
-    def _split_text_into_chunks(self, text: str, file_id: str, filename: str, params: dict) -> list[dict]:
+    def _split_text_into_chunks(self, text: str, file_id: str, filename: str, params: dict) -> list[IngestionChunk]:
         """将文本分割成块"""
         return chunk_markdown(text, file_id, filename, params)
 
-    def _calculate_chunk_stats(self, chunks: list[dict]) -> dict[str, int]:
+    def _calculate_chunk_stats(self, chunks: list[IngestionChunk]) -> dict[str, int]:
         return {
             "chunk_count": len(chunks),
             "token_count": sum(count_tokens(chunk["content"]) for chunk in chunks),
         }
 
-    def _build_chunk_pg_records(self, kb_id: str, chunks: list[dict]) -> list[dict[str, Any]]:
+    def _build_chunk_pg_records(self, kb_id: str, chunks: list[IngestionChunk]) -> list[dict[str, Any]]:
         return [
             {
                 "chunk_id": chunk["chunk_id"],
@@ -548,14 +474,14 @@ class MilvusKB(KnowledgeBase):
         kb_id: str,
         file_id: str,
         collection: Collection,
-        chunks: list[dict],
+        chunks: list[IngestionChunk],
         embeddings: list,
     ) -> None:
         if not chunks:
             return
 
         entities = [
-            [chunk["id"] for chunk in chunks],
+            [chunk["chunk_id"] for chunk in chunks],
             [chunk["content"] for chunk in chunks],
             [chunk["chunk_id"] for chunk in chunks],
             [chunk["file_id"] for chunk in chunks],
@@ -590,7 +516,7 @@ class MilvusKB(KnowledgeBase):
         kb_id: str,
         file_id: str,
         collection: Collection,
-        chunks: list[dict],
+        chunks: list[IngestionChunk],
         embedding_function,
         *,
         chunk_batch_size: int = MILVUS_CHUNK_EMBED_BATCH_SIZE,
@@ -727,7 +653,7 @@ class MilvusKB(KnowledgeBase):
         if not collection:
             raise ValueError(f"Failed to get Milvus collection for {kb_id}")
 
-        embedding_function = self._get_embedding_function(embedding_model_spec)
+        embedding_function = get_embedding_function(embedding_model_spec)
 
         allowed_statuses = {
             FileStatus.PARSED,
@@ -806,7 +732,6 @@ class MilvusKB(KnowledgeBase):
             for chunk in chunks:
                 chunk["generation"] = generation
                 chunk["chunk_id"] = f"{chunk['chunk_id'][:80]}-g{generation}"[:100]
-                chunk["id"] = f"{chunk['id'][:80]}-g{generation}"[:100]
             logger.info(
                 f"Split {filename} into {len(chunks)} chunks with params: "
                 f"chunk_preset_id={params.get('chunk_preset_id')}, "
@@ -911,13 +836,13 @@ class MilvusKB(KnowledgeBase):
 
         # 合并查询参数：kwargs（临时参数）优先级高于 query_params（持久化参数）
         # 这样允许用户在单次查询中临时覆盖持久化配置
-        merged_kwargs = {**config.query_options, **kwargs}
+        merged_kwargs = {**asdict(MilvusRetrievalConfig()), **config.query_options, **kwargs}
 
         try:
             # 查询参数（从 merged_kwargs 读取）
             logger.debug(f"Query params: {merged_kwargs}")
             final_top_k = min(max(int(merged_kwargs.get("final_top_k", 10)), 1), self.MAX_FINAL_TOP_K)
-            similarity_threshold = float(merged_kwargs.get("similarity_threshold", 0.2))
+            similarity_threshold = float(merged_kwargs["similarity_threshold"])
             metric_type = VECTOR_METRIC_TYPE
             include_distances = bool(merged_kwargs.get("include_distances", True))
             search_mode = str(merged_kwargs.get("search_mode", "vector")).lower()
@@ -942,12 +867,12 @@ class MilvusKB(KnowledgeBase):
             output_fields = ["content", "chunk_id", "file_id", "generation", "chunk_index"]
             retrieved_chunks: list[dict] = []
             if search_mode == "vector":
-                embedding_function = self._get_embedding_function(embedding_model_spec, sync=True)
-                query_embedding = await _run_milvus_query_io(embedding_function, [query_text])
+                embedding_function = get_embedding_function(embedding_model_spec, sync=True)
+                query_embedding = await run_milvus_query_io(embedding_function, [query_text])
 
                 search_params = {"metric_type": metric_type, "params": {"nprobe": 10}}
 
-                results = await _run_milvus_query_io(
+                results = await run_milvus_query_io(
                     collection.search,
                     data=query_embedding,
                     anns_field="embedding",
@@ -970,7 +895,7 @@ class MilvusKB(KnowledgeBase):
 
             elif search_mode == "keyword":
                 bm25_top_k = min(
-                    max(int(merged_kwargs.get("bm25_top_k", recall_top_k)), 1),
+                    max(int(merged_kwargs["bm25_top_k"]), 1),
                     self.MAX_BM25_TOP_K,
                 )
                 bm25_drop_ratio_search = float(merged_kwargs.get("bm25_drop_ratio_search", 0.0))
@@ -979,7 +904,7 @@ class MilvusKB(KnowledgeBase):
                     "params": {"drop_ratio_search": bm25_drop_ratio_search},
                 }
 
-                results = await _run_milvus_query_io(
+                results = await run_milvus_query_io(
                     collection.search,
                     data=[query_text],
                     anns_field=CONTENT_SPARSE_FIELD,
@@ -996,10 +921,10 @@ class MilvusKB(KnowledgeBase):
 
                 logger.debug(f"Milvus BM25 query response: {len(retrieved_chunks)} chunks found")
             else:
-                embedding_function = self._get_embedding_function(embedding_model_spec, sync=True)
-                query_embedding = await _run_milvus_query_io(embedding_function, [query_text])
+                embedding_function = get_embedding_function(embedding_model_spec, sync=True)
+                query_embedding = await run_milvus_query_io(embedding_function, [query_text])
                 bm25_top_k = min(
-                    max(int(merged_kwargs.get("bm25_top_k", recall_top_k)), 1),
+                    max(int(merged_kwargs["bm25_top_k"]), 1),
                     self.MAX_BM25_TOP_K,
                 )
                 bm25_drop_ratio_search = float(merged_kwargs.get("bm25_drop_ratio_search", 0.0))
@@ -1023,7 +948,7 @@ class MilvusKB(KnowledgeBase):
                     limit=bm25_top_k,
                     expr=filter_expr,
                 )
-                results = await _run_milvus_query_io(
+                results = await run_milvus_query_io(
                     collection.hybrid_search,
                     reqs=[vector_request, bm25_request],
                     rerank=WeightedRanker(vector_weight, bm25_weight),
@@ -1038,7 +963,7 @@ class MilvusKB(KnowledgeBase):
                 if highlighter and retrieved_chunks:
                     # 3.0.2 的 hybrid_search 不返回高亮；在已召回 ID 内取文本高亮，保持融合分数与顺序。
                     chunk_ids = [chunk["metadata"]["chunk_id"] for chunk in retrieved_chunks]
-                    highlighted = await _run_milvus_query_io(
+                    highlighted = await run_milvus_query_io(
                         collection.search,
                         data=query_embedding,
                         anns_field="embedding",
@@ -1068,7 +993,7 @@ class MilvusKB(KnowledgeBase):
                 )
                 if graph_chunks and filter_expr:
                     chunk_ids = [chunk["metadata"]["chunk_id"] for chunk in graph_chunks]
-                    allowed = await _run_milvus_query_io(
+                    allowed = await run_milvus_query_io(
                         collection.query,
                         expr=f"({filter_expr}) and chunk_id in {json.dumps(chunk_ids)}",
                         output_fields=["chunk_id"],
@@ -1173,9 +1098,6 @@ class MilvusKB(KnowledgeBase):
         embedding_model_spec: str | None,
     ) -> list[dict]:
         try:
-            from yuxi.modules.knowledge.graphs.milvus_graph_service import MilvusGraphService
-            from yuxi.modules.knowledge.graphs.milvus_graph_vector_store import MilvusGraphVectorStore
-
             if not embedding_model_spec:
                 return []
 
@@ -1190,7 +1112,7 @@ class MilvusKB(KnowledgeBase):
             graph_top_k = min(max(int(query_params.get("graph_top_k", 20)), 1), self.MAX_GRAPH_TOP_K)
             graph_max_nodes = min(max(int(query_params.get("graph_max_nodes", 10000)), 1), self.MAX_GRAPH_NODES)
 
-            vector_store = await _run_milvus_query_io(MilvusGraphVectorStore)
+            vector_store = await self.graph_service.get_graph_vector_store()
             entity_hits, triple_hits = await asyncio.gather(
                 vector_store.search_entities(
                     kb_id=kb_id,
@@ -1209,7 +1131,7 @@ class MilvusKB(KnowledgeBase):
             if not seed_weights:
                 return []
 
-            graph_service = MilvusGraphService()
+            graph_service = self.graph_service
             graph_scores = await graph_service.query_and_rank_chunks_by_ppr(
                 kb_id,
                 seed_weights,
@@ -1314,10 +1236,8 @@ class MilvusKB(KnowledgeBase):
         """删除指定代次的派生 Chunk；不传 generation 时删除文件全部代次。"""
         chunk_repo = KnowledgeChunkRepository()
         if await chunk_repo.count_graph_indexed_by_file_id(file_id, generation=generation):
-            from yuxi.modules.knowledge.graphs.milvus_graph_service import MilvusGraphService
-
             try:
-                await MilvusGraphService().delete_file_graph(kb_id, file_id, generation=generation)
+                await self.graph_service.delete_file_graph(kb_id, file_id, generation=generation)
             except Exception as e:
                 logger.error(f"Failed to delete graph data for file {file_id}: {e}")
                 raise
@@ -1342,72 +1262,10 @@ class MilvusKB(KnowledgeBase):
                 data={"chunk_count": 0, "token_count": 0},
             )
 
-    async def delete_file(self, kb_id: str, file_id: str) -> None:
-        """先提交删除事实，再清理派生存储；失败时保留可重试 outbox。"""
-        await KnowledgeFileRepository().mark_deleted(kb_id=kb_id, file_id=file_id)
-
-    async def get_file_basic_info(self, kb_id: str, file_id: str) -> dict:
-        """获取文件基本信息（仅元数据）"""
-        return {"meta": await self._load_file_meta(kb_id, file_id)}
-
-    async def _get_file_content_from_meta(self, file_id: str, file_meta: dict) -> dict:
-        """读取完整解析文本，并校验片段行号与文件快照属于同一入库代次。"""
-        content_info = {"lines": [], "line_location": {"available": False, "reason": "content_unavailable"}}
-        location_reason = "document_not_indexed" if file_meta.get("status") not in {"indexed", "done"} else ""
-        try:
-            chunks = await KnowledgeChunkRepository().list_by_file_id(file_id)
-            if not location_reason and any(chunk.generation != file_meta.get("active_generation") for chunk in chunks):
-                location_reason = "index_changed"
-            content_info["lines"] = [
-                {
-                    "id": chunk.chunk_id,
-                    "content": chunk.content,
-                    "chunk_order_index": chunk.chunk_index,
-                    "start_line": chunk.start_line,
-                    "end_line": chunk.end_line,
-                    "start_char_pos": chunk.start_char_pos,
-                    "end_char_pos": chunk.end_char_pos,
-                    "start_token_pos": chunk.start_token_pos,
-                    "end_token_pos": chunk.end_token_pos,
-                    "graph_indexed": chunk.graph_indexed,
-                    "ent_ids": chunk.ent_ids,
-                    "tags": chunk.tags,
-                    "extraction_result": chunk.extraction_result,
-                }
-                for chunk in chunks
-            ]
-        except Exception as e:
-            location_reason = "chunks_unavailable"
-            logger.error(f"Failed to get file content from PostgreSQL: {e}")
-
-        if not content_info["lines"]:
-            logger.warning(f"No chunks found in PostgreSQL for file {file_id}, file may not have been indexed")
-
-        # Try to read markdown content if available
-        if file_meta.get("markdown_file"):
-            try:
-                content = await self._read_markdown_from_minio(file_meta["markdown_file"])
-                content_info["content"] = content
-            except Exception as e:
-                logger.error(f"Failed to read markdown file for {file_id}: {e}")
-
-        if content_info.get("content"):
-            content_info["line_location"] = {"available": not location_reason, "reason": location_reason or None}
-        return content_info
-
-    async def get_file_content(self, kb_id: str, file_id: str) -> dict:
-        """获取文件内容信息（chunks和lines）"""
-        file_meta = await self._load_file_meta(kb_id, file_id)
-        return await self._get_file_content_from_meta(file_id, file_meta)
-
-    async def get_file_info(self, kb_id: str, file_id: str) -> dict:
-        """获取文件完整信息（基本信息+内容信息）"""
-        file_meta = await self._load_file_meta(kb_id, file_id)
-        content_info = await self._get_file_content_from_meta(file_id, file_meta)
-        return {"meta": file_meta, **content_info}
-
     async def cleanup_knowledge_base_resources(self, kb_id: str) -> dict:
         """清理知识库资源，同时删除 Milvus 集合。"""
+
+        vector_store = await self.graph_service.get_graph_vector_store()
 
         def delete_milvus_collections() -> None:
             try:
@@ -1420,9 +1278,7 @@ class MilvusKB(KnowledgeBase):
                 logger.error(f"Failed to drop Milvus collection {kb_id}: {e}")
                 raise
 
-            from yuxi.modules.knowledge.graphs.milvus_graph_vector_store import MilvusGraphVectorStore
-
-            MilvusGraphVectorStore().drop_graph_collections(kb_id)
+            vector_store.drop_graph_collections(kb_id)
 
         await await_io(asyncio.to_thread(delete_milvus_collections))
 

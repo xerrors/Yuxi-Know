@@ -54,6 +54,6 @@ Durable Task 的 `success` 只表示 worker 已完成编排，不能单独证明
 ## 源码和测试
 
 - [知识库路由](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/api/routers/knowledge/management.py)
-- [图谱服务](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/knowledge/graphs/milvus_graph_service.py)
+- [图谱服务](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/knowledge/graphs/service.py)
 - [知识库 unit tests](https://github.com/xerrors/Yuxi/tree/main/backend/test/unit/knowledge)
 - [图谱和知识库 integration](https://github.com/xerrors/Yuxi/tree/main/backend/test/integration/api)
