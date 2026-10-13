@@ -2,7 +2,7 @@
 
 from sqlalchemy import text
 
-BUSINESS_SCHEMA_VERSION = 11
+BUSINESS_SCHEMA_VERSION = 12
 KNOWLEDGE_SCHEMA_VERSION = 4
 SCHEMA_VERSION_TABLE = "yuxi_schema_migrations"
 

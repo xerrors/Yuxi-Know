@@ -27,7 +27,7 @@ from yuxi.api.errors import domain_error_handler
 from yuxi.api.routers.identity.auth import auth
 from yuxi.infrastructure.oidc.client import LOGOUT_EVENT, OIDCClient
 from yuxi.modules.identity import oidc
-from yuxi.modules.identity.models import Department, OIDCIdentity, OIDCLogout, OIDCSession, User
+from yuxi.modules.identity.models import Department, OIDCIdentity, OIDCLogout, OIDCSession, RevokedAccessToken, User
 from yuxi.modules.identity.security import AuthUtils
 from yuxi.modules.identity.services import oidc as service
 from yuxi.shared.datetime import utc_now
@@ -136,7 +136,7 @@ async def scenario(monkeypatch):
         async with admin.begin() as conn:
             await conn.execute(text(f'CREATE SCHEMA "{schema}"'))
         async with engine.begin() as conn:
-            for model in (Department, User, OIDCIdentity, OIDCSession, OIDCLogout):
+            for model in (Department, User, OIDCIdentity, OIDCSession, OIDCLogout, RevokedAccessToken):
                 await conn.run_sync(lambda sync, model=model: model.__table__.create(sync))
         task = asyncio.create_task(server.serve(sockets=[sock]))
         async with asyncio.timeout(10):
@@ -326,9 +326,7 @@ async def test_local_logout_revokes_jwt_and_exchange_without_affecting_other_ses
     second, _ = await login(scenario)
     headers = {"Authorization": "Bearer " + first["access_token"]}
     result = await scenario["http"].post("/api/auth/oidc/logout", headers=headers)
-    assert result.status_code == 200 and result.json()["logout_url"].startswith(
-        scenario["config"].issuer_url.rsplit("/", 1)[0] + "/logout?"
-    )
+    assert result.status_code == 200 and result.json() == {"logout_url": None}
     assert (await scenario["http"].get("/api/auth/me", headers=headers)).status_code == 401
     assert (await scenario["http"].post("/api/auth/oidc/exchange-code", json={"code": code})).status_code == 403
     assert (await scenario["http"].get("/api/auth/me", headers={"Authorization": "Bearer " + second["access_token"]})).status_code == 200
@@ -405,20 +403,19 @@ async def test_old_raw_binding_jwt_is_rejected_but_fresh_password_login_remains(
     assert (await scenario["http"].get("/api/auth/me", headers={"Authorization": "Bearer " + response["access_token"]})).status_code == 401
 
 
-async def test_logout_discovery_failure_still_returns_completed_local_logout(scenario, monkeypatch):
-    """远端不可达不把已完成的本地退出伪装成失败。"""
-    from yuxi.shared.errors import UpstreamError
+async def test_local_logout_never_contacts_provider(scenario, monkeypatch):
+    """本地退出不得读取认证中心元数据或发起共享 SSO 退出。"""
 
     response, _ = await login(scenario)
 
     async def unavailable(_config):
         """明确模拟元数据服务不可达。"""
-        raise UpstreamError("fixture unavailable")
+        raise AssertionError("local logout must not contact provider")
 
     monkeypatch.setattr(service.client, "metadata", unavailable)
     headers = {"Authorization": "Bearer " + response["access_token"]}
     result = await scenario["http"].post("/api/auth/oidc/logout", headers=headers)
-    assert result.status_code == 200 and result.json() == {"logout_url": None, "provider_logout_available": False}
+    assert result.status_code == 200 and result.json() == {"logout_url": None}
     assert (await scenario["http"].get("/api/auth/me", headers=headers)).status_code == 401
 
 
@@ -566,3 +563,23 @@ async def test_two_http_api_instances_share_browser_transaction_and_result(scena
         server.should_exit = True
         await asyncio.wait_for(task, 10)
         sock.close()
+
+
+async def test_password_logout_revokes_only_current_token_and_preserves_oidc_session(scenario):
+    """密码退出撤销当前 JWT，其他本地和企业登录会话不被结束。"""
+    enterprise, _ = await login(scenario)
+    async with scenario["db"]() as db:
+        (await db.get(User, enterprise["user_id"])).password_hash = AuthUtils.hash_password("fixture-local-password")
+        await db.commit()
+    credentials = {"username": enterprise["uid"], "password": "fixture-local-password"}
+    first = (await scenario["http"].post("/api/auth/token", data=credentials)).json()["access_token"]
+    second = (await scenario["http"].post("/api/auth/token", data=credentials)).json()["access_token"]
+    assert first != second
+    assert (await scenario["http"].get("/api/auth/me", headers={"Authorization": "Bearer " + first + "="})).status_code == 200
+    assert (await scenario["http"].post("/api/auth/oidc/logout", headers={"Authorization": "Bearer " + first})).status_code == 200
+    assert (await scenario["http"].get("/api/auth/me", headers={"Authorization": "Bearer " + first})).status_code == 401
+    assert (await scenario["http"].get("/api/auth/me", headers={"Authorization": "Bearer " + first + "="})).status_code == 401
+    for token in [second, enterprise["access_token"]]:
+        assert (await scenario["http"].get("/api/auth/me", headers={"Authorization": "Bearer " + token})).status_code == 200
+    async with scenario["db"]() as db:
+        assert await db.scalar(select(func.count()).select_from(RevokedAccessToken)) == 1

@@ -107,13 +107,19 @@ async def get_current_user(
             await OIDCRepository(db).active_session(payload["oidc_sid"], user.id, oidc_config.issuer_url)
         except PermissionDeniedError as exc:
             raise credentials_exception from exc
-    elif payload.get("auth_method") != "password":
+    else:
+        from yuxi.modules.identity.repositories.login_sessions import LoginSessionRepository
+
+        if await LoginSessionRepository(db).is_revoked(token):
+            raise credentials_exception
+    if not payload.get("oidc_sid") and payload.get("auth_method") != "password":
         from yuxi.modules.identity.models import OIDCIdentity
 
         # 旧标准账号及同名绑定账号的 JWT 无法证明登录来源，升级后必须重新认证。
         bound = await db.scalar(select(OIDCIdentity.id).where(OIDCIdentity.user_id == user.id).limit(1))
         if bound or (user.uid and user.uid.startswith("oidc:")):
             raise credentials_exception
+    request.state.jwt_token = token
     request.state.jwt_payload = payload
     return user
 

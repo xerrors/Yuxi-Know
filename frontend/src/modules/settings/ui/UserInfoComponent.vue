@@ -5,17 +5,19 @@
         <div class="user-avatar">
           <FallbackAvatar
             :src="userStore.avatar"
-            :name="displayName"
+            :name="userStore.displayName"
             :seed="userStore.uid || userStore.username"
             kind="user"
             :size="32"
             shape="circle"
-            :alt="displayName"
+            :alt="userStore.displayName"
             class="avatar-image"
           />
           <!-- <div class="user-role-badge" :class="userRoleClass"></div> -->
         </div>
-        <div v-if="showRole" class="user-name" :title="displayName">{{ displayName }}</div>
+        <div v-if="showRole" class="user-name" :title="userStore.displayName">
+          {{ userStore.displayName }}
+        </div>
         <div v-if="slots.actions" class="user-info-actions">
           <slot name="actions" />
         </div>
@@ -24,10 +26,15 @@
         <a-menu class="user-account-menu" @click="handleMenuClick">
           <a-menu-item key="user-info" @click="openProfile">
             <div class="user-info-display">
-              <div class="user-menu-username" :title="displayName">{{ displayName }}</div>
+              <div class="user-menu-username" :title="userStore.displayName">
+                {{ userStore.displayName }}
+              </div>
               <div class="user-menu-details">
-                <span class="user-menu-info" :title="isEnterpriseAccount ? '企业账号' : userStore.uid">
-                  {{ isEnterpriseAccount ? '企业账号' : `ID: ${userStore.uid}` }}
+                <span
+                  class="user-menu-info"
+                  :title="userStore.isEnterpriseAccount ? '企业账号' : userStore.uid"
+                >
+                  {{ userStore.isEnterpriseAccount ? '企业账号' : `ID: ${userStore.uid}` }}
                 </span>
                 <span class="user-menu-separator" aria-hidden="true">·</span>
                 <span class="user-menu-role">{{ userRoleText }}</span>
@@ -88,12 +95,6 @@ const infoStore = useInfoStore()
 const themeStore = useThemeStore()
 const slots = useSlots()
 const menuOpen = ref(false)
-const isEnterpriseAccount = computed(() => userStore.uid.startsWith('oidc:'))
-// OIDC 开户生成的随机后缀用于名称唯一性，账号菜单只显示可读名称。
-const displayName = computed(() =>
-  isEnterpriseAccount.value ? userStore.username.replace(/-[0-9a-f]{12}$/, '') : userStore.username
-)
-
 /** 主题项允许连续轮换，其他菜单操作关闭浮层。 */
 function handleMenuClick({ key }) {
   if (key !== 'theme') menuOpen.value = false
@@ -130,16 +131,15 @@ const userRoleText = computed(() => {
 // 退出登录
 const logout = async () => {
   try {
-    const result = await authApi.logoutOIDC()
-    userStore.logout()
-    if (result.provider_logout_available === false) {
-      message.warning('已退出 Yuxi；认证中心会话未退出')
-    }
-    if (result.logout_url) window.location.assign(result.logout_url)
-    else await router.push('/login')
+    await authApi.logout()
   } catch (error) {
-    message.error(error.message || '退出未完成，请重试')
+    if (error.status !== 401) {
+      message.error(error.message || '退出未完成，请重试')
+      return
+    }
   }
+  userStore.logout()
+  await router.replace('/login')
 }
 
 // 前往登录页

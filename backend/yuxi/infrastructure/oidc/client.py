@@ -37,10 +37,8 @@ class OIDCClient:
                 raise UpstreamError("OIDC discovery issuer 不匹配")
             endpoints = {}
             try:
-                for name in ("authorization_endpoint", "token_endpoint", "userinfo_endpoint", "jwks_uri", "end_session_endpoint"):
+                for name in ("authorization_endpoint", "token_endpoint", "userinfo_endpoint", "jwks_uri"):
                     value = getattr(config, name, "") or data.get(name)
-                    if not value and name == "end_session_endpoint":
-                        continue
                     if not isinstance(value, str):
                         raise ValueError("missing endpoint")
                     config.validate_url(value)

@@ -31,7 +31,7 @@ from test.integration.support.postgres_schema import (
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
 
-@pytest.mark.parametrize("version", [8, 9, 10])
+@pytest.mark.parametrize("version", [8, 9, 10, 11])
 async def test_old_business_schema_is_rejected_without_modifying_data(monkeypatch, version):
     """业务结构必须由部署者明确准备，初始化器不得自动升级存量账号。"""
     schema, admin, engine, manager = await _create_isolated_manager("pytest_old_business")
@@ -172,7 +172,7 @@ async def test_fresh_business_schema_contains_input_lifecycle_without_request_ta
             "thread_id",
         } <= input_columns
         assert "conversation_thread_id" not in input_columns
-        assert BUSINESS_SCHEMA_VERSION == 11
+        assert BUSINESS_SCHEMA_VERSION == 12
         assert KNOWLEDGE_SCHEMA_VERSION == 4
     finally:
         await _drop_isolated_schema(schema, admin_engine, scoped_engine)

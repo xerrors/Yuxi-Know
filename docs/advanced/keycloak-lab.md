@@ -60,12 +60,12 @@ API 通过共享网络解析 `auth.yuxi.test`，浏览器通过 hosts 和转发�
 ## 验证登录和账号行为
 
 1. 使用 `demo.dev` 首次登录。在管理页面或数据库确认只有一名对应普通用户，部门为研发部；身份表按 issuer 和 Keycloak sub 映射，uid 为 `oidc:` 前缀的内部标识。
-2. 使用另一份浏览器本地会话再次统一登录，确认本地用户 ID 相同。点击 Yuxi 退出并在 Keycloak 确认，页面返回登录页，旧 Yuxi JWT 必须返回 401。
+2. 使用另一份浏览器本地会话再次统一登录，确认本地用户 ID 相同。点击 Yuxi 退出后直接返回登录页，旧 Yuxi JWT 必须返回 401，认证中心 SSO 保留；再次登录可复用 SSO。
 3. 使用 `demo.product` 登录，确认得到另一名普通用户和产品部。同名本地用户不自动合并，Keycloak 管理员身份不自动授予 Yuxi 管理权限。
 4. 从 Keycloak 管理页面结束员工会话，确认 Yuxi back-channel 接口收到有效通知、旧 JWT 返回 401。禁用员工后新登录应被拒绝；只改 Enabled 不等同于结束会话，须分别验证。
 5. 在独立无痕浏览器测试错误密码，必须停留在 Keycloak。测试结束后恢复虚构员工为 Enabled。
 
-模板强制 PKCE S256，退出跳转为生成时的 Yuxi origin 加 `/login`，back-channel URL 为共享网络内的 `http://api:5050/api/auth/oidc/backchannel-logout`。共享网络中只能让一个目标 API 使用该别名；多个 Yuxi 槽位联调时为每个客户端配置独立容器 DNS 名。已有 realm 不会重新导入模板，需在客户端 Advanced 设置中同步这三项；后端通知地址无需与浏览器 origin 相同，但必须指向同一个 Yuxi 部署。
+模板强制 PKCE S256，back-channel URL 为共享网络内的 `http://api:5050/api/auth/oidc/backchannel-logout`。共享网络中只能让一个目标 API 使用该别名；多个 Yuxi 槽位联调时为每个客户端配置独立容器 DNS 名。已有 realm 不会重新导入模板，需在客户端 Advanced 设置中同步这两项；后端通知地址无需与浏览器 origin 相同，但必须指向同一个 Yuxi 部署。
 
 ## 维护和排障
 

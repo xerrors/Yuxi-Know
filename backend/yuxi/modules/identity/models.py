@@ -294,3 +294,11 @@ class OIDCLogout(Base):
     provider_sid = Column(String(255), nullable=True)
     issued_at = Column(DateTime(timezone=True), nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class RevokedAccessToken(Base):
+    """有效期内的本地 JWT 撤销摘要，独立于认证中心会话。"""
+
+    __tablename__ = "revoked_access_tokens"
+    id = Column(String(64), primary_key=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)

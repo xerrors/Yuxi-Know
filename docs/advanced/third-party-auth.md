@@ -9,12 +9,11 @@
 | 设置 | 地址 |
 | --- | --- |
 | 登录 Redirect URI | `https://yuxi.example.com/api/auth/oidc/callback` |
-| 退出 Post Logout Redirect URI | `https://yuxi.example.com/login` |
 | Back-channel Logout URL | `https://yuxi.example.com/api/auth/oidc/backchannel-logout` |
 
-认证中心必须能访问 back-channel 地址，并发送带签名的标准 logout token；Keycloak 启用 Backchannel Logout Session Required。若不支持此协议，Yuxi 只能主动撤销当前本地会话，无法接收认证中心会话结束通知。管理员停用员工时需同时结束其认证中心会话，或停用 Yuxi 账号。
+认证中心必须能访问 back-channel 地址，并发送带签名的标准 logout token；Keycloak 启用 Backchannel Logout Session Required。若不支持此协议，Yuxi 仍可主动撤销当前本地会话，无法接收认证中心会话结束通知。管理员停用员工时需同时结束其认证中心会话，或停用 Yuxi 账号。
 
-Yuxi 要求 discovery 的 issuer 与配置精确一致，使用 JWKS 中的 RS256/384/512 或 ES256/384/512 公钥；ID token 的受众仅允许当前 client，若有 azp 也必须匹配。UserInfo 的 sub 必须与 ID token 一致。认证中心应提供 discovery、JWKS、授权、token 和 UserInfo 端点；登出端点可选。相关协议依据见[官方资料核查](../develop-guides/audits/oidc-production-security-research-2026-10-13.md)。
+Yuxi 要求 discovery 的 issuer 与配置精确一致，使用 JWKS 中的 RS256/384/512 或 ES256/384/512 公钥；ID token 的受众仅允许当前 client，若有 azp 也必须匹配。UserInfo 的 sub 必须与 ID token 一致。认证中心应提供 discovery、JWKS、授权、token 和 UserInfo 端点。相关协议依据见[官方资料核查](../develop-guides/audits/oidc-production-security-research-2026-10-13.md)。
 
 ## 配置与启停
 
@@ -42,7 +41,7 @@ OIDC_REDIRECT_URI=https://yuxi.example.com/api/auth/oidc/callback
 | `OIDC_FETCH_DEPARTMENT_INFO` | `false` | 仅开户时读取 UserInfo 的部门字符串 |
 | `OIDC_DEPARTMENT_CLAIM` | `department` | 部门字段，去空白并截为 50 字符 |
 | `OIDC_FORCE_PROMPT_LOGIN` | `false` | 为 true 时每次要求认证中心重新登录 |
-| `OIDC_AUTHORIZATION_ENDPOINT` / `OIDC_TOKEN_ENDPOINT` / `OIDC_USERINFO_ENDPOINT` / `OIDC_END_SESSION_ENDPOINT` | 空 | 可覆盖对应 discovery 端点，仍执行 discovery 与 issuer/JWKS 验证 |
+| `OIDC_AUTHORIZATION_ENDPOINT` / `OIDC_TOKEN_ENDPOINT` / `OIDC_USERINFO_ENDPOINT` | 空 | 可覆盖对应 discovery 端点，仍执行 discovery 与 issuer/JWKS 验证 |
 
 `OIDC_USE_RAW_USERNAME=true` 和非 `user` 的 `OIDC_DEFAULT_ROLE` 会阻止启动。保留空的端点覆盖项即可使用 discovery，不需要邮箱字段。配置由 API 进程启动时读取；所有 API 副本必须使用同一配置、JWT 密钥、PostgreSQL 和 Redis。
 
@@ -59,11 +58,11 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --force-rec
 
 Yuxi 以已验证的 `issuer + sub` 唯一识别身份，首次登录默认自动创建普通用户，重复登录复用同一账号。显示名带随机后缀以避免名称碰撞；不会按用户名、邮箱自动合并现有账号，不恢复已注销用户，也不会自动授予管理员权限。现有账号的管理和权限仍由 Yuxi 拥有，部门声明仅在开户时使用。当前没有自助账号绑定功能。
 
-OIDC 本地会话固定一小时；每次 API 访问和登录结果兑换都读取数据库中的账号及撤销状态。点击退出先撤销当前本地会话，再跳转认证中心确认退出；认证中心不支持退出或暂不可达时，页面提示本地已退出、认证中心会话未退出。Back-channel 通知只撤销匹配提供商及 sid/sub 的会话；合法通知重试不会重复产生副作用。
+OIDC 本地会话固定一小时；每次 API 访问和登录结果兑换都读取数据库中的账号及撤销状态。点击退出只撤销当前 Yuxi 会话、清除浏览器登录状态并返回 Yuxi 登录页，不访问认证中心 end_session 或结束共享 SSO。其他产品继续使用其认证中心会话；再次登录 Yuxi 可以复用仍有效的 SSO。Back-channel 通知只撤销匹配提供商及 sid/sub 的会话；合法通知重试不会重复产生副作用。
 
-认证中心仅修改 Enabled 不保证发出登出通知。没有通知时，已签发的 Yuxi 会话可使用到期；需要即时停用时，结束认证中心会话并核对通知结果，或停用 Yuxi 用户。已经开始执行的任务不由登录撤销自动取消。管理员显式给用户设置本地密码后，密码登录属于独立凭据，不随 IdP 会话结束而撤销。
+认证中心仅修改 Enabled 不保证发出登出通知。没有通知时，已签发的 Yuxi 会话可使用到期；需要即时停用时，结束认证中心会话并核对通知结果，或停用 Yuxi 用户。已经开始执行的任务不由登录撤销自动取消。密码登录属于独立凭据，不随 IdP 会话结束而撤销；Yuxi 主动退出会持久撤销当前密码 JWT，旧令牌不可继续访问。
 
-业务数据库必须具备 Schema 11 的 OIDC 身份、会话和登出事件表。新库由 `schema-init` 创建；现有库需部署者先完成结构调整，代码不提供旧 OIDC 自动迁移、历史绑定推断。历史绑定用户没有会话标识的旧 JWT 会被拒绝，需重新使用 OIDC 或密码登录。部署时保留数据库备份，禁止仅改版本号而未建立实际表与约束。
+业务数据库必须具备 Schema 12 的 OIDC 身份、会话、登出事件与本地 JWT 撤销表。新库由 `schema-init` 创建；现有库需部署者先完成结构调整，代码不提供旧 OIDC 自动迁移、历史绑定推断。历史绑定用户没有会话标识的旧 JWT 会被拒绝，需重新使用 OIDC 或密码登录。部署时保留数据库备份，禁止仅改版本号而未建立实际表与约束。
 
 ## 排查与验收
 

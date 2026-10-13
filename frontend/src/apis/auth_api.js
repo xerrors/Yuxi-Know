@@ -42,8 +42,8 @@ async function getUserAccessOptions() {
   return apiAdminGet('/api/auth/users/access-options')
 }
 
-/** 先撤销当前 OIDC 会话，返回受信任的认证中心退出地址。 */
-async function logoutOIDC() {
+/** 只撤销当前 Yuxi 凭据，保留认证中心的共享登录状态。 */
+async function logout() {
   return apiPost('/api/auth/oidc/logout', {})
 }
 
@@ -149,7 +149,7 @@ export const authApi = {
   getOIDCLoginUrl,
   getUserAccessOptions,
   exchangeOIDCCode,
-  logoutOIDC,
+  logout,
   getCLIAuthSession,
   approveCLIAuthSession
 }

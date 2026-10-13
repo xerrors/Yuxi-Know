@@ -18,7 +18,7 @@ Redis 保存带 TTL 的 state/登录结果，HttpOnly SameSite=Lax cookie 绑定
 
 PostgreSQL 保存 OIDCIdentity 的 issuer+subject 唯一映射以及 OIDCSession 的本地会话，API 认证依赖逐次核对 OIDC 会话有效性。自动开户只创建普通用户，不按同名或邮箱绑定、不恢复已删除账号。Schema 升级为 11；当前数据库直接调整到目标结构；代码不提供旧 OIDC 自动迁移或历史绑定推断。保留本地密码登录作为独立入口。
 
-退出首先撤销本地 OIDC 会话，再提供认证中心 end_session 跳转。Back-channel logout 校验签名和专用 logout claims，持久记录事件并撤销匹配会话；事件也阻止进行中的旧认证在登出后发布。该机制依赖 IdP 发送标准通知，不提供 SCIM 或对目录停用事件的轮询。
+退出行为由[本地退出决定](./2026-10-13-yuxi-local-logout.md)收敛为只撤销 Yuxi 凭据并返回登录页，不结束认证中心 SSO。Back-channel logout 校验签名和专用 logout claims，持久记录事件并撤销匹配会话；事件也阻止进行中的旧认证在登出后发布。该机制依赖 IdP 发送标准通知，不提供 SCIM 或对目录停用事件的轮询。
 
 ## 替代方案
 

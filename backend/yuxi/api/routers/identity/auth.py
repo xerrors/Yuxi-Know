@@ -871,7 +871,7 @@ async def oidc_exchange_code(request: Request, response: Response, code: str = B
 
 @auth.post("/oidc/logout")
 async def oidc_logout(request: Request, response: Response, user=Depends(get_required_user), db=Depends(get_db)):
-    """当前用户主动退出 OIDC 会话。"""
+    """当前用户只撤销 Yuxi 本地凭据，保留认证中心共享会话。"""
     response.headers["Cache-Control"] = "no-store"
     return await oidc_logout_handler(request, db)
 

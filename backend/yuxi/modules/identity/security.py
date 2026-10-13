@@ -137,7 +137,7 @@ class AuthUtils:
     def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
         to_encode = data.copy()
         expire = utc_now() + (expires_delta or timedelta(seconds=JWT_EXPIRATION))
-        to_encode.update({"exp": expire, "iss": _get_jwt_issuer(), "aud": JWT_AUDIENCE})
+        to_encode.update({"exp": expire, "iss": _get_jwt_issuer(), "aud": JWT_AUDIENCE, "jti": secrets.token_urlsafe(32)})
         return jwt.encode(to_encode, _get_jwt_secret_key(), algorithm=JWT_ALGORITHM)
 
     @staticmethod

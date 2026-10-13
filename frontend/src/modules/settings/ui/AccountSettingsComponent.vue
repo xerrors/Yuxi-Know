@@ -23,12 +23,12 @@
             <div class="avatar-upload" :class="{ uploading: avatarUploading }">
               <FallbackAvatar
                 :src="userStore.avatar"
-                :name="userStore.username"
+                :name="userStore.displayName"
                 :seed="userStore.uid || userStore.username"
                 kind="user"
                 :size="80"
                 shape="circle"
-                :alt="userStore.username"
+                :alt="userStore.displayName"
                 class="account-avatar"
               />
               <div class="avatar-mask">
@@ -60,7 +60,7 @@
                 class="editable-value"
                 @click="startFieldEdit('username')"
               >
-                {{ userStore.username || '未设置' }}
+                {{ userStore.displayName || '未设置' }}
               </button>
             </div>
             <div class="profile-row editable-row">
@@ -87,8 +87,44 @@
               </button>
             </div>
             <div class="profile-row">
-              <span class="profile-label">UID</span>
-              <span class="profile-value mono">{{ userStore.uid || '未设置' }}</span>
+              <span class="profile-label">账号 ID</span>
+              <div class="identifier-field">
+                <div class="identifier-actions">
+                  <span class="profile-value" :class="{ mono: !userStore.isEnterpriseAccount }">
+                    {{ userStore.isEnterpriseAccount ? '企业账号' : userStore.uid || '未设置' }}
+                  </span>
+                  <a-button
+                    v-if="userStore.isEnterpriseAccount"
+                    type="text"
+                    size="small"
+                    :aria-expanded="identifierVisible"
+                    aria-controls="account-identifier"
+                    @click="identifierVisible = !identifierVisible"
+                  >
+                    <template #icon
+                      ><ChevronUp v-if="identifierVisible" :size="14" /><ChevronDown
+                        v-else
+                        :size="14"
+                    /></template>
+                    {{ identifierVisible ? '收起' : '查看 ID' }}
+                  </a-button>
+                  <a-button
+                    type="text"
+                    size="small"
+                    :disabled="!userStore.uid"
+                    @click="copyIdentifier"
+                  >
+                    <template #icon><Copy :size="14" /></template>
+                    复制
+                  </a-button>
+                </div>
+                <code
+                  v-if="userStore.isEnterpriseAccount && identifierVisible"
+                  id="account-identifier"
+                  class="identifier-details mono"
+                  >{{ userStore.uid }}</code
+                >
+              </div>
             </div>
           </div>
         </div>
@@ -118,15 +154,25 @@ import UserConfigSettingsCard from '@/modules/settings/ui/UserConfigSettingsCard
 
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
-import { Building2, RefreshCw, ShieldCheck, Upload } from '@lucide/vue'
+import {
+  Building2,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  RefreshCw,
+  ShieldCheck,
+  Upload
+} from '@lucide/vue'
 import FallbackAvatar from '@/shared/ui/FallbackAvatar.vue'
 import { useUserStore } from '@/modules/identity/model/user'
+import { copyTextToClipboard } from '@/shared/lib/clipboard'
 
 const userStore = useUserStore()
 const avatarUploading = ref(false)
 const refreshing = ref(false)
 const savingField = ref('')
 const editingField = ref('')
+const identifierVisible = ref(false)
 const usernameInput = ref(null)
 const phoneInput = ref(null)
 const userConfigRef = ref(null)
@@ -149,7 +195,7 @@ const userRoleText = computed(() => {
 })
 
 const syncProfileDraft = () => {
-  profileDraft.username = userStore.username || ''
+  profileDraft.username = userStore.displayName || ''
   profileDraft.phone_number = userStore.phoneNumber || ''
 }
 
@@ -185,12 +231,12 @@ const saveField = async (field) => {
   const payload = {}
   if (field === 'username') {
     const username = profileDraft.username.trim()
-    if (username.length < 2 || username.length > 20) {
-      message.error('用户名长度必须在 2-20 个字符之间')
+    if (username === userStore.displayName) {
+      cancelField()
       return
     }
-    if (username === userStore.username) {
-      cancelField()
+    if (username.length < 2 || username.length > 20) {
+      message.error('用户名长度必须在 2-20 个字符之间')
       return
     }
     payload.username = username
@@ -220,6 +266,16 @@ const saveField = async (field) => {
     message.error('更新失败：' + (error.message || '请稍后重试'))
   } finally {
     savingField.value = ''
+  }
+}
+
+/** 复制原始账号标识，HTTP 环境复用项目的剪贴板实现。 */
+const copyIdentifier = async () => {
+  try {
+    await copyTextToClipboard(userStore.uid)
+    message.success('账号 ID 已复制')
+  } catch {
+    message.error('复制失败，请查看 ID 后手动复制')
   }
 }
 
@@ -280,6 +336,13 @@ const handleAvatarChange = async (info) => {
     avatarUploading.value = false
   }
 }
+
+watch(
+  () => userStore.uid,
+  () => {
+    identifierVisible.value = false
+  }
+)
 
 watch(() => [userStore.username, userStore.phoneNumber], syncProfileDraft, { immediate: true })
 </script>
@@ -413,6 +476,35 @@ watch(() => [userStore.username, userStore.phoneNumber], syncProfileDraft, { imm
       color: var(--main-color);
       background: var(--main-5);
     }
+  }
+
+  .identifier-field {
+    min-width: 0;
+  }
+
+  .identifier-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+
+    .profile-value {
+      max-width: 100%;
+      margin-right: 4px;
+    }
+  }
+
+  .identifier-details {
+    display: block;
+    margin-top: 6px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: var(--gray-50);
+    color: var(--gray-600);
+    font-size: 12px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+    user-select: text;
   }
 
   .inline-input {

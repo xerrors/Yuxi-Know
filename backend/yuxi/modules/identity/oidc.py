@@ -25,7 +25,6 @@ class OIDCConfig(BaseModel):
     authorization_endpoint: str = ""
     token_endpoint: str = ""
     userinfo_endpoint: str = ""
-    end_session_endpoint: str = ""
     provider_name: str = "OIDC登录"
     scopes: str = "openid profile email"
     auto_create_user: bool = True
@@ -60,7 +59,6 @@ class OIDCConfig(BaseModel):
             "authorization_endpoint",
             "token_endpoint",
             "userinfo_endpoint",
-            "end_session_endpoint",
         ):
             value = getattr(self, field)
             if value:

@@ -4,7 +4,7 @@ import base64
 import hashlib
 import json
 import secrets
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import urlencode
 
 from sqlalchemy import select
 
@@ -15,8 +15,7 @@ from yuxi.modules.identity.models import Department
 from yuxi.modules.identity.repositories.oidc import OIDCRepository
 from yuxi.modules.identity.security import AuthUtils
 from yuxi.shared.datetime import utc_now
-from yuxi.shared.errors import PermissionDeniedError, StateConflictError, UpstreamError
-from yuxi.infrastructure.observability.logging import logger
+from yuxi.shared.errors import PermissionDeniedError, StateConflictError
 
 _MATCH = """
 local raw = redis.call('GET', KEYS[1])
@@ -107,29 +106,6 @@ class OIDCService:
         }
         await self.db.rollback()
         return response
-
-    async def logout(self, session_id, user_id):
-        """先撤销本地登录，认证中心不可达时仍保持本地退出生效。"""
-        await self.repo.revoke_session(session_id, user_id)
-        await self.db.commit()
-        if not self.config.enabled:
-            return {"logout_url": None, "provider_logout_available": False}
-        try:
-            metadata = await client.metadata(self.config)
-        except UpstreamError:
-            logger.warning("OIDC 本地会话已撤销，认证中心登出端点暂不可用")
-            return {"logout_url": None, "provider_logout_available": False}
-        endpoint = metadata.get("end_session_endpoint")
-        if not endpoint:
-            return {"logout_url": None, "provider_logout_available": False}
-        callback = urlsplit(self.config.redirect_uri)
-        logout_url = (
-            endpoint
-            + "?"
-            + urlencode({"client_id": self.config.client_id, "post_logout_redirect_uri": f"{callback.scheme}://{callback.netloc}/login"})
-        )
-
-        return {"logout_url": logout_url, "provider_logout_available": True}
 
     async def backchannel_logout(self, token):
         """只有专用签名通知可以撤销对应提供商的会话。"""

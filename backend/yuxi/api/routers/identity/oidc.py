@@ -9,6 +9,7 @@ from fastapi.responses import RedirectResponse
 
 from yuxi.modules.identity import oidc
 from yuxi.modules.identity.services.oidc import OIDCService
+from yuxi.modules.identity.services.logout import logout_current_session
 from yuxi.shared.errors import DomainError
 
 NO_STORE = {"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"}
@@ -54,6 +55,4 @@ async def oidc_logout_handler(request, db):
     payload = getattr(request.state, "jwt_payload", {})
     if getattr(request.state, "api_key", None):
         raise HTTPException(403, "API Key 不支持此操作")
-    if not payload.get("oidc_sid"):
-        return {"logout_url": None}
-    return await OIDCService(db).logout(payload["oidc_sid"], int(payload["sub"]))
+    return await logout_current_session(db, request.state.jwt_token, payload)

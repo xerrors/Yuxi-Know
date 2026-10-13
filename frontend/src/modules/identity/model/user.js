@@ -20,6 +20,11 @@ export const useUserStore = defineStore('user', () => {
 
   // 计算属性
   const isLoggedIn = computed(() => !!token.value)
+  const isEnterpriseAccount = computed(() => uid.value.startsWith('oidc:'))
+  // 开户随机后缀用于唯一性；资料与菜单共享同一可读名称。
+  const displayName = computed(() =>
+    isEnterpriseAccount.value ? username.value.replace(/-[0-9a-f]{12}$/, '') : username.value
+  )
   const isAdmin = computed(() => userRole.value === 'admin' || userRole.value === 'superadmin')
   const isSuperAdmin = computed(() => userRole.value === 'superadmin')
 
@@ -233,6 +238,8 @@ export const useUserStore = defineStore('user', () => {
 
     // 计算属性
     isLoggedIn,
+    isEnterpriseAccount,
+    displayName,
     isAdmin,
     isSuperAdmin,
 
