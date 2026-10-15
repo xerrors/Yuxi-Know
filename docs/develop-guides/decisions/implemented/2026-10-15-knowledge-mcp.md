@@ -32,17 +32,12 @@ Host 白名单由 API 环境变量 `YUXI_MCP_ALLOWED_HOSTS` 拥有，默认允�
 
 MCP 与 API 同步发布和启停，共用资源；服务故障不再表现为独立上游连接错误。模型可用的工具和资源范围保持原五个只读用例。`knowledge` Key 可以进入 MCP，但不扩大到其他 API 路径；`full` Key 仍受用户可见性约束，`agents` Key 与 JWT 被拒绝。
 
-独立 MCP package、Compose、workflow、容器和 5051 监听已移除，OpenCode 使用原有专用 Key 连接 `/api/mcp`。重新引入独立服务需要明确的独立扩容或发布隔离需求。
+MCP 随 API 发布，OpenCode 使用专用 Key 连接 `/api/mcp`。独立服务需要明确的独立扩容或发布隔离需求。
 
 ## 验证
 
-- `docker compose exec -T api uv run --group test pytest test/unit -m 'not slow'`：2619 passed、59 skipped、7 subtests passed，包含 21 项新增 MCP 单测。协议测试覆盖 Schema、并发身份、可见性、无效/agents/撤销 Key、未绑定部门、未知工具、参数约束、Host/Origin、错误脱敏和 MCP 启动失败清理。既有 `.github/workflows/test.yml` 运行完整 unit 集合。
-- `docker compose exec -T api uv run --group test pytest test/integration/api/test_knowledge_mcp.py -q`：2 passed。Fixture 创建并回收 Key、用户、私有知识库与 PostgreSQL/MinIO 文档；真实 MCP 回读文件、原文和关键词行号，结果与 HTTP API 相同，跨用户查询/原文被拒绝，JWT、agents、无效及撤销 Key 被拒绝。`.github/workflows/system-tests.yml` 显式运行该测试，无专属 Key 或预存数据要求。该集合不创建 Session，使用 self_managed_resources 避免扫描与本测试无关的共享 Workdir。
-- 真实 SDK 在 `/api/mcp` 完成全部五个工具调用：检索返回 8 个片段，原文 11 行，关键词定位成功。真实 HTTP 临时 Key 探针证明 agents 为 403，knowledge/agents Key 撤销后均为 401，专用 knowledge Key 调用凭据管理 API 为 403；临时 Key 均已撤销。
-- OpenCode 2.0.14 的 `opencode mcp list` 为 connected；`opencode run --model siliconflow-cn/deepseek-ai/DeepSeek-V4-Flash --auto --format json` 完成列表、检索和原文读取。回读实际工具结果确认 8 个片段和 11 行原文。
-- `docker compose -p yuxi-knowledge-mcp -f packages/knowledge-mcp/compose.yml down` 在删除该配置前停止并移除旧容器和网络；TCP 检查证明 5051 不可连接。源码中旧部署入口已删除。
-- `python3 scripts/verify_engineering_contracts.py`、`python3 -m unittest scripts.test_verify_engineering_contracts`（64 tests）、`cd docs && pnpm run build`、`git diff --check` 通过。容器缺少 ruff 可执行文件，改用本机 `uvx ruff check` 和 `uvx ruff format --check` 验证六个受影响 Python 文件，均通过。
+- `docker compose exec -T api uv run --group test pytest test/unit -m 'not slow'` 通过。MCP 协议测试覆盖 Schema、并发身份、可见性、无效/agents/撤销 Key、未绑定部门、未知工具、参数约束、Host/Origin、错误脱敏和启动失败清理；后端 workflow 运行完整 unit 集合。
+- `docker compose exec -T api uv run --group test pytest test/integration/api/test_knowledge_mcp.py -q` 通过。Fixture 创建并回收 Key、用户、私有知识库与 PostgreSQL/MinIO 文档；MCP 回读结果与 HTTP API 相同，跨用户查询和原文读取被拒绝，JWT、agents、无效及撤销 Key 被拒绝。system-tests workflow 显式运行该测试，无专属 Key 或预存数据要求。
+- SDK 和 OpenCode 实测完成工具发现、检索、原文读取与关键词定位，核对非空片段与对应来源；专用 knowledge Key 访问凭据管理 API 被拒绝。
 
-运行验证使用现有开发 Compose。主工作目录已有其他开发改动，仅在确认三个既有接线文件仍与基线一致后同步 MCP 实现与测试，保留其他修改；后端全量单测反映该实际部署工作树。公网 HTTPS、跨机器代理和其他 MCP 客户端未验证。
-
-独立 Reviewer 已审查实现、测试、CI 与文档，复核后无阻断问题。
+运行验证使用开发 Compose。公网 HTTPS、跨机器代理和其他 MCP 客户端未验证。

@@ -118,7 +118,6 @@ export default defineConfig({
           { text: '参与贡献', link: '/develop-guides/contributing' },
           { text: '测试规范', link: '/develop-guides/testing-guidelines' },
           { text: 'Agents API 对齐计划', link: '/develop-guides/agents-api-alignment-plan' },
-          { text: 'WeKnora MCP 对标', link: '/develop-guides/weknora-mcp-comparison' },
           { text: 'Yuxi Spec Loop', link: '/develop-guides/spec-loop' },
           { text: '工程信任系统', link: '/develop-guides/engineering-trust' },
           { text: '并行 worktree 环境', link: '/develop-guides/parallel-worktree-environments' },
