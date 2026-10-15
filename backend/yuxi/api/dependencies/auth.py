@@ -12,6 +12,8 @@ from yuxi.shared.datetime import utc_now
 # 定义OAuth2密码承载器，指定token URL
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token", auto_error=False)
 
+KNOWLEDGE_MCP_PATH = "/api/mcp"
+
 KNOWLEDGE_TOOL_PATHS = frozenset(
     f"/api/v1/knowledge/tools/{name}"
     for name in (
@@ -63,7 +65,7 @@ async def get_current_user(
             permitted_root = "/api/v1/agents" if api_key_obj.access_level == "agents" else None
             if api_key_obj.access_level != "full" and not (
                 (permitted_root and (route_path == permitted_root or route_path.startswith(f"{permitted_root}/")))
-                or (api_key_obj.access_level == "knowledge" and route_path in KNOWLEDGE_TOOL_PATHS)
+                or (api_key_obj.access_level == "knowledge" and route_path in KNOWLEDGE_TOOL_PATHS | {KNOWLEDGE_MCP_PATH})
             ):
                 raise HTTPException(status_code=403, detail="该 API Key 无权访问此 API 面")
             api_key_obj.last_used_at = utc_now()

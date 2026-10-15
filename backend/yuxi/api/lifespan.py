@@ -16,7 +16,8 @@ async def lifespan(app: FastAPI):
     app.state.startup_components = {}
     try:
         await _startup(app)
-        yield
+        async with app.state.knowledge_mcp.manager.run():
+            yield
     finally:
         app.state.startup_complete = False
         await _shutdown_component("sandbox_provider", shutdown_sandbox_provider)

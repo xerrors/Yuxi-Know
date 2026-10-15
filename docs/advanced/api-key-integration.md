@@ -70,7 +70,7 @@ API Key 通过 `Authorization` 请求头发送。生产环境必须使用 HTTPS�
 Authorization: Bearer yxkey_<your-secret>
 ```
 
-服务端会根据 `yxkey_` 前缀进入 API Key 校验；其他 Bearer token 按 JWT 校验。当前派生的 secret 由 `yxkey_` 加 48 位十六进制字符组成，总长度为 54 个字符；客户端不要记录或打印完整 secret。`full` Key 的权限受绑定用户约束；`agents` Key 还受 Agents Public API 路由边界约束，访问旧产品接口会返回 `403`。普通登录用户的 JWT 也可调用 Public API；`agents` Key 必须绑定 `app_id`。`knowledge` Key 只可访问 [五个只读知识库工具](./knowledge-base-api.md#外部查询接口)；知识库管理与上传接口返回 `403`，未注册的下载工具路径返回 `404`，具体知识库仍按绑定用户的资源权限过滤。
+服务端会根据 `yxkey_` 前缀进入 API Key 校验；其他 Bearer token 按 JWT 校验。当前派生的 secret 由 `yxkey_` 加 48 位十六进制字符组成，总长度为 54 个字符；客户端不要记录或打印完整 secret。`full` Key 的权限受绑定用户约束；`agents` Key 还受 Agents Public API 路由边界约束，访问旧产品接口会返回 `403`。普通登录用户的 JWT 也可调用 Public API；`agents` Key 必须绑定 `app_id`。`knowledge` Key 可通过 [MCP 入口](./knowledge-mcp.md) 或 HTTP 访问 [五个只读知识库工具](./knowledge-base-api.md#外部查询接口)；知识库管理与上传接口返回 `403`，未注册的下载工具路径返回 `404`，具体知识库仍按绑定用户的资源权限过滤。
 
 例如，用 `knowledge` Key 列出可见知识库：
 

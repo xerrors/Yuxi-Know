@@ -4,6 +4,8 @@
 
 ## 权限
 
+外部 MCP 客户端可通过[知识库 MCP 接入](./knowledge-mcp.md)调用本页的五个只读查询工具。
+
 文档管理接口要求知识库管理权限；原始文件上传接口还要求管理员身份。读取和外部查询接口要求知识库读取权限。
 
 知识库的 `share_config` 使用 version 2，分别保存 `read_scope` 和 `manage_scope`。范围的 `access_level` 可以是 `global`、`department` 或 `user`；范围关系遵循[资源权限的同类型子集规则](../mechanisms/resource-permissions.md#共享资源)。
