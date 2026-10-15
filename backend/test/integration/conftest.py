@@ -15,6 +15,7 @@ import httpx
 import pytest
 import pytest_asyncio
 from dotenv import load_dotenv
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
@@ -78,6 +79,16 @@ def _require_admin_credentials() -> tuple[str, str]:
     if not ADMIN_LOGIN or not ADMIN_PASSWORD:
         pytest.skip("Integration credentials are not configured via TEST_USERNAME / TEST_PASSWORD.")
     return ADMIN_LOGIN, ADMIN_PASSWORD
+
+
+@pytest_asyncio.fixture(scope="function")
+async def postgres_sessions():
+    """提供当前测试专用连接池，独立回读已提交事实并在同一事件循环关闭。"""
+    engine = create_async_engine(os.environ["POSTGRES_URL"], pool_pre_ping=True)
+    try:
+        yield async_sessionmaker(engine, expire_on_commit=False)
+    finally:
+        await engine.dispose()
 
 
 @pytest_asyncio.fixture(scope="function")

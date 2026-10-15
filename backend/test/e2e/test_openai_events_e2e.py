@@ -1,5 +1,6 @@
 """官方输入默认优先级、幂等批次与公开 item 恢复的 assembled-path 证据。"""
 
+import os
 import asyncio
 import uuid
 
@@ -29,7 +30,7 @@ async def test_default_message_keeps_batch_across_concurrent_steer_and_retry(e2e
     slug = await _agent(e2e_client, e2e_headers, uid)
     gate = str(uuid.uuid4())
     thread_id = turn_id = None
-    async with httpx.AsyncClient(base_url="http://api:8765", timeout=5) as replay:
+    async with httpx.AsyncClient(base_url=os.environ["OPENAI_REPLAY_URL"].removesuffix("/v1"), timeout=5) as replay:
         try:
             created = await e2e_client.post(
                 "/api/v1/agents/sessions",
@@ -162,7 +163,7 @@ async def test_default_cancel_target_is_fixed_for_idempotent_retry(e2e_client, e
     slug = await _agent(e2e_client, e2e_headers, uid)
     gate = str(uuid.uuid4())
     thread_id = turn_id = None
-    async with httpx.AsyncClient(base_url="http://api:8765", timeout=5) as replay:
+    async with httpx.AsyncClient(base_url=os.environ["OPENAI_REPLAY_URL"].removesuffix("/v1"), timeout=5) as replay:
         try:
             created = await e2e_client.post(
                 "/api/v1/agents/sessions",
@@ -220,7 +221,7 @@ async def test_cancel_preserves_displayed_partial_text_in_public_history(e2e_cli
     slug = await _agent(e2e_client, e2e_headers, uid)
     gate = str(uuid.uuid4())
     thread_id = turn_id = None
-    async with httpx.AsyncClient(base_url="http://api:8765", timeout=5) as replay:
+    async with httpx.AsyncClient(base_url=os.environ["OPENAI_REPLAY_URL"].removesuffix("/v1"), timeout=5) as replay:
         try:
             created = await e2e_client.post(
                 "/api/v1/agents/sessions",

@@ -1,4 +1,9 @@
 from copy import deepcopy
+import os
+import shlex
+import subprocess
+
+import pytest
 
 from test.unit.config._shared import load_compose, project_root
 
@@ -112,9 +117,27 @@ def test_production_compose_scopes_images_by_project_with_legacy_default() -> No
     assert compose["services"]["frontend"]["image"].startswith("${COMPOSE_PROJECT_NAME:-yuxi}-frontend:${YUXI_VERSION:-")
 
 
-def test_host_test_runner_probes_current_compose_slot() -> None:
-    """测试运行器必须通过 Compose service 探测当前槽位的 readiness。"""
-    source = (project_root() / "backend/test/run_tests.sh").read_text()
+@pytest.mark.parametrize("base_url,ready", [(None, True), ("http://slot-api:25050", True), ("http://slot-api:25050", False)])
+def test_host_test_runner_probes_current_compose_slot(tmp_path, monkeypatch, base_url, ready) -> None:
+    """真实 shell 入口探测目标槽位，未就绪不能执行任何测试批次。"""
+    commands_file = tmp_path / "commands"
+    docker = tmp_path / "docker"
+    docker.write_text(
+        '#!/bin/sh\nprintf "%s\\n" "$*" >> "$DOCKER_ARGS_LOG"\n'
+        'if [ "$5" = curl ]; then exit "$PROBE_EXIT_CODE"; fi\n'
+    )
+    docker.chmod(0o700)
+    monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
+    monkeypatch.setenv("DOCKER_ARGS_LOG", str(commands_file))
+    monkeypatch.setenv("PROBE_EXIT_CODE", "0" if ready else "7")
+    if base_url:
+        monkeypatch.setenv("TEST_BASE_URL", base_url)
+    else:
+        monkeypatch.delenv("TEST_BASE_URL", raising=False)
 
-    assert "docker compose exec -T api curl -fsS http://localhost:5050/api/system/ready" in source
-    assert "docker compose exec -T api curl -fsS http://localhost:5050/api/system/health" not in source
+    result = subprocess.run(["bash", str(project_root() / "backend/test/run_tests.sh"), "integration"], capture_output=True, text=True)
+
+    commands = [shlex.split(line) for line in commands_file.read_text().splitlines()]
+    assert commands[0] == ["compose", "exec", "-T", "api", "curl", "-fsS", f"{base_url or 'http://localhost:5050'}/api/system/ready"]
+    assert len([command for command in commands if "pytest" in command]) == (2 if ready else 0)
+    assert result.returncode == (0 if ready else 1)

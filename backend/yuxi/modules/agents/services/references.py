@@ -14,6 +14,7 @@ from yuxi.modules.agents.repositories.references import TurnReferenceRepository
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.agents.services.thread_access import require_thread
+from yuxi.modules.agents.tool_results import normalize_tool_result
 from yuxi.modules.knowledge.services.access import visible_knowledge_bases
 from yuxi.modules.models.chat import load_chat_model
 from yuxi.shared.datetime import format_utc_datetime, utc_now
@@ -139,7 +140,7 @@ def collect_reference_sources(messages: list[Message], visible_kb_ids: set[str])
         if tool_name not in {"query_kb", "open_kb_document", "find_kb_document", "web_search"}:
             continue
         try:
-            payload = json.loads(message.content)
+            payload = json.loads(normalize_tool_result(metadata.get("output")).audit_content)
         except (json.JSONDecodeError, TypeError):
             continue
         if not isinstance(payload, (dict, list)) or isinstance(payload, dict) and payload.get("error"):

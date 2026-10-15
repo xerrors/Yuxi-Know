@@ -24,7 +24,6 @@ from e2e_helpers import (
 )
 from test.live_api_cleanup import (
     make_test_session_title,
-    remove_e2e_thread_storage,
 )
 from yuxi.modules.extensions.skills.projection import get_user_skills_root_dir
 from yuxi.modules.workspace.paths import user_workspace_dir
@@ -249,7 +248,6 @@ async def test_main_agent_reads_personal_skill_directly_from_user_workspace(
     finally:
         if thread_id:
             await archive_public_thread(e2e_client, e2e_headers, thread_id, turn_id=turn_id)
-            remove_e2e_thread_storage(thread_id)
         if agent_created:
             agent_delete = await e2e_client.delete(f"/api/agent/{agent_slug}", headers=e2e_headers)
             assert agent_delete.status_code in {200, 404}, agent_delete.text

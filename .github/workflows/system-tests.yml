@@ -10,6 +10,7 @@ on:
       - 'backend/test/integration/**'
       - 'backend/test/e2e/**'
       - 'backend/test/support/**'
+      - 'backend/test/run_tests.sh'
       - 'docker/**'
       - 'docker-compose.yml'
       - 'docker-compose.prod.yml'
@@ -28,6 +29,7 @@ on:
       - 'backend/test/integration/**'
       - 'backend/test/e2e/**'
       - 'backend/test/support/**'
+      - 'backend/test/run_tests.sh'
       - 'docker/**'
       - 'docker-compose.yml'
       - 'docker-compose.prod.yml'
@@ -52,6 +54,8 @@ env:
   CUBE_PROXY_NODE_IP: ${{ vars.CUBE_PROXY_NODE_IP }}
   CUBE_PROXY_PORT_HTTP: ${{ vars.CUBE_PROXY_PORT_HTTP || '80' }}
   CUBE_TEMPLATE_ID: yuxi-user
+  OPENAI_REPLAY_URL: http://api:8765/v1
+  COOPERATION_REPLAY_URL: http://api:8766/v1
   E2E_USERNAME: ci_e2e_admin
   E2E_PASSWORD: ci-e2e-password-at-least-eight
 
@@ -321,11 +325,10 @@ jobs:
         run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_turn_result_causality.py -q
       - name: Verify feedback persistence and execution boundary
         run: docker compose exec -T api uv run --no-sync --no-dev pytest test/integration/services/test_agent_feedback.py -q
-      - name: Verify feedback HTTP access and worker collection
+      - name: Verify feedback HTTP access
         timeout-minutes: 5
         run: |
           docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_agent_feedback_api.py -q
-          docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_agent_feedback_e2e.py -q
       - name: Verify lifecycle HTTP and PostgreSQL boundaries
         timeout-minutes: 8
         run: |
@@ -352,27 +355,14 @@ jobs:
       - name: Verify Message audit HTTP contract
         timeout-minutes: 3
         run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_chat_router.py::test_thread_message_audits_return_persisted_facts_without_leaking_into_history test/integration/api/test_chat_router.py::test_debug_messages_follow_database_sequence_and_include_unassigned_inputs -q --setup-show -o faulthandler_timeout=60
-      - name: Verify visible tools for ordinary users
-        run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/e2e/test_agent_lifecycle_extended_e2e.py::test_standard_user_restores_visible_function_items_without_internal_audit -q
       - name: Verify Session cooperation persistence and capacity
         run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/services/test_session_cooperation.py -q
       - name: Verify attachment HTTP and object contract
         timeout-minutes: 3
         run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_chat_router.py::test_thread_artifact_uses_image_signature_for_content_type test/integration/api/test_public_agent_files.py -q
-      - name: Verify Input, Turn and Run lifecycle through worker
-        timeout-minutes: 20
-        run: docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_agent_lifecycle_e2e.py test/e2e/test_input_projection_recovery_e2e.py test/e2e/test_draft_attachments_e2e.py -q --durations=10
-      - name: Verify scheduled, model and tool lifecycle paths
-        timeout-minutes: 12
-        run: docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_agent_lifecycle_extended_e2e.py -q --durations=10
-      - name: Verify Session cooperation and Workdir boundaries
-        timeout-minutes: 12
-        run: docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_session_cooperation_e2e.py -q --durations=10
-      - name: Verify Agents Key end-user execution scope
-        timeout-minutes: 6
-        run: docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_agent_lifecycle_key_scope_e2e.py -q --durations=10
-      - name: Verify OpenAI events default input and recovery
-        run: docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_openai_events_e2e.py -q --durations=10
+      - name: Verify deterministic Agent lifecycle
+        timeout-minutes: 25
+        run: TEST_USERNAME="$E2E_USERNAME" TEST_PASSWORD="$E2E_PASSWORD" bash backend/test/run_tests.sh e2e
       - name: Verify identity transaction and replayable secret publication
         run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/services/test_identity_admin_service.py test/integration/services/test_api_key_user_lifecycle.py test/integration/api/test_apikey_router.py -q
       - name: Verify atomic OIDC login on isolated PostgreSQL schema

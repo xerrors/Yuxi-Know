@@ -25,13 +25,7 @@ DETERMINISTIC_MODEL = "ci-replay:deterministic-chat"
 
 def output_text(items):
     """从结果 Run 明确绑定的公开 item 读取正文。"""
-    return "".join(
-        part["text"]
-        for item in items
-        if item["type"] == "message"
-        for part in item["content"]
-        if part["type"] == "output_text"
-    )
+    return "".join(part["text"] for item in items if item["type"] == "message" for part in item["content"] if part["type"] == "output_text")
 
 
 def public_message(text: str) -> dict:
@@ -43,7 +37,7 @@ async def register_replay_provider(
     client: httpx.AsyncClient,
     headers: dict,
     *,
-    base_url: str = "http://api:8765/v1",
+    base_url: str | None = None,
     provider_id: str = "ci-replay",
 ) -> bool:
     """注册确定性模型重放服务并返回当前测试是否创建了供应商。"""
@@ -54,7 +48,7 @@ async def register_replay_provider(
             "provider_id": provider_id,
             "display_name": "CI deterministic replay",
             "provider_type": "openai",
-            "base_url": base_url,
+            "base_url": base_url or os.environ["OPENAI_REPLAY_URL"],
             "api_key": "ci-replay-key",
             "capabilities": ["chat"],
             "enabled_models": [{"id": "deterministic-chat", "display_name": "Deterministic chat", "type": "chat", "source": "manual"}],

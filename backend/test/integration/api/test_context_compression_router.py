@@ -21,6 +21,7 @@ from yuxi.api.routers.public_v1.agents import public_agents_router
 from yuxi.api.dependencies.auth import get_db, get_required_user
 import yuxi.modules.agents.services.compression as context_compression_service
 from yuxi.infrastructure.postgres.manager import pg_manager
+from yuxi.infrastructure.postgres.checkpointer import get_langgraph_checkpointer
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.workspace.models import Project
 from yuxi.modules.identity.models import User
@@ -39,14 +40,14 @@ async def test_compress_thread_persists_canonical_checkpoint_through_http(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """成功 HTTP 请求通过真实 PostgreSQL checkpointer 写入摘要事件。"""
-    thread_id = f"pytest-compression-{uuid.uuid4()}"
+    thread_id = str(uuid.uuid4())
     uid = f"pytest-user-{uuid.uuid4()}"
     project_id = str(uuid.uuid4())
     engine = create_async_engine(os.environ["POSTGRES_URL"], pool_pre_ping=True)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     await pg_manager.close()
     pg_manager.initialize()
-    checkpointer = await pg_manager.setup_langgraph_checkpointer()
+    checkpointer = get_langgraph_checkpointer(pg_manager)
 
     builder = StateGraph(_CheckpointState)
     builder.add_node("idle", lambda _state: {})
@@ -82,6 +83,7 @@ async def test_compress_thread_persists_canonical_checkpoint_through_http(
                 project_id=project_id,
                 agent_id="main",
                 status="active",
+                config_snapshot={"model": "test:model", "summary_threshold": 200},
             )
         )
         await db.commit()
@@ -127,21 +129,12 @@ async def test_compress_thread_persists_canonical_checkpoint_through_http(
                 "file_path": "/home/user/workspace/projects/history.md",
             }
 
-    async def resolve_model(*_args, **_kwargs):
-        return "test:model"
-
     async def workdir(**_kwargs):
         return f"projects/{project_id}"
 
-    async def runtime(**_kwargs):
-        return None
-
     monkeypatch.setattr(context_compression_service, "AgentRepository", AgentRepo)
     monkeypatch.setattr(context_compression_service, "get_agent_backend", lambda _backend_id: Agent())
-    monkeypatch.setattr(context_compression_service, "resolve_agent_run_model_spec", resolve_model)
     monkeypatch.setattr(context_compression_service, "ensure_session_workdir_available", workdir)
-    monkeypatch.setattr(context_compression_service, "_ensure_runtime_available", runtime)
-    monkeypatch.setattr(context_compression_service, "_release_runtime", runtime)
     monkeypatch.setattr(context_compression_service, "prepare_agent_runtime_context", AsyncMock())
     monkeypatch.setattr(context_compression_service, "create_agent_composite_backend", lambda _context: object())
     monkeypatch.setattr(

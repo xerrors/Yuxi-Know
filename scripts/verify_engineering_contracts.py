@@ -140,10 +140,7 @@ WORKFLOW_CONTRACTS = (
             'docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_public_knowledge_tools.py::test_knowledge_key_tool_route_boundary_without_kb test/integration/api/test_public_knowledge_tools.py::test_agents_key_cannot_access_public_knowledge_api test/integration/api/test_removed_api_endpoints.py::test_public_knowledge_does_not_expose_management_routes -q',
             'docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_chat_router.py::test_thread_message_audits_return_persisted_facts_without_leaking_into_history test/integration/api/test_chat_router.py::test_debug_messages_follow_database_sequence_and_include_unassigned_inputs -q --setup-show -o faulthandler_timeout=60',
             'docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_chat_router.py::test_thread_artifact_uses_image_signature_for_content_type test/integration/api/test_public_agent_files.py -q',
-            "docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_agent_lifecycle_e2e.py test/e2e/test_input_projection_recovery_e2e.py test/e2e/test_draft_attachments_e2e.py -q --durations=10",
-            "docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_agent_lifecycle_extended_e2e.py -q --durations=10",
-            "docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_session_cooperation_e2e.py -q --durations=10",
-            "docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_agent_lifecycle_key_scope_e2e.py -q --durations=10",
+            'TEST_USERNAME="$E2E_USERNAME" TEST_PASSWORD="$E2E_PASSWORD" bash backend/test/run_tests.sh e2e',
             'docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/services/test_identity_admin_service.py test/integration/services/test_api_key_user_lifecycle.py test/integration/api/test_apikey_router.py -q',
             'docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/services/test_project_workdir.py::test_sessions_share_workdir_only_through_project test/integration/services/test_user_skill_projection.py test/integration/api/test_skill_artifact_authorization.py -q',
             "docker compose exec -T api uv run --no-sync --no-dev pytest test/integration/sandbox -q",
@@ -154,6 +151,7 @@ WORKFLOW_CONTRACTS = (
             "backend/test/integration/**",
             "backend/test/e2e/**",
             "backend/test/support/**",
+            "backend/test/run_tests.sh",
             "docker/**",
             "scripts/ci_prepare_system_tests_env.sh",
             "scripts/ci_build_topology_images.sh",
@@ -166,7 +164,7 @@ WORKFLOW_CONTRACTS = (
         trigger="workflow_dispatch",
         commands=(
             'if [ -z "$SILICONFLOW_API_KEY" ]; then\necho "SILICONFLOW_API_KEY repository secret is required for this manual probe." >&2\nexit 1\nfi',
-            "docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_agent_async_e2e.py -q",
+            "docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_real_provider_e2e.py -q",
         ),
     ),
 )
@@ -467,6 +465,15 @@ def _workflow_has_trigger(text: str, trigger: str) -> bool:
 
 
 def _validate_workflows(root: Path, errors: list[str]) -> list[dict[str, Any]]:
+    runner = root / "backend/test/run_tests.sh"
+    runner_text = runner.read_text() if runner.is_file() else ""
+    selector = re.search(r"LIFECYCLE_E2E_TESTS=\((.*?)\)", runner_text, re.S)
+    selected = set(selector.group(1).split()) if selector else set()
+    for name in ("test_agent_lifecycle_e2e.py", "test_agent_lifecycle_extended_e2e.py", "test_input_projection_recovery_e2e.py", "test_draft_attachments_e2e.py", "test_session_cooperation_e2e.py", "test_agent_lifecycle_key_scope_e2e.py", "test_openai_events_e2e.py", "test_agent_feedback_e2e.py"):
+        if f"test/e2e/{name}" not in selected:
+            errors.append(f"E2E runner 缺少原 CI 用例：{name}")
+    if '"${PYTEST_CMD[@]}" "${LIFECYCLE_E2E_TESTS[@]}" -m e2e' not in runner_text:
+        errors.append("E2E runner selector 未连接 pytest")
     projection: list[dict[str, Any]] = []
     for contract in WORKFLOW_CONTRACTS:
         workflow = _require_repository_path(

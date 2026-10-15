@@ -12,7 +12,11 @@ import pytest
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from yuxi.modules.identity.oidc import restore_deleted_oidc_user
+from types import SimpleNamespace
+
+from yuxi.modules.identity.repositories.oidc import OIDCRepository
+from yuxi.modules.identity.models import OIDCIdentity
+from yuxi.shared.errors import PermissionDeniedError
 from yuxi.modules.identity.models import APIKey, User
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
@@ -180,8 +184,8 @@ async def test_revoked_api_key_cannot_be_resurrected_by_replaying_creation_reque
     assert auth_response.status_code == 401, auth_response.text
 
 
-async def test_user_delete_oidc_restore_cannot_republish_or_enable_old_api_key(test_client, admin_headers):
-    """用户恢复不能清除删除事务写入的凭据 tombstone。"""
+async def test_user_delete_blocks_oidc_login_and_old_api_key(test_client, admin_headers):
+    """删除用户阻断已绑定 OIDC 登录，已撤销 Key 不能重发或启用。"""
 
     suffix = uuid.uuid4().hex[:12]
     user_response = await test_client.post(
@@ -201,6 +205,9 @@ async def test_user_delete_oidc_restore_cannot_republish_or_enable_old_api_key(t
     factory = async_sessionmaker(engine, expire_on_commit=False)
 
     try:
+        async with factory() as db:
+            db.add(OIDCIdentity(issuer="https://identity.example.test", subject=f"test:{suffix}", user_id=user_id))
+            await db.commit()
         delete_response = await test_client.delete(f"/api/auth/users/{user_id}", headers=admin_headers)
         assert delete_response.status_code == 200, delete_response.text
 
@@ -210,19 +217,19 @@ async def test_user_delete_oidc_restore_cannot_republish_or_enable_old_api_key(t
             assert deleted_user is not None and deleted_user.is_deleted == 1
             assert persisted_key is not None and persisted_key.is_enabled is False
             assert persisted_key.revoked_at is not None
-            await restore_deleted_oidc_user(
-                db,
-                deleted_user,
-                {"name": f"restored_{suffix}", "username": f"restored_{suffix}", "sub": f"test:{suffix}"},
-            )
-            await db.commit()
+            with pytest.raises(PermissionDeniedError):
+                await OIDCRepository(db).resolve_user(
+                    SimpleNamespace(issuer_url="https://identity.example.test"),
+                    {"sub": f"test:{suffix}"},
+                    {},
+                )
 
         list_response = await test_client.get(API_KEYS_PATH, headers=admin_headers)
         assert list_response.status_code == 200, list_response.text
         assert api_key_id not in {item["id"] for item in list_response.json()["api_keys"]}
 
         replay_response = await test_client.post(API_KEYS_PATH, json=payload, headers=admin_headers)
-        assert replay_response.status_code == 409, replay_response.text
+        assert replay_response.status_code == 404, replay_response.text
         assert "secret" not in replay_response.json()
 
         enable_response = await test_client.put(

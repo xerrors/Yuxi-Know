@@ -1,5 +1,6 @@
 """真实 worker 验证消息附件归属、共享文件和图片 wire 内容。"""
 
+import os
 import asyncio
 import base64
 import json
@@ -39,7 +40,7 @@ async def test_draft_initial_send_queue_cancel_and_model_attachment_isolation(e2
     session_id = turn_id = queued_id = second_session = None
     gate = str(uuid.uuid4())
     conn = await asyncpg.connect(postgres_dsn())
-    async with httpx.AsyncClient(base_url="http://api:8765", timeout=5) as replay:
+    async with httpx.AsyncClient(base_url=os.environ["OPENAI_REPLAY_URL"].removesuffix("/v1"), timeout=5) as replay:
         try:
 
             async def upload(name, content):

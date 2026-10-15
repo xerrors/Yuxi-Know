@@ -227,10 +227,10 @@ async def test_history_query_uses_postgres_visibility_and_field_allowlists(memor
                 role="tool",
                 message_type="tool_audit",
                 operation_id="memory-history-call",
-                content="TOOLCALL-OUTPUT",
+                content="",
                 execution_status="completed",
                 started_at=visible_message.created_at,
-                extra_metadata={
+                extra_metadata={"output": "TOOLCALL-OUTPUT",
                     "source_model_message_id": visible_message.id,
                     "tool_name": "history_fixture",
                     "input": {"secret": "TOOLCALL-INPUT"},
@@ -304,8 +304,8 @@ async def test_memory_tools_reject_forged_source_from_other_session_or_turn(memo
                     message_type="tool_audit",
                     execution_status="completed",
                     operation_id=output,
-                    content=output,
-                    extra_metadata={"source_model_message_id": source.id, "tool_name": "fixture", "input": {}},
+                    content="",
+                    extra_metadata={"output": output, "source_model_message_id": source.id, "tool_name": "fixture", "input": {}},
                 )
                 for session_id, run_id, turn_id, output in [
                     (own_session.id, None, None, "AUTHORIZED-OUTPUT"),

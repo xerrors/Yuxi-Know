@@ -9,7 +9,6 @@ from PIL import Image, ImageDraw, ImageFont
 
 from test.live_api_cleanup import (
     make_test_session_title,
-    remove_e2e_thread_storage,
 )
 from test.e2e.e2e_helpers import cleanup_uploaded_chat_attachment
 
@@ -177,4 +176,3 @@ async def _cleanup_created_resources(
     if thread_id:
         response = await e2e_client.post(f"/api/v1/agents/sessions/{thread_id}/archive", headers=e2e_headers)
         assert response.status_code == 200, response.text
-        remove_e2e_thread_storage(thread_id)

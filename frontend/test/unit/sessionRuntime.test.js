@@ -141,12 +141,14 @@ test('最后一个视图释放后，迟到恢复和历史不能启动流或覆�
   await tick()
   detach()
   const detachNew = runtime.observeThread('thread', {})
-  runtime.threadMessages.thread = ['new view']
+  runtime.getThreadState('thread').historyLoaded = true
+  const newItems = runtime.getThreadState('thread').itemState
   for (const release of lookupResolvers) release({ yuxi: { current_turn: { id: 'old-turn' } } })
   releaseHistory({ data: [], yuxi: { runs: [{ id: 'old-run' }] }, has_more: false, last_id: null })
   await Promise.all([resume, history])
   assert.equal(h.counts().subscriptions, 0)
-  assert.deepEqual(runtime.threadMessages.thread, ['new view'])
+  assert.equal(runtime.getThreadState('thread').itemState, newItems)
+  assert.deepEqual(runtime.threadMessages.thread, [])
   detachNew()
 })
 
@@ -227,7 +229,7 @@ for (const historyFails of [false, true]) {
     await tick()
     assert.equal(requests, 2, '终态不能共用完成事件之前的历史')
     const output = historyFails
-      ? runtime.getThreadState('thread').ongoingRunGroup.items.output.content[0].text
+      ? runtime.getThreadState('thread').itemState.items.output.content[0].text
       : runtime.threadMessages.thread[0].content
     assert.equal(output, 'FINAL OUTPUT')
     detach()
@@ -460,4 +462,25 @@ test('首次和追加各读取最多三页，短历史停止且并发追加共�
     [undefined, '551', '451', '351', '251', '151', '51'].map((after) => ({ after, limit: 100 }))
   )
   detach()
+})
+
+test('历史、流和完成后的显示由同一 item 集合派生，不依赖历史再同步', async (t) => {
+  const h = setup(t)
+  const detach = h.runtime.observeThread('thread', {})
+  await h.runtime.fetchThreadMessages({ threadId: 'thread' })
+  const stream = h.runtime.startRunStream('thread', 'run', null, { turnId: 'turn' })
+  await tick()
+  h.emit({ type: 'agent.session.turn.item.added', event_id: 'added', session_id: 'thread', turn_id: 'turn',
+    item: { id: 'live', type: 'message', role: 'assistant', status: 'in_progress',
+      content: [{ type: 'output_text', text: '' }], yuxi: { run_id: 'run', message_id: 1 } } })
+  h.emit({ type: 'agent.session.turn.output_text.delta', event_id: 'delta', session_id: 'thread', turn_id: 'turn',
+    item_id: 'live', content_index: 0, delta: 'one fact' })
+  await tick()
+  assert.equal(h.runtime.threadMessages.thread[0].content, 'one fact')
+  const source = h.runtime.getThreadState('thread').itemState
+  h.runtime.resetThreadExecution('thread', { preserveInputMonitors: true })
+  assert.equal(h.runtime.getThreadState('thread').itemState, source)
+  assert.equal(h.runtime.threadMessages.thread[0].content, 'one fact')
+  detach()
+  await stream
 })

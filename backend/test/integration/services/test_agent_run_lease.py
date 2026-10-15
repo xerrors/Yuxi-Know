@@ -3,17 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import uuid
 from contextlib import asynccontextmanager
 from datetime import timedelta
 from unittest.mock import AsyncMock
 
 import pytest
-import pytest_asyncio
 from langchain_core.messages import ToolMessage
 from langgraph.types import Command
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from agent_run_test_helpers import cleanup_agent_run_threads, create_agent_run
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
@@ -31,16 +28,6 @@ from yuxi.modules.agents.models.messages import Message
 from yuxi.shared.datetime import utc_now
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
-
-
-@pytest_asyncio.fixture()
-async def lease_database():
-    """使用当前迁移后的隔离 PostgreSQL schema。"""
-    engine = create_async_engine(os.environ["POSTGRES_URL"], pool_pre_ping=True)
-    try:
-        yield async_sessionmaker(engine, expire_on_commit=False)
-    finally:
-        await engine.dispose()
 
 
 @asynccontextmanager
@@ -64,9 +51,9 @@ async def _create_run(session_factory, *, status="pending", worker_id=None, leas
     )
 
 
-async def test_owner_heartbeat_and_terminal_are_lease_fenced(lease_database):
+async def test_owner_heartbeat_and_terminal_are_lease_fenced(postgres_sessions):
     """旧 attempt 不能续租、写输出或覆盖新 owner 的终态。"""
-    sessions = lease_database
+    sessions = postgres_sessions
     run_id, thread_id, _ = await _create_run(sessions)
     now = utc_now()
     try:
@@ -94,9 +81,9 @@ async def test_owner_heartbeat_and_terminal_are_lease_fenced(lease_database):
         await cleanup_agent_run_threads(sessions, [thread_id])
 
 
-async def test_cancel_requested_run_cannot_be_completed_by_owner(lease_database):
+async def test_cancel_requested_run_cannot_be_completed_by_owner(postgres_sessions):
     """取消请求一旦持久化，后到的完成提交不能抢赢。"""
-    sessions = lease_database
+    sessions = postgres_sessions
     run_id, thread_id, _ = await _create_run(sessions)
     try:
         async with sessions() as db:
@@ -119,9 +106,9 @@ async def test_cancel_requested_run_cannot_be_completed_by_owner(lease_database)
         await cleanup_agent_run_threads(sessions, [thread_id])
 
 
-async def test_expired_lease_reconciliation_is_single_winner_and_closes_audit(lease_database, monkeypatch):
+async def test_expired_lease_reconciliation_is_single_winner_and_closes_audit(postgres_sessions, monkeypatch):
     """并发 reconciler 只能收敛一次，同事务关闭审计、Turn 与 lease。"""
-    sessions = lease_database
+    sessions = postgres_sessions
     run_id, thread_id, _ = await _create_run(sessions)
     now = utc_now()
     try:
@@ -161,9 +148,9 @@ async def test_expired_lease_reconciliation_is_single_winner_and_closes_audit(le
         await cleanup_agent_run_threads(sessions, [thread_id])
 
 
-async def test_model_audit_is_idempotent_and_keeps_turn_run_owner(lease_database):
+async def test_model_audit_is_idempotent_and_keeps_turn_run_owner(postgres_sessions):
     """同一模型操作只有一条审计事实，且旧 owner 不能改写。"""
-    sessions = lease_database
+    sessions = postgres_sessions
     run_id, thread_id, _ = await _create_run(sessions)
     now = utc_now()
     try:
@@ -242,9 +229,9 @@ async def test_model_audit_is_idempotent_and_keeps_turn_run_owner(lease_database
         await cleanup_agent_run_threads(sessions, [thread_id])
 
 
-async def test_tool_execution_is_one_message_bound_to_model_declaration(lease_database):
+async def test_tool_execution_is_one_message_bound_to_model_declaration(postgres_sessions):
     """工具执行须由同 Run 模型声明，并仅拥有一条持久消息。"""
-    sessions = lease_database
+    sessions = postgres_sessions
     run_id, thread_id, _ = await _create_run(sessions)
     now = utc_now()
     try:
@@ -301,12 +288,11 @@ async def test_tool_execution_is_one_message_bound_to_model_declaration(lease_da
                 worker_id="tool-owner",
                 tool_call_id="call-1",
                 output={"ok": True},
-                content="done",
                 finished_at=now + timedelta(seconds=1),
                 duration_ms=20,
                 finished_sequence=3,
             )
-            assert completed.execution_status == "completed"
+            assert completed.execution_status == "completed" and completed.content == ""
             with pytest.raises(ValueError):
                 await tool.start(
                     run_id=run_id,
@@ -323,15 +309,22 @@ async def test_tool_execution_is_one_message_bound_to_model_declaration(lease_da
             [audit] = await ToolMessageAuditRepository(db).list_for_run(run_id)
             assert "compatibility_tool_call_id" not in audit.extra_metadata
             assert audit.turn_id == (await db.get(AgentRun, run_id)).turn_id
-            assert audit.execution_status == "completed" and audit.content == "done"
+            assert audit.execution_status == "completed" and audit.content == ""
             assert audit.extra_metadata["input"] == {"x": 1}
+            assert audit.extra_metadata["output"] == {"ok": True}
+            from sqlalchemy.exc import IntegrityError
+
+            with pytest.raises(IntegrityError, match="ck_messages_tool_result_single_representation"):
+                async with db.begin_nested():
+                    audit.content = "第二份结果不得保存"
+                    await db.flush()
     finally:
         await cleanup_agent_run_threads(sessions, [thread_id])
 
 
-async def test_message_recorder_commits_facts_before_public_projection(lease_database, monkeypatch):
+async def test_message_recorder_commits_facts_before_public_projection(postgres_sessions, monkeypatch):
     """同一记录器写入真实 PG，公开投影失败保留已提交结果且错误 owner 不能覆盖。"""
-    sessions = lease_database
+    sessions = postgres_sessions
     run_id, thread_id, _ = await _create_run(sessions)
     owner = "recorder-owner"
     try:
@@ -404,13 +397,12 @@ async def test_message_recorder_commits_facts_before_public_projection(lease_dat
             [tool] = await ToolMessageAuditRepository(db).list_for_run(run_id)
             assert model.execution_status == tool.execution_status == "completed"
             assert model.usage == {"input_tokens": 5}
-            assert tool.content == "result" and tool.extra_metadata["output"]["tool_call_id"] == "call"
+            assert tool.content == "" and tool.extra_metadata["output"]["tool_call_id"] == "call"
             assert tool.extra_metadata["source_model_message_id"] == model.id
             assert tool.extra_metadata["public_items"]["output"]["status"] == "in_progress"
             assert tool.duration_ms is not None and tool.duration_ms >= 0
             assert "compatibility_tool_call_id" not in tool.extra_metadata
             assert tool.operation_id == "call"
-
 
         wrong_owner = RunMessageRecorder(run_id=run_id, thread_id=thread_id, worker_id="other-owner")
         with pytest.raises(ValueError):
@@ -420,16 +412,16 @@ async def test_message_recorder_commits_facts_before_public_projection(lease_dat
         assert public[-1]["item"]["output"] == "result" and public[-1]["item"]["call_id"] == "call"
         async with sessions() as db:
             [tool] = await ToolMessageAuditRepository(db).list_for_run(run_id)
-            assert tool.content == "result" and tool.execution_status == "completed"
+            assert tool.content == "" and tool.execution_status == "completed"
             assert tool.extra_metadata["public_items"]["output"]["status"] == "completed"
             assert tool.extra_metadata["public_items"]["output"]["id"] == public[-1]["item"]["id"]
     finally:
         await cleanup_agent_run_threads(sessions, [thread_id])
 
 
-async def test_langfuse_identity_is_write_once_by_live_owner(lease_database):
+async def test_langfuse_identity_is_write_once_by_live_owner(postgres_sessions):
     """Trace 与 Run observation 只能由当前 lease owner 固化并幂等重放。"""
-    sessions = lease_database
+    sessions = postgres_sessions
     run_id, thread_id, _ = await _create_run(sessions)
     try:
         async with sessions() as db:
@@ -453,9 +445,9 @@ async def test_langfuse_identity_is_write_once_by_live_owner(lease_database):
         await cleanup_agent_run_threads(sessions, [thread_id])
 
 
-async def test_root_failure_preserves_independent_child_turn(lease_database, monkeypatch):
+async def test_root_failure_preserves_independent_child_turn(postgres_sessions, monkeypatch):
     """父 Run 失败不取消拥有独立 Turn 和 runtime 的子任务。"""
-    sessions = lease_database
+    sessions = postgres_sessions
     parent_id, parent_thread_id, _ = await _create_run(sessions)
     child_thread_id = f"pytest-child-{uuid.uuid4()}"
     child_id = str(uuid.uuid4())
@@ -528,11 +520,11 @@ async def test_root_failure_preserves_independent_child_turn(lease_database, mon
         await cleanup_agent_run_threads(sessions, [parent_thread_id, child_thread_id])
 
 
-async def test_cancelling_recovery_isolates_bad_checkpoint(lease_database, monkeypatch):
+async def test_cancelling_recovery_isolates_bad_checkpoint(postgres_sessions, monkeypatch):
     """首条 checkpoint 清理失败仍收敛后续 Turn，同时拒绝报告整轮成功。"""
     from yuxi.modules.agents.services import turns
 
-    sessions = lease_database
+    sessions = postgres_sessions
     bad_id, bad_thread, _ = await _create_run(sessions, status="interrupted")
     good_id, good_thread, _ = await _create_run(sessions, status="cancelled")
     monkeypatch.setattr(turns.pg_manager, "get_async_session_context", lambda: _session_context(sessions))
@@ -559,14 +551,14 @@ async def test_cancelling_recovery_isolates_bad_checkpoint(lease_database, monke
         await cleanup_agent_run_threads(sessions, [bad_thread, good_thread])
 
 
-async def test_cancelled_cleanup_holds_run_lock_until_external_command_finishes(lease_database, monkeypatch, tmp_path):
+async def test_cancelled_cleanup_holds_run_lock_until_external_command_finishes(postgres_sessions, monkeypatch, tmp_path):
     """取消清理协程不能提前释放 Run 锁，也不能误清已领取的新 attempt。"""
     import threading
 
     from sqlalchemy import text
     from sqlalchemy.exc import DBAPIError
 
-    sessions = lease_database
+    sessions = postgres_sessions
     run_id, thread_id, _ = await _create_run(sessions)
     started, finish = threading.Event(), threading.Event()
     command = tmp_path / "command"

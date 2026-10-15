@@ -1,38 +1,13 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, compile, createSSRApp } from 'vue'
+import { renderToString } from 'vue/server-renderer'
 
 const source = readFileSync(
   new URL('../../src/modules/session/ui/SessionWorkspace.vue', import.meta.url),
   'utf8'
 )
-
-test('新线程创建后立即退出欢迎布局，不等待路由或首个回复', () => {
-  const props = reactive({ isNewSession: true })
-  const currentThreadId = ref(null)
-  const expression = source.slice(
-    source.indexOf('const showStartScreen ='),
-    source.indexOf('const currentThread =')
-  )
-  const showStartScreen = new Function(
-    'computed',
-    'props',
-    'currentThreadId',
-    `${expression}; return showStartScreen`
-  )(computed, props, currentThreadId)
-  assert.equal(showStartScreen.value, true)
-  currentThreadId.value = 'created-thread'
-  assert.equal(showStartScreen.value, false, '路由仍为新会话时也必须收起欢迎布局')
-  props.isNewSession = false
-  assert.equal(showStartScreen.value, false)
-  currentThreadId.value = null
-  assert.equal(showStartScreen.value, false, '已有会话路由加载期间不能显示欢迎布局')
-  props.isNewSession = true
-  assert.equal(showStartScreen.value, true, '回到新会话时恢复欢迎布局')
-  assert.match(source, /'start-screen': showStartScreen/)
-  assert.match(source, /v-if="showStartScreen" class="chat-greeting-input"/)
-})
 
 test('隐藏成员标签继续接收终态，但不标已读或滚动；显示后恢复可见副作用', () => {
   const props = reactive({ visible: false })
@@ -55,7 +30,7 @@ test('隐藏成员标签继续接收终态，但不标已读或滚动；显示�
     handlePublicEvent() {},
     fetchThreadMessages() {},
     fetchAgentState() {},
-    resetOngoingRunGroup() {},
+    resetThreadExecution() {},
     streamSmoother: {},
     workspaceActive,
     pageVisible: ref(true),
@@ -125,4 +100,60 @@ test('另一视图完成审批后，本视图立即解除旧等待点的输入�
   assert.equal(visible.value, false, '旧面板也不能代表新 Run 的审批')
   Object.assign(local, shared.value.pendingInterrupt)
   assert.equal(visible.value, true)
+})
+
+const view = readFileSync(new URL('../../src/pages/AgentView.vue', import.meta.url), 'utf8')
+const dock = source.slice(
+  source.lastIndexOf('<div', source.indexOf('ref="messageInputDockRef"')),
+  source.indexOf('<section', source.indexOf('ref="messageInputDockRef"'))
+)
+const render = compile(`${dock}</div></div>`)
+const layoutExpression = source.slice(
+  source.indexOf('const showStartScreen ='),
+  source.indexOf('const currentThread =')
+)
+
+test('新建路由且没有线程才显示欢迎布局，加载和空消息不改变布局', async () => {
+  assert.ok(view.includes(':is-new-session="!threadId"'), '新建布局由路由传入')
+  for (const isNewSession of [false, true]) {
+    for (const threadId of [null, 'created-thread']) {
+      const props = reactive({ isNewSession })
+      const currentThreadId = ref(threadId)
+      const showStartScreen = new Function(
+        'computed',
+        'props',
+        'currentThreadId',
+        `${layoutExpression}; return showStartScreen`
+      )(computed, props, currentThreadId)
+      for (const isLoadingMessages of [false, true]) {
+        for (const runGroups of [[], [{ id: 'history' }]]) {
+          const html = await renderToString(
+            createSSRApp({
+              data: () => ({
+                isNewSession,
+                currentChatId: threadId,
+                pendingSends: {},
+                showStartScreen: showStartScreen.value,
+                isLoadingMessages,
+                runGroups,
+                randomGreeting: '欢迎测试'
+              }),
+              render
+            })
+          )
+          assert.equal(html.includes('start-screen'), isNewSession && !threadId)
+          assert.equal(html.includes('欢迎测试'), isNewSession && !threadId)
+          assert.equal(html.includes('正在加载消息'), isLoadingMessages)
+        }
+      }
+      props.isNewSession = true
+      currentThreadId.value = null
+      assert.equal(showStartScreen.value, true)
+      currentThreadId.value = 'just-created'
+      assert.equal(showStartScreen.value, false, '创建完成立即收起欢迎布局')
+      props.isNewSession = false
+      currentThreadId.value = null
+      assert.equal(showStartScreen.value, false, '已有会话加载时不显示欢迎布局')
+    }
+  }
 })

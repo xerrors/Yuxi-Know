@@ -308,85 +308,61 @@ class DashboardRepository:
         }
 
     async def get_tool_call_stats(self, *, now: datetime | None = None) -> dict[str, Any]:
-        """统计有效用户与非删除会话中的工具调用。"""
+        """一次聚合实际执行事实，派生总量、失败分布与原滚动日窗口。"""
         query_now = now or utc_now()
-        valid_filters = [Session.status != "deleted", User.is_deleted == 0]
-        total_result = await self.db_session.execute(
-            select(func.count(Message.id))
-            .join(Session, Message.session_record_id == Session.id)
-            .join(User, Session.uid == User.uid)
-            .join(Agent, Session.agent_id == Agent.slug)
-            .where(*valid_filters, Message.message_type == TOOL_AUDIT_MESSAGE_TYPE, Message.started_at.is_not(None))
-        )
-        successful_result = await self.db_session.execute(
-            select(func.count(Message.id))
-            .join(Session, Message.session_record_id == Session.id)
-            .join(User, Session.uid == User.uid)
-            .join(Agent, Session.agent_id == Agent.slug)
-            .where(
-                *valid_filters,
-                Message.message_type == TOOL_AUDIT_MESSAGE_TYPE,
-                Message.started_at.is_not(None),
-                Message.execution_status == "completed",
-            )
-        )
-        total_calls = total_result.scalar() or 0
-        successful_calls = successful_result.scalar() or 0
-
-        # PostgreSQL 分组复用同一 JSON 表达式，使提取键使用同一绑定参数。
         tool_name = Message.extra_metadata["tool_name"].as_string()
-        most_used_result = await self.db_session.execute(
-            select(tool_name, func.count(Message.id).label("count"))
-            .join(Session, Message.session_record_id == Session.id)
-            .join(User, Session.uid == User.uid)
-            .join(Agent, Session.agent_id == Agent.slug)
-            .where(*valid_filters, Message.message_type == TOOL_AUDIT_MESSAGE_TYPE, Message.started_at.is_not(None))
-            .group_by(tool_name)
-            .order_by(func.count(Message.id).desc())
-            .limit(10)
+        day_bucket = case(
+            *[
+                (
+                    and_(
+                        Message.created_at >= query_now - timedelta(days=index + 1), Message.created_at < query_now - timedelta(days=index)
+                    ),
+                    index,
+                )
+                for index in range(7)
+            ],
+            else_=None,
         )
-        error_result = await self.db_session.execute(
-            select(tool_name, func.count(Message.id).label("error_count"))
-            .join(Session, Message.session_record_id == Session.id)
-            .join(User, Session.uid == User.uid)
-            .join(Agent, Session.agent_id == Agent.slug)
-            .where(
-                *valid_filters,
-                Message.message_type == TOOL_AUDIT_MESSAGE_TYPE,
-                Message.started_at.is_not(None),
-                Message.execution_status == "failed",
-            )
-            .group_by(tool_name)
-        )
-
-        error_rows = error_result.all()
-        daily_tool_calls = []
-        for day_offset in range(7):
-            day_start = query_now - timedelta(days=day_offset + 1)
-            day_end = query_now - timedelta(days=day_offset)
-            daily_result = await self.db_session.execute(
-                select(func.count(Message.id))
+        rows = (
+            await self.db_session.execute(
+                select(tool_name, Message.execution_status, day_bucket, func.count(Message.id))
                 .join(Session, Message.session_record_id == Session.id)
                 .join(User, Session.uid == User.uid)
                 .join(Agent, Session.agent_id == Agent.slug)
                 .where(
-                    *valid_filters,
+                    Session.status != "deleted",
+                    User.is_deleted == 0,
                     Message.message_type == TOOL_AUDIT_MESSAGE_TYPE,
                     Message.started_at.is_not(None),
-                    Message.created_at >= day_start,
-                    Message.created_at < day_end,
                 )
+                .group_by(tool_name, Message.execution_status, day_bucket)
             )
-            daily_tool_calls.append({"date": day_start.strftime("%Y-%m-%d"), "call_count": daily_result.scalar() or 0})
-
+        ).all()
+        total_calls = successful_calls = failed_calls = 0
+        tool_counts, error_counts = {}, {}
+        daily_counts = [0] * 7
+        for name, status, bucket, count in rows:
+            total_calls += count
+            tool_counts[name] = tool_counts.get(name, 0) + count
+            if status == "completed":
+                successful_calls += count
+            elif status == "failed":
+                failed_calls += count
+                error_counts[name] = error_counts.get(name, 0) + count
+            if bucket is not None:
+                daily_counts[bucket] += count
+        most_used = sorted(tool_counts.items(), key=lambda item: (-item[1], item[0]))[:10]
         return {
             "total_calls": total_calls,
             "successful_calls": successful_calls,
-            "failed_calls": sum(count for _, count in error_rows),
+            "failed_calls": failed_calls,
             "success_rate": round(successful_calls / total_calls * 100, 2) if total_calls else 0,
-            "most_used_tools": [{"tool_name": name, "count": count} for name, count in most_used_result.all()],
-            "tool_error_distribution": {name: count for name, count in error_rows},
-            "daily_tool_calls": list(reversed(daily_tool_calls)),
+            "most_used_tools": [{"tool_name": name, "count": count} for name, count in most_used],
+            "tool_error_distribution": error_counts,
+            "daily_tool_calls": [
+                {"date": (query_now - timedelta(days=index + 1)).strftime("%Y-%m-%d"), "call_count": daily_counts[index]}
+                for index in reversed(range(7))
+            ],
         }
 
     async def get_agent_analytics(self) -> dict[str, Any]:

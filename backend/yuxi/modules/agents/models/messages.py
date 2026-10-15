@@ -36,6 +36,10 @@ class Message(Base):
     __tablename__ = "messages"
     __table_args__ = (
         CheckConstraint(
+            "message_type != 'tool_audit' OR content = ''",
+            name="ck_messages_tool_result_single_representation",
+        ),
+        CheckConstraint(
             "execution_status IS NULL OR execution_status IN ('running', 'completed', 'failed', 'interrupted', 'abandoned')",
             name="ck_messages_execution_status",
         ),

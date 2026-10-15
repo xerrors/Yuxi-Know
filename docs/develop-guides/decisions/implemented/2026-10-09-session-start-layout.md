@@ -14,7 +14,7 @@ Owner：frontend/src/modules/session/ui/SessionWorkspace.vue
 
 ### 实现方案
 
-SessionWorkspace 用同一个派生状态控制输入框的 `start-screen` 类和欢迎语。线程创建成功后，当前线程身份立即使欢迎布局退出；AgentView 继续在 Input 快照读取完成后同步路由，保持新实例恢复已接收工作的时序。本修复在同一变更内完整生效，没有需要提前裁决的持久化、接口或生命周期取舍，直接记录为 implemented。
+SessionWorkspace 用同一个派生状态控制输入框的 `start-screen` 类和欢迎语。线程创建成功后，当前线程身份立即使欢迎布局退出；提交接收后再同步会话路由，已接收 Input 的执行观察由共享 runtime 拥有。
 
 ## 替代方案
 
@@ -26,8 +26,8 @@ SessionWorkspace 用同一个派生状态控制输入框的 `start-screen` 类�
 
 ## 验证
 
-`chatStartScreen.test.js` 渲染实际输入区域，覆盖路由标记、线程身份、历史加载和消息为空的组合；`sessionWorkspaceVisibility.test.js` 验证线程创建和回到新会话的响应式切换。恢复仅依赖路由标记的缺陷后，两项测试均因欢迎布局错误保留而失败。
+`sessionWorkspaceVisibility.test.js` 复用同一视图片段，渲染路由标记、线程身份、历史加载和消息为空的组合，并验证线程创建和返回新会话的响应式切换。独立的 `chatStartScreen.test.js` 与重复派生状态 fixture 已删除。恢复仅依赖路由标记的缺陷会使已有线程的欢迎布局断言失败。
 
 `sessionStartLayout.js` 在已登录开发页面暂缓实际发送，回读 DOM 和输入框边界，验证路由接管前用户消息出现、欢迎语消失且输入框底边位于视口底部；释放发送后验证会话路由、暗色窄屏的欢迎布局判断，并生成截图。结束时只停止本次创建的会话，等待归档边界允许清理并回读归档状态；失败时取消尚未投递的发送。该验证只证明布局切换，不证明整体窄屏体验和模型回复结果。
 
-执行入口：`docker compose exec frontend node --test test/unit/chatStartScreen.test.js test/unit/sessionWorkspaceVisibility.test.js`；`playwright-cli -s=<session> run-code --filename=frontend/test/browser/sessionStartLayout.js`。两者均 Passed。
+单测入口：`docker compose exec frontend node --test test/unit/sessionWorkspaceVisibility.test.js`，Passed。浏览器入口为 `playwright-cli -s=<session> run-code --filename=frontend/test/browser/sessionStartLayout.js`；其原有布局验收结果保留，本轮测试合并未重跑该依赖真实提交的脚本。

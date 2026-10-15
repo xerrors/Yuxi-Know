@@ -532,3 +532,50 @@ async def test_session_tokens_use_runs_and_expose_missing_usage(dashboard_db):
     item = (await service.list_sessions(search="thread-102"))["items"][0]
     assert item["total_tokens"] == 0
     assert item["token_usage_complete"] is True
+
+
+async def test_tool_stats_preserve_rolling_boundaries_with_one_aggregate(dashboard_db):
+    """滚动窗口保留下界、排除上界，单次聚合与时间桶缺口不改变统计。"""
+    now = datetime(2026, 10, 15, 12)
+    service = DashboardService(dashboard_db)
+    baseline = await service.get_tool_call_stats(now=now)
+    agent_session = await dashboard_db.scalar(select(Session).where(Session.thread_id == "thread-102"))
+    for offset in [
+        timedelta(),
+        timedelta(microseconds=1),
+        timedelta(days=1),
+        timedelta(days=1, microseconds=1),
+        timedelta(days=7),
+        timedelta(days=7, microseconds=1),
+    ]:
+        dashboard_db.add(
+            Message(
+                session_record_id=agent_session.id,
+                role="tool",
+                message_type="tool_audit",
+                content="",
+                started_at=now - offset,
+                created_at=now - offset,
+                execution_status="completed",
+                extra_metadata={"tool_name": "boundary"},
+            )
+        )
+    await dashboard_db.commit()
+    statements = []
+
+    def record(_connection, _cursor, statement, _parameters, _context, _many):
+        """记录真实数据库执行预算，不替代业务结果断言。"""
+        statements.append(statement)
+
+    engine = dashboard_db.bind.sync_engine
+    event.listen(engine, "before_cursor_execute", record)
+    try:
+        stats = await service.get_tool_call_stats(now=now)
+    finally:
+        event.remove(engine, "before_cursor_execute", record)
+    assert len(statements) == 1
+    assert stats["total_calls"] == baseline["total_calls"] + 6
+    assert stats["successful_calls"] == baseline["successful_calls"] + 6
+    assert [
+        after["call_count"] - before["call_count"] for after, before in zip(stats["daily_tool_calls"], baseline["daily_tool_calls"])
+    ] == [1, 0, 0, 0, 0, 1, 2]

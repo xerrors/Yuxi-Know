@@ -80,21 +80,3 @@ async def test_consumer_body_cancel_stops_real_graph_node(monkeypatch):
         await asyncio.gather(consumer, return_exceptions=True)
         for run in runs:
             await run.abort()
-
-
-@pytest.mark.asyncio
-async def test_stream_rejects_legacy_dictionary_input():
-    """显式Context不能与旧字典双输入共存。"""
-
-    class Agent(BaseAgent):
-        """只验证入口拒绝，不创建执行图。"""
-
-        async def get_graph(self, **kwargs):
-            raise AssertionError("旧输入必须在构图前拒绝")
-
-    with pytest.raises(TypeError, match="input_context"):
-        async for _ in Agent().stream_messages_with_state([], context=BaseContext(), input_context={}):
-            pass
-    with pytest.raises(TypeError, match="context"):
-        async for _ in Agent().stream_messages_with_state([]):
-            pass

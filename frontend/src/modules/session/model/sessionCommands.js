@@ -1,20 +1,5 @@
 import { agentApi } from '@/apis'
 
-/** 恢复既有回执或提交冻结的 Input，同一次重试始终复用幂等键。 */
-export async function submitSessionInput(threadId, data, { retry = false } = {}) {
-  let accepted
-  if (retry) {
-    try {
-      accepted = await agentApi.getSessionReceipt(threadId, data.idempotency_key)
-    } catch (error) {
-      if (error.status !== 404) throw error
-    }
-  }
-  accepted ||= await agentApi.sendThreadMessage(threadId, data)
-  if (!accepted.input_id) throw new Error('Public API 未返回 input_id')
-  return accepted
-}
-
 /** 读取当前等待点并提交回答或审批，拒绝已变更的执行归属。 */
 export async function resumeSessionWaitpoint({ threadId, turnId, runId, kind, answer }) {
   if (!turnId) throw new Error('当前线程没有等待中的 Turn')

@@ -701,19 +701,3 @@ async def test_execution_rejects_missing_persisted_identity(mode, thread_id, met
     with pytest.raises(ValueError, match="执行需要已持久化的 Thread、Turn 和 Run"):
         await anext(stream)
     await stream.aclose()
-
-
-@pytest.mark.parametrize("mode", ["chat", "resume"])
-def test_execution_requires_worker_snapshot(mode):
-    """调用方必须显式提供执行快照，不能启用重新读取配置的旧路径。"""
-    kwargs = dict(
-        thread_id="thread-1",
-        meta={"turn_id": "turn-1", "run_id": "run-1", "worker_id": "worker-1", "input_id": "input-1"},
-        current_user=SimpleNamespace(uid="user-1"),
-        db=object(),
-    )
-    with pytest.raises(TypeError, match="prepared_execution"):
-        if mode == "chat":
-            svc.stream_agent_execution(**kwargs, agent_slug="test-agent", input_messages=[build_chat_input_message("hello")])
-        else:
-            svc.stream_agent_execution(is_resume=True, **kwargs, resume_input={"answer": "ok"})

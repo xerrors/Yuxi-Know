@@ -9,7 +9,7 @@ export function useStreamSmoother({ getThreadState }) {
   const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
   const updateText = (itemId, threadId) => {
     const state = getThreadState(threadId)
-    const item = state?.ongoingRunGroup.items[itemId]
+    const item = state?.itemState.items[itemId]
     if (!item || item.type !== 'message') return
     if (globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
     state.displayText ||= {}
@@ -19,7 +19,7 @@ export function useStreamSmoother({ getThreadState }) {
     const tick = () => {
       frames.delete(key)
       const current = getThreadState(threadId)
-      const text = current?.ongoingRunGroup.items[itemId]?.content.map((part) => part.text || '').join('') || ''
+      const text = current?.itemState.items[itemId]?.content.map((part) => part.text || '').join('') || ''
       const shown = current?.displayText[itemId] || ''
       if (!current) return
       const graphemes = [...segmenter.segment(text)].map((part) => part.segment)

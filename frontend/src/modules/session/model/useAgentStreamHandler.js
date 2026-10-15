@@ -18,7 +18,7 @@ export function useAgentStreamHandler({
       event.yuxi?.run_id !== state.activeRunId
     )
       return false
-    applyAgentEvent(state.ongoingRunGroup, event)
+    applyAgentEvent(state.itemState, event)
     if (type.endsWith('output_text.delta') || type.endsWith('reasoning.delta')) {
       state.replyLoadingVisible = false
       streamSmoother?.updateText(event.item_id, threadId)

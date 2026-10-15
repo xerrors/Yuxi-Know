@@ -12,43 +12,18 @@ from pathlib import PurePosixPath
 import asyncpg
 import httpx
 from yuxi.modules.workspace.paths import normalize_workdir_path, user_workdir_host_dir
-from yuxi.infrastructure.runtime_settings import get_user_data_dir
 from yuxi.modules.agents.models.runs import AGENT_RUN_TERMINAL_STATUSES
 from test.support.postgres import postgres_dsn
 
 TEST_RESOURCE_PREFIX = "YUXI_TEST_"
 TEST_SESSION_TITLE_PREFIX = f"{TEST_RESOURCE_PREFIX}SESSION_"
 PYTEST_RESOURCE_PREFIXES = ("pytest", "py_test")
-LEGACY_TEST_SESSION_TITLE_PATTERNS = (
-    re.compile(
-        r"^(?:agent-async-e2e|agent-steer-e2e|attachment-state-e2e|attachment-workdir-e2e|"
-        r"chat-router-test|deterministic-e2e|ocr-config-e2e|personal-skill-e2e|"
-        r"pytest-channel|pytest-queue|read-file-e2e|skill-artifact-admin|skill-artifact-user|"
-        r"viewer|viewer-security-test)-[0-9a-f]{8}$"
-    ),
-)
-E2E_THREAD_TEST_MARKERS = frozenset(
-    {
-        "agent-async-e2e",
-        "agent-sync-e2e",
-        "agent-steer-e2e",
-        "attachment-state-e2e",
-        "ocr-config-e2e",
-        "personal-skill-e2e",
-        "read-file-e2e",
-        "subagent-stream-e2e",
-        "viewer-fs-e2e",
-    }
-)
 E2E_AGENT_SLUG_PREFIXES = (
-    "e2e-agent-call-",
-    "e2e-async-agent-",
-    "e2e-main-",
+    "ci-lifecycle-",
+    "e2e-provider-",
+    "e2e-async-agent-reasoning-",
     "e2e-personal-skill-",
     "e2e-read-file-",
-    "e2e-steer-agent-",
-    "e2e-subagent-",
-    "e2e-sync-agent-",
     "pytest-personal-agent-",
 )
 SAFE_THREAD_ID = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -81,18 +56,12 @@ def make_test_resource_id(label: str) -> str:
     return f"{TEST_RESOURCE_PREFIX}{normalized[:40]}_{uuid.uuid4().hex}"
 
 
-def make_test_session_metadata(test_name: str, *, e2e: bool = False, **extra: object) -> dict[str, object]:
+def make_test_session_metadata(test_name: str, **extra: object) -> dict[str, object]:
     """生成带测试资源标记的 Session metadata。"""
 
     metadata: dict[str, object] = {"_yuxi_test": True, "test": test_name}
-    if e2e:
-        metadata["_yuxi_e2e"] = True
     metadata.update(extra)
     return metadata
-
-
-
-
 
 
 def _is_pytest_resource(name: object) -> bool:
@@ -122,36 +91,16 @@ def _parse_metadata(value: object) -> dict[str, object]:
 
 
 def is_test_session_title(title: object) -> bool:
-    """识别统一前缀及当前仓库历史测试标题。"""
-
-    if not isinstance(title, str):
-        return False
-    if title.startswith(TEST_SESSION_TITLE_PREFIX):
-        return True
-    return any(pattern.fullmatch(title) for pattern in LEGACY_TEST_SESSION_TITLE_PATTERNS)
+    """只识别当前测试生成器发布的统一标题。"""
+    return isinstance(title, str) and title.startswith(TEST_SESSION_TITLE_PREFIX)
 
 
 def _is_test_thread(thread: object) -> bool:
-    """识别测试线程的显式标记、统一标题或测试智能体前缀。
-
-    智能体前缀用于兼容旧 agent-invocation 自动创建的会话，并与 agent 清理
-    共享同一 E2E_AGENT_SLUG_PREFIXES 信任边界；统一标题只在专用测试账号的
-    清理范围内使用。
-    """
-
+    """测试 Session 必须有明确 metadata 或统一标题，不能从 Agent 名称推断。"""
     if not isinstance(thread, dict):
         return False
-
     metadata = _parse_metadata(thread.get("metadata") or thread.get("extra_metadata"))
-    if metadata.get("_yuxi_test") is True:
-        return True
-    if metadata.get("_yuxi_e2e") is True and (
-        metadata.get("test") in E2E_THREAD_TEST_MARKERS or _has_prefix(metadata.get("marker"), ("YUXI_SUBAGENT_STREAM_E2E_",))
-    ):
-        return True
-    if is_test_session_title(thread.get("title")):
-        return True
-    return _has_prefix(thread.get("agent_id") or thread.get("agent_slug") or "", E2E_AGENT_SLUG_PREFIXES)
+    return metadata.get("_yuxi_test") is True or is_test_session_title(thread.get("title"))
 
 
 def _is_e2e_agent(agent: object, owner_uid: str) -> bool:
@@ -161,33 +110,6 @@ def _is_e2e_agent(agent: object, owner_uid: str) -> bool:
         return False
     slug = agent.get("slug") or agent.get("agent_id") or agent.get("id")
     return _has_prefix(slug, E2E_AGENT_SLUG_PREFIXES) and str(agent.get("created_by") or "") == owner_uid
-
-
-def _resolve_e2e_thread_storage(thread_id: str) -> Path:
-    """校验并返回测试线程的独立沙盒目录，不触碰用户共享工作区。"""
-
-    if not SAFE_THREAD_ID.fullmatch(thread_id):
-        raise RuntimeError(f"E2E agent_session cleanup received an unsafe thread id: {thread_id!r}")
-    if thread_id == "shared":
-        raise RuntimeError("E2E agent_session cleanup refuses to target the shared workspace")
-
-    threads_root = get_user_data_dir().resolve()
-    raw_thread_root = threads_root / thread_id
-    if raw_thread_root.is_symlink():
-        raise RuntimeError(f"E2E agent_session cleanup refuses to remove symlink: {raw_thread_root}")
-
-    thread_root = raw_thread_root.resolve()
-    if thread_root.parent != threads_root:
-        raise RuntimeError(f"E2E agent_session cleanup path escaped thread root: {thread_root}")
-    return thread_root
-
-
-def remove_e2e_thread_storage(thread_id: str) -> None:
-    """删除测试线程的独立沙盒目录。"""
-
-    thread_root = _resolve_e2e_thread_storage(thread_id)
-    if thread_root.is_dir():
-        shutil.rmtree(thread_root)
 
 
 def _resolve_test_workdir(uid: str, workdir_path: str) -> Path | None:
@@ -233,15 +155,14 @@ async def list_test_session_resources(owner_uid: str) -> dict[str, CleanupSessio
     conn = await asyncpg.connect(postgres_dsn())
     try:
         receipt_rows = await conn.fetch(
-            "SELECT DISTINCT thread_id FROM agent_input_receipts WHERE uid = $1 AND (left(idempotency_key, char_length($2)) = $2 OR left(idempotency_key, char_length($3)) = $3)",
+            "SELECT DISTINCT thread_id FROM agent_input_receipts WHERE uid = $1 AND left(idempotency_key, char_length($2)) = $2",
             owner_uid,
             TEST_RESOURCE_PREFIX,
-            "agent-call-queue-",
         )
         receipt_thread_ids = {str(row["thread_id"] or "") for row in receipt_rows}
         rows = await conn.fetch(
             "SELECT c.id, c.project_id, c.thread_id, c.uid, c.status, c.title, "
-            "p.workdir_path, p.directory_mode, p.selection_status, c.extra_metadata, c.agent_id "
+            "p.workdir_path, p.directory_mode, p.selection_status, c.extra_metadata "
             "FROM sessions c JOIN projects p ON p.id = c.project_id AND p.uid = c.uid "
             "WHERE c.uid = $1",
             owner_uid,
@@ -255,7 +176,6 @@ async def list_test_session_resources(owner_uid: str) -> dict[str, CleanupSessio
                     {
                         "title": row["title"],
                         "metadata": row["extra_metadata"],
-                        "agent_id": row["agent_id"],
                     }
                 )
                 and thread_id not in receipt_thread_ids
@@ -471,8 +391,6 @@ async def delete_test_session_resources(
                 await _validate_test_workdirs_exclusive(conn, workdirs, workdir_project_ids)
                 for uid, workdir_path in workdirs:
                     remove_test_workdir(uid, workdir_path)
-                for thread_id in thread_ids:
-                    remove_e2e_thread_storage(thread_id)
         except Exception as exc:  # noqa: BLE001
             raise RuntimeError(f"Test agent_session rows were deleted, but filesystem cleanup failed: {exc}") from exc
     finally:
@@ -581,7 +499,6 @@ async def cleanup_test_chat_resources(
     for resource in resources.values():
         if not SAFE_THREAD_ID.fullmatch(resource.thread_id):
             raise RuntimeError(f"Test agent_session cleanup received an unsafe thread id: {resource.thread_id!r}")
-        _resolve_e2e_thread_storage(resource.thread_id)
         if resource.workdir_path:
             _resolve_test_workdir(resource.uid, resource.workdir_path)
             workdir_targets.setdefault((resource.uid, resource.workdir_path), set()).add(resource.project_id)

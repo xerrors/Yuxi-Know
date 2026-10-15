@@ -1,4 +1,4 @@
-"""工具入口一次规整的审计文本、公开内容和失败语义。"""
+"""从工具原始结果派生审计文本、公开内容和失败语义。"""
 
 import json
 from dataclasses import dataclass

@@ -115,7 +115,7 @@ worker 读取 Input 的完整配置快照，为当前 Run 重新准备工作区�
 
 公开内容通过 Session 或指定 Turn 的 `/items` 分页读取，数据库按授权作用域、公开身份和稳定顺序执行 limit+1，包含已消费的用户输入和已经公开的正文、工具参数及结果；pending/cancelled 输入仅保留于 Input，不进入正式历史。页面 `yuxi.runs` 只投影该页引用的执行段身份、状态与耗时。公开 item 身份与 output_index 保存于 Message 元数据，Turn 锁分配递增索引；实时与历史复用同一 serializer。Session 提供当前概览，Turn 列表发现零消息轮次，指定 Turn 的详情按 result_run_id 读取最终输出。完整 Model/Tool 审计由独立管理员接口读取。
 
-调试面板通过 `/api/v1/agents/sessions/{thread_id}/audits` 读取所属 Thread 的持久 Message 和 Run，仅允许没有 API Key、没有 APP 作用域的超级管理员使用。消息包含用户、系统、模型和工具记录；Repository 按 Run 创建时间、Run ID、操作 sequence、Message ID 返回最新 500 条的正序窗口，并用 `truncated` 标明截断。Run 内用户输入排在操作前，其他无 sequence 消息排在操作后并按 Message ID 排列；无 Run 消息使用自身创建时间。面板直接使用数据库响应，不合并普通历史或 SSE 正文，读取失败保留上次快照并提示重试。顺序与展示取舍见[调试数据库投影决策](../develop-guides/decisions/implemented/2026-10-10-debug-database-projection.md)。
+调试面板通过 `/api/v1/agents/sessions/{thread_id}/audits` 读取所属 Thread 的持久 Message 和 Run，仅允许没有 API Key、没有 APP 作用域的超级管理员使用。消息包含用户、系统、模型和工具记录；工具结果唯一保存在 `extra_metadata.output`，工具 Message 的 `content` 固定为空，接口文本和 Memory 由同一工具结果转换器派生。Repository 按 Run 创建时间、Run ID、操作 sequence、Message ID 返回最新 500 条的正序窗口，并用 `truncated` 标明截断。Run 内用户输入排在操作前，其他无 sequence 消息排在操作后并按 Message ID 排列；无 Run 消息使用自身创建时间。面板直接使用数据库响应，不合并普通历史或 SSE 正文，读取失败保留上次快照并提示重试。顺序与展示取舍见[调试数据库投影决策](../develop-guides/decisions/implemented/2026-10-10-debug-database-projection.md)。
 
 History 读取不改变已读标记。页面加载后以 `POST /api/v1/agents/sessions/{thread_id}/viewed` 显式标记已查看；未知、跨 APP 或跨用户的 Thread 返回 404。多个查询遵循数据库事务隔离，运行中变化通过 Thread SSE 与持久快照重读收敛。
 
@@ -125,6 +125,6 @@ History 读取不改变已读标记。页面加载后以 `POST /api/v1/agents/se
 
 BaseAgent 保留 LangGraph v3 ProtocolEvent 的通道、顺序、内容块和 namespace，独立 GraphExecutionResult 返回 checkpoint。同一 Run 因取消让位批次而续图时，执行层在审计与公开投影前将各图段 seq 衔接为 Run 内递增序号，不修改源事件对象、内容和 namespace。Model/Tool 审计消费原生结构；agents service 的唯一 OpenAIEventAdapter 消费相同原生事件，Redis 逐条保存公开事件。批量写入仅优化传输，不合并事件。业务结果通过独立 RunExecutionResult 与 PostgreSQL 收敛，不从公开流反推。
 
-完成、等待、失败和取消由已提交的 Run/Turn 事实通知。原始推理和业务状态使用明确的 yuxi 扩展；官方 item 与 content 事件保持官方结构。详情见 [Agents Public API](../advanced/agents-public-api.md)。
+正常执行由 checkpoint 持久化用例在同一事务形成消息、最终输出归属与 Run/Turn 状态，runner 核对已提交结果后清理执行责任并发布通知。未提交的失败与用户取消由 runner 的共同用例尽力发布已缓冲的公开事件、回读用量并以有效 lease 提交终态；该结果同样只经过一次清理和通知。等待和 yield 保留各自的接续语义，已提交终态的重投递按持久清理标记补做清理、必要通知和后续 Input 调度。原始推理和业务状态使用明确的 yuxi 扩展；官方 item 与 content 事件保持官方结构。详情见 [Agents Public API](../advanced/agents-public-api.md)。
 
 子 Thread 在委派事务中保存实际模型和审批默认值，各 Input 接收时仍冻结本次配置。直接向子 Thread 提交新的 follow-up 会创建独立的用户 Turn，不继承旧 Turn 的 `created_by_run_id`。Thread 委派关系继续证明其用户、APP 和共享 Project 的授权；本轮 Run 的委派身份只用于本轮父子取消与 tracing，不以 Thread 历史委派推断取消范围。附件来源先随 Input 和 Receipt 提交，再写入授权 Workdir 并提交就绪事实；消费时生成 Message 并绑定最终附件。文件准备期间仅通过 Input/queue 查看 preparing 状态，公开用户 item 在消费后出现。模型附件上下文只包含本次 Input 与此前已消费的来源。

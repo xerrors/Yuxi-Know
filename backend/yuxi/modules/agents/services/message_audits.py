@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from yuxi.modules.agents.tool_results import normalize_tool_result
+
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -91,6 +93,7 @@ def serialize_tool_audit(message: Any) -> dict[str, Any]:
     return {
         **_serialize_audit_base(message, metadata),
         "type": "tool",
+        "content": normalize_tool_result(metadata.get("output")).audit_content,
         "tool_call_id": message.operation_id,
         "source": metadata.get("source"),
         "tool_name": metadata.get("tool_name"),

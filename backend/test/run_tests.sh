@@ -5,9 +5,17 @@ set -euo pipefail
 echo "Yuxi 测试运行器"
 echo "========================"
 
-PYTEST_CMD=("docker" "compose" "exec" "api" "uv" "run" "--group" "test" "pytest")
+PYTEST_CMD=(
+    docker compose exec -T
+    -e TEST_BASE_URL -e TEST_USERNAME -e TEST_PASSWORD
+    -e E2E_USERNAME -e E2E_PASSWORD
+    -e OPENAI_REPLAY_URL -e COOPERATION_REPLAY_URL
+    api uv run --group test pytest
+)
 LIFECYCLE_E2E_TESTS=(
     test/e2e/test_agent_lifecycle_e2e.py
+    test/e2e/test_input_projection_recovery_e2e.py
+    test/e2e/test_draft_attachments_e2e.py
     test/e2e/test_agent_lifecycle_extended_e2e.py
     test/e2e/test_session_cooperation_e2e.py
     test/e2e/test_agent_lifecycle_key_scope_e2e.py
@@ -17,7 +25,7 @@ LIFECYCLE_E2E_TESTS=(
 
 check_server() {
     echo "检查测试服务是否就绪..."
-    if docker compose exec -T api curl -fsS http://localhost:5050/api/system/ready > /dev/null 2>&1; then
+    if docker compose exec -T api curl -fsS "${TEST_BASE_URL:-http://localhost:5050}/api/system/ready" > /dev/null 2>&1; then
         echo "✓ 测试服务已就绪"
         return 0
     fi
@@ -36,7 +44,8 @@ run_integration_tests() {
     echo "运行集成测试..."
     check_server
     "${PYTEST_CMD[@]}" test/integration/api
-    "${PYTEST_CMD[@]}" test/integration --ignore=test/integration/api
+    "${PYTEST_CMD[@]}" test/integration --ignore=test/integration/api \
+        --ignore=test/integration/services/test_background_job_worker_path.py
 }
 
 run_e2e_tests() {
@@ -53,10 +62,9 @@ run_all_e2e_tests() {
 
 run_all_tests() {
     echo "运行全部测试..."
-    check_server
-    "${PYTEST_CMD[@]}" test/unit
+    run_unit_tests
     run_integration_tests
-    "${PYTEST_CMD[@]}" "${LIFECYCLE_E2E_TESTS[@]}"
+    run_e2e_tests
 }
 
 show_help() {

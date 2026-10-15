@@ -8,7 +8,6 @@ import threading
 import uuid
 
 import pytest
-import pytest_asyncio
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -40,16 +39,6 @@ from yuxi.shared.datetime import utc_now
 from yuxi.shared.errors import ResourceNotFoundError
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
-
-
-@pytest_asyncio.fixture()
-async def cleanup_database():
-    """为测试提供独立连接池。"""
-    engine = create_async_engine(os.environ["POSTGRES_URL"], pool_pre_ping=True)
-    try:
-        yield async_sessionmaker(engine, expire_on_commit=False)
-    finally:
-        await engine.dispose()
 
 
 async def _seed_thread(session_factory, *, thread_prefix: str) -> dict:
@@ -175,13 +164,13 @@ async def _cleanup_seed(session_factory, seeds: list[dict]) -> None:
         await db.commit()
 
 
-async def test_delete_test_session_rows_removes_history_and_preserves_neighbor(cleanup_database):
+async def test_delete_test_session_rows_removes_history_and_preserves_neighbor(postgres_sessions):
     """物理清理删除目标整条生命周期历史，同时保留相邻线程。"""
-    target = await _seed_thread(cleanup_database, thread_prefix="pytest-conv-target")
-    neighbor = await _seed_thread(cleanup_database, thread_prefix="pytest-conv-neighbor")
+    target = await _seed_thread(postgres_sessions, thread_prefix="pytest-conv-target")
+    neighbor = await _seed_thread(postgres_sessions, thread_prefix="pytest-conv-neighbor")
     try:
         await delete_test_session_rows({target["thread_id"]})
-        async with cleanup_database() as db:
+        async with postgres_sessions() as db:
             for model, key in (
                 (Session, "session_record_id"),
                 (AgentInput, "input_id"),
@@ -197,38 +186,38 @@ async def test_delete_test_session_rows_removes_history_and_preserves_neighbor(c
             assert await db.scalar(select(Message.id).where(Message.source_input_id == target["input_id"])) is None
             assert await db.scalar(select(Message.id).where(Message.source_input_id == neighbor["input_id"])) is not None
     finally:
-        await _cleanup_seed(cleanup_database, [target, neighbor])
+        await _cleanup_seed(postgres_sessions, [target, neighbor])
 
 
-async def test_delete_test_session_rows_is_idempotent(cleanup_database):
+async def test_delete_test_session_rows_is_idempotent(postgres_sessions):
     """重复清理同一测试线程仍保持物理删除。"""
-    target = await _seed_thread(cleanup_database, thread_prefix="pytest-conv-idem")
+    target = await _seed_thread(postgres_sessions, thread_prefix="pytest-conv-idem")
     try:
         await delete_test_session_rows({target["thread_id"]})
         await delete_test_session_rows({target["thread_id"]})
-        async with cleanup_database() as db:
+        async with postgres_sessions() as db:
             assert await db.get(Session, target["session_record_id"]) is None
     finally:
-        await _cleanup_seed(cleanup_database, [target])
+        await _cleanup_seed(postgres_sessions, [target])
 
 
-async def test_delete_test_session_rows_preserves_selectable_project(cleanup_database):
+async def test_delete_test_session_rows_preserves_selectable_project(postgres_sessions):
     """删除最后一个 Session 时保留可选择的 Project。"""
-    target = await _seed_thread(cleanup_database, thread_prefix="pytest-selectable-project")
+    target = await _seed_thread(postgres_sessions, thread_prefix="pytest-selectable-project")
     try:
-        async with cleanup_database() as db:
+        async with postgres_sessions() as db:
             project = await db.get(Project, target["project_id"])
             project.selection_status = "selectable"
             project.name = "Test selectable project"
             await db.commit()
         await delete_test_session_rows({target["thread_id"]})
-        async with cleanup_database() as db:
+        async with postgres_sessions() as db:
             assert await db.get(Project, target["project_id"]) is not None
     finally:
-        await _cleanup_seed(cleanup_database, [target])
+        await _cleanup_seed(postgres_sessions, [target])
 
 
-async def test_receipt_prefix_matching_treats_underscores_literally(cleanup_database):
+async def test_receipt_prefix_matching_treats_underscores_literally(postgres_sessions):
     """Receipt 幂等键前缀按字面匹配，不把下划线当 SQL 通配符。"""
     uid = f"pytest-prefix-user-{uuid.uuid4()}"
     valid_thread_id = f"pytest-prefix-valid-{uuid.uuid4()}"
@@ -236,7 +225,7 @@ async def test_receipt_prefix_matching_treats_underscores_literally(cleanup_data
     project_ids = [str(uuid.uuid4()), str(uuid.uuid4())]
     receipt_ids = [str(uuid.uuid4()), str(uuid.uuid4())]
     try:
-        async with cleanup_database() as db:
+        async with postgres_sessions() as db:
             db.add(User(username=uid, uid=uid, password_hash="test"))
             await db.flush()
             for project_id, thread_id in zip(project_ids, (valid_thread_id, ordinary_thread_id), strict=True):
@@ -296,16 +285,16 @@ async def test_receipt_prefix_matching_treats_underscores_literally(cleanup_data
         assert ordinary_thread_id not in resources
     finally:
         await delete_test_session_rows({valid_thread_id, ordinary_thread_id})
-        async with cleanup_database() as db:
+        async with postgres_sessions() as db:
             await db.execute(delete(Project).where(Project.id.in_(project_ids)))
             await db.execute(delete(User).where(User.uid == uid))
             await db.commit()
 
 
-async def test_workdir_guard_rejects_ancestor_or_descendant_owner(cleanup_database):
+async def test_workdir_guard_rejects_ancestor_or_descendant_owner(postgres_sessions):
     """目标 Project Workdir 与非目标 Session 路径嵌套时必须拒绝。"""
 
-    session_factory = cleanup_database
+    session_factory = postgres_sessions
     uid = f"pytest-workdir-user-{uuid.uuid4()}"
     target_thread_id = f"pytest-workdir-target-{uuid.uuid4()}"
     neighbor_thread_id = f"pytest-workdir-neighbor-{uuid.uuid4()}"
@@ -361,10 +350,10 @@ async def test_workdir_guard_rejects_ancestor_or_descendant_owner(cleanup_databa
             await db.commit()
 
 
-async def test_run_guard_rejects_nonterminal_run(cleanup_database):
+async def test_run_guard_rejects_nonterminal_run(postgres_sessions):
     """非终态 Run 存在时，清理 guard 必须拒绝后续破坏性动作。"""
 
-    session_factory = cleanup_database
+    session_factory = postgres_sessions
     target = await _seed_thread(session_factory, thread_prefix="pytest-running-guard")
     try:
         async with session_factory() as db:
@@ -379,9 +368,9 @@ async def test_run_guard_rejects_nonterminal_run(cleanup_database):
         await _cleanup_seed(session_factory, [target])
 
 
-async def test_run_guard_waits_for_interrupted_history_runtime_cleanup(cleanup_database):
+async def test_run_guard_waits_for_interrupted_history_runtime_cleanup(postgres_sessions):
     """恢复后的旧 interrupted 段只需等待 runtime owner 释放。"""
-    session_factory = cleanup_database
+    session_factory = postgres_sessions
     target = await _seed_thread(session_factory, thread_prefix="pytest-resumed-guard")
     resume_id = str(uuid.uuid4())
     try:
@@ -422,9 +411,9 @@ async def test_run_guard_waits_for_interrupted_history_runtime_cleanup(cleanup_d
         await _cleanup_seed(session_factory, [target])
 
 
-async def test_run_guard_rejects_waiting_turn_with_interrupted_run(cleanup_database):
+async def test_run_guard_rejects_waiting_turn_with_interrupted_run(postgres_sessions):
     """尚在等待输入的 Turn 不能因为 Run 已 interrupted 而被清理。"""
-    session_factory = cleanup_database
+    session_factory = postgres_sessions
     target = await _seed_thread(session_factory, thread_prefix="pytest-waiting-guard")
     try:
         async with session_factory() as db:
@@ -441,9 +430,9 @@ async def test_run_guard_rejects_waiting_turn_with_interrupted_run(cleanup_datab
         await _cleanup_seed(session_factory, [target])
 
 
-async def test_run_guard_rejects_unreleased_runtime_after_deadline(cleanup_database, monkeypatch):
+async def test_run_guard_rejects_unreleased_runtime_after_deadline(postgres_sessions, monkeypatch):
     """运行时长期未释放时，清理仍保持失败关闭。"""
-    session_factory = cleanup_database
+    session_factory = postgres_sessions
     target = await _seed_thread(session_factory, thread_prefix="pytest-runtime-guard")
     monkeypatch.setattr(cleanup_module, "RUN_CLEANUP_WAIT_SECONDS", 0.1)
     try:
@@ -458,10 +447,10 @@ async def test_run_guard_rejects_unreleased_runtime_after_deadline(cleanup_datab
         await _cleanup_seed(session_factory, [target])
 
 
-async def test_resource_cleanup_lock_makes_overlapping_linked_project_revalidate(cleanup_database, monkeypatch):
+async def test_resource_cleanup_lock_makes_overlapping_linked_project_revalidate(postgres_sessions, monkeypatch):
     """绑定待清理子目录的 linked Project 必须在删除后重新校验。"""
 
-    session_factory = cleanup_database
+    session_factory = postgres_sessions
     uid = f"pytest-lock-user-{uuid.uuid4()}"
     target_thread_id = f"pytest-lock-target-{uuid.uuid4()}"
     neighbor_thread_id = f"pytest-lock-neighbor-{uuid.uuid4()}"
@@ -539,7 +528,6 @@ async def test_resource_cleanup_lock_makes_overlapping_linked_project_revalidate
         original_remove(_uid, _workdir_path)
 
     monkeypatch.setattr("test.live_api_cleanup.remove_test_workdir", remove_while_project_waits)
-    monkeypatch.setattr("test.live_api_cleanup.remove_e2e_thread_storage", lambda _thread_id: None)
 
     try:
         await delete_test_session_resources(
@@ -562,10 +550,10 @@ async def test_resource_cleanup_lock_makes_overlapping_linked_project_revalidate
             await db.commit()
 
 
-async def test_resource_cleanup_reports_file_failure_after_database_commit(cleanup_database, monkeypatch):
+async def test_resource_cleanup_reports_file_failure_after_database_commit(postgres_sessions, monkeypatch):
     """文件清理失败必须显式报告，且不能恢复已提交的 Session 行。"""
 
-    session_factory = cleanup_database
+    session_factory = postgres_sessions
     target = await _seed_thread(session_factory, thread_prefix="pytest-cleanup-file-failure")
     workdir_path = f"projects/YUXI_TEST_failure-{uuid.uuid4()}"
     async with session_factory() as db:
@@ -580,7 +568,6 @@ async def test_resource_cleanup_reports_file_failure_after_database_commit(clean
         raise OSError("disk failure")
 
     monkeypatch.setattr("test.live_api_cleanup.remove_test_workdir", fail_file_cleanup)
-    monkeypatch.setattr("test.live_api_cleanup.remove_e2e_thread_storage", lambda _thread_id: None)
 
     try:
         with pytest.raises(RuntimeError, match="rows were deleted, but filesystem cleanup failed"):

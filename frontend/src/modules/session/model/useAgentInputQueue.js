@@ -12,7 +12,7 @@ const controlKey = () =>
 export function useAgentInputQueue({
   getThreadState,
   isThreadActive = () => true,
-  resetOngoingRunGroup,
+  resetThreadExecution,
   startRunStream,
   onStreamError
 }) {
@@ -72,9 +72,9 @@ export function useAgentInputQueue({
             const state = getThreadState(threadId)
             removeInput(state, currentInputId)
             stopInputMonitor(threadId, currentInputId)
-            if (!state?.activeRunId) resetOngoingRunGroup(threadId, { preserveInputMonitors: true })
-            mergeItemSnapshot(state.ongoingRunGroup, input.items || [])
-            delete state.ongoingRunGroup.optimisticMessages[currentInputId]
+            if (!state?.activeRunId) resetThreadExecution(threadId, { preserveInputMonitors: true })
+            mergeItemSnapshot(state.itemState, input.items || [])
+            delete state.optimisticInputs[currentInputId]
             state.pendingInputId = currentInputId
             void startRunStream(threadId, input.run_id, null, {
               turnId: input.turn_id,
@@ -86,8 +86,8 @@ export function useAgentInputQueue({
             advanceSnapshot(threadId)
             const state = getThreadState(threadId)
             removeInput(state, currentInputId)
-            if (state?.ongoingRunGroup?.optimisticMessages) {
-              delete state.ongoingRunGroup.optimisticMessages[currentInputId]
+            if (state?.optimisticInputs) {
+              delete state.optimisticInputs[currentInputId]
             }
             stopInputMonitor(threadId, currentInputId)
             onStreamError?.(threadId, currentInputId, 'cancelled')
@@ -164,8 +164,8 @@ export function useAgentInputQueue({
       if (action === 'cancel') {
         stopInputMonitor(threadId, inputId)
         removeInput(ts, inputId)
-        if (ts.ongoingRunGroup?.optimisticMessages)
-          delete ts.ongoingRunGroup.optimisticMessages[inputId]
+        if (ts.optimisticInputs)
+          delete ts.optimisticInputs[inputId]
       }
       await syncQueuedInputs(threadId)
       return true

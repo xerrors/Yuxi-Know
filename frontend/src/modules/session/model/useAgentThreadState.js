@@ -1,7 +1,5 @@
 import { createItemState } from './agentItems.js'
 
-const createOngoingRunGroupState = () => ({ ...createItemState(), optimisticMessages: {} })
-
 const IDLE_QUEUE_SNAPSHOT = Object.freeze({
   status: 'ready',
   queue_paused: false
@@ -36,7 +34,9 @@ export function useAgentThreadState({
         pendingInputId: null,
         pendingInterrupt: null,
         agentStateRequestVersion: 0,
-        ongoingRunGroup: createOngoingRunGroupState(),
+        itemState: createItemState(),
+        optimisticInputs: {},
+        historyLoaded: false,
         agentState: null,
         contextCompressing: false,
         queuedInputs: [],
@@ -72,39 +72,32 @@ export function useAgentThreadState({
     delete chatState.threadStates[threadId]
   }
 
-  const resetOngoingRunGroup = (threadId, { preserveInputMonitors = false } = {}) => {
-    if (threadId) {
-      const threadState = getThreadState(threadId)
-      if (!threadState) return
+  const resetThreadExecution = (threadId, { preserveInputMonitors = false } = {}) => {
+    const threadState = getThreadState(threadId)
+    if (!threadState) return
 
-      if (typeof onBeforeResetThread === 'function') {
-        onBeforeResetThread(threadId)
-      }
-
-      if (threadState.runStreamAbortController) {
-        threadState.runStreamAbortController.abort()
-        threadState.runStreamAbortController = null
-      }
-      clearTimeout(threadState.runReconnectTimer)
-      threadState.runReconnectTimer = null
-      if (!preserveInputMonitors) {
-        abortAllInputMonitors(threadState)
-      }
-
-      threadState.ongoingRunGroup = createOngoingRunGroupState()
-      resetThreadUiState(threadState)
-      return
+    if (typeof onBeforeResetThread === 'function') {
+      onBeforeResetThread(threadId)
     }
 
-    Object.keys(chatState.threadStates).forEach((id) => {
-      cleanupThreadState(id)
-    })
+    if (threadState.runStreamAbortController) {
+      threadState.runStreamAbortController.abort()
+      threadState.runStreamAbortController = null
+    }
+    clearTimeout(threadState.runReconnectTimer)
+    threadState.runReconnectTimer = null
+    if (!preserveInputMonitors) {
+      abortAllInputMonitors(threadState)
+    }
+
+    threadState.optimisticInputs = {}
+    resetThreadUiState(threadState)
   }
 
   return {
     getThreadState,
     cleanupThreadState,
-    resetOngoingRunGroup
+    resetThreadExecution
   }
 }
 

@@ -53,7 +53,7 @@ jobs:
             -H 'Content-Type: application/json' \
             --data "{\"uid\":\"${E2E_USERNAME}\",\"password\":\"${E2E_PASSWORD}\"}" >/dev/null
       - name: Run real-provider Agent probe
-        run: docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_agent_async_e2e.py -q
+        run: docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_real_provider_e2e.py -q
       - name: Runtime logs on failure
         if: failure()
         run: docker compose logs api worker --tail 300

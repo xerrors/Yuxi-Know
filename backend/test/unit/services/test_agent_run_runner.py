@@ -273,13 +273,15 @@ async def test_cancelling_member_releases_its_run_cleanup_responsibility(monkeyp
     monkeypatch.setattr(runner, "append_run_event_best_effort", fake_noop)
     monkeypatch.setattr(runner, "publish_run_settlement", fake_noop)
 
-    transition = await runner._finish_user_cancel(
+    monkeypatch.setattr(runner, "_get_run", AsyncMock(return_value=run))
+
+    transition = await runner._settle_uncommitted_run(
+        status="cancelled",
         run_id=run.id,
         thread_id=run.thread_id,
         current_user=None,
         worker_id="worker-1",
         writer=SimpleNamespace(),
-        run=run,
     )
 
     assert transition == runner.TerminalTransition(status="cancelled", changed=True)
@@ -434,7 +436,7 @@ async def test_run_environment_snapshot_survives_updates_and_is_released(monkeyp
         yield _terminal_result()
 
     monkeypatch.setattr(runner, "stream_agent_execution", stream)
-    monkeypatch.setattr(runner, "_finish_run", AsyncMock())
+    monkeypatch.setattr(runner, "_settle_uncommitted_run", AsyncMock())
     assert sandbox_run_env.get() is None
     await runner.process_agent_run({"job_try": 1}, run.id)
     assert observed == [{"RUN_VALUE": "before"}, {"RUN_VALUE": "before"}]
@@ -629,7 +631,7 @@ async def test_read_run_token_usage_from_state_rejects_other_run(monkeypatch: py
 
 
 @pytest.mark.asyncio
-async def test_finish_run_marks_usage_unavailable_when_state_read_fails(monkeypatch: pytest.MonkeyPatch):
+async def test_uncommitted_failure_marks_usage_unavailable_when_state_read_fails(monkeypatch: pytest.MonkeyPatch):
     terminal_calls: list[dict] = []
 
     async def fake_read_usage(**kwargs):
@@ -659,9 +661,9 @@ async def test_finish_run_marks_usage_unavailable_when_state_read_fails(monkeypa
     monkeypatch.setattr(runner, "mark_run_terminal", fake_mark_terminal)
     monkeypatch.setattr(runner, "publish_run_settlement", fake_append_end_event)
 
-    await runner._finish_run(
+    await runner._settle_uncommitted_run(
         "run-1",
-        "completed",
+        "failed",
         thread_id="thread-1",
         current_user=SimpleNamespace(uid="user-1"),
         worker_id="worker-1:attempt-1",
@@ -950,7 +952,7 @@ async def test_process_agent_run_retryable_error_retries_then_completes(monkeypa
 
 
 @pytest.mark.asyncio
-async def test_finish_run_terminal_loser_does_not_append_end_event(monkeypatch: pytest.MonkeyPatch):
+async def test_uncommitted_failure_losing_to_cancellation_does_not_publish(monkeypatch: pytest.MonkeyPatch):
     events: list[tuple[str, dict]] = []
 
     async def fake_mark_terminal(run_id: str, status: str, error_type=None, error_message=None, **kwargs):
@@ -966,9 +968,9 @@ async def test_finish_run_terminal_loser_does_not_append_end_event(monkeypatch: 
     monkeypatch.setattr(runner, "_get_run", AsyncMock(return_value=None))
     monkeypatch.setattr(runner, "_read_run_token_usage_from_state", AsyncMock(return_value=None))
 
-    transition = await runner._finish_run(
+    transition = await runner._settle_uncommitted_run(
         "run-1",
-        "completed",
+        "failed",
         thread_id="thread-1",
         current_user=SimpleNamespace(uid="user-1"),
         worker_id="worker-1:attempt-1",
@@ -1274,7 +1276,7 @@ async def test_cancel_during_manifest_preparation_settles_without_waiting_for_le
     monkeypatch.setattr(runner, "prepare_and_record_run_execution", persist)
     monkeypatch.setattr(runner, "_is_cancel_requested", is_cancelled)
     monkeypatch.setattr(runner, "_confirmed_user_cancel", is_cancelled)
-    monkeypatch.setattr(runner, "_finish_user_cancel", finish)
+    monkeypatch.setattr(runner, "_settle_uncommitted_run", finish)
     monkeypatch.setattr(runner, "mark_run_terminal", AsyncMock(side_effect=AssertionError("不能转为 failed")))
     monkeypatch.setattr(runner, "stream_agent_execution", lambda **kwargs: pytest.fail("取消后不能开始执行"))
     await runner.process_agent_run({"job_try": 1}, run.id)
@@ -1282,16 +1284,19 @@ async def test_cancel_during_manifest_preparation_settles_without_waiting_for_le
     assert finish.call_args.kwargs["run_id"] == run.id
 
 
-@pytest.mark.parametrize("status", ["completed", "interrupted"])
-async def test_committed_execution_releases_own_runtime_before_settlement(monkeypatch, status):
-    """完成和等待均以 PG 已提交状态为依据，先释放当前 Run 的 runtime。"""
+@pytest.mark.parametrize("status", ["completed", "interrupted", "failed"])
+async def test_execution_releases_own_runtime_before_settlement(monkeypatch, status):
+    """执行结果先持久终态，再一次清理当前 Run，最后发布。"""
     run = _build_run()
     _patch_common(monkeypatch, run)
     order = []
 
     async def stream():
-        run.status = status
-        yield _terminal_result(status)
+        if status == "failed":
+            yield RunExecutionResult(checkpoint=None, status="failed", committed=False)
+        else:
+            run.status = status
+            yield _terminal_result(status)
 
     async def release(actual, _message):
         assert actual is run
@@ -1304,9 +1309,17 @@ async def test_committed_execution_releases_own_runtime_before_settlement(monkey
     monkeypatch.setattr(runner, "stream_agent_execution", lambda **kw: stream())
     monkeypatch.setattr(runner, "_require_runtime_cleanup", release)
     monkeypatch.setattr(runner, "publish_run_settlement", publish)
-    monkeypatch.setattr(runner, "mark_run_terminal", AsyncMock(side_effect=AssertionError("already committed")))
+
+    async def commit(_run_id, target, **_kwargs):
+        """只有未提交失败需要 worker 形成终态，完成结果不得二次结算。"""
+        assert status == "failed" and target == status
+        run.status = target
+        order.append("commit")
+        return runner.TerminalTransition(status=target, changed=True)
+
+    monkeypatch.setattr(runner, "mark_run_terminal", commit)
     await runner.process_agent_run({"job_try": 1}, run.id)
-    assert order == ["release", "published"]
+    assert order == (["commit"] if status == "failed" else []) + ["release", "published"]
 
 
 @pytest.mark.parametrize("container", ["metadata", "payload", "yuxi"])
@@ -1377,7 +1390,6 @@ async def test_nonretryable_output_conflict_after_user_cancel_settles_cancelled(
     finish = AsyncMock(return_value=runner.TerminalTransition(status="cancelled", changed=True))
     monkeypatch.setattr(runner, "stream_agent_execution", lambda **kwargs: stream())
     monkeypatch.setattr(runner, "_confirmed_user_cancel", is_cancelled)
-    monkeypatch.setattr(runner, "_finish_user_cancel", finish)
-    monkeypatch.setattr(runner, "_finish_run", AsyncMock(side_effect=AssertionError("不能转为 failed")))
+    monkeypatch.setattr(runner, "_settle_uncommitted_run", finish)
     await runner.process_agent_run({"job_try": 1}, run.id)
     finish.assert_awaited_once()

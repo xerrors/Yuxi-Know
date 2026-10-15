@@ -2,6 +2,8 @@
 
 import json
 
+from yuxi.modules.agents.tool_results import normalize_tool_result
+
 from yuxi.modules.agents.message_preview import build_message_search_snippet
 from yuxi.modules.agents.repositories.memory_history import MemoryHistoryRepository
 from yuxi.modules.agents.repositories.messages import MessageRepository
@@ -136,7 +138,7 @@ class MemoryHistoryService:
             metadata = row.extra_metadata or {}
             tool_input = json.dumps(metadata.get("input") or {}, ensure_ascii=False, separators=(",", ":"))
             tool_input, input_truncated = truncate_utf8(tool_input, 1024)
-            tool_output, output_truncated = truncate_utf8(row.content, 2048)
+            tool_output, output_truncated = truncate_utf8(normalize_tool_result(metadata.get("output")).audit_content, 2048)
             error, error_truncated = truncate_utf8(metadata.get("error_message"), 512)
             tool_item = {
                 "tool_call_id": row.operation_id,

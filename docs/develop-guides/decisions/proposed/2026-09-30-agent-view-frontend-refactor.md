@@ -4,7 +4,7 @@
 类型：architecture
 Owner：frontend/src/pages/AgentView.vue
 
-调研日期：2026-09-30。读者为前端维护者、产品设计者和后续实现的 Reviewer。本文保存以 AgentView 完整可见工作区为中心的调研快照和整体重构方案。应用装配、目录归属与页面协调已按[主干决策](../implemented/2026-09-30-frontend-architecture-spine.md)实施；独立 Thread 阅读、统一输入、共享会话数据和全量 strict TypeScript 仍属于后续提案。
+调研日期：2026-09-30。读者为前端维护者、产品设计者和后续实现的 Reviewer。本文保存以 AgentView 完整可见工作区为中心的调研快照和整体重构方案。应用装配、目录归属与页面协调已按[主干决策](../implemented/2026-09-30-frontend-architecture-spine.md)实施；共享 item 状态与输入提交职责由 [Session 收敛决策](../implemented/2026-10-15-session-item-input-ownership.md)拥有。独立 Thread 阅读组件、完整草稿持久化和全量 strict TypeScript 仍属于后续提案。
 
 结论：前端需要围绕业务边界进行系统重构。优先建立按 Thread 隔离的会话数据与订阅模块、仅传 `threadId` 即可工作的对话阅读组件，以及管理完整草稿与提交回执的统一输入组件。页面负责组合这些能力，文件、状态、子智能体、调试和管理功能分别拥有自己的数据与界面。Vue 3、Vite、Pinia 和现有设计 token 可以继续使用。
 
@@ -87,7 +87,7 @@ flowchart TD
 | App、router guard、AppLayout、AgentView、聊天组件均包含 agent 初始化入口；AppLayout 还加载其他域资源 | 启动 Owner 分散，进入一个页面会牵动多个领域；初始化中的调用也缺少统一的完成承诺 |
 | 单测包含纯函数、Vue 运行时以及源码字符串断言；浏览器脚本由开发者在登录环境手动执行 | 已有有效证据值得保留，但字符串存在性无法证明 IME、焦点、粘贴、拖拽和真实订阅行为 |
 
-源码证据：[chatThreads store](https://github.com/xerrors/Yuxi/blob/main/frontend/src/modules/session/model/chatThreads.js)、[ThreadMessageList](https://github.com/xerrors/Yuxi/blob/main/frontend/src/modules/session/ui/ThreadMessageList.vue)、[SubagentThreadView](https://github.com/xerrors/Yuxi/blob/main/frontend/src/modules/session/ui/SubagentThreadView.vue)、[输入包装](https://github.com/xerrors/Yuxi/blob/main/frontend/src/modules/session/ui/AgentInputArea.vue)、[编辑器](https://github.com/xerrors/Yuxi/blob/main/frontend/src/modules/session/ui/MessageInputComponent.vue)、[Thread SSE](https://github.com/xerrors/Yuxi/blob/main/frontend/src/modules/session/model/useAgentRunStream.js)、[agent store](https://github.com/xerrors/Yuxi/blob/main/frontend/src/modules/agents/model/agent.js)。
+源码证据：[chatThreads store](https://github.com/xerrors/Yuxi/blob/main/frontend/src/modules/session/model/chatThreads.js)、[会话运行状态](https://github.com/xerrors/Yuxi/blob/main/frontend/src/modules/session/model/sessionRuntime.js)、[SubagentThreadView](https://github.com/xerrors/Yuxi/blob/main/frontend/src/modules/session/ui/SubagentThreadView.vue)、[输入包装](https://github.com/xerrors/Yuxi/blob/main/frontend/src/modules/session/ui/AgentInputArea.vue)、[编辑器](https://github.com/xerrors/Yuxi/blob/main/frontend/src/modules/session/ui/MessageInputComponent.vue)、[Thread SSE](https://github.com/xerrors/Yuxi/blob/main/frontend/src/modules/session/model/useAgentRunStream.js)、[agent store](https://github.com/xerrors/Yuxi/blob/main/frontend/src/modules/agents/model/agent.js)。
 
 ### 可以保留的基础
 

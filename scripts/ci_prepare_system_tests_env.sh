@@ -8,7 +8,7 @@ python3 - <<'PY'
 import os
 from pathlib import Path
 
-keys = ("JWT_SECRET_KEY", "API_KEY_DERIVATION_SECRET", "CUBE_API_URL", "CUBE_API_KEY", "CUBE_PROXY_NODE_IP", "CUBE_PROXY_PORT_HTTP", "CUBE_TEMPLATE_ID", "SILICONFLOW_API_KEY")
+keys = ("JWT_SECRET_KEY", "API_KEY_DERIVATION_SECRET", "CUBE_API_URL", "CUBE_API_KEY", "CUBE_PROXY_NODE_IP", "CUBE_PROXY_PORT_HTTP", "CUBE_TEMPLATE_ID", "SILICONFLOW_API_KEY", "OPENAI_REPLAY_URL", "COOPERATION_REPLAY_URL")
 values = {key: os.environ[key] for key in keys if os.environ.get(key)}
 state = Path("docker/volumes/yuxi").resolve()
 values.update(CUBE_NODE_USER_DATA_DIR=str(state / "threads"), CUBE_NODE_SKILL_PROJECTION_DIR=str(state / "skill-projections"))

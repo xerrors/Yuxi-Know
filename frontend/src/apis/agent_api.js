@@ -117,7 +117,7 @@ export const agentApi = {
         image_url: image
       }))
     ]
-    return postSessionEvents(
+    return apiPost(
       `/api/v1/agents/sessions/${threadId}/events`,
       {
         events: [
@@ -137,7 +137,7 @@ export const agentApi = {
           }
         ]
       },
-      data.idempotency_key
+      { headers: { 'Idempotency-Key': data.idempotency_key } }
     )
   },
 
@@ -213,10 +213,10 @@ export const agentApi = {
    * 取消排队中的请求
    */
   promoteThreadInput: (threadId, inputId, idempotencyKey) =>
-    postSessionEvents(
+    apiPost(
       `/api/v1/agents/sessions/${threadId}/events`,
       { events: [{ type: 'yuxi.session.input.promote', input_id: inputId }] },
-      idempotencyKey
+      { headers: { 'Idempotency-Key': idempotencyKey } }
     ),
 
   cancelThreadInput: (threadId, inputId, idempotencyKey) =>
@@ -233,20 +233,6 @@ export const agentApi = {
    */
   getAgentRun: (threadId, runId, options = {}) =>
     apiGet(`/api/v1/agents/sessions/${threadId}/runs/${runId}`, options)
-}
-
-/** 提交响应丢失时读取同一键的持久回执，未确认则交给原命令重试。 */
-async function postSessionEvents(path, body, key) {
-  try {
-    return await apiPost(path, body, { headers: { 'Idempotency-Key': key } })
-  } catch (error) {
-    if (error.status >= 400 && error.status < 500 && error.status !== 429) throw error
-    try {
-      return await apiGet(`${path.slice(0, -'/events'.length)}/receipt?${new URLSearchParams({ idempotency_key: key })}`)
-    } catch {
-      throw error
-    }
-  }
 }
 
 // =============================================================================

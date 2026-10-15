@@ -139,7 +139,8 @@ async def test_public_run_persists_preloaded_tool_and_model_audit(e2e_client, e2
             tool_row = await conn.fetchrow(
                 """
                 SELECT audit.execution_status, audit.content, audit.usage, audit.duration_ms,
-                       audit.operation_id, audit.extra_metadata->>'tool_name' AS tool_name
+                       audit.operation_id, audit.extra_metadata->>'tool_name' AS tool_name,
+                       audit.extra_metadata->'output'->>'content' AS output
                 FROM messages audit
                 WHERE audit.run_id = $1 AND audit.message_type = 'tool_audit'
                 """,
@@ -152,7 +153,8 @@ async def test_public_run_persists_preloaded_tool_and_model_audit(e2e_client, e2
                 TOOL,
                 "completed",
             )
-            assert TOOL_RESULT in tool_row["content"]
+            assert tool_row["content"] == ""
+            assert TOOL_RESULT in tool_row["output"]
             assert await conn.fetchval("SELECT to_regclass('tool_calls')") is None
 
             manifest = binding["manifest"]
@@ -400,7 +402,8 @@ async def test_tool_error_is_persisted_by_tool_message(e2e_client, e2e_headers):
             row = await conn.fetchrow(
                 """
                 SELECT audit.execution_status, audit.content, audit.duration_ms,
-                       audit.turn_id, audit.run_id, audit.extra_metadata->>'error_message' AS error_message
+                       audit.turn_id, audit.run_id, audit.extra_metadata->>'error_message' AS error_message,
+                       audit.extra_metadata->'output'->>'content' AS output
                 FROM messages audit
                 WHERE audit.run_id = $1 AND audit.message_type = 'tool_audit'
                 """,
@@ -409,7 +412,8 @@ async def test_tool_error_is_persisted_by_tool_message(e2e_client, e2e_headers):
             assert row and row["execution_status"] == "failed"
             assert row["run_id"] == run_id and row["turn_id"] == turn_id
             assert row["duration_ms"] is not None and row["duration_ms"] >= 0
-            assert row["content"] and row["error_message"]
+            assert row["content"] == ""
+            assert row["output"] == audit["content"] and row["error_message"]
         finally:
             await conn.close()
     finally:

@@ -15,7 +15,7 @@ import pytest
 from PIL import Image
 from pypdf import PdfWriter
 
-from test.live_api_cleanup import make_test_session_title, remove_e2e_thread_storage
+from test.live_api_cleanup import make_test_session_title
 from test.e2e.e2e_helpers import cleanup_uploaded_chat_attachment
 from yuxi.bootstrap.models import load_models
 from yuxi.infrastructure.minio import get_minio_client
@@ -186,7 +186,6 @@ async def test_private_draft_parse_send_and_delete_preserve_complete_local_direc
             await cleanup_uploaded_chat_attachment(uid, uploaded["id"])
         if thread_id:
             await e2e_client.post(f"/api/v1/agents/sessions/{thread_id}/archive", headers=e2e_headers)
-            remove_e2e_thread_storage(thread_id)
         await asyncio.to_thread(replay.shutdown)
         replay.server_close()
         await pg_manager.close()

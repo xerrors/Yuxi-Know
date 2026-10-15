@@ -99,7 +99,6 @@ class ToolMessageAuditRepository:
         worker_id: str,
         tool_call_id: str,
         output: Any,
-        content: str,
         finished_at: datetime,
         duration_ms: int | None,
         finished_sequence: int | None,
@@ -112,7 +111,6 @@ class ToolMessageAuditRepository:
             tool_call_id=tool_call_id,
             execution_status="completed",
             output=output,
-            content=content,
             error_message=None,
             finished_at=finished_at,
             duration_ms=duration_ms,
@@ -126,7 +124,7 @@ class ToolMessageAuditRepository:
         thread_id: str,
         worker_id: str,
         tool_call_id: str,
-        content: str,
+        reason: str,
     ) -> Message:
         """记录已接受审批的拒绝结果，不制造工具执行开始事实。"""
         from yuxi.shared.datetime import utc_now
@@ -151,7 +149,7 @@ class ToolMessageAuditRepository:
             role="tool",
             message_type=TOOL_AUDIT_MESSAGE_TYPE,
             operation_id=tool_call_id,
-            content=content,
+            content="",
             delivery_status="complete",
             execution_status="failed",
             finished_at=utc_now(),
@@ -159,8 +157,8 @@ class ToolMessageAuditRepository:
                 "audit_kind": "tool",
                 "tool_name": declaration["name"],
                 "input": declaration["args"],
-                "output": content,
-                "error_message": content,
+                "output": reason,
+                "error_message": reason,
                 "source": "approval_rejection",
                 "source_model_message_id": source.id,
                 "source_model_operation_id": source.operation_id,
@@ -179,7 +177,6 @@ class ToolMessageAuditRepository:
         tool_call_id: str,
         error_message: str,
         output: Any,
-        content: str,
         finished_at: datetime,
         duration_ms: int | None,
         finished_sequence: int | None,
@@ -192,7 +189,6 @@ class ToolMessageAuditRepository:
             tool_call_id=tool_call_id,
             execution_status="failed",
             output=output,
-            content=content,
             error_message=error_message,
             finished_at=finished_at,
             duration_ms=duration_ms,
@@ -267,7 +263,6 @@ class ToolMessageAuditRepository:
         tool_call_id: str,
         execution_status: Literal["completed", "failed"],
         output: Any,
-        content: str,
         error_message: str | None,
         finished_at: datetime,
         duration_ms: int | None,
@@ -294,17 +289,14 @@ class ToolMessageAuditRepository:
 
         metadata = dict(message.extra_metadata or {})
         if message.execution_status == execution_status:
-            if (
-                message.content != content
-                or metadata.get("error_message") != error_message
-                or _canonical_tool_output(metadata.get("output")) != _canonical_tool_output(output)
+            if metadata.get("error_message") != error_message or _canonical_tool_output(metadata.get("output")) != _canonical_tool_output(
+                output
             ):
                 raise ValueError("已关闭 Tool 审计事实不能被不同结果覆盖")
             return message
         if message.execution_status != "running":
             raise ValueError(f"Tool 审计事实不能从 {message.execution_status} 转为 {execution_status}")
 
-        message.content = content
         message.finished_at = message.finished_at or finished_at
         if duration_ms is not None:
             message.duration_ms = duration_ms

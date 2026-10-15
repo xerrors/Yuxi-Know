@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-import importlib
 import sys
 import types
 from dataclasses import dataclass, field
 from unittest.mock import AsyncMock
 
 import pytest
+from yuxi.modules.agents.runtime import context as context_module
 from yuxi.modules.knowledge.read_models import KnowledgeBaseSummary
+from yuxi.modules.workspace.paths import ensure_user_workspace
 
 
 def _knowledge_summary(kb_id: str) -> KnowledgeBaseSummary:
@@ -25,12 +26,6 @@ def _knowledge_summary(kb_id: str) -> KnowledgeBaseSummary:
         created_at=None,
     )
 
-
-def _load_context_module():
-    return importlib.import_module("yuxi.modules.agents.runtime.context")
-
-
-context_module = _load_context_module()
 BaseContext = context_module.BaseContext
 filter_config_by_role = context_module.filter_config_by_role
 normalize_agent_context_config = context_module.normalize_agent_context_config
@@ -374,7 +369,6 @@ async def test_prepare_agent_runtime_context_filters_resources_and_derives_runti
         async def get(self, _db=None):
             return {"default_model": "fake-model"}
 
-    context_module = _load_context_module()
     monkeypatch.setattr(context_module, "system_options", FakeSystemOptions())
 
     class FakeUserRepository:
@@ -484,7 +478,6 @@ async def test_prepare_agent_runtime_context_clears_resources_for_missing_user(m
         async def get(self, _db=None):
             return {"default_model": "fake-model"}
 
-    context_module = _load_context_module()
     monkeypatch.setattr(context_module, "system_options", FakeSystemOptions())
 
     class FakeUserRepository:
@@ -657,3 +650,54 @@ async def test_resource_field_declarations_drive_write_runtime_and_schema(monkey
     assert normalized["selected_tools"] == ["visible"]
     assert normalized["labels"] == ["plain"]
     assert normalized["skills"] == []
+
+def test_context_update_applies_only_declared_runtime_fields() -> None:
+    context = BaseContext()
+    context.update(
+        {
+            "thread_id": "thread-1",
+            "uid": "user-1",
+            "system_prompt": "runtime prompt",
+            "unknown_field": "ignored",
+            "update": "must not shadow the method",
+        },
+    )
+
+    assert context.thread_id == "thread-1"
+    assert context.uid == "user-1"
+    assert context.system_prompt == "runtime prompt"
+    assert not hasattr(context, "unknown_field")
+    assert callable(context.update)
+
+
+@pytest.mark.asyncio
+async def test_workspace_prompt_excludes_memory_from_shared_context(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("YUXI_USER_DATA_DIR", str(tmp_path / "threads"))
+    ensure_user_workspace("user-1")
+    agents_dir = tmp_path / "threads" / "shared" / "user-1" / "workspace" / "agents"
+    (agents_dir / "AGENTS.md").write_text("行为约束", encoding="utf-8")
+    (agents_dir / "USER.md").write_text("用户信息", encoding="utf-8")
+    (agents_dir / "MEMORY.md").write_text("长期记忆", encoding="utf-8")
+
+    context = BaseContext(thread_id="thread-1", uid="user-1")
+    context.update_config({})
+    await context_module._append_workspace_agent_prompt(context)
+
+    assert context.system_prompt == (
+        "You are a helpful assistant.\n\n用户工作区 agents/AGENTS.md 内容：\n行为约束\n\n用户工作区 agents/USER.md 内容：\n用户信息"
+    )
+    assert "长期记忆" not in context.system_prompt
+
+
+@pytest.mark.parametrize("workspace_text", ["用户工作区策略", ""])
+async def test_workspace_prompt_appends_only_available_agent_context(monkeypatch, workspace_text):
+    """运行快照保留系统提示词，工作区内容只追加到同一 Context。"""
+    monkeypatch.setattr(context_module, "_load_workspace_agent_context", lambda uid: workspace_text)
+    context = BaseContext(thread_id="thread-1", uid="user-1")
+    context.update_config({"system_prompt": "快照中的系统提示词", "temperature": 0.1})
+    await context_module._append_workspace_agent_prompt(context)
+    assert context.system_prompt == "快照中的系统提示词" + (f"\n\n{workspace_text}" if workspace_text else "")
+    assert context.thread_id == "thread-1" and context.uid == "user-1"

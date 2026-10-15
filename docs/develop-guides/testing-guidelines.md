@@ -84,14 +84,31 @@ docker compose ps
 docker compose logs --tail=100 api
 ```
 
-后端按 unit、integration/api、其余 integration 子树、E2E 分批运行。各套件的模块和 helper 按当前目录加载；脚本的 `integration` 与 `all` 同样分批执行，保持完整选择范围。
+后端按 unit、integration/api、其余 integration 子树、E2E 分批运行。各套件的模块和 helper 按当前目录加载；脚本的 `integration` 与 `all` 同样分批执行。确定性 E2E 的用例集合由 `backend/test/run_tests.sh` 唯一维护，CI 复用此入口，避免重复执行相同文件。涉及不兼容 Schema 时，先使用[独立槽位](./parallel-worktree-environments.md)装配完整环境，再运行测试；脚本只负责选择和执行套件。
+
+后台作业启动恢复由 `system-tests.yml` 的现有拓扑步骤单独验证：先停止 worker，保存未发布 intent，再启动 worker 并回读领域结果。`test_background_job_worker_path.py` 的这组跨进程阶段不进入普通 integration 批次；通用脚本不会重启正在使用的服务。完整系统验证须同时完成该拓扑步骤。
 
 ```bash
 docker compose exec api uv run --group test pytest test/unit -m "not slow"
 docker compose exec api uv run --group test pytest test/integration/api
-docker compose exec api uv run --group test pytest test/integration --ignore=test/integration/api
+docker compose exec api uv run --group test pytest test/integration --ignore=test/integration/api --ignore=test/integration/services/test_background_job_worker_path.py
 backend/test/run_tests.sh e2e
 backend/test/run_tests.sh all
+```
+
+Compose API 容器只挂载后端目录时，部署配置测试会因缺少仓库根文件而跳过。这些用例由包含根目录的 CI 单测环境执行；本地须从宿主仓库根目录补跑，不能把容器的 skip 当作部署契约通过：
+
+```bash
+uv run --project backend --no-sync --group test pytest backend/test/unit/config -q
+```
+
+模型重放服务由测试环境启动；依赖共享重放的场景显式读取 `OPENAI_REPLAY_URL` 与 `COOPERATION_REPLAY_URL`。需要独占状态的场景复用 `e2e/conftest.py` 已有的重放 fixture，避免在测试文件内重复启动和回收服务器。
+
+默认 Compose 测试环境分别启动 `test/support/openai_replay_server.py` 与 `test.support.cooperation_replay_server` 后，在宿主导出 worker 可访问的地址；测试脚本把它们和测试账号转发给容器。CI 在现有环境生成步骤写入同样的值：
+
+```bash
+export OPENAI_REPLAY_URL=http://api:8765/v1
+export COOPERATION_REPLAY_URL=http://api:8766/v1
 ```
 
 也可以从仓库根目录使用脚本：

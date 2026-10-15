@@ -70,7 +70,7 @@ export function useAgentRunStream({
   handlePublicEvent,
   fetchThreadMessages,
   fetchAgentState,
-  resetOngoingRunGroup,
+  resetThreadExecution,
   onScrollToBottom,
   streamSmoother,
   onInterruptDetected = null,
@@ -125,7 +125,7 @@ export function useAgentRunStream({
       )
         return
       if (status !== 'requires_action' && refreshed)
-        resetOngoingRunGroup(threadId, { preserveInputMonitors: true })
+        resetThreadExecution(threadId, { preserveInputMonitors: true })
       void fetchAgentState(threadId)
       if (status === 'requires_action') onInterruptDetected?.({ threadId, runId })
       else onTerminalDetected?.({ threadId, runId, touchedThreadIds: [...touchedThreadIds] })

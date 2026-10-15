@@ -111,7 +111,7 @@ async def test_same_recorder_keeps_interleaved_model_and_tool_states_separate(mo
     first, second, tool = (recorded_messages[key] for key in [("model", "shared"), ("model", "second"), ("tool", "shared")])
     assert first["content"] == "一续" and first["usage"] == {"input_tokens": 5}
     assert second["content"] == "二" and second["usage"] == {"output_tokens": 3}
-    assert tool["content"] == "工具结果" and tool["tool_input"] == {"q": "实际输入"}
+    assert tool["output"] == "工具结果" and tool["tool_input"] == {"q": "实际输入"}
     assert [row["duration_ms"] for row in (first, second, tool)] == [200, 300, 200]
     assert [row["sequence"] for row in (first, second, tool)] == [0, 1, 6]
     for row in (first, second, tool):
@@ -229,7 +229,7 @@ async def test_command_result_is_committed_once_before_public_projection(monkeyp
     monkeypatch.setattr(adapter, "_save", reject_public)
     with pytest.raises(ValueError, match="public rejected"):
         await adapter.consume(normalized)
-    assert recorded_messages[("tool", "call")]["content"] == "目标结果"
+    assert service.normalize_tool_result(recorded_messages[("tool", "call")]["output"]).audit_content == "目标结果"
     assert recorded_messages[("tool", "call")]["execution_status"] == "completed"
 
 
@@ -554,7 +554,6 @@ async def test_collector_projects_tool_start_and_successful_finish(monkeypatch):
             "worker_id": "worker-1",
             "tool_call_id": "call-1",
             "output": output,
-            "content": '[{"type": "text", "text": "result"}]',
             "finished_at": calls[1][1]["finished_at"],
             "duration_ms": 275,
             "finished_sequence": 12,
@@ -632,7 +631,7 @@ async def test_collector_treats_error_tool_message_as_failed_finish(monkeypatch)
 
     assert calls[1][0] == "fail"
     assert calls[1][1]["error_message"] == "invalid arguments"
-    assert calls[1][1]["content"] == "invalid arguments"
+    assert service.normalize_tool_result(calls[1][1]["output"]).audit_content == "invalid arguments"
 
 
 @pytest.mark.asyncio

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import asyncio
 import hashlib
 import json
@@ -21,7 +23,7 @@ from e2e_helpers import (
     wait_for_consumed_input,
 )
 
-from test.live_api_cleanup import make_test_session_title, remove_e2e_thread_storage
+from test.live_api_cleanup import make_test_session_title
 from yuxi.infrastructure.runtime_settings import get_skill_data_dir
 from yuxi.modules.extensions.skills.projection import get_user_skills_root_dir
 
@@ -65,7 +67,7 @@ async def test_preloaded_skill_edit_is_loaded_by_the_worker(
                 "provider_id": provider_id,
                 "display_name": "Skill edit deterministic replay",
                 "provider_type": "openai",
-                "base_url": "http://api:8765/v1",
+                "base_url": os.environ["OPENAI_REPLAY_URL"],
                 "api_key": "ci-replay-key",
                 "capabilities": ["chat"],
                 "enabled_models": [{"id": "deterministic-chat", "display_name": "Replay", "type": "chat", "source": "manual"}],
@@ -227,7 +229,7 @@ async def test_preloaded_skill_edit_is_loaded_by_the_worker(
         consumed = await wait_for_consumed_input(e2e_client, e2e_headers, run.json())
         run_id, turn_id = consumed["run_id"], consumed["turn_id"]
         if edit_during_run:
-            async with httpx.AsyncClient(base_url="http://localhost:8765", timeout=10) as replay:
+            async with httpx.AsyncClient(base_url=os.environ["OPENAI_REPLAY_URL"].removesuffix("/v1"), timeout=10) as replay:
                 async with asyncio.timeout(30):
                     while not (await replay.get("/blocking-started", params={"token": gate})).json()["started"]:
                         await asyncio.sleep(0.1)
@@ -282,11 +284,10 @@ async def test_preloaded_skill_edit_is_loaded_by_the_worker(
         assert manifest["resources"]["skills"][0]["preload_content_hash"] == hashlib.sha256(updated.encode()).hexdigest()
     finally:
         if edit_during_run:
-            async with httpx.AsyncClient(base_url="http://localhost:8765", timeout=10) as replay:
+            async with httpx.AsyncClient(base_url=os.environ["OPENAI_REPLAY_URL"].removesuffix("/v1"), timeout=10) as replay:
                 await replay.get("/release-blocking", params={"token": gate})
         if thread_id:
             await archive_public_thread(e2e_client, e2e_headers, thread_id, turn_id=turn_id)
-            remove_e2e_thread_storage(thread_id)
         if agent_created:
             await delete_agent(e2e_client, e2e_headers, agent_slug)
         if mcp_slug:

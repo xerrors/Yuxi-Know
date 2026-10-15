@@ -1,10 +1,9 @@
-// 使用已登录开发环境：playwright-cli -s=<session> run-code --filename=frontend/test/browser/actionDropdownGrowth.js
+// 在已打开的会话输入区执行：playwright-cli -s=<session> run-code --filename=frontend/test/browser/actionDropdownGrowth.js
 // 文件内容由 CLI 作为函数表达式执行，不添加前导分号。
 // prettier-ignore
 async (page) => {
-  await page.unrouteAll({ behavior: 'ignoreErrors' })
-  await page.goto('http://localhost:5173/agent')
   await page.setViewportSize({ width: 1440, height: 900 })
+  await page.reload()
   let release
   const gate = new Promise((resolve) => (release = resolve))
   await page.route('**/api/system/model-providers/models/v2?*', async (route) => {
@@ -68,8 +67,19 @@ async (page) => {
     }
   })
   await page.unroute('**/api/system/model-providers/models/v2?*')
-  await panel.press('Escape')
-  Object.assign(result, { loadedHeight, filteredHeight, filteredCount })
+  const search = panel.getByRole('textbox', { name: '搜索模型' })
+  const escaped = await search.evaluate(input => {
+    const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    let propagated = false
+    const listener = () => { propagated = true }
+    document.addEventListener('keydown', listener)
+    const consumed = !input.dispatchEvent(event)
+    document.removeEventListener('keydown', listener)
+    return { consumed, propagated }
+  })
+  await panel.waitFor({ state: 'hidden' })
+  if (!escaped.consumed || escaped.propagated) throw new Error('Escape 必须关闭搜索弹层并阻止默认行为和向上冒泡')
+  Object.assign(result, { loadedHeight, filteredHeight, filteredCount, escapeConsumed: true })
   if (filteredCount !== 1 || loadedHeight - filteredHeight < 200) {
     throw new Error('筛选必须只留下一个选项，并让弹层明显缩短')
   }

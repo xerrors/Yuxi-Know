@@ -9,6 +9,7 @@ from test.integration.services.agent_input_fixtures import start_input_run
 from test.integration.services.agent_input_fixtures import sessions as sessions
 from yuxi.modules.agents.models.messages import TOOL_AUDIT_MESSAGE_TYPE, Message
 from yuxi.modules.agents.services.message_recorder import RunMessageRecorder
+from yuxi.modules.agents.services.message_audits import serialize_tool_audit
 from yuxi.modules.agents.services.openai_events import OpenAIEventAdapter
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
@@ -32,7 +33,7 @@ pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_man
 async def test_failed_tool_audit_and_public_output_use_same_normalized_result(
     sessions, content, message, expected_output, expected_text, expected_error
 ):
-    """序列化结构化/空结果与明确原因一次；公开快照和审计从同一 Run 回读。"""
+    """原始结果只保存一次，公开内容与审计文本从同一 Run 结果派生。"""
     run = await start_input_run(sessions)
     recorder = RunMessageRecorder(run_id=run.id, thread_id=run.thread_id, worker_id="owner")
     adapter = OpenAIEventAdapter(run_id=run.id, turn_id=run.turn_id, thread_id=run.thread_id, worker_id="owner")
@@ -72,7 +73,9 @@ async def test_failed_tool_audit_and_public_output_use_same_normalized_result(
             select(Message).where(Message.run_id == run.id, Message.operation_id == "call", Message.message_type == TOOL_AUDIT_MESSAGE_TYPE)
         )
         assert audit.turn_id == run.turn_id and audit.execution_status == "failed"
-        assert audit.content == expected_text and audit.extra_metadata["error_message"] == expected_error
+        assert audit.content == ""
+        assert serialize_tool_audit(audit)["content"] == expected_text
+        assert audit.extra_metadata["error_message"] == expected_error
         assert audit.extra_metadata["output"] == source
         stored = audit.extra_metadata["public_items"]["output"]
         assert stored["output"] == expected_output and stored["error"] == expected_error

@@ -138,7 +138,36 @@ async def test_public_session_initial_text_stream_and_saved_items(e2e_client, e2
         conn = await asyncpg.connect(postgres_dsn())
         try:
             assert await conn.fetchval("SELECT count(*) FROM agent_inputs WHERE thread_id=$1", session_id) == 1
-            assert await conn.fetchval("SELECT result_run_id FROM agent_turns WHERE id=$1", turn_id) == result["yuxi"]["result_run_id"]
+            origin = await conn.fetchrow(
+                """
+                SELECT run.id, run.agent_slug, run.source, run.channel, input.id AS input_id,
+                       input.source AS input_source, input.channel AS input_channel,
+                       input.status, input.turn_id, turn.result_run_id, session.extra_metadata->>'source' AS session_source,
+                       message.source_input_id, message.extra_metadata->'agent_invocation_meta' AS invocation
+                FROM agent_runs run
+                JOIN agent_inputs input ON input.consumed_run_id=run.id
+                JOIN agent_turns turn ON turn.id=run.turn_id
+                JOIN messages message ON message.id=run.input_message_id
+                JOIN sessions session ON session.id=run.session_record_id
+                WHERE run.id=$1 AND run.thread_id=$2
+                """,
+                consumed["run_id"], session_id,
+            )
+            assert origin["agent_slug"] == slug
+            assert origin["id"] == origin["result_run_id"] == result["yuxi"]["result_run_id"]
+            assert origin["input_id"] == origin["source_input_id"] == consumed["input_id"]
+            assert origin["status"] == "consumed" and origin["turn_id"] == turn_id
+            assert origin["source"] == origin["input_source"] == origin["session_source"] == "public_api"
+            assert origin["channel"] == origin["input_channel"] == "web"
+            assert origin["invocation"] is None
+            if input_kind == "text" and not stream:
+                rejected = await e2e_client.post(
+                    f"/api/v1/agents/sessions/{session_id}/events", headers={**e2e_headers, "Idempotency-Key": str(uuid.uuid4())},
+                    json={"events": [{"type": "agent.session.input.message", "input": [_message("invalid")],
+                                      "evaluation": {"dataset_name": "removed"}}]},
+                )
+                assert rejected.status_code == 422, rejected.text
+                assert await conn.fetchval("SELECT count(*) FROM agent_inputs WHERE thread_id=$1", session_id) == 1
         finally:
             await conn.close()
     finally:
@@ -280,7 +309,7 @@ async def test_first_input_and_follow_up_fifo_cross_worker(e2e_client, e2e_heade
         assert replay.status_code == 201, replay.text
         assert replay.json()["id"] == thread_id
 
-        async with httpx.AsyncClient(base_url="http://api:8765", timeout=5) as replay_client:
+        async with httpx.AsyncClient(base_url=os.environ["OPENAI_REPLAY_URL"].removesuffix("/v1"), timeout=5) as replay_client:
             for _ in range(100):
                 started = await replay_client.get("/blocking-started", params={"token": gate})
                 assert started.status_code == 200
@@ -560,7 +589,7 @@ async def test_steer_aggregates_and_yields_into_same_turn(e2e_client, e2e_header
         assert created.status_code == 201, created.text
         initial = await wait_for_consumed_input(e2e_client, e2e_headers, created.json()["yuxi"]["receipt"])
         thread_id = initial["session_id"]
-        async with httpx.AsyncClient(base_url="http://api:8765", timeout=5) as replay_client:
+        async with httpx.AsyncClient(base_url=os.environ["OPENAI_REPLAY_URL"].removesuffix("/v1"), timeout=5) as replay_client:
             for _ in range(100):
                 started = await replay_client.get("/blocking-started", params={"token": gate})
                 assert started.status_code == 200
@@ -698,7 +727,7 @@ async def test_steer_aggregates_and_yields_into_same_turn(e2e_client, e2e_header
             await conn.close()
     finally:
         try:
-            async with httpx.AsyncClient(base_url="http://api:8765", timeout=5) as replay_client:
+            async with httpx.AsyncClient(base_url=os.environ["OPENAI_REPLAY_URL"].removesuffix("/v1"), timeout=5) as replay_client:
                 await replay_client.get("/release-blocking", params={"token": gate})
         except httpx.HTTPError:
             pass
@@ -923,7 +952,7 @@ async def test_invalid_question_parameters_return_tool_error_without_waitpoint(e
         conn = await asyncpg.connect(postgres_dsn())
         try:
             audit = await conn.fetchrow(
-                "SELECT execution_status, content, turn_id FROM messages WHERE run_id = $1 AND message_type = "
+                "SELECT execution_status, content, extra_metadata, turn_id FROM messages WHERE run_id = $1 AND message_type = "
                 "'tool_audit' AND operation_id = 'call-ask-user'",
                 accepted["run_id"],
             )
@@ -931,7 +960,9 @@ async def test_invalid_question_parameters_return_tool_error_without_waitpoint(e
             await conn.close()
         assert audit and audit["execution_status"] == "failed"
         assert audit["turn_id"] == accepted["turn_id"]
-        assert "ValidationError" in audit["content"] or "multi_select" in audit["content"]
+        assert audit["content"] == ""
+        metadata = json.loads(audit["extra_metadata"])
+        assert "ValidationError" in metadata["output"]["content"] or "multi_select" in metadata["output"]["content"]
     finally:
         await delete_agent(e2e_client, e2e_headers, slug)
         deleted = await e2e_client.delete(f"/api/system/model-providers/{provider_id}", headers=e2e_headers)
@@ -961,7 +992,7 @@ async def test_cancel_waiting_turn_pauses_queue_until_continue(e2e_client, e2e_h
         assert created.status_code == 201, created.text
         initial = await wait_for_consumed_input(e2e_client, e2e_headers, created.json()["yuxi"]["receipt"])
         thread_id, turn_id = initial["session_id"], initial["turn_id"]
-        async with httpx.AsyncClient(base_url="http://api:8765", timeout=5) as replay_client:
+        async with httpx.AsyncClient(base_url=os.environ["OPENAI_REPLAY_URL"].removesuffix("/v1"), timeout=5) as replay_client:
             async with asyncio.timeout(30):
                 while True:
                     started = await replay_client.get("/blocking-started", params={"token": gate})
@@ -1037,7 +1068,7 @@ async def test_cancel_waiting_turn_pauses_queue_until_continue(e2e_client, e2e_h
         await _continue_queued_input(e2e_client, e2e_headers, thread_id, queued_id, "cancel-continue")
     finally:
         try:
-            async with httpx.AsyncClient(base_url="http://api:8765", timeout=5) as replay_client:
+            async with httpx.AsyncClient(base_url=os.environ["OPENAI_REPLAY_URL"].removesuffix("/v1"), timeout=5) as replay_client:
                 await replay_client.get("/release-blocking", params={"token": gate})
         except httpx.HTTPError:
             pass
@@ -1081,7 +1112,7 @@ async def test_cancel_running_model_closes_audit_without_foreign_output(e2e_clie
         assert created.status_code == 201, created.text
         consumed = await wait_for_consumed_input(e2e_client, e2e_headers, created.json()["yuxi"]["receipt"])
         thread_id, turn_id, run_id = consumed["session_id"], consumed["turn_id"], consumed["run_id"]
-        async with httpx.AsyncClient(base_url="http://localhost:8765", timeout=5) as replay:
+        async with httpx.AsyncClient(base_url=os.environ["OPENAI_REPLAY_URL"].removesuffix("/v1"), timeout=5) as replay:
             for _ in range(100):
                 started = await replay.get("/blocking-started", params={"token": token})
                 assert started.status_code == 200, started.text
@@ -1136,7 +1167,7 @@ async def test_cancel_running_model_closes_audit_without_foreign_output(e2e_clie
         assert run["output_message_id"] is None and visible == 0
         assert [(row["turn_id"], row["run_id"], row["execution_status"]) for row in audits] == [(turn_id, run_id, "interrupted")]
     finally:
-        async with httpx.AsyncClient(base_url="http://localhost:8765", timeout=5) as replay:
+        async with httpx.AsyncClient(base_url=os.environ["OPENAI_REPLAY_URL"].removesuffix("/v1"), timeout=5) as replay:
             await replay.get("/release-blocking", params={"token": token})
         if thread_id is not None and turn_id is not None:
             current = await e2e_client.get(f"/api/v1/agents/sessions/{thread_id}/turns/{turn_id}", headers=e2e_headers)
@@ -1412,13 +1443,13 @@ async def test_large_tool_approval_resume_keeps_original_audit(e2e_client, e2e_h
         assert runs[1]["resume_from_run_id"] == first_run_id
         assert runs[1]["input_payload"] == runs[0]["input_payload"]
         assert audit and audit["turn_id"] == turn_id and audit["run_id"] == resume_run_id
-        assert audit["execution_status"] == "completed" and len(audit["content"]) > 12_000
+        assert audit["execution_status"] == "completed" and audit["content"] == ""
         metadata = json.loads(audit["extra_metadata"]) if isinstance(audit["extra_metadata"], str) else audit["extra_metadata"]
         assert metadata["tool_name"] == "execute"
-        assert metadata["output"]["content"] == audit["content"]
+        assert len(metadata["output"]["content"]) > 12_000
         offloaded = user_workspace_dir(uid) / workdir_path / "outputs/large_tool_results/call-large-tool-result"
         assert offloaded.is_file()
-        assert audit["content"] == offloaded.read_text()
+        assert metadata["output"]["content"] == offloaded.read_text()
     finally:
         if thread_id and turn_id:
             current = await e2e_client.get(f"/api/v1/agents/sessions/{thread_id}/turns/{turn_id}", headers=e2e_headers)
@@ -1459,7 +1490,7 @@ async def test_thread_sse_releases_validation_transaction(e2e_client, e2e_header
         assert created.status_code == 201, created.text
         consumed = await wait_for_consumed_input(e2e_client, e2e_headers, created.json()["yuxi"]["receipt"])
         thread_id, turn_id = consumed["session_id"], consumed["turn_id"]
-        async with httpx.AsyncClient(base_url="http://localhost:8765", timeout=5) as replay:
+        async with httpx.AsyncClient(base_url=os.environ["OPENAI_REPLAY_URL"].removesuffix("/v1"), timeout=5) as replay:
             for _ in range(100):
                 started = await replay.get("/blocking-started", params={"token": token})
                 assert started.status_code == 200, started.text
@@ -1500,12 +1531,12 @@ async def test_thread_sse_releases_validation_transaction(e2e_client, e2e_header
                 assert active.json()["status"] == "in_progress"
         finally:
             await conn.close()
-        async with httpx.AsyncClient(base_url="http://localhost:8765", timeout=5) as replay:
+        async with httpx.AsyncClient(base_url=os.environ["OPENAI_REPLAY_URL"].removesuffix("/v1"), timeout=5) as replay:
             assert (await replay.get("/release-blocking", params={"token": token})).status_code == 200
         completed = await _turn(e2e_client, e2e_headers, thread_id, turn_id)
         assert completed["status"] == "completed", completed
     finally:
-        async with httpx.AsyncClient(base_url="http://localhost:8765", timeout=5) as replay:
+        async with httpx.AsyncClient(base_url=os.environ["OPENAI_REPLAY_URL"].removesuffix("/v1"), timeout=5) as replay:
             await replay.get("/release-blocking", params={"token": token})
         if thread_id and turn_id:
             current = await e2e_client.get(f"/api/v1/agents/sessions/{thread_id}/turns/{turn_id}", headers=e2e_headers)

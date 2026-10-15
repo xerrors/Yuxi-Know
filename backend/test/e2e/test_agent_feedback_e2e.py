@@ -3,35 +3,18 @@
 import asyncio
 import json
 import uuid
-from http.server import ThreadingHTTPServer
-from threading import Thread
 
 import asyncpg
 import pytest
 
 from test.e2e.e2e_helpers import archive_public_thread, delete_agent, postgres_dsn, wait_for_consumed_input, wait_model_provider_cache
 from test.live_api_cleanup import make_test_session_title
-from test.support.openai_replay_server import ReplayHandler
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.e2e, pytest.mark.slow, pytest.mark.timeout(180)]
 
 
-@pytest.fixture
-def feedback_replay_url():
-    """启动独立 HTTP 模型重放，避免改变共享模型服务。"""
-    server = ThreadingHTTPServer(("0.0.0.0", 0), ReplayHandler)
-    thread = Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        yield f"http://api:{server.server_port}/v1"
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(timeout=5)
-
-
 @pytest.mark.parametrize("invalid_reason", [False, True])
-async def test_worker_marks_own_run_without_skill_and_survives_tool_error(e2e_client, e2e_headers, feedback_replay_url, invalid_reason):
+async def test_worker_marks_own_run_without_skill_and_survives_tool_error(e2e_client, e2e_headers, openai_replay_url, invalid_reason):
     """未选工具和 Skill 的正常 Run 能采集，空原因返回工具错误且仍完成原任务。"""
     provider_id = f"ci-feedback-{uuid.uuid4().hex[:8]}"
     slug = f"ci-feedback-agent-{uuid.uuid4().hex[:8]}"
@@ -44,7 +27,7 @@ async def test_worker_marks_own_run_without_skill_and_survives_tool_error(e2e_cl
             "provider_id": provider_id,
             "display_name": "Feedback deterministic replay",
             "provider_type": "openai",
-            "base_url": feedback_replay_url,
+            "base_url": openai_replay_url,
             "api_key": "ci-replay-key",
             "capabilities": ["chat"],
             "enabled_models": [{"id": "deterministic-chat", "display_name": "Replay", "type": "chat", "source": "manual"}],
@@ -128,13 +111,14 @@ async def test_worker_marks_own_run_without_skill_and_survives_tool_error(e2e_cl
                 manifest = await conn.fetchval("SELECT manifest FROM agent_runs WHERE id=$1", run_id)
                 assert json.loads(manifest)["resources"]["skills"] == []
             tool_fact = await conn.fetchrow(
-                "SELECT execution_status, content FROM messages WHERE run_id=$1 AND message_type='tool_audit'", run_id
+                "SELECT execution_status, content, extra_metadata->'output'->>'content' AS output FROM messages WHERE run_id=$1 AND message_type='tool_audit'", run_id
             )
             assert tool_fact and tool_fact["execution_status"] == ("failed" if invalid_reason else "completed")
+            assert tool_fact["content"] == ""
             if not invalid_reason:
-                assert records[0]["id"] in tool_fact["content"]
+                assert records[0]["id"] in tool_fact["output"]
             else:
-                assert "未保存" in tool_fact["content"]
+                assert "未保存" in tool_fact["output"]
         finally:
             await conn.close()
         feedback_path = f"/api/agent/threads/{session_id}/turns/{turn_id}/feedback"

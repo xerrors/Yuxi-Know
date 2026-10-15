@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from yuxi.modules.agents import presets
 from yuxi.modules.agents.runtime.agent_backends import AgentBackendNotFoundError
-from yuxi.modules.extensions.skills import shared as skill_service
+from yuxi.modules.extensions.skills.builtin import sync as skill_service
 from yuxi.modules.agents.services.configuration import initialize_agent_presets
 from yuxi.modules.agents.models.definitions import Agent
 from yuxi.modules.extensions.skills.models import Skill
@@ -164,7 +164,7 @@ async def test_discovered_content_persists_and_preserves_customization(tmp_path,
         f'---\nname: 测试技能\nslug: {skill_slug}\ndescription: 初始描述\nversion: "1.0"\ntool_dependencies: [web_search]\n---\n技能正文\n'
     )
     monkeypatch.setattr(skill_service, "BUILTIN_SKILLS_DIR", skill_dir.parent)
-    monkeypatch.setattr(skill_service, "get_skill_data_dir", lambda: tmp_path / "skill-sources")
+    monkeypatch.setattr(skill_service, "get_skills_root_dir", lambda: tmp_path / "skill-sources/shared")
     engine = create_async_engine(os.environ["POSTGRES_URL"])
     sessions = async_sessionmaker(engine, expire_on_commit=False)
 

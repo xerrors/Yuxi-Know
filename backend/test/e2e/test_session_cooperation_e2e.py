@@ -1,5 +1,6 @@
 """真实 API、worker、checkpoint 和共享沙盒的 Session 协作链。"""
 
+import os
 import asyncio
 import json
 import sys
@@ -39,7 +40,7 @@ async def test_sessions_use_public_state_and_shared_sandbox(e2e_client, e2e_head
     """根工具创建普通会话，结果通过持久等待返回，文件在同一 Project 中。"""
     me = await e2e_client.get("/api/auth/me", headers=e2e_headers)
     uid = me.json()["uid"]
-    await _provider(e2e_client, e2e_headers, base_url="http://api:8766/v1", provider_id="cooperation-replay")
+    await _provider(e2e_client, e2e_headers, base_url=os.environ["COOPERATION_REPLAY_URL"], provider_id="cooperation-replay")
     slug = await _agent(
         e2e_client,
         e2e_headers,
@@ -51,7 +52,7 @@ async def test_sessions_use_public_state_and_shared_sandbox(e2e_client, e2e_head
     )
     target_slug = None
     if select_agent:
-        await _provider(e2e_client, e2e_headers, base_url="http://api:8766/v1", provider_id="cooperation-target-replay")
+        await _provider(e2e_client, e2e_headers, base_url=os.environ["COOPERATION_REPLAY_URL"], provider_id="cooperation-target-replay")
         target_slug = await _agent(
             e2e_client,
             e2e_headers,
@@ -249,7 +250,7 @@ async def test_full_tree_capacity_control_and_sibling_tools(e2e_client, e2e_head
     from yuxi.modules.agents.services.cooperation import reconcile_stopped_trees
 
     me = await e2e_client.get("/api/auth/me", headers=e2e_headers)
-    await _provider(e2e_client, e2e_headers, base_url="http://api:8766/v1", provider_id="cooperation-replay")
+    await _provider(e2e_client, e2e_headers, base_url=os.environ["COOPERATION_REPLAY_URL"], provider_id="cooperation-replay")
     slug = await _agent(e2e_client, e2e_headers, me.json()["uid"], model_spec=MODEL, summary_prompt=SUMMARY_PROMPT)
     conn = await asyncpg.connect(postgres_dsn())
     root_id = root_turn = gate_file = workdir = None
@@ -463,7 +464,7 @@ async def cooperation_depth_two(e2e_client, e2e_headers):
 async def test_worker_rejects_third_cooperation_depth_and_commits_only_allowed_members(e2e_client, e2e_headers, cooperation_depth_two):
     """真实 API、worker 与工具执行拒绝第三层，回读会话和输入确认无副作用。"""
     me = (await e2e_client.get("/api/auth/me", headers=e2e_headers)).json()
-    await _provider(e2e_client, e2e_headers, base_url="http://api:8766/v1", provider_id="cooperation-replay")
+    await _provider(e2e_client, e2e_headers, base_url=os.environ["COOPERATION_REPLAY_URL"], provider_id="cooperation-replay")
     slug = await _agent(e2e_client, e2e_headers, me["uid"], model_spec=MODEL, tools=[])
     thread_id = turn_id = None
     conn = await asyncpg.connect(postgres_dsn())

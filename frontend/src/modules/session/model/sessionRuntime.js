@@ -1,4 +1,4 @@
-import { reactive, ref, onScopeDispose } from 'vue'
+import { reactive, ref, computed, onScopeDispose } from 'vue'
 import { defineStore } from 'pinia'
 import { agentApi } from '@/apis'
 import { handleChatError } from '@/shared/lib/errorHandler'
@@ -8,7 +8,7 @@ import { useAgentRunStream } from './useAgentRunStream'
 import { useAgentInputQueue } from './useAgentInputQueue'
 import { useAgentStreamHandler } from './useAgentStreamHandler'
 import { useStreamSmoother } from './useStreamSmoother'
-import { createItemState, itemsToMessages, mergeItemSnapshot, syncHistoricalItemEvent } from './agentItems'
+import { itemsToMessages, mergeItemSnapshot } from './agentItems'
 import { bindMessageInputRun } from './messageDebug'
 import { extractPendingInterrupt, pendingInterruptFromWaitpoint } from './useApproval'
 import { useSessionFeedbackStore } from './sessionFeedback'
@@ -18,17 +18,20 @@ export const useSessionRuntimeStore = defineStore('sessionRuntime', () => {
   const chatThreads = useChatThreadsStore()
   const feedback = useSessionFeedbackStore()
   const chatState = reactive({ threadStates: {} })
-  const threadMessages = ref({})
+  const threadMessages = computed(() => Object.fromEntries(
+    Object.entries(chatState.threadStates)
+      .filter(([, state]) => state.historyLoaded || Object.keys(state.itemState.items).length)
+      .map(([id, state]) => [id, itemsToMessages(Object.values(state.itemState.items))])
+  ))
   const threadRuns = ref({})
   const historyPages = reactive({})
   const pendingSends = reactive({})
-  const historyItems = new Map()
   const observers = new Map()
   const requests = new Map()
   const streamSmoother = useStreamSmoother({
     getThreadState: (id) => chatState.threadStates[id] || null
   })
-  const { getThreadState, cleanupThreadState, resetOngoingRunGroup } = useAgentThreadState({
+  const { getThreadState, cleanupThreadState, resetThreadExecution } = useAgentThreadState({
     chatState,
     onBeforeResetThread: streamSmoother.resetThread,
     onBeforeCleanupThread: streamSmoother.resetThread
@@ -48,7 +51,7 @@ export const useSessionRuntimeStore = defineStore('sessionRuntime', () => {
   const notify = (name, payload) => {
     for (const observer of observers.get(payload.threadId) || []) observer[name]?.(payload)
   }
-  const isCurrent = (threadId, state) => chatState.threadStates[threadId] === state
+  const isCurrentThreadState = (threadId, state) => chatState.threadStates[threadId] === state
 
   const fetchThreadMessages = async ({ threadId, fresh = false, more = false, turnId = null }) => {
     if (!threadId || !observers.has(threadId)) return
@@ -60,13 +63,13 @@ export const useSessionRuntimeStore = defineStore('sessionRuntime', () => {
       } catch {
         /* 新请求负责重试。 */
       }
-      if (!observers.has(threadId) || !isCurrent(threadId, state)) return
+      if (!observers.has(threadId) || !isCurrentThreadState(threadId, state)) return
     }
     return once(`history:${threadId}`, async () => {
       if (!observers.has(threadId)) return
       const state = getThreadState(threadId)
       try {
-        const projection = historyItems.get(threadId) || createItemState()
+        const projection = state.itemState
         const previousIds = new Set(Object.keys(projection.items))
         const paging = historyPages[threadId] ||= { after: null, hasMore: false, loading: false }
         paging.loading = true
@@ -76,13 +79,12 @@ export const useSessionRuntimeStore = defineStore('sessionRuntime', () => {
           agentApi.getPublicThread(threadId),
           agentApi.getSessionItems(threadId, { after, turnId, limit: 100 })
         ])
-        if (!isCurrent(threadId, state)) return
+        if (!isCurrentThreadState(threadId, state)) return
         let page = initialPage
         const runs = new Map((threadRuns.value[threadId] || []).map((run) => [run.id, run]))
         while (true) {
-          if (!isCurrent(threadId, state)) return
+          if (!isCurrentThreadState(threadId, state)) return
           mergeItemSnapshot(projection, page.data)
-          mergeItemSnapshot(state.ongoingRunGroup, page.data)
           for (const run of page.yuxi.runs) runs.set(run.id, run)
           after = page.last_id
           pagesRead++
@@ -94,18 +96,16 @@ export const useSessionRuntimeStore = defineStore('sessionRuntime', () => {
         const target = turnId || session.yuxi.current_turn?.id
         if (target && !more) {
           const turn = await agentApi.getThreadTurn(threadId, target)
-          if (!isCurrent(threadId, state)) return
+          if (!isCurrentThreadState(threadId, state)) return
           mergeItemSnapshot(projection, turn.yuxi.output)
-          mergeItemSnapshot(state.ongoingRunGroup, turn.yuxi.output)
           for (const run of turn.yuxi.runs || []) runs.set(run.id, run)
         }
         if (!turnId && (more || !paging.after || !page.has_more)) {
           paging.after = page.last_id
           paging.hasMore = page.has_more
         }
-        historyItems.set(threadId, projection)
+        state.historyLoaded = true
         streamSmoother.flushThread(threadId)
-        threadMessages.value[threadId] = itemsToMessages(Object.values(projection.items))
         void feedback.load(threadId, threadMessages.value[threadId]
           .filter((message) => message.phase === 'final_answer' && message.execution_status === 'completed')
           .map((message) => message.run_id), fresh)
@@ -116,7 +116,7 @@ export const useSessionRuntimeStore = defineStore('sessionRuntime', () => {
         handleChatError(error, 'load')
         throw error
       } finally {
-        if (isCurrent(threadId, state) && historyPages[threadId]) historyPages[threadId].loading = false
+        if (isCurrentThreadState(threadId, state) && historyPages[threadId]) historyPages[threadId].loading = false
       }
     })
   }
@@ -131,7 +131,7 @@ export const useSessionRuntimeStore = defineStore('sessionRuntime', () => {
       try {
         const response = await agentApi.getAgentState(threadId, { includeRelations: false })
         if (
-          !isCurrent(threadId, state) ||
+          !isCurrentThreadState(threadId, state) ||
           state.agentStateRequestVersion !== version ||
           state.runStateVersion !== runVersion
         )
@@ -175,10 +175,6 @@ export const useSessionRuntimeStore = defineStore('sessionRuntime', () => {
     isThreadActive: (threadId) => observers.has(threadId),
     handlePublicEvent: (event, threadId) => {
       const result = handlePublicEvent(event, threadId)
-      const history = historyItems.get(threadId)
-      if (history && syncHistoricalItemEvent(history, event)) {
-        threadMessages.value[threadId] = itemsToMessages(Object.values(history.items))
-      }
       if (event.turn && event.session_id === threadId) {
         chatThreads.upsertThread({ id: threadId, status: event.turn.status === 'queued' ? 'in_progress' : event.turn.status })
       }
@@ -186,7 +182,7 @@ export const useSessionRuntimeStore = defineStore('sessionRuntime', () => {
     },
     fetchThreadMessages,
     fetchAgentState,
-    resetOngoingRunGroup,
+    resetThreadExecution,
     streamSmoother,
     onScrollToBottom: (threadId) => notify('onScrollToBottom', { threadId }),
     onInterruptDetected: ({ threadId, turn }) => {
@@ -196,7 +192,7 @@ export const useSessionRuntimeStore = defineStore('sessionRuntime', () => {
         const version = state.runStateVersion
         const waiting = turn || (turnId && (await agentApi.getThreadTurn(threadId, turnId)))
         if (
-          !isCurrent(threadId, state) ||
+          !isCurrentThreadState(threadId, state) ||
           state.currentTurnId !== turnId ||
           state.runStateVersion !== version ||
           waiting?.status !== 'requires_action'
@@ -212,16 +208,15 @@ export const useSessionRuntimeStore = defineStore('sessionRuntime', () => {
       notify('onTerminalDetected', payload)
     },
     onRunStarted: ({ threadId, runId, inputId }) => {
-      const chunks = getThreadState(threadId)?.ongoingRunGroup?.optimisticMessages || {}
+      const chunks = getThreadState(threadId)?.optimisticInputs || {}
       bindMessageInputRun(Object.values(chunks).flat(), inputId, runId)
-      bindMessageInputRun(threadMessages.value[threadId], inputId, runId)
       chatThreads.upsertThread({ id: threadId, status: 'in_progress' })
     }
   })
   const queue = useAgentInputQueue({
     getThreadState,
     isThreadActive: (threadId) => observers.has(threadId),
-    resetOngoingRunGroup,
+    resetThreadExecution,
     startRunStream: stream.startRunStream
   })
   const resumeQueuedInputs = (threadId) =>
@@ -241,10 +236,8 @@ export const useSessionRuntimeStore = defineStore('sessionRuntime', () => {
       if (listeners.size || observers.get(threadId) !== listeners) return
       observers.delete(threadId)
       cleanupThreadState(threadId)
-      delete threadMessages.value[threadId]
       delete threadRuns.value[threadId]
       delete historyPages[threadId]
-      historyItems.delete(threadId)
       for (const key of requests.keys()) {
         if (key.endsWith(`:${threadId}`)) requests.delete(key)
       }
@@ -261,7 +254,8 @@ export const useSessionRuntimeStore = defineStore('sessionRuntime', () => {
     historyPages,
     pendingSends,
     getThreadState,
-    resetOngoingRunGroup,
+    isCurrentThreadState,
+    resetThreadExecution,
     fetchThreadMessages,
     fetchAgentState,
     observeThread,

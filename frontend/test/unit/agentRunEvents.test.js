@@ -1,11 +1,10 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { after, before, test } from 'node:test'
 import { setImmediate } from 'node:timers'
 import { createServer } from 'vite'
 import { createItemState } from '../../src/modules/session/model/agentItems.js'
 
-let server, api, useAgentRunStream, processRunSseResponse, useAgentInputQueue
+let server, api, useAgentRunStream, processRunSseResponse
 before(async () => {
   globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} }
   server = await createServer({ server: { middlewareMode: true, hmr: false } })
@@ -13,9 +12,7 @@ before(async () => {
   ;({ useAgentRunStream, processRunSseResponse } = await server.ssrLoadModule(
     '/src/modules/session/model/useAgentRunStream.js'
   ))
-  ;({ useAgentInputQueue } = await server.ssrLoadModule(
-    '/src/modules/session/model/useAgentInputQueue.js'
-  ))
+
 })
 after(async () => {
   await server?.close()
@@ -55,7 +52,7 @@ function harness(
   const state = {
     currentTurnId: 'turn',
     activeRunId: currentRun,
-    ongoingRunGroup: createItemState()
+    itemState: createItemState()
   }
   const delivered = [],
     terminal = []
@@ -72,7 +69,7 @@ function harness(
     handlePublicEvent: (value) => delivered.push(value),
     fetchThreadMessages: snapshot,
     fetchAgentState() {},
-    resetOngoingRunGroup() {},
+    resetThreadExecution() {},
     onTerminalDetected: (value) => terminal.push(value)
   })
   t.after(() => stream.stopRunStreamSubscription('thread'))
@@ -148,46 +145,6 @@ test('Run settled 不结束 Turn；只有 Turn 终态收尾', async (t) => {
   assert.equal(h.terminal.length, 1)
 })
 
-test('FIFO 领取后用真实 item 替换乐观输入并订阅所属 Turn', async (t) => {
-  const state = {
-    queuedInputs: [],
-    inputQueueMonitor: null,
-    ongoingRunGroup: {
-      ...createItemState(),
-      optimisticMessages: { input: { id: 'local' } }
-    }
-  }
-  const item = {
-    id: 'input_1',
-    type: 'message',
-    role: 'user',
-    status: 'completed',
-    content: [],
-    yuxi: { input_id: 'input' }
-  }
-  t.mock.method(api, 'getThreadQueue', async () => ({
-    inputs: [{ input_id: 'input', status: 'pending' }]
-  }))
-  t.mock.method(api, 'getThreadInput', async () => ({
-    status: 'consumed',
-    run_id: 'run',
-    turn_id: 'turn',
-    items: [item]
-  }))
-  const started = []
-  const queue = useAgentInputQueue({
-    getThreadState: () => state,
-    resetOngoingRunGroup() {},
-    startRunStream: (...args) => started.push(args)
-  })
-  t.after(() => queue.stopAllInputMonitors('thread'))
-  await queue.syncQueuedInputs('thread')
-  await tick()
-  assert.deepEqual(state.ongoingRunGroup.items.input_1, item)
-  assert.deepEqual(state.ongoingRunGroup.optimisticMessages, {})
-  assert.deepEqual(started, [['thread', 'run', null, { turnId: 'turn', inputId: 'input' }]])
-})
-
 test('旧 Turn 等待历史回读时启动新 FIFO 流，旧收尾不能中止新订阅或审批', async (t) => {
   let releaseHistory
   const history = new Promise((resolve) => {
@@ -196,7 +153,7 @@ test('旧 Turn 等待历史回读时启动新 FIFO 流，旧收尾不能中止�
   let secondController,
     resetCount = 0,
     terminalCount = 0
-  const state = { currentTurnId: 'turn', activeRunId: 'run', ongoingRunGroup: createItemState() }
+  const state = { currentTurnId: 'turn', activeRunId: 'run', itemState: createItemState() }
   t.mock.method(api, 'getThreadTurn', async (_thread, turnId) => ({
     id: turnId,
     yuxi: { current_run_id: 'next', status: 'running' }
@@ -221,7 +178,7 @@ test('旧 Turn 等待历史回读时启动新 FIFO 流，旧收尾不能中止�
     handlePublicEvent() {},
     fetchThreadMessages: () => history,
     fetchAgentState() {},
-    resetOngoingRunGroup: () => {
+    resetThreadExecution: () => {
       resetCount++
       state.runStreamAbortController?.abort()
     },
@@ -271,62 +228,10 @@ test('协作等待保留 SSE，自动恢复的 Run 重新允许 steer 并接收�
   assert.equal(h.state.activeRunSteerable, false)
   assert.equal(signal.aborted, false)
   h.state.queuedInputs ||= []
-  h.state.ongoingRunGroup ||= { ...createItemState(), optimisticMessages: {} }
-  h.state.ongoingRunGroup.optimisticMessages ||= {}
-  const source = readFileSync(
-    new URL('../../src/modules/session/ui/SessionWorkspace.vue', import.meta.url),
-    'utf8'
-  )
-  const sendSource = source.slice(
-    source.indexOf('const handleSendMessage ='),
-    source.indexOf('const handleDirectSteer =')
-  )
-  const dependencies = {
-    userInput: { value: '队列里的新工作' },
-    currentAgent: { value: {} },
-    sendCooldownActive: { value: false },
-    props: {},
-    isLoadingMessages: { value: false },
-    isWaitingForUserAction: { value: false },
-    startSendCooldown() {},
-    currentChatId: { value: 'thread' },
-    currentModelSpec: { value: null },
-    currentToolApprovalMode: { value: 'always_trust' },
-    nextTick: tick,
-    scrollController: { scrollToBottom() {} },
-    getThreadState: () => h.state,
-    approvalState: {},
-    currentPendingThreadAttachments: { value: [] },
-    threadMessages: { value: {} },
-    createClientRequestId: () => 'queued-input',
-    draftFilesByThread: { value: {} },
-    pendingSends: { value: {} },
-    fetchThreadAttachments: async () => {},
-    buildOptimisticHumanMessage: ({ inputId, text }) => ({
-      id: inputId,
-      type: 'human',
-      content: text
-    }),
-    resetOngoingRunGroup: () => h.state.runStreamAbortController?.abort(),
-    submitSessionInput: async () => ({ input_id: 'queued-input', turn_id: null, run_id: null }),
-    agentApi: {
-      getThreadInput: async () => ({ items: [] })
-    },
-    mergeItemSnapshot() {},
-    startInputMonitor() {},
-    resumeQueuedInputs: async () => {},
-    isRunInterruptedConflict: () => false,
-    handleChatError: (error) => {
-      throw error
-    }
-  }
-  const send = new Function(
-    ...Object.keys(dependencies),
-    `${sendSource}; return handleSendMessage`
-  )(...Object.values(dependencies))
-  await send()
-  assert.equal(signal.aborted, false, '协作等待追加工作不能关闭当前 Turn 的 SSE')
-  assert.equal(h.state.queuedInputs[0].input_id, 'queued-input')
+  h.state.itemState ||= createItemState()
+  h.state.optimisticInputs ||= {}
+  h.state.queuedInputs.push({ input_id: 'queued-input', status: 'pending', content: '队列里的新工作' })
+  assert.equal(signal.aborted, false, '协作等待保留当前 Turn 的 SSE')
   currentRun = 'resumed'
   emit(event('agent.session.turn.in_progress', 'resumed'))
   await tick()

@@ -7,6 +7,7 @@ import uuid
 from contextlib import aclosing
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Literal
 
 from arq.worker import RetryJob
 from sqlalchemy import select
@@ -449,28 +450,35 @@ async def _publish_committed_terminal(
         await publish_run_settlement(run_id, status, thread_id=thread_id)
 
 
-async def _finish_run(
+async def _settle_uncommitted_run(
     run_id: str,
-    status: str,
+    status: Literal["failed", "cancelled"],
     *,
     thread_id: str | None,
     current_user,
     worker_id: str,
     error_type: str | None = None,
     error_message: str | None = None,
+    writer: PublicEventWriter | None = None,
     publish_end: bool = True,
 ) -> TerminalTransition:
+    """收敛尚未提交的失败或用户取消；已提交执行结果由公共发布边界收尾。"""
+    if writer is not None:
+        await flush_writer_best_effort(writer)
     run = await _get_run(run_id)
     token_usage = {"available": False}
-    if thread_id:
-        state_token_usage = await _read_run_token_usage_from_state(
-            run_id=run_id,
-            thread_id=thread_id,
-            current_user=current_user,
-            app_id=run.app_id if run else None,
+    if thread_id and current_user is not None:
+        token_usage = (
+            await _read_run_token_usage_from_state(
+                run_id=run_id,
+                thread_id=thread_id,
+                current_user=current_user,
+                app_id=run.app_id if run else None,
+            )
+            or token_usage
         )
-        if state_token_usage is not None:
-            token_usage = state_token_usage
+    if status == "cancelled":
+        error_type, error_message = "cancelled", "对话已取消"
     transition = await mark_run_terminal(
         run_id,
         status,
@@ -479,44 +487,15 @@ async def _finish_run(
         token_usage=token_usage,
         worker_id=worker_id,
     )
-    if transition.status in TERMINAL_RUN_STATUSES:
+    if publish_end and transition.status in TERMINAL_RUN_STATUSES:
         committed_run = await _get_run(run_id)
         await _publish_committed_terminal(
-            committed_run, run_id=run_id, status=transition.status, thread_id=thread_id, publish_end=publish_end and transition.changed
-        )
-    return transition
-
-
-async def _finish_user_cancel(
-    *,
-    run_id: str,
-    thread_id: str,
-    current_user,
-    worker_id: str,
-    writer: PublicEventWriter,
-    run: AgentRun,
-) -> TerminalTransition:
-    """在 PostgreSQL 已确认取消后，由当前 owner 写入 cancelled。"""
-
-    await flush_writer_best_effort(writer)
-    state_token_usage = None
-    if current_user is not None:
-        state_token_usage = await _read_run_token_usage_from_state(
+            committed_run,
             run_id=run_id,
+            status=transition.status,
             thread_id=thread_id,
-            current_user=current_user,
-            app_id=run.app_id,
+            publish_end=publish_end and transition.changed,
         )
-    transition = await mark_run_terminal(
-        run_id,
-        "cancelled",
-        error_type="cancelled",
-        error_message="对话已取消",
-        token_usage=state_token_usage or {"available": False},
-        worker_id=worker_id,
-    )
-    if transition.status in TERMINAL_RUN_STATUSES:
-        await _publish_committed_terminal(run, run_id=run_id, status=transition.status, thread_id=thread_id, publish_end=transition.changed)
     return transition
 
 
@@ -837,7 +816,7 @@ async def process_agent_run(ctx, run_id: str):
                     if not event.committed:
                         if event.status != "failed":
                             raise RuntimeError(f"执行结果缺少 PostgreSQL {event.status} 终态")
-                        transition = await _finish_run(
+                        transition = await _settle_uncommitted_run(
                             run_id,
                             event.status,
                             thread_id=thread_id,
@@ -867,13 +846,13 @@ async def process_agent_run(ctx, run_id: str):
             logger.warning(f"Run stopped after losing its lease: {run_id}")
             return
         if await _confirmed_user_cancel(run_id):
-            transition = await _finish_user_cancel(
+            transition = await _settle_uncommitted_run(
+                status="cancelled",
                 run_id=run_id,
                 thread_id=thread_id,
                 current_user=user,
                 worker_id=worker_id,
                 writer=writer,
-                run=run,
             )
             logger.info(f"Run user cancellation settled: run={run_id}, changed={transition.changed}")
             return
@@ -884,13 +863,13 @@ async def process_agent_run(ctx, run_id: str):
             logger.error(f"Infrastructure cancellation could not release AgentRun lease: run={run_id}", exc_info=True)
             raise cancellation
         if not released and await _confirmed_user_cancel(run_id):
-            transition = await _finish_user_cancel(
+            transition = await _settle_uncommitted_run(
+                status="cancelled",
                 run_id=run_id,
                 thread_id=thread_id,
                 current_user=user,
                 worker_id=worker_id,
                 writer=writer,
-                run=run,
             )
             logger.info(f"Run concurrent user cancellation settled: run={run_id}, changed={transition.changed}")
             return
@@ -902,7 +881,14 @@ async def process_agent_run(ctx, run_id: str):
     except Exception as exc:
         await flush_writer_best_effort(writer)
         if await _confirmed_user_cancel(run_id):
-            await _finish_user_cancel(run_id=run_id, thread_id=thread_id, current_user=user, worker_id=worker_id, writer=writer, run=run)
+            await _settle_uncommitted_run(
+                status="cancelled",
+                run_id=run_id,
+                thread_id=thread_id,
+                current_user=user,
+                worker_id=worker_id,
+                writer=writer,
+            )
             return
         if _is_retryable_exception(exc) and not _is_last_try(ctx):
             if not await release_run_lease_for_retry(run_id, worker_id):
@@ -921,7 +907,7 @@ async def process_agent_run(ctx, run_id: str):
             )
             raise RetryableRunError(str(exc)) from exc
         logger.error("Run failed %s: %s", run_id, exc)
-        await _finish_run(
+        await _settle_uncommitted_run(
             run_id,
             "failed",
             thread_id=thread_id,

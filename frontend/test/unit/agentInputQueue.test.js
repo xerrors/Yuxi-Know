@@ -1,17 +1,17 @@
 import assert from 'node:assert/strict'
 import path from 'node:path'
 import { after, before, test } from 'node:test'
+import { setImmediate } from 'node:timers'
 import { fileURLToPath } from 'node:url'
 
 import { createServer } from 'vite'
+import { createItemState } from '../../src/modules/session/model/agentItems.js'
+import { useAgentThreadState } from '../../src/modules/session/model/useAgentThreadState.js'
 
 const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 let server
 let agentApi
 let useAgentInputQueue
-let MessageProcessor
-let getMessageGroupDisplayItems
-let groupRunContinuations
 
 before(async () => {
   const storage = new Map()
@@ -25,11 +25,7 @@ before(async () => {
   ;({ useAgentInputQueue } = await server.ssrLoadModule(
     '/src/modules/session/model/useAgentInputQueue.js'
   ))
-  ;({ default: MessageProcessor } = await server.ssrLoadModule('/src/modules/session/model/messageProcessor.js'))
-  ;({ getMessageGroupDisplayItems } = await server.ssrLoadModule('/src/modules/session/model/messageGrouping.js'))
-  ;({ groupRunContinuations } = await server.ssrLoadModule(
-    '/src/modules/session/model/runProcessGrouping.js'
-  ))
+
 })
 
 after(async () => {
@@ -40,7 +36,7 @@ after(async () => {
 test('转引导重试复用幂等键，成功和冲突都回读队列且不写正式历史', async () => {
   const state = {
     queuedInputs: [{ input_id: 'F1', kind: 'follow_up', status: 'pending' }],
-    inputQueueMonitor: null, ongoingRunGroup: { items: {}, optimisticMessages: {} }
+    inputQueueMonitor: null, itemState: { items: {} }, optimisticInputs: {}
   }
   const original = { ...agentApi }
   const { ErrorHandler } = await server.ssrLoadModule('/src/shared/lib/errorHandler.js')
@@ -68,7 +64,7 @@ test('转引导重试复用幂等键，成功和冲突都回读队列且不写�
     assert.notEqual(keys[1], keys[2])
     assert.equal(reads, 2)
     assert.deepEqual(state.queuedInputs, [])
-    assert.deepEqual(state.ongoingRunGroup.items, {})
+    assert.deepEqual(state.itemState.items, {})
   } finally {
     queue.stopAllInputMonitors('t')
     Object.assign(agentApi, original)
@@ -77,7 +73,7 @@ test('转引导重试复用幂等键，成功和冲突都回读队列且不写�
 })
 
 test('较早队列快照不能覆盖新快照，取消一条不移除其他引导', async () => {
-  const state = { queuedInputs: [], inputQueueMonitor: null, ongoingRunGroup: { items: {}, optimisticMessages: {} } }
+  const state = { queuedInputs: [], inputQueueMonitor: null, itemState: { items: {} }, optimisticInputs: {} }
   const original = { ...agentApi }
   let resolveOld
   agentApi.getThreadQueue = () => new Promise((resolve) => { resolveOld = resolve })
@@ -95,144 +91,11 @@ test('较早队列快照不能覆盖新快照，取消一条不移除其他引�
     agentApi.getThreadQueue = async () => ({ inputs: [rows[1]] })
     assert.equal(await queue.cancelInput('t', 'S1'), true)
     assert.deepEqual(state.queuedInputs.map((item) => item.input_id), ['S2'])
-    assert.deepEqual(state.ongoingRunGroup.items, {})
+    assert.deepEqual(state.itemState.items, {})
   } finally {
     queue.stopAllInputMonitors('t')
     Object.assign(agentApi, original)
   }
-})
-
-test('审批前后的工具和思考跨关联 Run 连续展示，正文仍独立', () => {
-  const runs = [
-    { id: 'first', turn_id: 'turn-1', status: 'interrupted', timing: { created_at: '2026-09-16T00:00:00Z' } },
-    {
-      id: 'resume',
-      turn_id: 'turn-1',
-      run_type: 'resume',
-      status: 'completed',
-      timing: { created_at: '2026-09-16T00:01:00Z' }
-    }
-  ]
-  const history = [
-    { id: 'human', run_id: 'first', type: 'human', content: '完成任务' },
-    { id: 'm1', run_id: 'first', type: 'ai', tool_calls: [{ id: 't1', name: 'ls', args: {} }] },
-    {
-      id: 'm2',
-      run_id: 'first',
-      type: 'ai',
-      reasoning_content: 'thinking1',
-      tool_calls: [
-        { id: 't2', name: 'read_file', args: {} },
-        { id: 't3', name: 'ask_user_question', args: {}, status: 'success' }
-      ]
-    },
-    {
-      id: 'answer',
-      run_id: 'resume',
-      type: 'human',
-      content: '{"type":"approval","decisions":[{"call_id":"t3","decision":"approve"}]}',
-      message_type: 'resume'
-    },
-    {
-      id: 'm3',
-      run_id: 'resume',
-      type: 'ai',
-      reasoning_content: 'thinking2',
-      tool_calls: [{ id: 't4', name: 'ls', args: {} }]
-    },
-    { id: 'm4', run_id: 'resume', type: 'ai', content: '最终回答' }
-  ]
-  const runGroups = MessageProcessor.convertServerHistoryToMessages(history, runs)
-  const groups = groupRunContinuations(runGroups)
-  assert.equal(groups.length, 1)
-  const items = getMessageGroupDisplayItems(groups[0])
-  assert.deepEqual(
-    items.map((item) => item.type),
-    ['message', 'tool-group', 'message']
-  )
-  assert.deepEqual(
-    items[1].entries.map((entry) => (entry.type === 'tool' ? entry.toolCall.id : entry.content)),
-    ['t1', 'thinking1', 't2', 't3', 'thinking2', 't4']
-  )
-  assert.equal(items[2].message.content, '最终回答')
-  assert.equal(runGroups.length, 2)
-  const streaming = groupRunContinuations([
-    runGroups[0],
-    { ...runGroups[1], status: 'streaming', messages: runGroups[1].messages.slice(0, 1) }
-  ])
-  assert.equal(streaming[0].status, 'streaming')
-  assert.equal(getMessageGroupDisplayItems(streaming[0])[1].key, items[1].key)
-})
-
-test('协作恢复的实时消息没有 Run 快照时，仍与等待工具连续展示', () => {
-  const waiting = {
-    run: { id: 'before', turn_id: 'turn-1', status: 'interrupted' },
-    messages: [{
-      id: 'wait', type: 'ai', run_id: 'before', turn_id: 'turn-1',
-      tool_calls: [{ id: 'wait-call', name: 'wait_inputs', status: 'waiting', args: {} }]
-    }]
-  }
-  const live = {
-    status: 'streaming',
-    messages: [{
-      id: 'thinking', type: 'ai', run_id: 'after', turn_id: 'turn-1',
-      reasoning_content: '继续核验'
-    }]
-  }
-  const groups = groupRunContinuations([waiting, live])
-  assert.equal(groups.length, 1)
-  const items = getMessageGroupDisplayItems(groups[0])
-  assert.equal(items.length, 1)
-  assert.deepEqual(items[0].entries.map((entry) => entry.type), ['tool', 'reasoning'])
-  assert.equal(items[0].toolCalls[0].status, 'waiting')
-  assert.deepEqual(groups[0].messages.map((message) => message.run_id), ['before', 'after'])
-  assert.equal(groups[0].run.id, 'after')
-  assert.equal(groups[0].status, 'streaming')
-  for (const messages of [
-    [{ ...live.messages[0], turn_id: 'turn-2' }],
-    [{ ...live.messages[0], turn_id: undefined }],
-    [{ id: 'user', type: 'human', content: '继续' }, ...live.messages]
-  ]) {
-    assert.equal(groupRunContinuations([waiting, { ...live, messages }]).length, 2)
-  }
-})
-
-test('thinking 与相邻工具按顺序合并，正文和错误仍独立显示', () => {
-  const messages = [
-    { id: 'a1', type: 'ai', reasoning_content: '先检查', tool_calls: [{ id: 't1', name: 'ls', args: {} }] },
-    { id: 'a2', type: 'ai', reasoning_content: '再确认', tool_calls: [{ id: 't2', name: 'read_file', args: {} }] },
-    { id: 'a3', type: 'ai', reasoning_content: '得到结论', content: '最终回答' }
-  ]
-  const items = getMessageGroupDisplayItems({ messages })
-  assert.deepEqual(items.map((item) => item.type), ['tool-group', 'message'])
-  assert.deepEqual(items[0].entries.map((entry) => entry.type), ['reasoning', 'tool', 'reasoning', 'tool', 'reasoning'])
-  assert.deepEqual(items[0].entries.filter((entry) => entry.type === 'reasoning').map((entry) => entry.content), ['先检查', '再确认', '得到结论'])
-  assert.equal(items[0].toolCalls.length, 2)
-  assert.equal(items[1].message.content, '最终回答')
-  assert.equal(items[1].message.reasoning_content, '')
-  assert.equal(messages[2].reasoning_content, '得到结论')
-
-  const thinkingOnly = getMessageGroupDisplayItems({ messages: [{ id: 'a', type: 'ai', reasoning_content: '思考中' }] })
-  assert.equal(thinkingOnly.length, 1)
-  assert.equal(thinkingOnly[0].type, 'tool-group')
-  assert.equal(thinkingOnly[0].entries[0].content, '思考中')
-  assert.deepEqual(thinkingOnly[0].toolCalls, [])
-  assert.deepEqual(getMessageGroupDisplayItems({ messages: [{ type: 'ai', content: '' }] }), [])
-
-  const failed = getMessageGroupDisplayItems({ messages: [{ type: 'ai', reasoning_content: '检查中断', error_type: 'interrupted' }] })
-  assert.deepEqual(failed.map((item) => item.type), ['tool-group', 'message'])
-  assert.equal(failed[1].message.error_type, 'interrupted')
-})
-
-test('同一消息的 thinking、正文和工具分段使用不同的稳定 key', () => {
-  const message = { id: 'mixed', type: 'ai', reasoning_content: '计划', content: '先查文件', tool_calls: [{ id: 't1', name: 'ls', args: {} }] }
-  const items = getMessageGroupDisplayItems({ messages: [message] })
-  assert.deepEqual(items.map((item) => item.type), ['tool-group', 'message', 'tool-group'])
-  assert.equal(new Set(items.map((item) => item.key)).size, 3)
-  assert.equal(items[0].entries[0].content, '计划')
-  assert.equal(items[2].entries[0].toolCall.id, 't1')
-  const updated = getMessageGroupDisplayItems({ messages: [{ ...message, content: '先查文件，再整理' }] })
-  assert.deepEqual(updated.map((item) => item.key), items.map((item) => item.key))
 })
 
 test('完整队列快照保留独立 steer 节点并遵循服务器优先顺序', async () => {
@@ -244,7 +107,7 @@ test('完整队列快照保留独立 steer 节点并遵循服务器优先顺序'
       { input_id: 'local', status: 'sending' }
     ],
     inputQueueMonitor: null,
-    ongoingRunGroup: { items: {}, optimisticMessages: {} }
+    itemState: { items: {} }, optimisticInputs: {}
   }
   const originalQueue = agentApi.getThreadQueue
   const originalInput = agentApi.getThreadInput
@@ -259,7 +122,7 @@ test('完整队列快照保留独立 steer 节点并遵循服务器优先顺序'
     await queue.syncQueuedInputs('thread-1')
     assert.deepEqual(state.queuedInputs.map((input) => input.input_id), ['S1', 'S2', 'F1', 'local'])
     assert.equal(state.queuedInputs[0].content, 'S1')
-    assert.deepEqual(state.ongoingRunGroup.items, {})
+    assert.deepEqual(state.itemState.items, {})
     assert.ok(state.inputQueueMonitor)
     assert.deepEqual([...state.inputQueueMonitor.inputIds], ['S1', 'S2', 'F1'])
     agentApi.getThreadQueue = async () => ({ inputs: [
@@ -278,7 +141,7 @@ test('尚未接收的本地输入不能被取消或订阅', async () => {
   const state = {
     queuedInputs: [{ input_id: 'local-key', status: 'sending' }],
     inputQueueMonitor: null,
-    ongoingRunGroup: { items: {}, optimisticMessages: {} }
+    itemState: { items: {} }, optimisticInputs: {}
   }
   const originalQueue = agentApi.getThreadQueue
   const originalInput = agentApi.getThreadInput
@@ -300,49 +163,86 @@ test('尚未接收的本地输入不能被取消或订阅', async () => {
   }
 })
 
+test('重置执行观察保留唯一 item 事实和排队 Input 的监视', () => {
+  const chatState = { threadStates: {} }
+  const { getThreadState, resetThreadExecution } = useAgentThreadState({
+    chatState
+  })
+  const state = getThreadState('thread-1')
+  const controller = new AbortController()
+  let runAborted = false
+  state.runStreamAbortController = { abort: () => (runAborted = true) }
+  state.inputQueueMonitor = { controller, timer: null, inputIds: new Set(['input-2']) }
+  state.itemState.items['input-1'] = { type: 'message', content: [{ type: 'output_text', text: '第一轮回复' }] }
 
-test('交付物展示不把最后可见工具后的正文收入过程区', () => {
-  for (const artifactTool of [
-    { name: 'present_artifacts', args: { filepaths: ['/dog.png'] }, status: 'success' },
-    { function: { name: 'present_artifacts', arguments: '{"filepaths":["/dog.png"]}' }, status: 'success' }
-  ]) {
-    const messages = [
-      { id: 'human', type: 'human', content: '生成小狗图片' },
-      { id: 'prepare', type: 'ai', content: '检查图片文件', tool_calls: [{ name: 'ls', args: {} }] },
-      { id: 'answer', type: 'ai', content: '图片已生成，这是图片说明。', tool_calls: [artifactTool] },
-      { id: 'confirm', type: 'ai', content: '图片已展示，可下载。' }
-    ]
-    const original = structuredClone(messages)
-    const items = getMessageGroupDisplayItems({ messages }, { collapseIntermediate: true })
-    assert.deepEqual(items.map(item => item.type), ['message', 'process-group', 'message', 'message'])
-    assert.deepEqual(items[1].items.map(item => item.key), ['prepare', 'tool-group-prepare-tools'])
-    assert.equal(items[1].toolCallCount, 1)
-    assert.deepEqual(items.slice(2).map(item => item.message.id), ['answer', 'confirm'])
-    assert.deepEqual(MessageProcessor.extractArtifactsFromMessageGroup({ messages }), ['/dog.png'])
-    assert.deepEqual(messages, original)
-  }
+  resetThreadExecution('thread-1', { preserveInputMonitors: true })
+
+  assert.equal(runAborted, true)
+  assert.equal(controller.signal.aborted, false)
+  assert.deepEqual([...state.inputQueueMonitor.inputIds], ['input-2'])
+  assert.equal(state.itemState.items['input-1'].content[0].text, '第一轮回复')
 })
 
-test('只有交付物展示时正文全部保留，混合调用或后续执行工具仍参与过程折叠', () => {
-  const present = { name: 'present_artifacts', args: { filepaths: ['/dog.png'] }, status: 'success' }
-  const execute = { name: 'bash', args: { command: 'check' } }
-  const answer = { id: 'answer', type: 'ai', content: '图片说明', tool_calls: [present] }
-  const confirm = { id: 'confirm', type: 'ai', content: '展示完成' }
-  const human = { id: 'human', type: 'human', content: '生成图片' }
-  for (const messages of [[human, answer], [human, answer, confirm]]) {
-    const items = getMessageGroupDisplayItems({ messages }, { collapseIntermediate: true })
-    assert.deepEqual(items.map(item => item.message.id), messages.map(message => message.id))
+for (const action of ['reset', 'cleanup']) {
+  test(`${action} 停止 Input 监视与重连计时器`, (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] })
+    const chatState = { threadStates: {} }
+    const { getThreadState, resetThreadExecution, cleanupThreadState } = useAgentThreadState({
+      chatState
+    })
+    const state = getThreadState('thread-1')
+    const controller = new AbortController()
+    let retried = false
+    state.inputQueueMonitor = {
+      inputIds: new Set(['input-1']),
+      controller,
+      timer: setTimeout(() => { retried = true }, 20)
+    }
+
+    if (action === 'reset') resetThreadExecution('thread-1')
+    else cleanupThreadState('thread-1')
+
+    t.mock.timers.tick(40)
+    assert.equal(controller.signal.aborted, true)
+    assert.equal(retried, false)
+    assert.equal(state.inputQueueMonitor, null)
+  })
+}
+
+test('FIFO 领取后用真实 item 替换乐观输入并订阅所属 Turn', async (t) => {
+  const state = {
+    queuedInputs: [],
+    inputQueueMonitor: null,
+    itemState: createItemState(),
+    optimisticInputs: { input: { id: 'local' } }
   }
-  for (const messages of [
-    [{ ...answer, tool_calls: [present, execute] }, confirm],
-    [answer, { id: 'check', type: 'ai', content: '继续检查', tool_calls: [execute] }, confirm]
-  ]) {
-    const items = getMessageGroupDisplayItems({ messages }, { collapseIntermediate: true })
-    assert.deepEqual(items.map(item => item.type), ['process-group', 'message'])
-    assert.equal(items[0].toolCallCount, 1)
-    assert.equal(items[0].items.at(-1).toolCalls[0].name, 'bash')
-    assert.equal(items[1].message.id, 'confirm')
-    const live = getMessageGroupDisplayItems({ messages })
-    assert.equal(live.some(item => item.type === 'process-group'), false)
+  const item = {
+    id: 'input_1',
+    type: 'message',
+    role: 'user',
+    status: 'completed',
+    content: [],
+    yuxi: { input_id: 'input' }
   }
+  t.mock.method(agentApi, 'getThreadQueue', async () => ({
+    inputs: [{ input_id: 'input', status: 'pending' }]
+  }))
+  t.mock.method(agentApi, 'getThreadInput', async () => ({
+    status: 'consumed',
+    run_id: 'run',
+    turn_id: 'turn',
+    items: [item]
+  }))
+  const started = []
+  const queue = useAgentInputQueue({
+    getThreadState: () => state,
+    resetThreadExecution() {},
+    startRunStream: (...args) => started.push(args)
+  })
+  t.after(() => queue.stopAllInputMonitors('thread'))
+  await queue.syncQueuedInputs('thread')
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.deepEqual(state.itemState.items.input_1, item)
+  assert.deepEqual(state.optimisticInputs, {})
+  assert.deepEqual(started, [['thread', 'run', null, { turnId: 'turn', inputId: 'input' }]])
 })

@@ -10,7 +10,7 @@ Owner：frontend/src/modules/session/model/useAgentInputQueue.js
 
 ## 决策
 
-每个 Thread 使用一个共享 Input 监视循环，顺序读取当前已登记 Input 的精确状态；保留 `inputMonitors[inputId]` 作为每条 Input 的身份索引和取消/完成收敛入口。任一 Input 的临时错误使用较长下一轮退避，终态、取消、路由离开和清理仍中止整个共享循环。队列快照继续只登记服务端返回的 pending Input，不猜测已消费记录。
+每个 Thread 使用一个共享 Input 监视循环，`inputQueueMonitor.inputIds` 登记待观察身份，循环顺序读取各 Input 的精确状态。已消费或取消的 Input 只移除自身登记；全部登记完成或 Thread 最后一个使用者释放时中止循环。临时错误延长下一轮退避。队列快照只登记服务端返回的 pending Input，不猜测已消费记录。
 
 ## 替代方案
 
@@ -24,10 +24,10 @@ Owner：frontend/src/modules/session/model/useAgentInputQueue.js
 
 ## 验证
 
-旧能力不存在：`useAgentInputQueue.js` 不再为每个 Input 创建独立 `AbortController` 和 `setTimeout`；同一 Thread 的登记项共享 `inputQueueMonitor.controller`。
+旧能力不存在：`useAgentInputQueue.js` 不再为每个 Input 创建独立 `AbortController` 和 `setTimeout`；同一 Thread 的登记项共享 `inputQueueMonitor.controller`。队列领取、取消和监视器释放用例统一由 `agentInputQueue.test.js` 拥有，独立的 `agentThreadQueueTransition.test.js` 已删除。
 
 重新引入条件：只有后端明确提供批量 Input 状态或事件契约，且真实 HTTP/worker 证据证明逐条读取仍是瓶颈时，才改变读取协议；不得在前端把 pending 快照推断为 consumed。
 
-- `cd frontend && pnpm exec node --test test/unit/agentInputQueue.test.js test/unit/agentThreadQueueTransition.test.js test/unit/agentRunEvents.test.js`：Passed，15/15。
+- `cd frontend && pnpm exec node --test --test-concurrency=1 test/unit/agentInputQueue.test.js test/unit/agentRunEvents.test.js`：Passed，15/15。
 - `cd frontend && pnpm run lint:check`：Passed。
 - `python3 scripts/verify_engineering_contracts.py`：Passed。

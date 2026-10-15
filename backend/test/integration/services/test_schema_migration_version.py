@@ -34,7 +34,7 @@ from test.integration.support.postgres_schema import (
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
 
-@pytest.mark.parametrize("domain, version", [("business", 1), ("business", 2), ("business", 12), ("business", 13), ("knowledge", 3)])
+@pytest.mark.parametrize("domain, version", [("business", 1), ("business", 2), ("business", 3), ("business", 12), ("business", 13), ("knowledge", 3)])
 async def test_incompatible_schema_is_rejected_without_modifying_data(monkeypatch, domain, version):
     """不兼容版本在 DDL 前失败，曾支持的升级入口也不得修改数据。"""
     schema, admin, engine, manager = await _create_isolated_manager("pytest_old_business")
@@ -182,7 +182,7 @@ async def test_fresh_business_schema_contains_input_lifecycle_without_request_ta
             "thread_id",
         } <= input_columns
         assert "conversation_thread_id" not in input_columns
-        assert BUSINESS_SCHEMA_VERSION == 3
+        assert BUSINESS_SCHEMA_VERSION == 4
         assert KNOWLEDGE_SCHEMA_VERSION == 1
     finally:
         await _drop_isolated_schema(schema, admin_engine, scoped_engine)

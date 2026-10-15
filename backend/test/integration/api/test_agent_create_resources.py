@@ -1,15 +1,12 @@
 """一次创建的真实 HTTP、PostgreSQL 与文件提交证据。"""
 
 import json
-import os
 import uuid
 from io import BytesIO
 from zipfile import ZipFile
 
 import pytest
-import pytest_asyncio
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from yuxi.infrastructure.runtime_settings import get_skill_data_dir
 from yuxi.modules.agents.models.definitions import Agent
@@ -19,16 +16,6 @@ from yuxi.modules.extensions.skills.models import Skill
 from yuxi.modules.identity.models import User
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
-
-
-@pytest_asyncio.fixture
-async def sessions():
-    """独立连接读取已提交结果，避免把同一 session 的对象当事实。"""
-    engine = create_async_engine(os.environ["POSTGRES_URL"])
-    try:
-        yield async_sessionmaker(engine, expire_on_commit=False)
-    finally:
-        await engine.dispose()
 
 
 def bundle(*, mcp=None, invalid=False, slug="guide"):
@@ -57,15 +44,15 @@ def remote_config(slug):
     }
 
 
-async def assert_absent(sessions, agent_slug, mcp_slug):
+async def assert_absent(postgres_sessions, agent_slug, mcp_slug):
     """提交失败后重新查询 PostgreSQL 的所有关联结果。"""
-    async with sessions() as db:
+    async with postgres_sessions() as db:
         assert await db.scalar(select(Agent.id).where(Agent.slug == agent_slug)) is None
         assert await db.scalar(select(MCPServer.id).where(MCPServer.slug == mcp_slug)) is None
         assert await db.scalar(select(Skill.id).join(Agent, Skill.bound_agent_id == Agent.id).where(Agent.slug == agent_slug)) is None
 
 
-async def test_create_with_skill_and_existing_mcp(test_client, admin_headers, standard_user, sessions):
+async def test_create_with_skill_and_existing_mcp(test_client, admin_headers, standard_user, postgres_sessions):
     """回读完整包、显式 MCP 选择和脱敏结果，普通用户可复用已启用 MCP。"""
     me = await test_client.get("/api/auth/me", headers=admin_headers)
     assert me.status_code == 200, me.text
@@ -103,7 +90,7 @@ async def test_create_with_skill_and_existing_mcp(test_client, admin_headers, st
         assert context["mcps"] == [mcp_slug]
         assert context["system_prompt"] == "创建时指定角色"
         assert context["tools"] == [] and context["max_execution_steps"] == 7
-        async with sessions() as db:
+        async with postgres_sessions() as db:
             agent = await db.scalar(select(Agent).where(Agent.slug == slug))
             skill = await db.scalar(select(Skill).where(Skill.bound_agent_id == agent.id))
             server = await db.scalar(select(MCPServer).where(MCPServer.slug == mcp_slug))
@@ -132,7 +119,7 @@ async def test_create_with_skill_and_existing_mcp(test_client, admin_headers, st
         assert result.status_code in {200, 404}, result.text
 
 
-async def test_json_creation_keeps_backend_defaults_without_empty_skill(test_client, admin_headers, sessions):
+async def test_json_creation_keeps_backend_defaults_without_empty_skill(test_client, admin_headers, postgres_sessions):
     """省略 Context 保持默认意图，不创建空专属包或其他资源。"""
     suffix = uuid.uuid4().hex[:10]
     slug, mcp_slug = f"pytest-json-{suffix}", f"pytest-json-mcp-{suffix}"
@@ -147,7 +134,7 @@ async def test_json_creation_keeps_backend_defaults_without_empty_skill(test_cli
         context = read.json()["agent"]["config_json"]["context"]
         assert "mcps" not in context and "tools" not in context
         assert read.json()["agent"]["configurable_items"]["tools"]["default"] == "all"
-        async with sessions() as db:
+        async with postgres_sessions() as db:
             agent = await db.scalar(select(Agent).where(Agent.slug == slug))
             assert await db.scalar(select(Skill.id).where(Skill.bound_agent_id == agent.id)) is None
             assert await db.scalar(select(MCPServer.id).where(MCPServer.slug == mcp_slug)) is None
@@ -156,7 +143,7 @@ async def test_json_creation_keeps_backend_defaults_without_empty_skill(test_cli
         await test_client.delete(f"/api/system/mcp-servers/{mcp_slug}", headers=admin_headers)
 
 
-async def test_disabled_mcp_cannot_be_selected(test_client, admin_headers, sessions):
+async def test_disabled_mcp_cannot_be_selected(test_client, admin_headers, postgres_sessions):
     """拒绝禁用资源选择，已有独立配置保持原值。"""
     suffix = uuid.uuid4().hex[:10]
     existing, slug = f"pytest-existing-{suffix}", f"pytest-existing-agent-{suffix}"
@@ -171,7 +158,7 @@ async def test_disabled_mcp_cannot_be_selected(test_client, admin_headers, sessi
             json={"name": slug, "slug": slug, "config_json": {"context": {"mcps": [existing]}}},
         )
         assert rejected.status_code == 422, rejected.text
-        async with sessions() as db:
+        async with postgres_sessions() as db:
             assert await db.scalar(select(Agent.id).where(Agent.slug == slug)) is None
             row = await db.scalar(select(MCPServer).where(MCPServer.slug == existing))
             assert row.url == "https://example.com/mcp" and row.headers == {"X-Test": "fixture-only"}
@@ -181,7 +168,7 @@ async def test_disabled_mcp_cannot_be_selected(test_client, admin_headers, sessi
 
 
 @pytest.mark.parametrize("failure", ["zip", "dependency", "config", "config-shape", "removed-import", "oversize", "payload"])
-async def test_invalid_creation_leaves_no_partial_resources(test_client, admin_headers, sessions, failure):
+async def test_invalid_creation_leaves_no_partial_resources(test_client, admin_headers, postgres_sessions, failure):
     """失败不留下 Agent 或专属包，Agent 请求不能创建 MCP。"""
     root = get_skill_data_dir() / "packages"
     before = set(root.glob("*")) | set(root.glob("*/*"))
@@ -206,12 +193,12 @@ async def test_invalid_creation_leaves_no_partial_resources(test_client, admin_h
         files={"file": ("guide.zip", package, "application/zip")},
     )
     assert response.status_code == (413 if failure == "oversize" else 422), response.text
-    await assert_absent(sessions, slug, mcp_slug)
+    await assert_absent(postgres_sessions, slug, mcp_slug)
     assert set(root.glob("*")) | set(root.glob("*/*")) == before
 
 
 @pytest.mark.parametrize("role", ["user", "admin", "superadmin"])
-async def test_mcp_is_created_only_by_its_management_endpoint(test_client, admin_headers, standard_user, sessions, role):
+async def test_mcp_is_created_only_by_its_management_endpoint(test_client, admin_headers, standard_user, postgres_sessions, role):
     """独立创建权限保持不变，所有角色都不能在 Agent 请求内导入。"""
     headers = admin_headers if role == "superadmin" else standard_user["headers"]
     if role == "admin":
@@ -223,18 +210,18 @@ async def test_mcp_is_created_only_by_its_management_endpoint(test_client, admin
         "/api/agent", headers=headers, json={"slug": slug, "name": slug, "mcp_servers": [remote_config(mcp_slug)]}
     )
     assert rejected.status_code == 422, rejected.text
-    await assert_absent(sessions, slug, mcp_slug)
+    await assert_absent(postgres_sessions, slug, mcp_slug)
     try:
         result = await test_client.post("/api/system/mcp-servers", headers=headers, json=remote_config(mcp_slug))
         assert result.status_code == (200 if role == "superadmin" else 403), result.text
-        async with sessions() as db:
+        async with postgres_sessions() as db:
             assert (await db.scalar(select(MCPServer.id).where(MCPServer.slug == mcp_slug)) is not None) == (role == "superadmin")
     finally:
         await test_client.delete(f"/api/system/mcp-servers/{mcp_slug}", headers=admin_headers)
 
 
 @pytest.mark.parametrize("with_skill", [False, True])
-async def test_final_commit_failure_rolls_back_all_creation(test_client, admin_headers, sessions, monkeypatch, with_skill):
+async def test_final_commit_failure_rolls_back_all_creation(test_client, admin_headers, postgres_sessions, monkeypatch, with_skill):
     """Agent/专属包提交失败回滚自身，已经独立发布的 MCP 保留。"""
     me = await test_client.get("/api/auth/me", headers=admin_headers)
     suffix = uuid.uuid4().hex[:10]
@@ -243,7 +230,7 @@ async def test_final_commit_failure_rolls_back_all_creation(test_client, admin_h
     assert result.status_code == 200, result.text
     root = get_skill_data_dir() / "packages"
     before = set(root.glob("*")) | set(root.glob("*/*"))
-    async with sessions() as db:
+    async with postgres_sessions() as db:
         operator = await db.scalar(select(User).where(User.uid == me.json()["uid"]))
 
         async def fail_final_commit():
@@ -267,7 +254,7 @@ async def test_final_commit_failure_rolls_back_all_creation(test_client, admin_h
                 skill_upload=("guide.zip", bundle(mcp=mcp_slug)) if with_skill else None,
             )
     try:
-        async with sessions() as db:
+        async with postgres_sessions() as db:
             assert await db.scalar(select(Agent.id).where(Agent.slug == slug)) is None
             server = await db.scalar(select(MCPServer).where(MCPServer.slug == mcp_slug))
             assert server.url == "https://example.com/mcp" and server.headers == {"X-Test": "fixture-only"}
@@ -277,7 +264,9 @@ async def test_final_commit_failure_rolls_back_all_creation(test_client, admin_h
 
 
 @pytest.mark.parametrize("role", ["user", "admin"])
-async def test_shared_skill_creation_has_its_own_permission_and_lifetime(test_client, admin_headers, standard_user, sessions, role):
+async def test_shared_skill_creation_has_its_own_permission_and_lifetime(
+    test_client, admin_headers, standard_user, postgres_sessions, role,
+):
     """共享 Skill 仅管理员发布，Agent 失败不会回滚已发布的 Skill。"""
     headers = standard_user["headers"]
     if role == "admin":
@@ -306,7 +295,7 @@ async def test_shared_skill_creation_has_its_own_permission_and_lifetime(test_cl
             },
         )
         assert result.status_code == (200 if role == "admin" else 403), result.text
-        async with sessions() as db:
+        async with postgres_sessions() as db:
             shared = await db.scalar(select(Skill).where(Skill.slug == skill_slug))
             assert (shared is not None) == (role == "admin")
             if shared is not None:
@@ -336,7 +325,7 @@ async def test_shared_skill_creation_has_its_own_permission_and_lifetime(test_cl
                 files={"file": ("bad.zip", bundle(invalid=True), "application/zip")},
             )
             assert rejected.status_code == 422, rejected.text
-            async with sessions() as db:
+            async with postgres_sessions() as db:
                 assert await db.scalar(select(Agent.id).where(Agent.slug == agent_slug + "-bad")) is None
                 assert await db.scalar(select(Skill.id).where(Skill.slug == skill_slug)) is not None
     finally:

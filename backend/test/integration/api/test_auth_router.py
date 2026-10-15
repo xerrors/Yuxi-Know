@@ -157,20 +157,18 @@ async def test_user_is_locked_after_repeated_failed_logins(test_client, standard
 
 
 async def test_login_rate_limit_blocks_repeated_failures_per_ip_and_account(test_client, isolated_redis_client):
-    # 测试进程连 localhost:5050，服务端看到的来源 IP 是 127.0.0.1
+    request_headers = {"X-Forwarded-For": "192.0.2.77"}
     identifier = f"nouser_{uuid.uuid4().hex[:8]}"
-    for _ in range(login_limiter.LOGIN_FAILURE_IP_ACCOUNT_MAX - 1):
-        await login_limiter.record_login_failure("127.0.0.1", identifier)
-
-    failure_response = await test_client.post(
-        "/api/auth/token",
-        data={"username": identifier, "password": "wrong-password"},
-    )
-    assert failure_response.status_code == 401, failure_response.text
+    for _ in range(login_limiter.LOGIN_FAILURE_IP_ACCOUNT_MAX):
+        response = await test_client.post(
+            "/api/auth/token", headers=request_headers, data={"username": identifier, "password": "wrong-password"}
+        )
+        assert response.status_code == 401, response.text
 
     # 第 10 次失败后，同 IP+账号组合进入滑动窗口限速
     blocked_response = await test_client.post(
         "/api/auth/token",
+        headers=request_headers,
         data={"username": identifier, "password": "wrong-password"},
     )
     assert blocked_response.status_code == 429, blocked_response.text

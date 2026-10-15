@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
+import os
 import uuid
 
 import pytest
 import pytest_asyncio
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from test.support.knowledge import default_embedding_model_spec
 from yuxi.infrastructure.minio import get_minio_client
 from yuxi.infrastructure.minio.client import MinIOClient
-from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.knowledge.models import KnowledgeBase, KnowledgeFile
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
@@ -71,9 +72,10 @@ async def readable_knowledge_tool_data(knowledge_base_resource):
         b"First line\nNeedle in document\nLast line",
         content_type="text/markdown",
     )
-    pg_manager.initialize()
+    engine = create_async_engine(os.environ["POSTGRES_URL"])
+    sessions = async_sessionmaker(engine)
     try:
-        async with pg_manager.get_async_session_context() as session:
+        async with sessions() as session:
             kb = await session.scalar(select(KnowledgeBase).where(KnowledgeBase.kb_id == kb_id))
             assert kb is not None
             session.add(
@@ -87,10 +89,11 @@ async def readable_knowledge_tool_data(knowledge_base_resource):
                     is_folder=False,
                 )
             )
+            await session.commit()
         yield file_id
     finally:
         await minio.adelete_file(MinIOClient.KB_BUCKETS["parsed"], object_name)
-        await pg_manager.close()
+        await engine.dispose()
 
 
 async def test_jwt_can_call_five_read_only_knowledge_tools(test_client, admin_headers, knowledge_base_resource):

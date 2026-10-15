@@ -2,6 +2,7 @@
 // 执行：playwright-cli -s=history-loading run-code --filename=frontend/test/browser/sessionHistoryLoading.js
 // prettier-ignore
 async (page) => {
+  await page.unrouteAll({ behavior: 'wait' })
   const threadId = '00000000-0000-4000-8000-000000000001'
   const agentId = '00000000-0000-4000-8000-000000000002'
   const thread = {
@@ -22,10 +23,11 @@ async (page) => {
   const check = (condition, message) => { if (!condition) throw new Error(message) }
   await page.addInitScript(() => localStorage.setItem('user_token', 'history-replay-token'))
   await page.route('**/api/**', async route => {
-    const parsed = await page.evaluate(raw => { const url = new URL(raw); return { path: url.pathname, params: Object.fromEntries(url.searchParams) } }, route.request().url())
-    const path = parsed.path, url = { searchParams: { get: name => parsed.params[name] || null } }
+    const raw = route.request().url()
+    const path = raw.replace(/^https?:\/\/[^/]+/, '').split('?')[0]
+    const url = { searchParams: { get: name => decodeURIComponent(raw.match(new RegExp(`[?&]${name}=([^&]*)`))?.[1] || '') || null } }
     let json
-    if (path === '/api/auth/me') json = { id: 1, username: '历史验证', role: 'user' }
+    if (path === '/api/auth/me') json = { id: 1, uid: 'history-verification', username: '历史验证', role: 'user' }
     else if (path === '/api/agent') json = { agents: [agent] }
     else if (path === `/api/agent/${agentId}`) json = agent
     else if (path.endsWith('/items')) {
@@ -124,5 +126,77 @@ async (page) => {
   const longTop = await chat.evaluate((el, key) => [...el.querySelectorAll('.history-display-item')].find(node => node.dataset.historyKey === key).getBoundingClientRect().top, longAnchor.key)
   check(Math.abs(longTop - longAnchor.top) < 2, `同Run内部追加阅读位置偏移 ${longTop - longAnchor.top}px`)
   check(await chat.locator('.group-box').count() === 1, '追加拆散了长Run')
-  return { initialItems: 300, appendedItems: 300, anchorShift: restoredTop - movedTop, sameRunAnchorShift: longTop - longAnchor.top, totalItems: 950, requests: completedRequests, loading: true, retry: true, darkMobile: true, unknown: [...unknown] }
+  const inputId = 'accepted-input', turnId = 'accepted-turn', runId = 'accepted-run'
+  const history = item(950)
+  const human = { ...item(951), id: 'accepted-human', role: 'user', turn_id: turnId,
+    content: [{ type: 'input_text', text: '冻结输入内容' }], yuxi: { run_id: runId, input_id: inputId, message_id: 951, output_index: 0, created_at: '2026-10-16T00:10:00Z' } }
+  const answer = { ...item(952), id: 'answer', role: 'assistant', turn_id: turnId, phase: 'final_answer',
+    content: [{ type: 'output_text', text: '唯一流的最终回答' }], yuxi: { run_id: runId, message_id: 952, output_index: 1, created_at: '2026-10-16T00:10:01Z' } }
+  let sends = 0, receipts = 0, streams = 0, frozen, completed = false
+  await page.route('**/api/**', async route => {
+    const request = route.request()
+    const path = request.url().replace(/^https?:\/\/[^/]+/, '').split('?')[0]
+    let json
+    if (path.endsWith('/events') && request.method() === 'POST') {
+      sends++
+      const data = { body: request.postDataJSON(), key: request.headers()['idempotency-key'] }
+      if (sends === 1) {
+        frozen = data
+        return route.fulfill({ status: 503, json: { detail: '接收结果未知' } })
+      }
+      check(JSON.stringify(data) === JSON.stringify(frozen), '重试改变了冻结载荷或请求身份')
+      json = { input_id: inputId }
+    } else if (path.endsWith('/receipt')) {
+      receipts++
+      return route.fulfill({ status: 404, json: { detail: '回执不存在' } })
+    } else if (path.endsWith(`/inputs/${inputId}`)) {
+      json = { input_id: inputId, status: 'consumed', run_id: runId, turn_id: turnId, items: [human] }
+    } else if (path.endsWith('/events')) {
+      streams++
+      const events = [
+        { type: 'agent.session.turn.item.added', item: { ...answer, status: 'in_progress', content: [] } },
+        { type: 'agent.session.turn.output_text.delta', item_id: answer.id, content_index: 0, delta: '唯一流的最终回答' },
+        { type: 'agent.session.turn.item.done', item: answer },
+        { type: 'yuxi.session.turn.state', turn: { status: 'completed' }, yuxi: { run_id: runId, current_run_id: runId } }
+      ].map((event, index) => ({ ...event, event_id: `input-event-${index}`, session_id: threadId, turn_id: turnId, yuxi: { run_id: runId, ...event.yuxi } }))
+      completed = true
+      return route.fulfill({ contentType: 'text/event-stream', body: events.map(event => `data: ${JSON.stringify(event)}\n\n`).join('') })
+    } else if (path.endsWith('/items') && completed) {
+      json = { data: [answer, human, history], has_more: false, last_id: history.id, yuxi: { runs: [] } }
+    } else if (path.endsWith(`/turns/${turnId}`)) {
+      json = { id: turnId, status: 'completed', yuxi: { current_run_id: runId, result_run_id: runId } }
+    } else if (path.endsWith(`/runs/${runId}`)) {
+      json = { id: runId, turn_id: turnId, status: 'completed', output: [answer] }
+    } else if (path.endsWith('/references')) {
+      json = { turn_id: turnId, available: false, sources: [], references: null }
+    } else if (path.endsWith('/feedback')) {
+      json = { items: [] }
+    } else return route.fallback()
+    await route.fulfill({ json })
+  })
+  const editor = page.locator('.agent-view [contenteditable="true"]')
+  await editor.fill('冻结输入内容')
+  for (const inputMethod of [{ isComposing: true }, { keyCode: 229 }]) {
+    await editor.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', ...inputMethod })
+    await page.waitForTimeout(50)
+    check(sends === 0 && await editor.innerText() === '冻结输入内容', '输入法确认候选词误发消息或清掉草稿')
+  }
+  await page.getByRole('button', { name: '发送消息', exact: true }).click()
+  await page.getByText('发送结果待确认，重试会确认同一条消息。').waitFor()
+  await editor.fill('用户继续编辑的新草稿')
+  await page.getByRole('button', { name: '重试发送', exact: true }).click()
+  await page.getByText('唯一流的最终回答', { exact: true }).waitFor()
+  check(sends === 2 && receipts === 1 && streams === 1, `流程重复：${JSON.stringify({ sends, receipts, streams })}`)
+  check(await editor.innerText() === '用户继续编辑的新草稿', '接收旧提交清掉了新草稿')
+  check(await page.getByText('历史消息 0950：', { exact: false }).count() === 1, '发送或终态重读丢失/复制历史')
+  check(await page.getByText('冻结输入内容', { exact: true }).count() === 1, '乐观消息与正式输入重复展示')
+  await page.getByText('唯一流的最终回答', { exact: true }).scrollIntoViewIfNeeded()
+  await page.waitForTimeout(3500)
+  await page.screenshot({ path: '/tmp/yuxi-session-input-lifecycle.png' })
+  await page.evaluate(() => document.documentElement.classList.add('dark'))
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.getByText('唯一流的最终回答', { exact: true }).scrollIntoViewIfNeeded()
+  await page.waitForTimeout(300)
+  await page.screenshot({ path: '/tmp/yuxi-session-input-lifecycle-dark.png' })
+  return { initialItems: 300, appendedItems: 300, anchorShift: restoredTop - movedTop, sameRunAnchorShift: longTop - longAnchor.top, totalItems: 950, requests: completedRequests, loading: true, retry: true, darkMobile: true, input: { sends, receipts, streams, compositionGuard: true, nextDraftRetained: true }, unknown: [...unknown] }
 }

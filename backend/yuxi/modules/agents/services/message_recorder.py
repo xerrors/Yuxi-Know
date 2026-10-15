@@ -171,7 +171,6 @@ class RunMessageRecorder:
                 event=event,
                 tool_call_id=self._tool_call_id(data),
                 output=output,
-                content=result.audit_content,
                 error_message=result.error,
             )
         elif event_name == "tool-error":
@@ -179,7 +178,6 @@ class RunMessageRecorder:
                 event=event,
                 tool_call_id=self._tool_call_id(data),
                 output=None,
-                content="",
                 error_message=str(data.get("message") or TOOL_FAILURE_MESSAGE),
                 wait_for_run_terminal=True,
             )
@@ -220,7 +218,6 @@ class RunMessageRecorder:
         event: dict[str, Any],
         tool_call_id: str,
         output: Any,
-        content: str,
         error_message: str | None,
         wait_for_run_terminal: bool = False,
     ) -> None:
@@ -232,7 +229,6 @@ class RunMessageRecorder:
             "worker_id": self.worker_id,
             "tool_call_id": tool_call_id,
             "output": output,
-            "content": content,
             "finished_at": self._wall_clock(event),
             "duration_ms": duration_ms,
             "finished_sequence": self._sequence(event),

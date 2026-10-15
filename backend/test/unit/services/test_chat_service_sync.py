@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -8,7 +7,6 @@ import pytest
 from langchain.messages import AIMessage, HumanMessage, ToolMessage
 
 from yuxi.modules.agents.runtime import context as agent_context
-from yuxi.modules.workspace import paths as workspace_paths
 from test.unit.support.agent_context_fixtures import prepared_execution
 import yuxi.modules.agents.services.execution as svc
 import yuxi.modules.agents.services.checkpoint_messages as message_svc
@@ -40,33 +38,11 @@ def test_approval_binding_uses_current_model_and_keeps_duplicate_call_order():
         message_svc._bind_approval_calls(waitpoint, None)
 
 
-def _empty_agent_context(_uid: str) -> str:
-    return ""
-
-
 async def _resolve_test_workdir(**_kwargs):
     """返回测试 Session 的 Project Workdir。"""
 
     return "projects/11111111-1111-4111-8111-111111111111"
 
-
-def test_context_update_applies_only_declared_runtime_fields() -> None:
-    context = agent_context.BaseContext()
-    context.update(
-        {
-            "thread_id": "thread-1",
-            "uid": "user-1",
-            "system_prompt": "runtime prompt",
-            "unknown_field": "ignored",
-            "update": "must not shadow the method",
-        },
-    )
-
-    assert context.thread_id == "thread-1"
-    assert context.uid == "user-1"
-    assert context.system_prompt == "runtime prompt"
-    assert not hasattr(context, "unknown_field")
-    assert callable(context.update)
 
 
 class _EmptyModelAuditRepo:
@@ -909,77 +885,6 @@ async def test_interrupt_without_model_does_not_invent_message(
         "token_usage": {"available": False},
         "worker_id": "worker-1",
     }
-
-
-@pytest.mark.asyncio
-async def test_workspace_prompt_excludes_memory_from_shared_context(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-):
-    monkeypatch.setenv("YUXI_USER_DATA_DIR", str(tmp_path / "threads"))
-    workspace_paths.ensure_user_workspace("user-1")
-    agents_dir = tmp_path / "threads" / "shared" / "user-1" / "workspace" / "agents"
-    (agents_dir / "AGENTS.md").write_text("行为约束", encoding="utf-8")
-    (agents_dir / "USER.md").write_text("用户信息", encoding="utf-8")
-    (agents_dir / "MEMORY.md").write_text("长期记忆", encoding="utf-8")
-
-    context = agent_context.BaseContext(thread_id="thread-1", uid="user-1")
-    context.update_config({})
-    await agent_context._append_workspace_agent_prompt(context)
-
-    assert context.system_prompt == (
-        "You are a helpful assistant.\n\n用户工作区 agents/AGENTS.md 内容：\n行为约束\n\n用户工作区 agents/USER.md 内容：\n用户信息"
-    )
-    assert "长期记忆" not in context.system_prompt
-
-
-@pytest.mark.asyncio
-async def test_workspace_prompt_merges_workspace_agent_context(monkeypatch: pytest.MonkeyPatch):
-    def fake_agent_context(_uid: str) -> str:
-        return "用户工作区 agents/AGENTS.md 内容：\n回答前先读取 AGENTS.md\n\n用户工作区 agents/USER.md 内容：\n用户偏好中文"
-
-    monkeypatch.setattr(agent_context, "_load_workspace_agent_context", fake_agent_context)
-
-    context = agent_context.BaseContext(thread_id="thread-1", uid="user-1")
-    context.update_config({"system_prompt": "原始系统提示词", "temperature": 0.1})
-    await agent_context._append_workspace_agent_prompt(context)
-
-    assert context.system_prompt == (
-        "原始系统提示词\n\n用户工作区 agents/AGENTS.md 内容：\n回答前先读取 AGENTS.md\n\n用户工作区 agents/USER.md 内容：\n用户偏好中文"
-    )
-    assert context.thread_id == "thread-1"
-    assert context.uid == "user-1"
-
-
-@pytest.mark.asyncio
-async def test_manifest_snapshot_prompt_keeps_workspace_agent_context(monkeypatch: pytest.MonkeyPatch):
-    async def fake_to_thread(func, *args):
-        del func, args
-        return "用户工作区 agents/AGENTS.md 内容：\nWORKSPACE-MARKER"
-
-    monkeypatch.setattr(agent_context.asyncio, "to_thread", fake_to_thread)
-    config = {"system_prompt": "MANIFEST-CONFIG"}
-
-    context = agent_context.BaseContext(thread_id="thread-1", uid="user-1")
-    context.update_config(config)
-    await agent_context._append_workspace_agent_prompt(context)
-
-    assert context.system_prompt == "MANIFEST-CONFIG\n\n用户工作区 agents/AGENTS.md 内容：\nWORKSPACE-MARKER"
-    assert context.thread_id == "thread-1"
-    assert context.uid == "user-1"
-
-
-@pytest.mark.asyncio
-async def test_workspace_prompt_keeps_prompt_when_workspace_agent_context_empty(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    monkeypatch.setattr(agent_context, "_load_workspace_agent_context", _empty_agent_context)
-
-    context = agent_context.BaseContext(thread_id="thread-1", uid="user-1")
-    context.update_config({"system_prompt": "原始系统提示词"})
-    await agent_context._append_workspace_agent_prompt(context)
-
-    assert context.system_prompt == "原始系统提示词"
 
 
 @pytest.mark.parametrize(

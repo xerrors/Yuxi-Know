@@ -121,7 +121,7 @@ async def save_messages_from_langgraph_state(
                         thread_id=thread_id,
                         worker_id=worker_id,
                         tool_call_id=tool_call_id,
-                        content=tool_result_text(msg_dict.get("content")),
+                        reason=tool_result_text(msg_dict.get("content")),
                     )
                     from yuxi.modules.agents.repositories.public_items import PublicItemRepository
 
@@ -134,8 +134,8 @@ async def save_messages_from_langgraph_state(
                         item={
                             "type": "function_call_output",
                             "call_id": tool_call_id,
-                            "output": audit.content,
-                            "error": audit.content,
+                            "output": audit.extra_metadata["output"],
+                            "error": audit.extra_metadata["error_message"],
                             "status": "failed",
                         },
                     )
@@ -364,7 +364,6 @@ async def _reconcile_tool_error_from_state(
         worker_id=worker_id,
         tool_call_id=tool_call_id,
         output=json.loads(json.dumps(msg_dict, ensure_ascii=False, default=str)),
-        content=content,
         error_message=content or TOOL_FAILURE_MESSAGE,
         finished_at=utc_now(),
         duration_ms=None,

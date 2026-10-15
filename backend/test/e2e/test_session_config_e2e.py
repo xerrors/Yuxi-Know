@@ -1,5 +1,6 @@
 """真实 HTTP、worker 与数据库验证会话配置生效边界。"""
 
+import os
 import asyncio
 import json
 import uuid
@@ -59,7 +60,7 @@ async def test_session_snapshot_and_input_freeze_survive_definition_and_session_
             return response.json()
 
         first = await submit(f"{OUTPUT} DETERMINISTIC_FROZEN_CONFIG DETERMINISTIC_BLOCK_BEFORE_RESPONSE:{gate}")
-        async with httpx.AsyncClient(base_url="http://api:8765", timeout=5) as replay:
+        async with httpx.AsyncClient(base_url=os.environ["OPENAI_REPLAY_URL"].removesuffix("/v1"), timeout=5) as replay:
             async with asyncio.timeout(30):
                 while not (await replay.get("/blocking-started", params={"token": gate})).json()["started"]:
                     await asyncio.sleep(0.1)
@@ -160,7 +161,7 @@ async def test_session_snapshot_and_input_freeze_survive_definition_and_session_
             assert payload["context_snapshot"]["system_prompt"] == initial_config["system_prompt"]
     finally:
         await conn.close()
-        async with httpx.AsyncClient(base_url="http://api:8765", timeout=5) as replay:
+        async with httpx.AsyncClient(base_url=os.environ["OPENAI_REPLAY_URL"].removesuffix("/v1"), timeout=5) as replay:
             await replay.get("/release-blocking", params={"token": gate})
         await delete_agent(e2e_client, e2e_headers, slug)
         for provider_id in ("ci-replay", "ci-config-replay"):

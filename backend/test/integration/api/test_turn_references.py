@@ -283,9 +283,9 @@ async def reference_turn(test_client, admin_headers, reference_replay):
                         message_type="tool_audit",
                         run_id=run_id,
                         turn_id=owning_turn,
-                        content=json.dumps(payload, ensure_ascii=False),
+                        content="",
                         execution_status=status,
-                        extra_metadata={"tool_name": name, "input": {"kb_id": kb_id}},
+                        extra_metadata={"output": json.dumps(payload, ensure_ascii=False), "tool_name": name, "input": {"kb_id": kb_id}},
                     )
                 )
             await db.commit()
@@ -448,10 +448,10 @@ async def test_readonly_connector_evidence_keeps_remote_file_id_without_document
         }
         tools = list(await db.scalars(select(Message).where(Message.turn_id == target.turn_id, Message.role == "tool")))
         knowledge = next(message for message in tools if message.extra_metadata["tool_name"] == "query_kb")
-        knowledge.content = json.dumps(
+        knowledge.extra_metadata = {**knowledge.extra_metadata, "output": json.dumps(
             {"results": [{"content": "知识库证据", "metadata": {"file_id": "remote-document", "source": "外部文档"}}]},
             ensure_ascii=False,
-        )
+        )}
         await db.commit()
     before = await test_client.get(target.references_path, headers=admin_headers)
     assert [source["kind"] for source in before.json()["sources"]] == ["knowledge", "web"]
@@ -570,7 +570,7 @@ async def test_incomplete_turn_and_oversize_sources_do_not_call_model(
         turn.status = "completed"
         tools = list(await db.scalars(select(Message).where(Message.turn_id == target.turn_id, Message.role == "tool")))
         knowledge = next(message for message in tools if message.extra_metadata["tool_name"] == "query_kb")
-        knowledge.content = json.dumps({"results": [{"content": "证据" * 40000}]})
+        knowledge.extra_metadata = {**knowledge.extra_metadata, "output": json.dumps({"results": [{"content": "证据" * 40000}]})}
         await db.commit()
     oversize = await test_client.post(url, headers=admin_headers)
     assert oversize.status_code == 413

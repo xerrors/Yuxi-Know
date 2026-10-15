@@ -74,7 +74,7 @@ async def test_dashboard_http_reads_tool_messages_and_counts_only_started_execut
                         message_type="tool_audit",
                         execution_status=status,
                         started_at=started,
-                        content="persisted tool output",
+                        content="",
                         operation_id=f"{marker}-{source or status}",
                         extra_metadata={
                             "tool_name": source or status,

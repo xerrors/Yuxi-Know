@@ -15,6 +15,7 @@ from pathlib import PurePosixPath
 
 import asyncpg
 import pytest
+from test.support.postgres import postgres_dsn
 from PIL import Image
 
 from test.integration.api.helpers import delete_created_threads
@@ -22,10 +23,6 @@ from test.live_api_cleanup import make_test_session_title
 from yuxi.infrastructure.minio import get_minio_client
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
-
-
-def _postgres_dsn() -> str:
-    return os.getenv("POSTGRES_URL", "postgresql+asyncpg://postgres:postgres@postgres:5432/yuxi").replace("+asyncpg", "")
 
 
 async def _upload_project_file(
@@ -99,7 +96,7 @@ async def test_thread_message_audits_return_persisted_facts_without_leaking_into
     failed_turn_id = f"turn-{uuid.uuid4()}"
     started_at = datetime(2026, 8, 30, 1, 0, 0, tzinfo=UTC)
 
-    conn = await asyncpg.connect(_postgres_dsn())
+    conn = await asyncpg.connect(postgres_dsn())
     try:
         agent_session = await conn.fetchrow(
             "SELECT id, uid, agent_id FROM sessions WHERE thread_id = $1",
@@ -224,29 +221,13 @@ async def test_thread_message_audits_return_persisted_facts_without_leaking_into
                 ),
             ],
         )
-        model_messages = await conn.fetch(
-            "SELECT id, operation_id FROM messages WHERE run_id = $1 AND role = 'assistant'",
-            run_id,
-        )
-        message_ids = {row["operation_id"]: row["id"] for row in model_messages}
-        await conn.executemany(
-            """
-            INSERT INTO tool_calls
-                (message_id, langgraph_tool_call_id, tool_name, tool_input, tool_output, status)
-            VALUES ($1, $2, 'search', '{}'::jsonb, $3, 'success')
-            """,
-            [
-                (message_ids["operation-1"], "compat-call-proven", "safe result"),
-                (message_ids["operation-2"], "compat-call-unproven", "must stay hidden"),
-            ],
-        )
         await conn.execute(
             """
             INSERT INTO messages
                 (session_record_id, role, content, message_type, delivery_status, extra_metadata, run_id,
                  turn_id, operation_id, started_at, finished_at, duration_ms, sequence,
                  execution_status, usage)
-            VALUES ($1, 'tool', '查询结果', 'tool_audit', 'complete', $2::jsonb, $3, $4, 'call-1',
+            VALUES ($1, 'tool', '', 'tool_audit', 'complete', $2::jsonb, $3, $4, 'call-1',
                     $5, $6, 400, 6, 'completed', NULL)
             """,
             agent_session["id"],
@@ -351,14 +332,13 @@ async def test_thread_message_audits_return_persisted_facts_without_leaking_into
     history = await test_client.get(f"/api/v1/agents/sessions/{thread_id}/items?order=asc&limit=100", headers=admin_headers)
     assert history.status_code == 200, history.text
     history_items = history.json()["data"]
-    # 未进入公开输出链路的原始审计不会因 state_reconciled 或 ToolCall 存在而暴露。
+    # 未进入公开输出链路的原始审计不会因 state_reconciled 标记而暴露。
     assert len(history_items) == 1
     failed_input = history_items[0]
     assert failed_input["type"] == "message" and failed_input["role"] == "user"
     assert failed_input["yuxi"]["run_id"] == failed_run_id
     assert failed_input["yuxi"]["delivery_status"] == "failed"
     assert "must-not-leak" not in history.text
-    assert "must stay hidden" not in history.text
 
 
 async def test_image_upload_composites_transparent_png_pixels_on_white(test_client, admin_headers):
@@ -423,7 +403,7 @@ async def test_thread_artifact_uses_image_signature_for_content_type(test_client
 
     assert upload_response.status_code == 201, upload_response.text
     uploaded = upload_response.json()
-    conn = await asyncpg.connect(_postgres_dsn())
+    conn = await asyncpg.connect(postgres_dsn())
     try:
         await conn.execute("UPDATE sessions SET queue_paused=true WHERE thread_id=$1", thread_id)
     finally:
@@ -516,7 +496,7 @@ async def _create_thread_for_user(test_client, headers: dict[str, str]) -> str:
 async def test_turn_pages_include_empty_turns_and_keep_viewed_explicit(test_client, admin_headers, standard_user):
     """分页发现零消息的轮次，读取不标记已读且不跨用户泄露。"""
     thread_id = await _create_thread_for_user(test_client, admin_headers)
-    conn = await asyncpg.connect(_postgres_dsn())
+    conn = await asyncpg.connect(postgres_dsn())
     prefix = uuid.uuid4().hex
     started_at = datetime(2026, 9, 5, 0, 0, 0, tzinfo=UTC)
     try:
@@ -1044,13 +1024,17 @@ async def test_debug_messages_follow_database_sequence_and_include_unassigned_in
                 "delivery_status,extra_metadata) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'complete',$9::json) RETURNING id",
                 session["id"],
                 role,
-                content,
+                "" if role == "tool" else content,
                 run_id,
                 turn_id,
                 sequence,
                 operation,
                 start + timedelta(seconds=20 - (sequence or 0)),
-                json.dumps({"input_id": "input-test"} if role == "user" else {"tool_name": "search"}),
+                json.dumps(
+                    {"input_id": "input-test"}
+                    if role == "user"
+                    else {"tool_name": "search", **({"output": content} if role == "tool" else {})}
+                ),
             )
             if role == "user":
                 await conn.execute(
@@ -1100,7 +1084,11 @@ async def test_debug_messages_follow_database_sequence_and_include_unassigned_in
         rows = await conn.fetch("SELECT id,content,sequence FROM messages WHERE session_record_id=$1", session["id"])
         persisted = {row["id"]: row for row in rows}
         for projected in payload["audits"]:
-            assert projected["content"] == persisted[projected["id"]]["content"]
+            if projected["type"] == "tool":
+                assert projected["content"] == "工具结果"
+                assert persisted[projected["id"]]["content"] == ""
+            else:
+                assert projected["content"] == persisted[projected["id"]]["content"]
             assert projected["sequence"] == persisted[projected["id"]]["sequence"]
     finally:
         await conn.close()

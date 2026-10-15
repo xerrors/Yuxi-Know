@@ -104,5 +104,5 @@ async def test_rejection_requires_accepted_approval_bound_to_same_turn(monkeypat
     monkeypatch.setattr(repository, "_lock_run", lock)
     with pytest.raises(ValueError, match="已接受审批"):
         await repository.record_approval_rejection(
-            run_id="resume", thread_id="thread", worker_id="owner", tool_call_id="call", content="rejected"
+            run_id="resume", thread_id="thread", worker_id="owner", tool_call_id="call", reason="rejected"
         )

@@ -52,6 +52,20 @@ Owner 与 gate 必须在同一变更中保持一致。
 运行 verifier 及其负向测试。
 """,
         )
+        self._write("backend/test/run_tests.sh", """LIFECYCLE_E2E_TESTS=(
+    test/e2e/test_agent_lifecycle_e2e.py
+    test/e2e/test_agent_lifecycle_extended_e2e.py
+    test/e2e/test_input_projection_recovery_e2e.py
+    test/e2e/test_draft_attachments_e2e.py
+    test/e2e/test_session_cooperation_e2e.py
+    test/e2e/test_agent_lifecycle_key_scope_e2e.py
+    test/e2e/test_openai_events_e2e.py
+    test/e2e/test_agent_feedback_e2e.py
+)
+run_e2e_tests() {
+    "${PYTEST_CMD[@]}" "${LIFECYCLE_E2E_TESTS[@]}" -m e2e
+}
+""")
         self._write_valid_workflows()
         self._write_valid_agents_files()
         self._write_valid_postmortem_files()
@@ -119,6 +133,7 @@ jobs:
       - 'backend/test/integration/**'
       - 'backend/test/e2e/**'
       - 'backend/test/support/**'
+      - 'backend/test/run_tests.sh'
       - 'docker/**'
       - 'scripts/ci_prepare_system_tests_env.sh'
       - 'scripts/ci_build_topology_images.sh'
@@ -136,10 +151,7 @@ jobs:
       - run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_public_knowledge_tools.py::test_knowledge_key_tool_route_boundary_without_kb test/integration/api/test_public_knowledge_tools.py::test_agents_key_cannot_access_public_knowledge_api test/integration/api/test_removed_api_endpoints.py::test_public_knowledge_does_not_expose_management_routes -q
       - run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_chat_router.py::test_thread_message_audits_return_persisted_facts_without_leaking_into_history test/integration/api/test_chat_router.py::test_debug_messages_follow_database_sequence_and_include_unassigned_inputs -q --setup-show -o faulthandler_timeout=60
       - run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_chat_router.py::test_thread_artifact_uses_image_signature_for_content_type test/integration/api/test_public_agent_files.py -q
-      - run: docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_agent_lifecycle_e2e.py test/e2e/test_input_projection_recovery_e2e.py test/e2e/test_draft_attachments_e2e.py -q --durations=10
-      - run: docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_agent_lifecycle_extended_e2e.py -q --durations=10
-      - run: docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_session_cooperation_e2e.py -q --durations=10
-      - run: docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_agent_lifecycle_key_scope_e2e.py -q --durations=10
+      - run: TEST_USERNAME="$E2E_USERNAME" TEST_PASSWORD="$E2E_PASSWORD" bash backend/test/run_tests.sh e2e
       - run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/services/test_identity_admin_service.py test/integration/services/test_api_key_user_lifecycle.py test/integration/api/test_apikey_router.py -q
       - run: |
           docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest \\
@@ -162,7 +174,7 @@ jobs:
             echo "SILICONFLOW_API_KEY repository secret is required for this manual probe." >&2
             exit 1
           fi
-      - run: docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_agent_async_e2e.py -q
+      - run: docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_real_provider_e2e.py -q
 """,
         )
 
@@ -458,10 +470,7 @@ jobs:
         for test_path in (
             "test/integration/sandbox",
             "test/integration/services/test_agent_input_concurrency.py",
-            "test/e2e/test_agent_lifecycle_e2e.py",
-            "test/e2e/test_agent_lifecycle_extended_e2e.py",
-            "test/e2e/test_session_cooperation_e2e.py",
-            "test/e2e/test_agent_lifecycle_key_scope_e2e.py",
+            'TEST_USERNAME="$E2E_USERNAME" TEST_PASSWORD="$E2E_PASSWORD" bash backend/test/run_tests.sh e2e',
             'docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_chat_router.py::test_thread_message_audits_return_persisted_facts_without_leaking_into_history test/integration/api/test_chat_router.py::test_debug_messages_follow_database_sequence_and_include_unassigned_inputs -q --setup-show -o faulthandler_timeout=60',
             'docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_chat_router.py::test_thread_artifact_uses_image_signature_for_content_type test/integration/api/test_public_agent_files.py -q',
         ):
@@ -476,6 +485,16 @@ jobs:
                 self.assertTrue(
                     any("缺少实际 run step" in error for error in self._errors())
                 )
+
+    def test_e2e_runner_cannot_drop_prior_ci_coverage(self) -> None:
+        """统一入口删掉原 CI 用例或断开 selector 时拒绝。"""
+        path = self.root / "backend/test/run_tests.sh"
+        original = path.read_text()
+        for name in ("test_input_projection_recovery_e2e.py", "test_draft_attachments_e2e.py"):
+            path.write_text(original.replace(name, "removed.py"))
+            self.assertTrue(any("E2E runner" in error for error in self._errors()))
+        path.write_text(original.replace('"${LIFECYCLE_E2E_TESTS[@]}" -m e2e', 'test/other.py'))
+        self.assertTrue(any("E2E runner" in error for error in self._errors()))
 
     def test_sandbox_gate_cannot_exclude_shared_mount_fuzz(self) -> None:
         """恢复旧单文件命令时拒绝漏跑共享挂载 fuzz。"""
@@ -558,7 +577,7 @@ jobs:
         path = self.root / ".github/workflows/real-provider-probe.yml"
         path.write_text(
             path.read_text(encoding="utf-8").replace(
-                "test/e2e/test_agent_async_e2e.py",
+                "test/e2e/test_real_provider_e2e.py",
                 "test/e2e/test_other_real_provider.py",
             ),
             encoding="utf-8",

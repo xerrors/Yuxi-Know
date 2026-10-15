@@ -200,10 +200,10 @@ async def test_history_exposes_tool_result_without_internal_model_metadata(sessi
             role="tool",
             message_type="tool_audit",
             operation_id="call-a",
-            content="safe result",
+            content="",
             execution_status="completed",
             started_at=answer.created_at,
-            extra_metadata={"source_model_message_id": answer.id, "tool_name": "search", "input": {"q": "Yuxi"}},
+            extra_metadata={"output": "safe result", "source_model_message_id": answer.id, "tool_name": "search", "input": {"q": "Yuxi"}},
         )
     )
     await _register_visible(session)

@@ -380,6 +380,8 @@ async def test_steer_before_first_model_is_saved_as_yielded_not_failed(sessions,
     from langchain.messages import AIMessage
 
     from yuxi.modules.agents.runtime.middlewares.steer import SteerMiddleware
+    from yuxi.modules.agents.repositories.model_audit import ModelMessageAuditRepository
+    from yuxi.shared.datetime import utc_now
 
     current = await _start(sessions)
     steer = await _send(sessions, "S3")
@@ -447,6 +449,15 @@ async def test_steer_before_first_model_is_saved_as_yielded_not_failed(sessions,
             assert turn.current_run_id == old.id and old.worker_id == "owner"
             assert batch.status == "cancelled" and batch.consumed_run_id is None
             assert await db.scalar(select(func.count()).select_from(AgentRun)) == 1
+            model = ModelMessageAuditRepository(db)
+            await model.start(
+                run_id=current.id, thread_id="input-thread", worker_id="owner",
+                operation_id="after-cancel", sequence=0, started_at=utc_now(),
+            )
+            await model.finish(
+                run_id=current.id, thread_id="input-thread", worker_id="owner",
+                operation_id="after-cancel", content="original task done", finished_at=utc_now(), duration_ms=0, usage=None,
+            )
             status = await messages.save_messages_from_langgraph_state(
                 state=SimpleNamespace(values={"messages": [AIMessage(content="original task done", id="after-cancel")]}),
                 thread_id="input-thread",

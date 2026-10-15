@@ -194,7 +194,7 @@
               <div class="message-input-wrapper">
                 <div v-if="pendingSends[currentChatId]" class="queued-request-notice">
                   <span>发送结果待确认，重试会确认同一条消息。</span>
-                  <button class="queued-request-continue" :disabled="sendCooldownActive" @click="handleSendMessage({ retry: true })">重试发送</button>
+                  <button class="queued-request-continue" :disabled="sendCooldownActive || pendingSends[currentChatId]?.submitting" @click="handleSendMessage({ retry: true })">重试发送</button>
                 </div>
                 <!-- 加载状态：加载消息 -->
                 <div v-if="isLoadingMessages" class="chat-loading" role="status">
@@ -303,7 +303,7 @@
                       ref="agentInputAreaRef"
                       v-model="userInput"
                       :is-loading="shouldShowStopButton"
-                      :disabled="!currentAgent || currentToolApprovalVisible || !!pendingSends[currentChatId]"
+                      :disabled="!currentAgent || currentToolApprovalVisible"
                       :send-button-disabled="isSendButtonDisabled"
                       :mention="mentionConfig"
                       :thread-id="currentChatId"
@@ -770,18 +770,18 @@ import { useInfoStore } from '@/modules/settings/model/info'
 import { useUserStore } from '@/modules/identity/model/user'
 import { storeToRefs } from 'pinia'
 import {
-  getMessageInputId,
   getMessageRunId
 } from '@/modules/session/model/messageDebug'
 import { MessageProcessor } from '@/modules/session/model/messageProcessor'
-import { itemsToMessages, mergeItemSnapshot } from '@/modules/session/model/agentItems'
+import { itemsToMessages } from '@/modules/session/model/agentItems'
 import dayjs, { parseToShanghai } from '@/shared/lib/time'
 import { agentApi, threadApi } from '@/apis'
 import HumanApprovalModal from '@/modules/session/ui/HumanApprovalModal.vue'
 import { useApproval } from '@/modules/session/model/useApproval'
 import { IDLE_QUEUE_SNAPSHOT } from '@/modules/session/model/useAgentThreadState'
+import { createSessionInput, createInputRequestId } from '@/modules/session/model/sessionInput'
 import { useSessionRuntimeStore } from '@/modules/session/model/sessionRuntime'
-import { submitSessionInput, resumeSessionWaitpoint } from '@/modules/session/model/sessionCommands'
+import { resumeSessionWaitpoint } from '@/modules/session/model/sessionCommands'
 import { useSessionCooperation } from '@/modules/session/model/useSessionCooperation'
 import CooperationTree from '@/modules/session/ui/CooperationTree.vue'
 import { useAgentMentionConfig } from '@/modules/session/model/useAgentMentionConfig'
@@ -888,7 +888,7 @@ const randomGreeting = greetingMessages[Math.floor(Math.random() * greetingMessa
 const sessionRuntime = useSessionRuntimeStore()
 const {
   getThreadState,
-  resetOngoingRunGroup,
+  resetThreadExecution,
   fetchThreadMessages,
   fetchAgentState,
   startRunStream,
@@ -897,7 +897,6 @@ const {
   cancelInput,
   promoteInput,
   continueQueue,
-  startInputMonitor
 } = sessionRuntime
 const { threadMessages, threadRuns, historyPages, pendingSends } = storeToRefs(sessionRuntime)
 const setCurrentThreadId = (threadId, options) => {
@@ -1652,9 +1651,9 @@ const currentThreadState = computed(() => {
 
 const getThreadOngoingMessages = (threadId) => {
   const threadState = getThreadState(threadId)
-  if (!threadState || !threadState.ongoingRunGroup) return []
+  if (!threadState || !threadState.itemState) return []
 
-  const items = Object.values(threadState.ongoingRunGroup.items).filter(
+  const items = Object.values(threadState.itemState.items).filter(
     (item) => item.yuxi?.run_id === threadState.activeRunId
   )
   const visible = itemsToMessages(items).map((item) => ({
@@ -1664,163 +1663,38 @@ const getThreadOngoingMessages = (threadId) => {
   const inputIds = new Set(
     visible.filter((item) => item.type === 'human').map((item) => item.input_id)
   )
-  const optimistic = Object.values(threadState.ongoingRunGroup.optimisticMessages)
+  const optimistic = Object.values(threadState.optimisticInputs)
     .flat()
     .filter((item) => !inputIds.has(item.extra_metadata?.input_id))
   return [...optimistic, ...visible]
 }
 
 const ongoingRunMessages = computed(() => getThreadOngoingMessages(currentChatId.value))
-provide('getThreadOngoingMessages', getThreadOngoingMessages)
-
-const historyRunGroups = computed(() => {
-  return MessageProcessor.convertServerHistoryToMessages(
-    currentThreadMessages.value,
-    currentThreadRuns.value
-  )
-})
-
-function mergeLocalImageFields(message, localMessage) {
-  const localImages = localMessage?.image_urls || []
-  if (!localImages.length || message?.image_urls?.length) return message
-  return {
-    ...message,
-    message_type: localMessage.message_type || message.message_type,
-    image_urls: localImages,
-    extra_metadata: message.extra_metadata || {}
-  }
-}
-
-function mergeOngoingUserMessageIntoHistory(historyRunGroups, ongoingMessages) {
-  if (
-    !Array.isArray(historyRunGroups) ||
-    !historyRunGroups.length ||
-    !Array.isArray(ongoingMessages)
-  ) {
-    return { historyRunGroups, ongoingMessages }
-  }
-
-  const firstOngoingMessage = ongoingMessages[0]
-  if (!firstOngoingMessage || firstOngoingMessage.type !== 'human') {
-    return { historyRunGroups, ongoingMessages }
-  }
-
-  const lastHistoryRunGroup = historyRunGroups[historyRunGroups.length - 1]
-  const historyMessages = Array.isArray(lastHistoryRunGroup?.messages)
-    ? lastHistoryRunGroup.messages
-    : []
-  const historyHumanIndex = historyMessages.findIndex((message) => message?.type === 'human')
-  if (historyHumanIndex === -1) return { historyRunGroups, ongoingMessages }
-
-  const historyHuman = historyMessages[historyHumanIndex]
-  const historyInputId = getMessageInputId(historyHuman, { allowMessageIdFallback: true })
-  const ongoingInputId = getMessageInputId(firstOngoingMessage, {
-    allowMessageIdFallback: true
-  })
-  if (!historyInputId || !ongoingInputId || historyInputId !== ongoingInputId) {
-    return { historyRunGroups, ongoingMessages }
-  }
-
-  const patchedHistoryHuman = mergeLocalImageFields(historyHuman, firstOngoingMessage)
-  if (patchedHistoryHuman === historyHuman) {
-    return { historyRunGroups, ongoingMessages: ongoingMessages.slice(1) }
-  }
-
-  const patchedHistoryMessages = [...historyMessages]
-  patchedHistoryMessages[historyHumanIndex] = patchedHistoryHuman
-  const patchedHistoryRunGroups = [...historyRunGroups]
-  patchedHistoryRunGroups[historyRunGroups.length - 1] = {
-    ...lastHistoryRunGroup,
-    messages: patchedHistoryMessages
-  }
-  return { historyRunGroups: patchedHistoryRunGroups, ongoingMessages: ongoingMessages.slice(1) }
-}
-
-function mergeActiveRunOngoingIntoHistory(historyRunGroups, ongoingMessages, activeRunId) {
-  if (!activeRunId || !Array.isArray(historyRunGroups) || !Array.isArray(ongoingMessages)) {
-    return { historyRunGroups, ongoingMessages }
-  }
-  if (!ongoingMessages.length) return { historyRunGroups, ongoingMessages }
-
-  const filteredHistoryRunGroups = historyRunGroups
-    .map((group) => ({
-      ...group,
-      messages: (group.messages || []).filter(
-        (message) => !(message?.type === 'ai' && getMessageRunId(message) === activeRunId)
-      )
-    }))
-    .filter((group) => group.messages.length > 0 || group.run)
-
-  const activeGroupIndex = filteredHistoryRunGroups.findIndex(
-    (group) => group.run?.id === activeRunId
-  )
-  if (activeGroupIndex !== -1) {
-    const group = filteredHistoryRunGroups[activeGroupIndex]
-    filteredHistoryRunGroups[activeGroupIndex] = {
-      ...group,
-      messages: [...group.messages, ...ongoingMessages],
-      status: 'streaming'
-    }
-    return { historyRunGroups: filteredHistoryRunGroups, ongoingMessages: [] }
-  }
-
-  const firstOngoingMessage = ongoingMessages[0]
-  if (firstOngoingMessage?.type === 'human' || filteredHistoryRunGroups.length === 0) {
-    return { historyRunGroups: filteredHistoryRunGroups, ongoingMessages }
-  }
-
-  const lastHistoryRunGroup = filteredHistoryRunGroups[filteredHistoryRunGroups.length - 1]
-  const lastMessages = Array.isArray(lastHistoryRunGroup.messages)
-    ? lastHistoryRunGroup.messages
-    : []
-  const lastHuman = lastMessages.find((message) => message?.type === 'human')
-  if (!lastHuman) return { historyRunGroups: filteredHistoryRunGroups, ongoingMessages }
-
-  const historyInputId = getMessageInputId(lastHuman, { allowMessageIdFallback: true })
-  const ongoingInputId = getMessageInputId(firstOngoingMessage, {
-    allowMessageIdFallback: true
-  })
-  const sameActiveRun =
-    getMessageRunId(lastHuman) === activeRunId ||
-    (Boolean(historyInputId) && Boolean(ongoingInputId) && ongoingInputId === historyInputId)
-  if (!sameActiveRun) return { historyRunGroups: filteredHistoryRunGroups, ongoingMessages }
-
-  const patchedHistoryRunGroups = [...filteredHistoryRunGroups]
-  patchedHistoryRunGroups[patchedHistoryRunGroups.length - 1] = {
-    ...lastHistoryRunGroup,
-    messages: [...lastMessages, ...ongoingMessages],
-    status: 'streaming'
-  }
-  return { historyRunGroups: patchedHistoryRunGroups, ongoingMessages: [] }
-}
 
 const cooperationToolView = computed(() => ({
   sessions: cooperationSessions.value,
-  tasks: collectCooperationTasks([...currentThreadMessages.value, ...ongoingRunMessages.value]),
+  tasks: collectCooperationTasks(currentThreadMessages.value),
   openSession: openCooperationSession,
   openTree: openCooperationTree
 }))
 
 const runGroups = computed(() => {
-  const historyGroups = historyRunGroups.value
-  const { historyRunGroups: mergedHistoryRunGroups, ongoingMessages: mergedOngoingMessages } =
-    mergeOngoingUserMessageIntoHistory(historyGroups, ongoingRunMessages.value)
-  const { historyRunGroups: activeRunHistoryGroups, ongoingMessages: activeRunOngoingMessages } =
-    mergeActiveRunOngoingIntoHistory(
-      mergedHistoryRunGroups,
-      mergedOngoingMessages,
-      currentThreadState.value?.activeRunId || null
-    )
-
-  // 如果有进行中的消息且线程状态显示正在流式处理，添加进行中的对话
-  if (activeRunOngoingMessages.length > 0) {
-    const ongoingRunGroup = {
-      messages: activeRunOngoingMessages,
-      status: 'streaming'
+  const state = currentThreadState.value
+  const messages = currentThreadMessages.value.map((item) => ({
+    ...item,
+    content: state?.displayText[item.id] ?? item.content
+  }))
+  const inputIds = new Set(messages.filter((item) => item.type === 'human').map((item) => item.input_id))
+  const optimistic = Object.values(state?.optimisticInputs || {}).flat()
+    .filter((item) => !inputIds.has(item.extra_metadata?.input_id))
+  const groups = MessageProcessor.convertServerHistoryToMessages([...messages, ...optimistic], currentThreadRuns.value)
+  for (const group of groups) {
+    if (state?.isStreaming && (group.run?.id === state.activeRunId ||
+      group.messages.some((item) => getMessageRunId(item) === state.activeRunId || item.id === state.pendingInputId))) {
+      group.status = 'streaming'
     }
-    return groupRunContinuations([...activeRunHistoryGroups, ongoingRunGroup])
   }
-  return groupRunContinuations(activeRunHistoryGroups)
+  return groupRunContinuations(groups)
 })
 
 /** 间隔超过一小时时，在新用户消息上方显示发送时间。 */
@@ -2019,6 +1893,7 @@ const isSendButtonDisabled = computed(() => {
     props.sendDisabled ||
     isLoadingMessages.value ||
     isWaitingForUserAction.value ||
+    !!pendingSends.value[currentChatId.value] ||
     (!userInput.value && !isProcessing.value) ||
     !currentAgent.value
   )
@@ -2033,35 +1908,6 @@ const startSendCooldown = () => {
     sendCooldownActive.value = false
     sendCooldownTimer = null
   }, 2000)
-}
-
-const createClientRequestId = () => {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID()
-  }
-  return `req-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
-}
-
-const buildOptimisticHumanMessage = ({ inputId, text, imageContents = [], attachments = [] }) => {
-  const message = {
-    id: inputId,
-    role: 'user',
-    type: 'human',
-    created_at: new Date().toISOString(),
-    delivery_status: 'sending',
-    content: text,
-    message_type: imageContents.length ? 'multimodal_image' : 'text',
-    extra_metadata: {
-      input_id: inputId,
-      attachments
-    }
-  }
-
-  if (imageContents.length) {
-    message.image_urls = imageContents
-  }
-
-  return message
 }
 
 const CONFIG_CHANGE_NOTICE_MESSAGE =
@@ -2460,7 +2306,7 @@ const createActiveThread = async () => {
   let request = threadCreationRequest.value
   if (!request || request.agentId !== selectedAgent || request.projectId !== selectedProject) {
     request = {
-      ...creationContext, id: createClientRequestId(),
+      ...creationContext, id: createInputRequestId(),
       metadata: { tool_approval_mode: currentToolApprovalMode.value }
     }
     threadCreationRequest.value = request
@@ -2484,7 +2330,7 @@ const createActiveThread = async () => {
     if (!thread) throw new Error('创建对话失败')
     if (!accepted) throw new Error('新对话上下文已变化，请重新发送或添加附件')
 
-    threadMessages.value[thread.id] = []
+    getThreadState(thread.id).historyLoaded = true
     threadAttachmentsMap.value[thread.id] = []
     threadCreationRequest.value = null
     promoteDraftSelection(draftFilesByThread.value, thread.id)
@@ -2731,7 +2577,7 @@ const selectThreadFromRoute = async (threadId) => {
     return false
   }
 
-  if (currentThreadId.value === threadId && Object.hasOwn(threadMessages.value, threadId)) {
+  if (currentThreadId.value === threadId && getThreadState(threadId).historyLoaded) {
     if (!props.embedded && workspaceActive.value) chatThreadsStore.setCurrentThreadId(threadId)
     await resumeCurrentRunForVisiblePage()
     return true
@@ -2741,217 +2587,62 @@ const selectThreadFromRoute = async (threadId) => {
   return true
 }
 
-const handleSendMessage = async ({ images = [], mode = 'follow_up', retry = false } = {}) => {
-  const original = pendingSends.value[currentChatId.value]
-  if (original && !retry) return
-  if (retry && !original) return
-  const text = original?.text ?? userInput.value.trim()
-  images = original?.images || images
-  mode = original?.data.mode || mode
-  const pendingAttachments = original?.attachments || [...currentPendingThreadAttachments.value]
-  const imageContents = images.map((item) => item.imageUrl).filter(Boolean)
-  if (
-    (!text && !imageContents.length) ||
-    !currentAgent.value ||
-    sendCooldownActive.value ||
-    props.sendDisabled ||
-    isLoadingMessages.value ||
-    isWaitingForUserAction.value
-  )
-    return
-
-  // 发送后进入短暂冷却，防止连续触发停止
-  startSendCooldown()
-
-  let threadId = currentChatId.value
-  if (!threadId) {
-    try {
-      threadId = await ensureActiveThread()
-    } catch {
-      message.error('创建对话失败，请重试')
-      return
+const sessionInput = createSessionInput({
+  runtime: sessionRuntime,
+  onPrepared: (_threadId, draft) => {
+    if (userInput.value.trim() === draft.text) userInput.value = ''
+    if (approvalState.threadId === _threadId) hideApprovalState()
+    void nextTick(() => scrollController.scrollToBottom(true))
+  },
+  onAccepted: async (threadId, draft) => {
+    draftFilesByThread.value[threadId] = (draftFilesByThread.value[threadId] || [])
+      .filter((item) => !draft.data.attachment_file_ids.includes(item.id))
+    const model = draft.data.model_spec
+    const thread = threads.value.find((item) => item.id === threadId)
+    if (model && thread) {
+      thread.agent.model = model
+      delete selectedModelByThread[threadId]
+      void chatThreadsStore.updateThread(threadId, null, undefined, undefined, model).catch(() => {})
     }
-    // 新建线程：把草稿态的模型选择迁移到真实线程，避免选择丢失
-    promoteDraftSelection(selectedModelByThread, threadId)
-    // 该线程由草稿发送创建，清理新建对话草稿，避免已发送文本再次还原
-    threadDraftSession.clearDraftThread()
-  }
-  // 接收时冻结输入框展示的执行配置。
-  const modelSpec = original ? original.data.model_spec : currentModelSpec.value || null
-  const toolApprovalMode = original ? original.data.tool_approval_mode : currentToolApprovalMode.value
-
-  userInput.value = ''
-
-  await nextTick()
-  scrollController.scrollToBottom(true)
-
-  const threadState = getThreadState(threadId)
-  if (!threadState) return
-  const hadActiveRun = Boolean(
-    threadState.activeRunId && (threadState.isStreaming || threadState.cooperationWaiting)
-  )
-  threadState.pendingInterrupt = null
-  if (approvalState.threadId === threadId) {
-    hideApprovalState()
-  }
-
-  const pendingAttachmentFileIds = pendingAttachments
-    .map((attachment) => attachment.id)
-    .filter(Boolean)
-
-  const clientKey = original?.data.idempotency_key || createClientRequestId()
-  const inputMessage = buildOptimisticHumanMessage({
-    inputId: clientKey,
-    text,
-    imageContents,
-    attachments: pendingAttachments.map((attachment) => ({ ...attachment, input_id: clientKey }))
-  })
-  if (!hadActiveRun) {
-    resetOngoingRunGroup(threadId)
-    threadState.pendingInputId = clientKey
-    threadState.ongoingRunGroup.optimisticMessages[clientKey] = [inputMessage]
-    threadState.isStreaming = true
-  } else {
-    threadState.queuedInputs.push({
-      input_id: clientKey,
-      status: 'sending',
-      content: text,
-      created_at: inputMessage.created_at,
-      message: inputMessage
-    })
-  }
-
-  let acceptedInputId = clientKey
-  let messageAccepted = false
-  const data = original?.data || {
-    query: text,
-    idempotency_key: clientKey,
-    attachment_file_ids: pendingAttachmentFileIds,
-    image_content: imageContents.length ? imageContents : null,
-    model_spec: modelSpec,
-    tool_approval_mode: toolApprovalMode,
-    mode
-  }
-  pendingSends.value[threadId] = { text, images, attachments: pendingAttachments, data }
-  try {
-    const accepted = await submitSessionInput(threadId, data, { retry })
-    acceptedInputId = accepted.input_id
-    messageAccepted = true
-    delete pendingSends.value[threadId]
-    if (acceptedInputId !== clientKey) {
-      const optimistic = threadState.ongoingRunGroup.optimisticMessages[clientKey]
-      if (optimistic) {
-        threadState.ongoingRunGroup.optimisticMessages[acceptedInputId] = optimistic.map(
-          (item) => ({
-            ...item,
-            id: item.id === clientKey ? acceptedInputId : item.id,
-            extra_metadata: {
-              ...item.extra_metadata,
-              input_id: acceptedInputId,
-              attachments: (item.extra_metadata?.attachments || []).map((attachment) => ({
-                ...attachment,
-                input_id: acceptedInputId
-              }))
-            }
-          })
-        )
-        delete threadState.ongoingRunGroup.optimisticMessages[clientKey]
-      }
-    }
-    const acceptedMessage =
-      acceptedInputId === clientKey
-        ? inputMessage
-        : {
-            ...inputMessage,
-            id: acceptedInputId,
-            extra_metadata: {
-              ...inputMessage.extra_metadata,
-              input_id: acceptedInputId,
-              attachments: (inputMessage.extra_metadata?.attachments || []).map((attachment) => ({
-                ...attachment,
-                input_id: acceptedInputId
-              }))
-            }
-          }
-    draftFilesByThread.value[threadId] = (draftFilesByThread.value[threadId] || []).filter((item) => !pendingAttachmentFileIds.includes(item.id))
+    if (draft.createdFromDraft && currentChatId.value === threadId) threadDraftSession.clearDraftThread()
+    if (props.isNewSession && currentChatId.value === threadId) emit('thread-change', threadId)
     await fetchThreadAttachments(threadId)
-    const inputSnapshot = await agentApi.getThreadInput(threadId, acceptedInputId)
-    mergeItemSnapshot(threadState.ongoingRunGroup, inputSnapshot.items || [])
-    delete threadState.ongoingRunGroup.optimisticMessages[clientKey]
-    delete threadState.ongoingRunGroup.optimisticMessages[acceptedInputId]
-    const runId = inputSnapshot.run_id
-    threadState.queuedInputs = threadState.queuedInputs.filter(
-      (input) => input.input_id !== clientKey
-    )
-    if (modelSpec) {
-      const thread = threads.value.find((item) => item.id === threadId)
-      if (thread) {
-        thread.agent.model = modelSpec
-        delete selectedModelByThread[threadId]
-      }
-      void chatThreadsStore
-        .updateThread(threadId, null, undefined, undefined, modelSpec)
-        .catch(() => {})
-    }
-    // 首个 Input 持久化后再进入新路由，新实例才能恢复已接收的工作。
-    if (props.isNewSession) emit('thread-change', threadId)
-    if (!runId) {
-      for (const msg of threadState.ongoingRunGroup.optimisticMessages[acceptedInputId] || []) {
-        if (msg.type === 'human') msg.delivery_status = 'queued'
-      }
-      acceptedMessage.delivery_status = 'queued'
-      threadState.queuedInputs = threadState.queuedInputs || []
-      threadState.queuedInputs.push({
-        input_id: acceptedInputId,
-        status: 'pending',
-        kind: mode,
-        content: text,
-        created_at: inputMessage.created_at,
-        message: acceptedMessage
-      })
-      if (!hadActiveRun) {
-        threadState.isStreaming = false
-        threadState.replyLoadingVisible = false
-      }
-      startInputMonitor(threadId, acceptedInputId)
-      await resumeQueuedInputs(threadId)
-    } else {
-      threadState.pendingInputId = acceptedInputId
-      await startRunStream(threadId, runId, null, {
-        inputId: acceptedInputId,
-        turnId: inputSnapshot.turn_id
-      })
-    }
-  } catch (error) {
-    if (error.status >= 400 && error.status < 500 && error.status !== 429) delete pendingSends.value[threadId]
-    if (messageAccepted && props.isNewSession) emit('thread-change', threadId)
-    if (!messageAccepted && !pendingSends.value[threadId] && currentChatId.value === threadId) {
-      userInput.value = [text, userInput.value].filter(Boolean).join('\n')
-      agentInputAreaRef.value?.restoreImages?.(images)
-    }
-    threadState.queuedInputs = threadState.queuedInputs.filter(
-      (input) => ![clientKey, acceptedInputId].includes(input.input_id)
-    )
-    if (!hadActiveRun) {
-      threadState.isStreaming = false
-      threadState.replyLoadingVisible = false
-      threadState.pendingInputId = null
-      resetOngoingRunGroup(threadId)
+  },
+  onRejected: async (threadId, draft, error, { accepted, restore }) => {
+    if (restore && currentChatId.value === threadId) {
+      userInput.value = [draft.text, userInput.value].filter(Boolean).join('\n')
+      agentInputAreaRef.value?.restoreImages?.(draft.images)
     }
     if (isRunInterruptedConflict(error)) {
-      threadState.isStreaming = false
-      threadState.activeRunSteerable = false
-      try {
-        await fetchAgentState(threadId, { required: true })
-      } catch {
-        message.error('审批状态恢复失败，请刷新页面后重试')
-      }
+      try { await fetchAgentState(threadId, { required: true }) }
+      catch { message.error('审批状态恢复失败，请刷新页面后重试') }
     }
-    if (mode === 'steer' && currentChatId.value === threadId && !userInput.value) {
-      userInput.value = text
-    }
+    if (accepted && props.isNewSession) emit('thread-change', threadId)
     handleChatError(error, 'send')
   }
+})
+
+const handleSendMessage = async ({ images = [], mode = 'follow_up', retry = false } = {}) => {
+  const original = pendingSends.value[currentChatId.value]
+  if (original && !retry || retry && !original) return
+  const text = original?.text ?? userInput.value.trim()
+  if ((!text && !images.length && !original?.images.length) || !currentAgent.value ||
+    sendCooldownActive.value || props.sendDisabled || isLoadingMessages.value || isWaitingForUserAction.value) return
+  startSendCooldown()
+  let threadId = currentChatId.value
+  const createdFromDraft = !threadId
+  const draft = {
+    text, images: images.map((image) => ({ ...image })), createdFromDraft,
+    attachments: currentPendingThreadAttachments.value.map((file) => ({ ...file })),
+    modelSpec: currentModelSpec.value || null, toolApprovalMode: currentToolApprovalMode.value, mode
+  }
+  if (!threadId) {
+    try { threadId = await ensureActiveThread() }
+    catch { message.error('创建对话失败，请重试'); return }
+    if (!threadId) return
+    promoteDraftSelection(selectedModelByThread, threadId)
+  }
+  await sessionInput.send(threadId, draft, { retry })
 }
 
 const handleDirectSteer = async () => {
@@ -3057,7 +2748,7 @@ const handleApprovalWithStream = async (answer) => {
     hideApprovalState()
     threadState.pendingInterrupt = null
     threadState.isStreaming = true
-    resetOngoingRunGroup(threadId, { preserveInputMonitors: true })
+    resetThreadExecution(threadId, { preserveInputMonitors: true })
     // 首个流事件前读取已持久化的续跑关系；读取失败不能把已创建的 Run 当成创建失败。
     try {
       await fetchThreadMessages({ threadId })

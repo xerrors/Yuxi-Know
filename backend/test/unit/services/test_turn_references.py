@@ -13,8 +13,8 @@ def tool(name, payload, *, kb_id="kb-a", message_id=1):
     return SimpleNamespace(
         id=message_id,
         run_id="run-a",
-        content=json.dumps(payload, ensure_ascii=False),
-        extra_metadata={"tool_name": name, "input": {"kb_id": kb_id}},
+        content="",
+        extra_metadata={"tool_name": name, "output": json.dumps(payload, ensure_ascii=False), "input": {"kb_id": kb_id}},
     )
 
 

@@ -210,7 +210,7 @@ async def test_model_audit_messages_are_hidden_from_history_and_message_count(se
     tool_audit = Message(
         session_record_id=agent_session.id,
         role="tool",
-        content="hidden tool output",
+        content="", extra_metadata={"output": "hidden tool output"},
         message_type="tool_audit",
         operation_id="tool-1",
         started_at=now,
@@ -638,10 +638,10 @@ async def test_memory_read_uses_allowlist_and_only_explicit_toolcall_table(sessi
             role="tool",
             message_type="tool_audit",
             operation_id="call-1",
-            content="TOOLCALL-OUTPUT",
+            content="",
             execution_status="completed",
             started_at=assistant.created_at,
-            extra_metadata={"source_model_message_id": assistant.id, "tool_name": "secret_tool", "input": {"secret": "TOOLCALL-INPUT"}},
+            extra_metadata={"output": "TOOLCALL-OUTPUT", "source_model_message_id": assistant.id, "tool_name": "secret_tool", "input": {"secret": "TOOLCALL-INPUT"}},
         )
     )
     await session.commit()
@@ -779,10 +779,10 @@ async def test_memory_tools_exclude_unproven_or_active_model_audits(session):
                 role="tool",
                 message_type="tool_audit",
                 operation_id=f"call-{message.content}",
-                content=f"output-{message.content}",
+                content="",
                 execution_status="completed",
                 started_at=message.created_at,
-                extra_metadata={"source_model_message_id": message.id, "tool_name": "search", "input": {}},
+                extra_metadata={"output": f"output-{message.content}", "source_model_message_id": message.id, "tool_name": "search", "input": {}},
             )
             for message in messages
         ]
