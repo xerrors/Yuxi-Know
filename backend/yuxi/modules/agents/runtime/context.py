@@ -182,7 +182,7 @@ class BaseContext:
 
     runtime_scope_id: str | None = field(
         default=None,
-        metadata={"name": "Sandbox Runtime Scope", "configurable": False, "hide": True},
+        metadata={"name": "Cooperation Tree Scope", "configurable": False, "hide": True},
     )
 
     workdir_relative_path: str | None = field(

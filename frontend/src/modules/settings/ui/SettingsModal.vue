@@ -80,7 +80,7 @@
             v-if="userStore.isLoggedIn"
           >
             <SquareTerminal class="icon" :size="18" />
-            <span>环境变量</span>
+            <span>Agent 环境</span>
           </div>
         </div>
 
@@ -142,7 +142,7 @@
           @click="activeTab = 'agentEnv'"
           v-if="userStore.isLoggedIn"
         >
-          沙盒环境变量
+          Agent 环境
         </div>
         <div
           class="nav-item"

@@ -11,8 +11,8 @@ from langgraph.prebuilt.tool_node import ToolRuntime
 from pydantic import BaseModel, Field
 
 from yuxi.infrastructure.observability.logging import logger
-from yuxi.modules.agents.runtime.sandbox import ProvisionerSandboxBackend
-from yuxi.modules.extensions.tools.builtin.sandbox_scope import resolve_runtime_sandbox_scope, runtime_scope_value
+from yuxi.modules.agents.runtime.sandbox import UserSandboxBackend
+from yuxi.modules.extensions.tools.builtin.file_context import resolve_file_context, runtime_context_value
 from yuxi.modules.extensions.tools.registry import tool
 from yuxi.modules.knowledge.schemas import FindInputSchema, OpenInputSchema, SearchFileInput, SearchInputSchema
 from yuxi.modules.knowledge.services import tools as knowledge_tools
@@ -258,13 +258,11 @@ async def download_kb_file(
 
     sandbox_scope = _runtime_sandbox_scope(runtime)
     if sandbox_scope is None:
-        return "无法获取当前会话的沙盒上下文，缺少 thread_id 或 uid"
-    runtime_thread_id, uid, workdir_relative_path, workdir_path = sandbox_scope
-    backend = ProvisionerSandboxBackend(
-        thread_id=runtime_thread_id,
+        return "无法获取当前会话的沙盒上下文，缺少 uid 或 Workdir"
+    uid, workdir_relative_path, workdir_path = sandbox_scope
+    backend = UserSandboxBackend(
         uid=uid,
         workdir_path=workdir_relative_path,
-        create_if_missing=True,
     )
 
     output_path = _resolve_download_output_path(backend, workdir_path, data, normalized_file_id, save_as)
@@ -331,18 +329,18 @@ def _find_query_target(
         return None, str(exc)
 
 
-def _runtime_sandbox_scope(runtime: ToolRuntime | None) -> tuple[str, str, str, str] | None:
-    """返回知识库下载使用的 runtime、用户和 Workdir 路径。"""
+def _runtime_sandbox_scope(runtime: ToolRuntime | None) -> tuple[str, str, str] | None:
+    """返回知识库下载使用的用户和 Workdir 路径。"""
     try:
-        runtime_id, uid, relative_path = resolve_runtime_sandbox_scope(runtime)
+        uid, relative_path = resolve_file_context(runtime)
     except ValueError:
         return None
-    workdir_path = runtime_scope_value(runtime, "workdir_path")
-    return (runtime_id, uid, relative_path, workdir_path) if workdir_path else None
+    workdir_path = runtime_context_value(runtime, "workdir_path")
+    return (uid, relative_path, workdir_path) if workdir_path else None
 
 
 def _resolve_download_output_path(
-    backend: ProvisionerSandboxBackend,
+    backend: UserSandboxBackend,
     workdir_path: str,
     data: dict[str, Any],
     file_id: str,

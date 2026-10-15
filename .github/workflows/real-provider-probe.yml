@@ -13,12 +13,16 @@ concurrency:
 jobs:
   real-provider-probe:
     name: Shipping Agent path against SiliconFlow
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, yuxi-cube]
     timeout-minutes: 35
     env:
       JWT_SECRET_KEY: probe-jwt-secret-at-least-thirty-two-characters
       API_KEY_DERIVATION_SECRET: probe-api-key-derivation-secret-at-least-32-chars
-      SANDBOX_PROVISIONER_TOKEN: probe-sandbox-token-at-least-thirty-two-characters
+      CUBE_API_URL: ${{ vars.CUBE_API_URL }}
+      CUBE_API_KEY: ${{ secrets.CUBE_API_KEY }}
+      CUBE_PROXY_NODE_IP: ${{ vars.CUBE_PROXY_NODE_IP }}
+      CUBE_PROXY_PORT_HTTP: ${{ vars.CUBE_PROXY_PORT_HTTP || '80' }}
+      CUBE_TEMPLATE_ID: yuxi-user
       E2E_USERNAME: real_probe_admin
       E2E_PASSWORD: real-probe-password-at-least-eight
       SILICONFLOW_API_KEY: ${{ secrets.SILICONFLOW_API_KEY }}
@@ -31,29 +35,9 @@ jobs:
             exit 1
           fi
       - name: Prepare isolated Compose environment
-        run: |
-          cp .env.template .env
-          python3 - <<'PY'
-          import os
-          from pathlib import Path
-
-          path = Path(".env")
-          replacements = {
-              "JWT_SECRET_KEY": os.environ["JWT_SECRET_KEY"],
-              "API_KEY_DERIVATION_SECRET": os.environ["API_KEY_DERIVATION_SECRET"],
-              "SANDBOX_PROVISIONER_TOKEN": os.environ["SANDBOX_PROVISIONER_TOKEN"],
-              "SILICONFLOW_API_KEY": os.environ["SILICONFLOW_API_KEY"],
-          }
-          lines = [
-              line
-              for line in path.read_text(encoding="utf-8").splitlines()
-              if line.split("=", 1)[0] not in replacements
-          ]
-          lines.extend(f"{key}={value}" for key, value in replacements.items())
-          path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-          PY
+        run: bash scripts/ci_prepare_system_tests_env.sh
       - name: Start shipping topology
-        run: docker compose up -d --build postgres redis minio sandbox-provisioner api worker
+        run: docker compose up -d --build postgres redis minio api worker
       - name: Wait for readiness
         run: |
           for attempt in $(seq 1 90); do

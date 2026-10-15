@@ -30,9 +30,9 @@ def build_prompt_with_context(context):
 当前 Project Workdir 为 {workdir_path}，也是默认工作目录：
 - {workdir_path}/uploads/：用户上传文件的建议目录；Agent 可以覆盖，但非必要不修改原文件
 - 根据用户要求和项目结构，将产物保存在当前 Project Workdir 中合适的位置
-- /home/gem/user-data/：当前用户的整个 UserWorkspace；可以读取其他 Project 目录作为参考
-- /home/gem/skills/：当前用户已授权共享/内置 Skill 的只读目录
-- /home/gem/user-data/agents/skills/：当前用户的个人 Skill 目录
+- /home/user/workspace/：当前用户的整个 UserWorkspace；可以读取其他 Project 目录作为参考
+- /home/user/skills/：当前用户已授权共享/内置 Skill 的只读目录
+- /home/user/workspace/agents/skills/：当前用户的个人 Skill 目录
 - 未经用户明确要求，不得在当前 Project Workdir 之外创建、修改、移动或删除文件
 - 同树协作会话共享同一个 Project Workdir 与沙盒；并发写同一路径遵循真实 POSIX 结果
 """

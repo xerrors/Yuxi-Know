@@ -1,11 +1,10 @@
 <template>
   <div class="agent-env-settings">
+    <UserSandboxSettingsCard ref="sandboxSettings" />
     <div class="header-section">
       <div class="header-content">
-        <div class="section-title">沙盒环境变量</div>
-        <p class="section-description">
-          配置当前用户的 Agent 沙盒环境变量。新建沙盒时会注入这些变量，并覆盖同名全局 sandbox.env。
-        </p>
+        <div class="section-title">环境变量</div>
+        <p class="section-description">管理账户级环境变量，保存后对新启动的运行生效。</p>
       </div>
       <div class="header-actions">
         <a-button
@@ -16,15 +15,37 @@
         >
           <template #icon><RefreshCw :size="16" :class="{ spin: loading }" /></template>
         </a-button>
-        <a-button type="primary" :loading="saving" @click="saveAgentEnv">
-          {{ saveButtonText }}
+        <a-button
+          :loading="verifying"
+          :disabled="loading || saving || hasUnsavedChanges || !savedEnvKeys.length"
+          @click="verifyAgentEnv"
+        >
+          验证配置
+        </a-button>
+        <a-button type="primary" :loading="saving" :disabled="loading" @click="saveAgentEnv">
+          保存配置
         </a-button>
       </div>
     </div>
 
     <div class="env-tip">
       <Info :size="14" class="tip-icon" />
-      <span>保存后仅对新建沙盒生效，已运行沙盒不会热更新。</span>
+      <span>当前运行保持启动时的配置。验证读取最新保存值，并自动创建或恢复环境。</span>
+    </div>
+
+    <div class="env-verification" aria-live="polite">
+      <p v-if="hasUnsavedChanges">配置尚未保存，保存后可执行生效验证。</p>
+      <p v-else-if="savedEnvKeys.length && !verification && !verificationError">
+        配置已保存，尚未完成生效验证。
+      </p>
+      <a-alert v-if="verificationError" type="error" :message="verificationError" show-icon />
+      <template v-if="verification">
+        <p>
+          验证时间：{{
+            new Date(verification.verified_at).toLocaleString('zh-CN', { hour12: false })
+          }}。结果仅适用于本次命令进程。
+        </p>
+      </template>
     </div>
 
     <a-spin :spinning="loading">
@@ -32,6 +53,7 @@
         :key="editorRevision"
         :modelValue="draftEnv"
         :locked-keys="savedEnvKeys"
+        :key-verification="verificationByKey"
         conceal-locked-values
         @update:modelValue="updateDraftEnv"
       />
@@ -45,6 +67,7 @@ import { message } from 'ant-design-vue'
 import { Info, RefreshCw } from '@lucide/vue'
 import { agentEnvApi } from '@/apis/agent_env_api'
 import McpEnvEditor from '@/modules/agents/ui/McpEnvEditor.vue'
+import UserSandboxSettingsCard from './UserSandboxSettingsCard.vue'
 
 const ENV_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/
 const MAX_ENV_COUNT = 200
@@ -52,7 +75,13 @@ const MAX_ENV_KEY_LENGTH = 128
 const MAX_ENV_VALUE_LENGTH = 32768
 
 const loading = ref(false)
+const sandboxSettings = ref(null)
 const saving = ref(false)
+const verifying = ref(false)
+const verification = ref(null)
+const verificationError = ref('')
+const savedUpdatedAt = ref(null)
+let verificationRevision = 0
 const draftEnv = ref({})
 const lastSavedEnv = ref({})
 const editorRevision = ref(0)
@@ -76,36 +105,43 @@ const isSameEnv = (left, right) => {
 }
 
 const savedEnvKeys = computed(() => Object.keys(lastSavedEnv.value || {}))
-const hasUnsavedChanges = computed(
-  () => !isSameEnv(normalizeEnv(draftEnv.value), lastSavedEnv.value)
+const hasUnsavedChanges = computed(() => !isSameEnv(draftEnv.value, lastSavedEnv.value))
+const verificationByKey = computed(
+  () => new Map((verification.value?.variables || []).map(({ key, matches }) => [key, matches]))
 )
-const saveButtonText = computed(() => (hasUnsavedChanges.value ? '保存（有修改）' : '保存'))
+
+function invalidateVerification() {
+  verificationRevision += 1
+  verification.value = null
+  verificationError.value = ''
+  return verificationRevision
+}
 
 const updateDraftEnv = (value) => {
   const nextEnv = normalizeEnv(value)
-  if (!isSameEnv(draftEnv.value, nextEnv)) {
-    draftEnv.value = nextEnv
-  }
+  if (isSameEnv(draftEnv.value, nextEnv)) return
+  draftEnv.value = nextEnv
+  invalidateVerification()
 }
 
 const validateEnv = (env) => {
   const entries = Object.entries(env)
   if (entries.length > MAX_ENV_COUNT) {
-    message.error(`环境变量数量不能超过 ${MAX_ENV_COUNT} 个`)
+    message.error(`环境变量数量上限为 ${MAX_ENV_COUNT} 个`)
     return false
   }
 
   for (const [key, value] of entries) {
     if (key.length > MAX_ENV_KEY_LENGTH) {
-      message.error(`环境变量名长度不能超过 ${MAX_ENV_KEY_LENGTH}`)
+      message.error(`变量名长度上限为 ${MAX_ENV_KEY_LENGTH} 个字符`)
       return false
     }
     if (!ENV_KEY_PATTERN.test(key)) {
-      message.error(`环境变量名 ${key} 格式不正确`)
+      message.error(`变量名 ${key} 格式无效`)
       return false
     }
     if (value.length > MAX_ENV_VALUE_LENGTH) {
-      message.error(`环境变量 ${key} 的值过长`)
+      message.error(`变量 ${key} 的值超过长度上限`)
       return false
     }
   }
@@ -113,15 +149,17 @@ const validateEnv = (env) => {
 }
 
 const loadAgentEnv = async () => {
+  invalidateVerification()
   loading.value = true
   try {
     const res = await agentEnvApi.get()
     const env = normalizeEnv(res.env)
     draftEnv.value = env
     lastSavedEnv.value = env
+    savedUpdatedAt.value = res.updated_at
     editorRevision.value += 1
   } catch (error) {
-    message.error(error.message || '加载环境变量失败')
+    message.error(error.message || '环境变量读取失败')
   } finally {
     loading.value = false
   }
@@ -131,21 +169,44 @@ const saveAgentEnv = async () => {
   const env = normalizeEnv(draftEnv.value)
   if (!validateEnv(env)) return
   if (isSameEnv(env, lastSavedEnv.value)) {
-    message.info('环境变量未变化')
+    message.info('配置无变更')
     return
   }
 
   saving.value = true
+  invalidateVerification()
   try {
-    await agentEnvApi.update(env)
+    const res = await agentEnvApi.update(env)
     draftEnv.value = env
     lastSavedEnv.value = env
+    savedUpdatedAt.value = res.updated_at
     editorRevision.value += 1
-    message.success('环境变量已保存')
+    message.success('配置已保存，将在新启动的运行中生效')
   } catch (error) {
-    message.error(error.message || '保存环境变量失败')
+    message.error(error.message || '环境变量保存失败')
   } finally {
     saving.value = false
+  }
+}
+
+const verifyAgentEnv = async () => {
+  const revision = invalidateVerification()
+  verifying.value = true
+  try {
+    const result = await agentEnvApi.verify()
+    if (revision !== verificationRevision || hasUnsavedChanges.value) return
+    if (result.updated_at !== savedUpdatedAt.value) {
+      verificationError.value = '配置已更新，请刷新后重新验证。'
+      return
+    }
+    verification.value = result
+  } catch (error) {
+    if (revision === verificationRevision && !hasUnsavedChanges.value) {
+      verificationError.value = error.message || '生效验证失败，请检查环境状态'
+    }
+  } finally {
+    verifying.value = false
+    await sandboxSettings.value?.refresh()
   }
 }
 
@@ -154,6 +215,8 @@ onMounted(loadAgentEnv)
 
 <style lang="less" scoped>
 .agent-env-settings {
+  padding-top: 12px;
+
   .header-section {
     display: flex;
     justify-content: space-between;
@@ -176,7 +239,7 @@ onMounted(loadAgentEnv)
       font-weight: 500;
       color: var(--gray-900);
       line-height: 1.4;
-      margin: 12px 0 12px;
+      margin: 0 0 6px;
     }
 
     .section-description {
@@ -192,6 +255,7 @@ onMounted(loadAgentEnv)
     align-items: center;
     gap: 8px;
     flex-shrink: 0;
+    flex-wrap: wrap;
 
     .refresh-btn {
       display: flex;
@@ -229,6 +293,12 @@ onMounted(loadAgentEnv)
       color: var(--gray-400);
       flex-shrink: 0;
     }
+  }
+
+  .env-verification {
+    color: var(--gray-600);
+    font-size: 12px;
+    margin-bottom: 14px;
   }
 }
 

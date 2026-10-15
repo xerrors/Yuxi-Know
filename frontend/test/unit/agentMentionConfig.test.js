@@ -14,14 +14,14 @@ test('文件 mention 来自附件元数据并按路径去重', async () => {
     )
     const attachments = ref([
       {
-        path: '/home/gem/user-data/projects/example/report.txt',
+        path: '/home/user/workspace/projects/example/report.txt',
         file_name: 'report.txt',
         file_size: 42,
         uploaded_at: '2026-09-30T00:00:00Z',
         artifact_url: '/api/example/artifact',
         status: 'ready'
       },
-      { path: '/home/gem/user-data/projects/example/report.txt', file_name: 'duplicate.txt' },
+      { path: '/home/user/workspace/projects/example/report.txt', file_name: 'duplicate.txt' },
       { file_name: 'missing-path.txt' }
     ])
     const { mentionConfig } = useAgentMentionConfig({
@@ -32,7 +32,7 @@ test('文件 mention 来自附件元数据并按路径去重', async () => {
 
     assert.deepEqual(mentionConfig.value.files, [
       {
-        path: '/home/gem/user-data/projects/example/report.txt',
+        path: '/home/user/workspace/projects/example/report.txt',
         file_name: 'report.txt',
         size: 42,
         modified_at: '2026-09-30T00:00:00Z',

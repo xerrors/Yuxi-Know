@@ -41,7 +41,6 @@ def test_initialization_scripts_enforce_security_secret_contract():
     [
         {"API_KEY_DERIVATION_SECRET": "short"},
         {"API_KEY_DERIVATION_SECRET": "jwt-secret-value-that-is-at-least-32-characters"},
-        {"SANDBOX_PROVISIONER_TOKEN": "api-secret-value-that-is-at-least-32-characters"},
         {"JWT_SECRET_KEY": " padded-secret-value-that-is-at-least-32-characters "},
         {"JWT_SECRET_KEY": '"123456789012345678901234567890"'},
     ],
@@ -51,7 +50,6 @@ def test_shell_initialization_validation_rejects_short_reused_or_padded_secrets(
     values = {
         "JWT_SECRET_KEY": "jwt-secret-value-that-is-at-least-32-characters",
         "API_KEY_DERIVATION_SECRET": "api-secret-value-that-is-at-least-32-characters",
-        "SANDBOX_PROVISIONER_TOKEN": "sandbox-secret-value-that-is-at-least-32-characters",
         **overrides,
     }
     (tmp_path / ".env").write_text("".join(f"{name}={value}\n" for name, value in values.items()))
@@ -72,7 +70,6 @@ def test_shell_initialization_validation_accepts_distinct_strong_secrets(tmp_pat
     (tmp_path / ".env").write_text(
         "JWT_SECRET_KEY=jwt-secret-value-that-is-at-least-32-characters\n"
         "API_KEY_DERIVATION_SECRET=api-secret-value-that-is-at-least-32-characters\n"
-        "SANDBOX_PROVISIONER_TOKEN=sandbox-secret-value-that-is-at-least-32-characters\n"
     )
 
     completed = subprocess.run(

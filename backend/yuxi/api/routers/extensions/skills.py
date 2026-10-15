@@ -209,7 +209,7 @@ async def list_remote_skills_route(
     _current_user: User = Depends(get_required_user),
 ):
     try:
-        return {"success": True, "data": await list_remote_skills(payload.source)}
+        return {"success": True, "data": await list_remote_skills(payload.source, uid=str(_current_user.uid))}
     except ValueError as e:
         _raise_from_value_error(e)
     except HTTPException:
@@ -222,7 +222,7 @@ async def list_remote_skills_route(
 @user_skills.post("/remote/search")
 async def search_remote_skills_route(payload: RemoteSkillSearchRequest, _current_user: User = Depends(get_required_user)):
     try:
-        return {"success": True, "data": await search_remote_skills(payload.query)}
+        return {"success": True, "data": await search_remote_skills(payload.query, uid=str(_current_user.uid))}
     except ValueError as e:
         _raise_from_value_error(e)
     except HTTPException:

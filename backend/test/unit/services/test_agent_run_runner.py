@@ -18,7 +18,6 @@ from yuxi.modules.agents.services.execution import RunExecutionResult
 def api_key_derivation_secret(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("JWT_SECRET_KEY", "test-jwt-secret-that-is-at-least-32-chars")
     monkeypatch.setenv("API_KEY_DERIVATION_SECRET", "test-api-key-derivation-secret-32-chars")
-    monkeypatch.setenv("SANDBOX_PROVISIONER_TOKEN", "test-sandbox-token-that-is-at-least-32-chars")
 
 
 class _RaisingAsyncIter:
@@ -339,6 +338,7 @@ def _patch_common(monkeypatch: pytest.MonkeyPatch, run_obj: SimpleNamespace):
     monkeypatch.setattr(worker_bootstrap.pg_manager, "get_async_session_context", fake_session_ctx)
     monkeypatch.setattr(runner, "_get_run", fake_get_run)
     monkeypatch.setattr(runner, "_load_user", fake_load_user)
+    monkeypatch.setattr(runner.AgentEnvRepository, "get_by_uid", AsyncMock(return_value=None))
     monkeypatch.setattr(runner, "_load_run_input_messages", fake_load_run_input_messages)
     monkeypatch.setattr(runner, "get_agent_state_view", fake_get_agent_state_view)
     monkeypatch.setattr(runner, "mark_run_running", fake_mark_run_running)
@@ -363,7 +363,7 @@ def _patch_common(monkeypatch: pytest.MonkeyPatch, run_obj: SimpleNamespace):
         AsyncMock(
             return_value=SimpleNamespace(
                 workdir_path="projects/11111111-1111-4111-8111-111111111111",
-                virtual_path="/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111",
+                virtual_path="/home/user/workspace/projects/11111111-1111-4111-8111-111111111111",
             )
         ),
     )
@@ -374,7 +374,7 @@ def _patch_common(monkeypatch: pytest.MonkeyPatch, run_obj: SimpleNamespace):
     monkeypatch.setattr(runner.RunContext, "start", fake_noop)
     monkeypatch.setattr(runner.RunContext, "close", fake_noop)
     monkeypatch.setattr(runner.RunContext, "is_cancelled", fake_not_cancelled)
-    monkeypatch.setattr(leases, "release_runtime_if_idle", AsyncMock(return_value=True))
+    monkeypatch.setattr(leases, "complete_run_command_cleanup", AsyncMock(return_value=True))
 
 
 @pytest.mark.asyncio
@@ -408,6 +408,42 @@ async def test_process_agent_run_rejects_corrupted_runtime_scope_before_executio
     assert stream_called is False
     assert terminal_calls[0]["status"] == "failed"
     assert terminal_calls[0]["args"][0] == "invalid_runtime_scope"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fails", [False, True])
+async def test_run_environment_snapshot_survives_updates_and_is_released(monkeypatch, fails):
+    """线程与异步子任务复用启动快照，成功或失败退出均释放密钥。"""
+    from yuxi.modules.agents.runtime.sandbox.provider import sandbox_run_env
+
+    run = _build_run()
+    _patch_common(monkeypatch, run)
+    saved = SimpleNamespace(env={"RUN_VALUE": "before"})
+    monkeypatch.setattr(runner.AgentEnvRepository, "get_by_uid", AsyncMock(return_value=saved))
+    observed = []
+
+    async def stream(**kwargs):
+        """更新来源配置后，两个执行通道仍读取同一份快照。"""
+        saved.env["RUN_VALUE"] = "after"
+        observed.append(await asyncio.to_thread(lambda: dict(sandbox_run_env.get())))
+        observed.append(dict(sandbox_run_env.get()))
+        if fails:
+            raise ValueError("fixture execution failed")
+        run.status = "completed"
+        yield _terminal_result()
+
+    monkeypatch.setattr(runner, "stream_agent_execution", stream)
+    monkeypatch.setattr(runner, "_finish_run", AsyncMock())
+    assert sandbox_run_env.get() is None
+    await runner.process_agent_run({"job_try": 1}, run.id)
+    assert observed == [{"RUN_VALUE": "before"}, {"RUN_VALUE": "before"}]
+    assert sandbox_run_env.get() is None
+
+    observed.clear()
+    run.status = "pending"
+    await runner.process_agent_run({"job_try": 1}, run.id)
+    assert observed == [{"RUN_VALUE": "after"}, {"RUN_VALUE": "after"}]
+    assert sandbox_run_env.get() is None
 
 
 @pytest.mark.asyncio
@@ -899,7 +935,7 @@ async def test_process_agent_run_retryable_error_retries_then_completes(monkeypa
         return True
 
     monkeypatch.setattr(runner, "release_run_lease_for_retry", fake_release_lease)
-    monkeypatch.setattr(runner, "release_runtime_if_idle", fake_release_runtime)
+    monkeypatch.setattr(runner, "complete_run_command_cleanup", fake_release_runtime)
 
     with pytest.raises(runner.RetryableRunError) as retry:
         await runner.process_agent_run({"job_try": 1}, "run-1")
@@ -964,7 +1000,7 @@ async def test_process_member_run_uses_own_thread_and_shared_runtime(monkeypatch
         tool_approval_mode="always_trust",
         runtime_scope_id="prepared-root",
         workdir_relative_path="projects/prepared",
-        workdir_path="/home/gem/user-data/projects/prepared",
+        workdir_path="/home/user/workspace/projects/prepared",
     )
     monkeypatch.setattr(runner, "prepare_and_record_run_execution", AsyncMock(return_value=prepared))
     captured: dict[str, object] = {}
@@ -994,7 +1030,7 @@ async def test_process_member_run_uses_own_thread_and_shared_runtime(monkeypatch
     assert "parent_thread_id" not in meta
     assert meta["runtime_scope_id"] == "prepared-root"
     assert meta["workdir_relative_path"] == "projects/prepared"
-    assert meta["workdir_path"] == "/home/gem/user-data/projects/prepared"
+    assert meta["workdir_path"] == "/home/user/workspace/projects/prepared"
     assert meta["model_spec"] == "prepared:model"
     assert meta["tool_approval_mode"] == "always_trust"
     assert captured["agent_slug"] == "worker"

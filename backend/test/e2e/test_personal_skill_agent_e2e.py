@@ -54,7 +54,7 @@ def personal_replay():
             else:
                 names = {item["function"]["name"] for item in body["tools"]}
                 if (
-                    f"/home/gem/user-data/agents/skills/{scenario['slug']}/SKILL.md" not in json.dumps(body["messages"])
+                    f"/home/user/workspace/agents/skills/{scenario['slug']}/SKILL.md" not in json.dumps(body["messages"])
                     or "read_file" not in names
                 ):
                     send_json_response(self, 400, {"error": {"message": "个人 Skill 或合法文件工具未进入模型请求"}})
@@ -68,7 +68,7 @@ def personal_replay():
                             "type": "function",
                             "function": {
                                 "name": "read_file",
-                                "arguments": json.dumps({"file_path": f"/home/gem/user-data/agents/skills/{scenario['slug']}/SKILL.md"}),
+                                "arguments": json.dumps({"file_path": f"/home/user/workspace/agents/skills/{scenario['slug']}/SKILL.md"}),
                             },
                         }
                     ],
@@ -236,7 +236,7 @@ async def test_main_agent_reads_personal_skill_directly_from_user_workspace(
         assert len(personal_replay["requests"]) == 2
         # 移除真实首请求的发现路径，保留测试原提示中的 slug 与工具 schema。
         first_request = personal_replay["requests"][0]
-        discovered_path = f"/home/gem/user-data/agents/skills/{slug}/SKILL.md"
+        discovered_path = f"/home/user/workspace/agents/skills/{slug}/SKILL.md"
         missing_discovery = json.loads(json.dumps(first_request).replace(discovered_path, ""))
         async with httpx.AsyncClient() as replay_client:
             rejected = await replay_client.post(f"{personal_replay['url']}/chat/completions", json=missing_discovery)

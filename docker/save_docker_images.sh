@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 
 # 创建输出目录
 OUTPUT_DIR="docker_images_backup"
-mkdir -p $OUTPUT_DIR
+mkdir -p "$OUTPUT_DIR"
 
 # 定义输出文件名
 OUTPUT_FILE="$OUTPUT_DIR/docker_images_$(date +%Y%m%d).tar"
@@ -15,14 +15,25 @@ echo "开始导出 Docker 镜像到 $OUTPUT_FILE..."
 
 # 从各个文件中提取的基础镜像列表
 IMAGES=(
-    "python:3.13-slim",
-    "ghcr.io/astral-sh/uv:0.12.6",
-    "node:24-alpine",
-    "node:24-slim",
-    "nginx:alpine",
-    "neo4j:5.26.29",
-    "quay.io/coreos/etcd:v3.5.25",
-    "milvusdb/milvus:v3.0.2",
+    # 应用与基础设施（docker-compose*.yml、docker/*.Dockerfile）
+    "python:3.13-slim"
+    "ghcr.io/astral-sh/uv:0.12.6"
+    "node:24-slim"
+    "node:24-alpine"
+    "nginx:alpine"
+    "postgres:16"
+    "redis:7.4.10-alpine"
+    "neo4j:5.26.29"
+    "quay.io/coreos/etcd:v3.5.25"
+    "milvusdb/milvus:v3.0.2"
+    # Cube 沙盒（docker/cube/Dockerfile.user、Dockerfile.runner、build-template.sh）
+    "node:24-bullseye-slim"
+    "ghcr.io/tencentcloud/cubesandbox-base:2026.16"
+    "ubuntu:24.04"
+    "registry:2"
+    # 按需：在目标机器上本地构建 mineru/paddlex 时才需要的基础镜像
+    # "docker.m.daocloud.io/vllm/vllm-openai:v0.11.2"
+    # "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlex/paddlex:paddlex3.0.1-paddlepaddle3.0.0-gpu-cuda11.8-cudnn8.9-trt8.6"
 )
 
 # MinIO 的官方镜像已不再公开分发，改为按仓库内 Dockerfile 构建后再导出。
@@ -43,10 +54,10 @@ done
 
 # 保存所有镜像到单个 tar 文件
 echo "正在保存镜像到 tar 文件..."
-docker save ${IMAGES[@]} "$MINIO_IMAGE" -o $OUTPUT_FILE
+docker save "${IMAGES[@]}" "$MINIO_IMAGE" -o "$OUTPUT_FILE"
 
 # 计算文件大小
-FILE_SIZE=$(du -h $OUTPUT_FILE | cut -f1)
+FILE_SIZE=$(du -h "$OUTPUT_FILE" | cut -f1)
 
 echo "完成！"
 echo "所有 Docker 镜像已保存到: $OUTPUT_FILE"

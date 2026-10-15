@@ -20,8 +20,7 @@ from test.e2e.e2e_helpers import (
 )
 from test.live_api_cleanup import make_test_session_title
 from yuxi.modules.workspace.paths import user_workspace_dir
-from yuxi.modules.agents.runtime.sandbox import get_sandbox_provider, ProvisionerSandboxBackend
-from yuxi.modules.agents.services.leases import release_idle_sandboxes
+from yuxi.modules.agents.runtime.sandbox import get_sandbox_provider, UserSandboxBackend
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.bootstrap.models import load_models
 
@@ -84,7 +83,7 @@ async def test_sessions_use_public_state_and_shared_sandbox(e2e_client, e2e_head
             thread_id,
         )
         workdir = root["workdir_path"]
-        path = f"/home/gem/user-data/{workdir}/cooperation.txt"
+        path = f"/home/user/workspace/{workdir}/cooperation.txt"
         runtime_probe = f"/tmp/cooperation-shared-{uuid.uuid4().hex}"
         question_marker = " PARALLEL_QUESTION" if parallel_question else ""
         selection_marker = f" SELECT_AGENT:{target_slug}" if select_agent else ""
@@ -206,10 +205,9 @@ async def test_sessions_use_public_state_and_shared_sandbox(e2e_client, e2e_head
         assert child_turn.status_code == 200 and output_text(child_turn.json()["yuxi"]["output"]) == OUTPUT
         assert json.loads(child["config_snapshot"])["system_prompt"].count("用户工作区 agents/AGENTS.md") == 0
         provider = get_sandbox_provider()
-        connection = await asyncio.to_thread(provider.get, thread_id, uid=uid, workdir_path=root["workdir_path"])
+        connection = await asyncio.to_thread(provider.get, uid)
         assert connection is not None
-        assert await asyncio.to_thread(provider.get, child["thread_id"], uid=uid, workdir_path=root["workdir_path"]) is None
-        backend = ProvisionerSandboxBackend(thread_id=thread_id, uid=uid, workdir_path=root["workdir_path"])
+        backend = UserSandboxBackend(uid=uid, workdir_path=root["workdir_path"])
         missing_path = path + ".missing.txt"
         for read_result in [await asyncio.to_thread(backend.read, missing_path), await backend.aread(missing_path)]:
             assert read_result.error == f"File '{missing_path}' not found"
@@ -225,21 +223,11 @@ async def test_sessions_use_public_state_and_shared_sandbox(e2e_client, e2e_head
             assert compressed.status_code == 200, compressed.text
             preserved = await asyncio.to_thread(backend.execute, f"cat {temporary}")
             assert preserved.exit_code == 0 and preserved.output == "transient"
-            assert await asyncio.to_thread(provider.get, child["thread_id"], uid=uid, workdir_path=root["workdir_path"]) is None
-        await conn.execute(
-            "UPDATE session_cooperation_runtimes SET idle_since=now()-interval '6 minutes' WHERE tree_root_thread_id=$1",
-            thread_id,
-        )
-        load_models()
-        pg_manager.initialize()
-        try:
-            await release_idle_sandboxes()
-        finally:
-            await pg_manager.close()
-        assert await conn.fetchval("SELECT released FROM session_cooperation_runtimes WHERE tree_root_thread_id=$1", thread_id)
-        assert await asyncio.to_thread(provider.get, thread_id, uid=uid, workdir_path=root["workdir_path"]) is None
-        rebuilt = await asyncio.to_thread(backend.execute, f"cat {path} && test ! -e {temporary}")
-        assert rebuilt.exit_code == 0 and rebuilt.output == "cooperation verified"
+            assert (await asyncio.to_thread(provider.get, uid)).sandbox_id == connection.sandbox_id
+        preserved = await asyncio.to_thread(backend.execute, f"cat {path} && cat {temporary}")
+        assert preserved.exit_code == 0 and preserved.output == "cooperation verifiedtransient"
+        assert (await asyncio.to_thread(provider.get, uid)).sandbox_id == connection.sandbox_id
+        assert (await asyncio.to_thread(backend.execute, f"rm -- {temporary}")).exit_code == 0
 
     finally:
         await conn.close()
@@ -250,14 +238,6 @@ async def test_sessions_use_public_state_and_shared_sandbox(e2e_client, e2e_head
                 if member["session_id"] != thread_id:
                     await archive_public_thread(e2e_client, e2e_headers, member["session_id"], turn_id=member["turn_id"])
             await archive_public_thread(e2e_client, e2e_headers, thread_id, turn_id=turn_id)
-            if workdir is not None:
-                await asyncio.to_thread(
-                    get_sandbox_provider().release,
-                    thread_id,
-                    uid=uid,
-                    workdir_path=workdir,
-                    clear_cache_on_delete_failure=True,
-                )
         await delete_agent(e2e_client, e2e_headers, slug)
         if target_slug is not None:
             await delete_agent(e2e_client, e2e_headers, target_slug)
@@ -301,7 +281,7 @@ async def test_full_tree_capacity_control_and_sibling_tools(e2e_client, e2e_head
             "SELECT p.workdir_path FROM sessions s JOIN projects p ON p.id=s.project_id WHERE s.thread_id=$1", root_id
         )
         gate_file = user_workspace_dir(me.json()["uid"]) / workdir / "capacity-release"
-        gate_path = f"/home/gem/user-data/{workdir}/capacity-release"
+        gate_path = f"/home/user/workspace/{workdir}/capacity-release"
         accepted = await event(
             root_id,
             {
@@ -443,14 +423,6 @@ async def test_full_tree_capacity_control_and_sibling_tools(e2e_client, e2e_head
                             await diagnostic.close()
                         error.add_note(f"Archive blockers: session={member['session_id']}, runs={blockers}, pending={pending}")
                         raise
-            if root_id and workdir is not None:
-                await asyncio.to_thread(
-                    get_sandbox_provider().release,
-                    root_id,
-                    uid=me.json()["uid"],
-                    workdir_path=workdir,
-                    clear_cache_on_delete_failure=True,
-                )
             await delete_agent(e2e_client, e2e_headers, slug)
         except Exception as cleanup_error:
             if body_error is not None:

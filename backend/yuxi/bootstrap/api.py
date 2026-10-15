@@ -8,7 +8,7 @@ from yuxi import get_version
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.infrastructure.postgres.schema import require_current_schema
-from yuxi.modules.agents.runtime.sandbox import init_sandbox_provider
+from yuxi.modules.agents.runtime.sandbox.provider import check_sandbox_provider
 from yuxi.modules.agents.services.transport import get_redis_client
 from yuxi.modules.extensions.mcp.service import ensure_builtin_mcp_servers_in_db
 from yuxi.modules.identity.oidc import get_oidc_config
@@ -148,7 +148,7 @@ async def _startup(app: FastAPI) -> None:
         app,
         name="sandbox_provider",
         required=True,
-        operation=init_sandbox_provider,
+        operation=check_sandbox_provider,
     )
 
     app.state.startup_complete = True

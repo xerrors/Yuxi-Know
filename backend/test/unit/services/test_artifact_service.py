@@ -58,7 +58,7 @@ class _Workspace:
             self.files[path] = content
 
     def expected_bytes(self, runtime_path: str) -> bytes:
-        if runtime_path.startswith("/home/gem/skills/reporter/"):
+        if runtime_path.startswith("/home/user/skills/reporter/"):
             return (self.skill_root / runtime_path.rsplit("/", 1)[-1]).read_bytes()
         return self.files[workspace_scope_from_runtime_path(runtime_path)]
 
@@ -113,9 +113,9 @@ async def _async_value(value):
 @pytest.mark.asyncio
 async def test_artifact_allows_project_user_data_and_authorized_skills(live_files):
     for path in (
-        "/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/report.md",
-        "/home/gem/user-data/notes.txt",
-        "/home/gem/skills/reporter/SKILL.md",
+        "/home/user/workspace/projects/11111111-1111-4111-8111-111111111111/report.md",
+        "/home/user/workspace/notes.txt",
+        "/home/user/skills/reporter/SKILL.md",
     ):
         response = await svc.resolve_thread_artifact_view(thread_id="thread-1", current_uid="user-1", db=object(), path=path)
         assert Path(response.path).read_bytes() == live_files.expected_bytes(path)
@@ -125,7 +125,7 @@ async def test_artifact_allows_project_user_data_and_authorized_skills(live_file
 
 @pytest.mark.asyncio
 async def test_artifact_preview_converts_office_file(live_files, monkeypatch):
-    path = "/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/report.docx"
+    path = "/home/user/workspace/projects/11111111-1111-4111-8111-111111111111/report.docx"
     live_files.add_runtime_file(path, b"docx bytes")
     captured = {}
 
@@ -151,7 +151,7 @@ async def test_artifact_preview_converts_office_file(live_files, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_artifact_preview_reports_oversized_file_without_rendering(live_files, monkeypatch):
-    path = "/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/report.docx"
+    path = "/home/user/workspace/projects/11111111-1111-4111-8111-111111111111/report.docx"
 
     def reject_large_file(_path, _target, max_bytes):
         assert max_bytes == svc.MAX_FILE_PREVIEW_BYTES
@@ -173,7 +173,7 @@ async def test_artifact_preview_reports_oversized_file_without_rendering(live_fi
 @pytest.mark.asyncio
 @pytest.mark.parametrize("file_name", ["报告.txt", 'quoted"name.txt', "line\nbreak.txt"])
 async def test_artifact_download_encodes_untrusted_posix_filename(live_files, file_name):
-    path = f"/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/{file_name}"
+    path = f"/home/user/workspace/projects/11111111-1111-4111-8111-111111111111/{file_name}"
     live_files.add_runtime_file(path, b"safe")
 
     response = await svc.resolve_thread_artifact_view(
@@ -199,7 +199,7 @@ async def test_artifact_rejects_other_project(live_files):
             thread_id="thread-1",
             current_uid="user-1",
             db=object(),
-            path="/home/gem/user-data/projects/other/secret.txt",
+            path="/home/user/workspace/projects/other/secret.txt",
         )
     assert isinstance(exc.value, ResourceNotFoundError)
 
@@ -226,7 +226,7 @@ async def test_artifact_rechecks_current_skill_authorization(live_files, monkeyp
             thread_id="thread-1",
             current_uid="user-1",
             db=object(),
-            path="/home/gem/skills/reporter/SKILL.md",
+            path="/home/user/skills/reporter/SKILL.md",
         )
 
     assert isinstance(exc.value, PermissionDeniedError)
@@ -243,7 +243,7 @@ async def test_artifact_transfer_limit_is_not_reported_as_missing(live_files, mo
             thread_id="thread-1",
             current_uid="user-1",
             db=object(),
-            path="/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/report.md",
+            path="/home/user/workspace/projects/11111111-1111-4111-8111-111111111111/report.md",
         )
     assert isinstance(exc.value, ContentTooLargeError)
 
@@ -254,9 +254,9 @@ async def test_save_artifact_copies_live_bytes_to_user_data(live_files):
         thread_id="thread-1",
         current_uid="user-1",
         db=object(),
-        path="/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/report.md",
+        path="/home/user/workspace/projects/11111111-1111-4111-8111-111111111111/report.md",
     )
-    assert result["saved_path"] == "/home/gem/user-data/saved_artifacts/report.md"
+    assert result["saved_path"] == "/home/user/workspace/saved_artifacts/report.md"
     assert live_files.expected_bytes(result["saved_path"]) == b"one\ntwo\n"
 
 
@@ -266,17 +266,17 @@ async def test_save_artifact_uses_selected_workspace_destination(live_files):
         thread_id="thread-1",
         current_uid="user-1",
         db=object(),
-        path="/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/report.md",
+        path="/home/user/workspace/projects/11111111-1111-4111-8111-111111111111/report.md",
         destination_path="/exports/reports",
     )
-    assert result["saved_path"] == "/home/gem/user-data/exports/reports/report.md"
+    assert result["saved_path"] == "/home/user/workspace/exports/reports/report.md"
     assert live_files.expected_bytes(result["saved_path"]) == b"one\ntwo\n"
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "destination",
-    ["../exports", "/exports/../reports", "/home/gem/user-data/exports", "/home/gem/skills/reporter"],
+    ["../exports", "/exports/../reports", "/home/user/workspace/exports", "/home/user/skills/reporter"],
 )
 async def test_save_artifact_rejects_unsafe_destination(live_files, destination):
     with pytest.raises(DomainError) as exc:
@@ -284,7 +284,7 @@ async def test_save_artifact_rejects_unsafe_destination(live_files, destination)
             thread_id="thread-1",
             current_uid="user-1",
             db=object(),
-            path="/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/report.md",
+            path="/home/user/workspace/projects/11111111-1111-4111-8111-111111111111/report.md",
             destination_path=destination,
         )
     assert isinstance(exc.value, PermissionDeniedError)
@@ -296,10 +296,10 @@ async def test_save_artifact_accepts_explicit_default_destination(live_files):
         thread_id="thread-1",
         current_uid="user-1",
         db=object(),
-        path="/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/report.md",
+        path="/home/user/workspace/projects/11111111-1111-4111-8111-111111111111/report.md",
         destination_path="/saved_artifacts",
     )
-    assert result["saved_path"] == "/home/gem/user-data/saved_artifacts/report.md"
+    assert result["saved_path"] == "/home/user/workspace/saved_artifacts/report.md"
     assert live_files.expected_bytes(result["saved_path"]) == b"one\ntwo\n"
 
 
@@ -310,7 +310,7 @@ async def test_save_artifact_rejects_missing_destination(live_files):
             thread_id="thread-1",
             current_uid="user-1",
             db=object(),
-            path="/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/report.md",
+            path="/home/user/workspace/projects/11111111-1111-4111-8111-111111111111/report.md",
             destination_path="/missing",
         )
     assert isinstance(exc.value, ResourceNotFoundError)
@@ -331,7 +331,7 @@ async def test_save_artifact_does_not_recreate_selected_directory_after_validati
             thread_id="thread-1",
             current_uid="user-1",
             db=object(),
-            path="/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/report.md",
+            path="/home/user/workspace/projects/11111111-1111-4111-8111-111111111111/report.md",
             destination_path="/exports/reports",
         )
     assert isinstance(exc.value, ResourceNotFoundError)
@@ -345,7 +345,7 @@ async def test_save_artifact_rejects_file_in_destination_path(live_files):
             thread_id="thread-1",
             current_uid="user-1",
             db=object(),
-            path="/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/report.md",
+            path="/home/user/workspace/projects/11111111-1111-4111-8111-111111111111/report.md",
             destination_path="/notes.txt/child",
         )
     assert isinstance(exc.value, InvalidOperationError)
@@ -353,7 +353,7 @@ async def test_save_artifact_rejects_file_in_destination_path(live_files):
 
 @pytest.mark.asyncio
 async def test_concurrent_artifact_saves_use_distinct_atomic_names(live_files):
-    second_source = "/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/outputs/report.md"
+    second_source = "/home/user/workspace/projects/11111111-1111-4111-8111-111111111111/outputs/report.md"
     live_files.add_runtime_file(second_source, b"second")
 
     first, second = await asyncio.gather(
@@ -361,7 +361,7 @@ async def test_concurrent_artifact_saves_use_distinct_atomic_names(live_files):
             thread_id="thread-1",
             current_uid="user-1",
             db=object(),
-            path="/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/report.md",
+            path="/home/user/workspace/projects/11111111-1111-4111-8111-111111111111/report.md",
         ),
         svc.save_thread_artifact_to_workspace_view(
             thread_id="thread-1",
@@ -372,8 +372,8 @@ async def test_concurrent_artifact_saves_use_distinct_atomic_names(live_files):
     )
 
     assert {first["saved_path"], second["saved_path"]} == {
-        "/home/gem/user-data/saved_artifacts/report.md",
-        "/home/gem/user-data/saved_artifacts/report (1).md",
+        "/home/user/workspace/saved_artifacts/report.md",
+        "/home/user/workspace/saved_artifacts/report (1).md",
     }
     assert set(live_files.expected_bytes(path) for path in (first["saved_path"], second["saved_path"])) == {
         b"one\ntwo\n",

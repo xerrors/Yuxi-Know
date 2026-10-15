@@ -13,7 +13,7 @@ def prepared_execution(*, backend_id="ChatbotAgent", **config):
         worker_id="worker-1",
         runtime_scope_id="thread-1",
         workdir_relative_path="projects/11111111-1111-4111-8111-111111111111",
-        workdir_path="/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111",
+        workdir_path="/home/user/workspace/projects/11111111-1111-4111-8111-111111111111",
     )
     context.update(config)
     return PreparedRunExecution(manifest={}, context=context, backend_id=backend_id)

@@ -7,10 +7,13 @@ import os
 from unittest.mock import AsyncMock
 
 import pytest
+from psycopg_pool import AsyncConnectionPool
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from yuxi.infrastructure.postgres.connection import postgres_conninfo
+from yuxi.modules.agents.models.sandbox import UserSandbox
 from yuxi.infrastructure.postgres.schema import BUSINESS_SCHEMA_VERSION, KNOWLEDGE_SCHEMA_VERSION
 from yuxi.migrations import main as schema_bootstrap
 from yuxi.migrations.schema import (
@@ -31,15 +34,22 @@ from test.integration.support.postgres_schema import (
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
 
-@pytest.mark.parametrize("version", [8, 9, 10, 11])
-async def test_old_business_schema_is_rejected_without_modifying_data(monkeypatch, version):
-    """业务结构必须由部署者明确准备，初始化器不得自动升级存量账号。"""
+@pytest.mark.parametrize("domain, version", [("business", 1), ("business", 12), ("business", 13), ("knowledge", 3)])
+async def test_incompatible_schema_is_rejected_without_modifying_data(monkeypatch, domain, version):
+    """不兼容版本在 DDL 前失败，曾支持的升级入口也不得修改数据。"""
     schema, admin, engine, manager = await _create_isolated_manager("pytest_old_business")
     try:
         await create_business_tables(manager)
         await create_schema_version_table(manager)
-        await record_schema_version(manager, "business", version)
+        await record_schema_version(manager, "business", BUSINESS_SCHEMA_VERSION)
         await record_schema_version(manager, "knowledge", KNOWLEDGE_SCHEMA_VERSION)
+        await record_schema_version(manager, domain, version)
+        if domain == "business" and version == 1:
+            async with engine.begin() as conn:
+                await conn.execute(text("ALTER TABLE session_cooperation_runtimes ADD COLUMN idle_since timestamptz"))
+                await conn.execute(text("ALTER TABLE session_cooperation_runtimes ADD COLUMN released boolean NOT NULL"))
+            with pytest.raises(RuntimeError, match="business=1"):
+                await require_current_schema(manager)
         async with engine.begin() as conn:
             await conn.execute(
                 text(
@@ -52,7 +62,7 @@ async def test_old_business_schema_is_rejected_without_modifying_data(monkeypatc
         monkeypatch.setattr(manager, "close", AsyncMock())
         with pytest.raises(RuntimeError, match="Unsupported Yuxi schema"):
             await schema_bootstrap.main()
-        assert (await get_schema_versions(manager))["business"] == version
+        assert (await get_schema_versions(manager))[domain] == version
         async with engine.connect() as conn:
             assert await conn.scalar(text("SELECT password_hash FROM users WHERE uid='existing'")) == "original"
             assert await conn.scalar(text("SELECT count(*) FROM oidc_identities")) == 0
@@ -172,8 +182,8 @@ async def test_fresh_business_schema_contains_input_lifecycle_without_request_ta
             "thread_id",
         } <= input_columns
         assert "conversation_thread_id" not in input_columns
-        assert BUSINESS_SCHEMA_VERSION == 12
-        assert KNOWLEDGE_SCHEMA_VERSION == 4
+        assert BUSINESS_SCHEMA_VERSION == 2
+        assert KNOWLEDGE_SCHEMA_VERSION == 1
     finally:
         await _drop_isolated_schema(schema, admin_engine, scoped_engine)
 
@@ -462,83 +472,61 @@ async def test_background_job_baseline_replaces_task_table_and_knowledge_owner_c
         assert {"tasks", "jobs"}.isdisjoint(tables)
         assert "processing_job_id" in columns and "processing_task_id" not in columns
         assert {"ck_background_jobs_status", "uq_background_jobs_active_dedupe"} <= constraints
-        await create_schema_version_table(manager)
-        await record_schema_version(manager, "business", 2)
-        await record_schema_version(manager, "knowledge", 1)
-        with pytest.raises(RuntimeError, match="business=2.*knowledge=1"):
-            await require_current_schema(manager)
     finally:
         await _drop_isolated_schema(schema, admin_engine, scoped_engine)
 
 
-@pytest.mark.parametrize("business_version", [BUSINESS_SCHEMA_VERSION])
-async def test_knowledge_name_upgrade_preserves_data_and_rejects_case_insensitive_duplicates(monkeypatch, business_version):
-    """3→4 由真实入口升级；重跑保留数据，活动名称唯一，已删名称可复用。"""
-    schema, admin, engine, manager = await _create_isolated_manager("pytest_name_upgrade")
+async def test_fresh_initializer_creates_complete_baseline_and_restarts_without_changing_data(monkeypatch):
+    """真实入口直接建立约束、沙盒与 checkpoint，重跑保留持久事实。"""
+    schema, admin, engine, manager = await _create_isolated_manager("pytest_initial_baseline")
+    manager.AsyncSession = async_sessionmaker(engine, expire_on_commit=False)
+    pool = AsyncConnectionPool(
+        conninfo=postgres_conninfo(os.environ["POSTGRES_URL"]),
+        kwargs={"autocommit": True, "options": f"-c search_path={schema}"},
+        open=False,
+    )
+    manager.langgraph_pool = pool
+    monkeypatch.setattr(schema_bootstrap, "pg_manager", manager)
+    monkeypatch.setattr(manager, "initialize", lambda: None)
+    monkeypatch.setattr(manager, "close", AsyncMock())
     try:
-        await create_business_tables(manager)
-        await create_knowledge_tables(manager)
-        await create_schema_version_table(manager)
-        await record_schema_version(manager, "business", business_version)
-        await record_schema_version(manager, "knowledge", 3)
-        async with engine.begin() as conn:
-            await conn.execute(text("DROP INDEX IF EXISTS uq_knowledge_bases_active_name"))
-            await conn.execute(text("INSERT INTO knowledge_bases (kb_id, name, kb_type) VALUES ('existing', 'Preserved', 'milvus')"))
-            await conn.execute(
-                text(
-                    "INSERT INTO knowledge_bases (kb_id, name, kb_type, deleted_at) "
-                    "VALUES ('archived', 'PRESERVED', 'milvus', CURRENT_TIMESTAMP)"
-                )
-            )
-        monkeypatch.setattr(schema_bootstrap, "pg_manager", manager)
-        monkeypatch.setattr(manager, "initialize", lambda: None)
-        monkeypatch.setattr(manager, "close", AsyncMock())
-        await schema_bootstrap.main()
+        await pool.open()
         await schema_bootstrap.main()
         await require_current_schema(manager)
+        assert await get_schema_versions(manager) == {"business": BUSINESS_SCHEMA_VERSION, "knowledge": KNOWLEDGE_SCHEMA_VERSION}
         async with engine.connect() as conn:
+            tables = set((await conn.execute(text("SELECT tablename FROM pg_tables WHERE schemaname = current_schema()"))).scalars())
+            assert {"user_sandboxes", "sandbox_commands", "checkpoints", "checkpoint_blobs", "checkpoint_writes"} <= tables
+            assert await conn.scalar(text("SELECT count(*) FROM checkpoint_migrations")) > 0
+            paused_at = (
+                await conn.execute(
+                    text(
+                        "SELECT data_type, is_nullable FROM information_schema.columns "
+                        "WHERE table_schema = current_schema() AND table_name = 'user_sandboxes' AND column_name = 'paused_at'"
+                    )
+                )
+            ).one()
+            assert tuple(paused_at) == ("timestamp with time zone", "YES")
+        async with manager.AsyncSession.begin() as session:
+            session.add(UserSandbox(uid="fixture", envd_token="fixture-token", operation_id="fixture-operation"))
+            session.add(KnowledgeBase(kb_id="existing", name="Preserved", kb_type="milvus"))
+        async with engine.connect() as conn:
+            sandbox_before = dict((await conn.execute(text("SELECT * FROM user_sandboxes WHERE uid='fixture'"))).mappings().one())
+            assert sandbox_before["paused_at"] is None
+            versions_before = (await conn.execute(text("SELECT * FROM yuxi_schema_migrations ORDER BY domain"))).all()
+        await schema_bootstrap.main()
+        async with engine.connect() as conn:
+            assert dict((await conn.execute(text("SELECT * FROM user_sandboxes WHERE uid='fixture'"))).mappings().one()) == sandbox_before
+            assert (await conn.execute(text("SELECT * FROM yuxi_schema_migrations ORDER BY domain"))).all() == versions_before
             assert await conn.scalar(text("SELECT name FROM knowledge_bases WHERE kb_id='existing'")) == "Preserved"
-        with pytest.raises(IntegrityError):
+        with pytest.raises(IntegrityError, match="uq_knowledge_bases_active_name"):
             async with engine.begin() as conn:
                 await conn.execute(text("INSERT INTO knowledge_bases (kb_id, name, kb_type) VALUES ('duplicate', 'PRESERVED', 'milvus')"))
         async with engine.begin() as conn:
             await conn.execute(text("UPDATE knowledge_bases SET deleted_at=CURRENT_TIMESTAMP WHERE kb_id='existing'"))
             await conn.execute(text("INSERT INTO knowledge_bases (kb_id, name, kb_type) VALUES ('replacement', 'preserved', 'milvus')"))
         async with engine.connect() as conn:
-            assert await conn.scalar(text("SELECT count(*) FROM knowledge_bases")) == 3
+            assert await conn.scalar(text("SELECT count(*) FROM knowledge_bases")) == 2
     finally:
-        await _drop_isolated_schema(schema, admin, engine)
-
-
-async def test_knowledge_name_upgrade_rejects_existing_duplicates_without_changing_version_or_rows(monkeypatch):
-    """存量重名不会自动改名或丢数据，迁移失败保持知识域版本 3。"""
-    schema, admin, engine, manager = await _create_isolated_manager("pytest_name_conflict")
-    try:
-        await create_business_tables(manager)
-        await create_knowledge_tables(manager)
-        await create_schema_version_table(manager)
-        await record_schema_version(manager, "business", BUSINESS_SCHEMA_VERSION)
-        await record_schema_version(manager, "knowledge", 3)
-        async with engine.begin() as conn:
-            await conn.execute(text("DROP INDEX IF EXISTS uq_knowledge_bases_active_name"))
-            await conn.execute(
-                text("INSERT INTO knowledge_bases (kb_id, name, kb_type) VALUES ('a', 'Duplicate', 'milvus'), ('b', 'duplicate', 'milvus')")
-            )
-        monkeypatch.setattr(schema_bootstrap, "pg_manager", manager)
-        monkeypatch.setattr(manager, "initialize", lambda: None)
-        monkeypatch.setattr(manager, "close", AsyncMock())
-        with pytest.raises(RuntimeError, match="重名"):
-            await schema_bootstrap.main()
-        assert await get_schema_versions(manager) == {"business": BUSINESS_SCHEMA_VERSION, "knowledge": 3}
-        async with engine.connect() as conn:
-            assert list((await conn.execute(text("SELECT name FROM knowledge_bases ORDER BY kb_id"))).scalars()) == [
-                "Duplicate",
-                "duplicate",
-            ]
-            assert await conn.scalar(text("SELECT to_regclass('uq_knowledge_bases_active_name')")) is None
-        async with engine.begin() as conn:
-            await conn.execute(text("UPDATE knowledge_bases SET name='Resolved' WHERE kb_id='b'"))
-        await schema_bootstrap.main()
-        await require_current_schema(manager)
-    finally:
+        await pool.close()
         await _drop_isolated_schema(schema, admin, engine)

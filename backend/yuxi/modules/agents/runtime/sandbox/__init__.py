@@ -1,19 +1,9 @@
-from yuxi.modules.agents.runtime.sandbox.backend import ProvisionerSandboxBackend
+"""Agent 文件与 Cube 用户环境执行边界。"""
+
+from yuxi.modules.agents.runtime.sandbox.backend import UserSandboxBackend
 from yuxi.modules.agents.runtime.sandbox.provider import (
-    ProvisionerSandboxProvider,
-    SandboxConnection,
+    CubeSandboxProvider,
     get_sandbox_provider,
-    init_sandbox_provider,
-    sandbox_id_for_thread,
-    shutdown_sandbox_provider,
 )
 
-__all__ = [
-    "ProvisionerSandboxBackend",
-    "ProvisionerSandboxProvider",
-    "SandboxConnection",
-    "get_sandbox_provider",
-    "init_sandbox_provider",
-    "sandbox_id_for_thread",
-    "shutdown_sandbox_provider",
-]
+__all__ = ["UserSandboxBackend", "CubeSandboxProvider", "get_sandbox_provider"]

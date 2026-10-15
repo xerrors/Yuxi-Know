@@ -131,7 +131,7 @@ async def test_default_thread_creates_implicit_project_with_exclusive_binding(te
     assert row["selection_status"] == "implicit"
     assert row["directory_mode"] == "managed"
     assert re.fullmatch(
-        rf"projects/\d{{4}}-\d{{2}}-\d{{2}}_\d{{2}}-\d{{2}}-\d{{2}}_{re.escape(payload['project_id'][:8])}(?:-[1-9]\d*)?",
+        rf"projects/\d{{8}}/{re.escape(payload['project_id'][:6])}(?:-[1-9]\d*)?",
         row["workdir_path"],
     )
     assert user_workdir_host_dir(str(row["uid"]), str(row["workdir_path"])).is_dir()

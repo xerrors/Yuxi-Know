@@ -8,7 +8,6 @@ IMAGE_PREFIX = "${COMPOSE_PROJECT_NAME:-yuxi}"
 PORT_MARKERS = {
     "api": {"${YUXI_API_PORT:-5050}:5050"},
     "frontend": {"${YUXI_FRONTEND_PORT:-5173}:5173"},
-    "sandbox-provisioner": {"127.0.0.1:${YUXI_SANDBOX_PORT:-8002}:8002"},
     "graph": {
         "127.0.0.1:${YUXI_NEO4J_HTTP_PORT:-7474}:7474",
         "127.0.0.1:${YUXI_NEO4J_BOLT_PORT:-7687}:7687",
@@ -30,7 +29,6 @@ LOCAL_IMAGE_SUFFIXES = {
     "api": "-api:",
     "worker": "-api:",
     "schema-init": "-api:",
-    "sandbox-provisioner": "-sandbox-provisioner:",
     "frontend": "-frontend:",
     "mineru-api": "-mineru:",
     "paddlex": "-paddlex:",
@@ -65,14 +63,6 @@ def _slot_isolation_violations(compose: dict) -> set[str]:
         image = str(services[service_name].get("image") or "")
         if not image.startswith(f"{IMAGE_PREFIX}{suffix}"):
             violations.add(f"image:{service_name}")
-
-    provisioner_env = set(services["sandbox-provisioner"]["environment"])
-    expected_prefix = "${SANDBOX_DOCKER_NETWORK_PREFIX:-${COMPOSE_PROJECT_NAME:-yuxi}-sandbox}"
-    if f"DOCKER_NETWORK_PREFIX={expected_prefix}" not in provisioner_env:
-        violations.add("sandbox:network-prefix")
-    expected_container = "${SANDBOX_DOCKER_SANDBOX_PREFIX:-${COMPOSE_PROJECT_NAME:-yuxi}-sandbox}"
-    if f"DOCKER_SANDBOX_PREFIX={expected_container}" not in provisioner_env:
-        violations.add("sandbox:container-prefix")
 
     return violations
 

@@ -396,7 +396,7 @@ const rememberRawSelectionRange = (range) => {
 
 const formatMentionPath = (path) => {
   if (!path) return ''
-  let cleanPath = path.replace(/^\/?home\/gem\/user-data\/?/, '')
+  let cleanPath = path.replace(/^\/?home\/user\/workspace(?:\/|$)/, '')
   if (cleanPath.startsWith('/')) {
     cleanPath = cleanPath.substring(1)
   }

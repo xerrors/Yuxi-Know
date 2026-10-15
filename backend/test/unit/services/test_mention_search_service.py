@@ -47,7 +47,7 @@ async def test_workspace_mention_search_ranks_directories_and_ignores_hidden_tre
     assert [item["name"] for item in results] == ["test", "test_auth.py", "conftest.py"]
     assert results[0] == {
         "name": "test",
-        "path": "/home/gem/user-data/test/",
+        "path": "/home/user/workspace/test/",
         "is_dir": True,
         "source": "workspace",
     }
@@ -121,7 +121,7 @@ async def test_search_mentions_uses_workdir_access_and_workspace_scan(monkeypatc
     assert result == [
         {
             "name": "outputs",
-            "path": ("/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/outputs/"),
+            "path": ("/home/user/workspace/projects/11111111-1111-4111-8111-111111111111/outputs/"),
             "is_dir": True,
             "source": "thread",
         }

@@ -31,14 +31,14 @@ function setupImage(t, source, loader, sandbox = true, sourceLoader = null) {
   return { props, imageLoader, view, urls, revoked, previews, stop: () => scope.stop() }
 }
 const imageResponse = () => ({ blob: async () => new Blob(['image'], { type: 'image/png' }) })
-const path = '/home/gem/user-data/projects/example/图片 #1.png'
+const path = '/home/user/workspace/projects/example/图片 #1.png'
 
 test('Image 协议接受含空格的沙盒路径，路径跳转和反斜杠拒绝', () => {
   const widget = path => JSON.stringify({ type: 'Card', children: [{ type: 'Image', path, alt: '图片' }] })
   assert.equal(parseWidget(widget(path)).children[0].path, path)
   assert.equal(parseWidget(widget('/workspace/custom/image.png')).children[0].path, '/workspace/custom/image.png')
-  assert.equal(parseWidget(widget('/home/gem/skills/example/image.png')).children[0].path, '/home/gem/skills/example/image.png')
-  for (const invalid of ['/home/gem/user-data/../secret.png', '/home/gem/user-data/a\\b.png', '/home/gem/user-data/a\0b'])
+  assert.equal(parseWidget(widget('/home/user/skills/example/image.png')).children[0].path, '/home/user/skills/example/image.png')
+  for (const invalid of ['/home/user/workspace/../secret.png', '/home/user/workspace/a\\b.png', '/home/user/workspace/a\0b'])
     assert.throws(() => parseWidget(widget(invalid)), /沙盒虚拟绝对路径/)
   for (const invalid of ['file:///tmp/a.png', 'data:image/png;base64,a', '//example.com/a.png', 'https://user:pass@example.com/a.png'])
     assert.throws(() => parseWidget(JSON.stringify({ type: 'Card', children: [{ type: 'Image', src: invalid, alt: '图片' }] })), /HTTPS/)

@@ -754,7 +754,7 @@ test/
 - CI 现状：`test.yml:65` 只跑 `pytest test/unit -m 'not slow'`；`system-tests.yml` 是逐文件白名单编排（无整目录步骤）；全 workflows **无任何一处引用下述门控环境变量**。
 - 双零覆盖（默认不跑 + CI 不跑，且无其它层兜底）：
   1. **BUILTIN_PROVIDERS 目录事实**（每个内置 provider 的 base_url/api_key_env/模型 id）：唯一验证者是 `RUN_MODEL_PROVIDER_CONNECTIVITY` 门控的 connectivity 套件；`unit/services/test_model_provider_service.py:462-465` 只断言 schema 与"ollama 不在内"。siliconflow 改名模型时无任何信号。
-  2. **沙箱镜像 grep 契约**（容器内 grep + NUL 传输协议，决策文档 `2026-09-24-sandbox-grep-nul-transport.md`）：唯一测试 `integration/sandbox/test_sandbox_native_grep.py` 由 `TEST_SANDBOX_URL` 门控，且该变量在全仓库无任何配置来源（yml/sh/compose/toml 零命中）；unit 侧 grep 族 mock 掉 `_grep_root`。
+  2. **沙箱镜像 grep 契约**（容器内 grep + NUL 传输协议，原决策已归并至[沙盒环境决策](../decisions/implemented/2026-10-15-sandbox-environment.md#后端装配与旧执行路径的证据边界)，此处保留审计时的旧后端事实）：唯一测试 `integration/sandbox/test_sandbox_native_grep.py` 由 `TEST_SANDBOX_URL` 门控，且该变量在全仓库无任何配置来源（yml/sh/compose/toml 零命中）；unit 侧 grep 族 mock 掉 `_grep_root`。
 - 其余门控（`YUXI_REASONING_*`、`E2E_VISION_MODEL`/`E2E_NON_VISION_MODEL`、`REFERENCE_PROBE_MODEL`）有默认单测兜底（如 `test_provider_reasoning.py` 解析族、`test_model_input_middleware.py` OCR fallback 族），风险可接受，但应在 CI 显式接入门控（哪怕单 provider）或文档化运行频率。
 - 运行时条件 skip：`test_chat_router.py:698/702/729/733`、`test_viewer_filesystem_security.py:21`、`e2e_helpers.py:27`（429 配额即跳过，真实模型断言可被静默吞掉）——应改为显式报告。
 - CI 白名单缺口：`integration/graphs/` 两文件、`integration/sandbox/test_sandbox_native_grep.py`、`integration/api/test_debug_message_projection.py` 不在 system-tests.yml，仅 `run_tests.sh integration` 整目录能带到。

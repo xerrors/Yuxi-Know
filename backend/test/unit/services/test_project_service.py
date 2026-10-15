@@ -35,6 +35,10 @@ class _Db:
     async def scalar(self, _statement):
         return None
 
+    async def scalars(self, _statement):
+        """返回已登记的目录绑定。"""
+        return SimpleNamespace(all=lambda: [item.workdir_path for item in self.items])
+
 
 async def test_linked_project_accepts_existing_nested_directory(monkeypatch, tmp_path: Path):
     monkeypatch.setattr("yuxi.modules.workspace.paths.get_user_data_dir", lambda: tmp_path)
@@ -124,7 +128,7 @@ async def test_multiple_projects_can_share_one_existing_directory(monkeypatch, t
     assert first["workdir_path"] == second["workdir_path"] == "shared"
 
 
-async def test_implicit_project_uses_timestamped_managed_workdir(monkeypatch, tmp_path: Path):
+async def test_implicit_project_uses_date_grouped_managed_workdir(monkeypatch, tmp_path: Path):
     monkeypatch.setattr("yuxi.modules.workspace.paths.get_user_data_dir", lambda: tmp_path)
     monkeypatch.setattr(
         "yuxi.modules.workspace.paths.shanghai_now",
@@ -135,7 +139,7 @@ async def test_implicit_project_uses_timestamped_managed_workdir(monkeypatch, tm
     project = await svc.create_implicit_project(uid="user-1", db=_Db())
 
     assert project.id == "a1b2c3d4-e5f6-4789-8123-456789abcdef"
-    assert project.workdir_path == "projects/2026-09-02_14-35-08_a1b2c3d4"
+    assert project.workdir_path == "projects/20260902/a1b2c3"
     assert not (user_workspace_dir("user-1") / project.workdir_path).exists()
 
 

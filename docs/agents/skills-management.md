@@ -17,8 +17,8 @@ Skill 是一个可复用的能力包，通常包含一个 `SKILL.md`、提示词
 
 运行时路径是：
 
-- 共享和内置 Skill：`/home/gem/skills/<slug>/`，对 Agent 只读；
-- 个人 Skill：`/home/gem/user-data/agents/skills/<slug>/`，位于当前用户的 UserWorkspace。
+- 共享和内置 Skill：`/home/user/skills/<slug>/`，对 Agent 只读；
+- 个人 Skill：`/home/user/workspace/agents/skills/<slug>/`，位于当前用户的 UserWorkspace。
 
 同一用户有个人 Skill 和共享 Skill 使用同一个 slug 时，个人版本覆盖该用户看到的共享版本。删除个人版本后，如果共享版本仍可访问，会恢复共享版本。
 
@@ -141,7 +141,7 @@ GitHub 的 `owner/repo` 简写会被转换为 HTTPS 地址。远程来源会在�
 
 API/worker 启动时同步文件、元数据和依赖，保留数据库中的启停状态。重启后在“扩展 → Skills”核对新增项的说明和依赖；新增脚本或资源也必须随发行包携带。源码目录与共享投影分别拥有发布内容和安装文件，编辑应落在源码目录。
 
-安装前仍应审查 Skill 的提示词、脚本、依赖和网络行为。不要把数据库密码、云平台密钥或 `SANDBOX_PROVISIONER_TOKEN` 放进 Skill 或 Agent 环境。
+安装前仍应审查 Skill 的提示词、脚本、依赖和网络行为。不要把数据库密码、云平台密钥或 Cube 控制凭据 放进 Skill 或 Agent 环境。
 
 ## 依赖和加载时机
 
@@ -187,9 +187,11 @@ Agent 配置中的 Skill 选择不能扩大用户的文件、知识库或 MCP �
 
 远程安装和安装确认草稿共用远程下载、白名单及提取边界。个人来源采用创建型原子发布，同名目录即使为空也失败；共享内容先发布唯一不可变包再提交数据库引用，失败清理未提交包；内置更新保留旧目录用于失败恢复。投影按 uid 锁定并核对完整授权集合：单项变更先撤销旧投影，再重建用户集合，失败保留撤销结果并由下一次执行刷新补偿。不同发布点保留各自的覆盖与撤权规则。
 
+远程 CLI 的临时 HOME 按请求清理；递归删除遇到符号链接时只移除链接本身，不访问目标。文件读取、复制和父目录遍历继续拒绝符号链接。CLI 的 Node/npm 与 Git 依赖由[沙盒模板](../advanced/sandbox-operations.md)提供。
+
 共享和内置 Skill 投影对 Agent 只读，但沙盒命令仍可能执行其中的脚本。脚本如需写文件，应写入当前 Project Workdir 或 User Data，而不是 Skill 目录。个人 Skill 直接从当前用户工作区读取，不会复制到共享投影。
 
-Skill 的选择影响 Prompt 和工具激活；共享投影按用户授权集合生成，不会因为某个 Agent 选择了 Skill 就改变 Sandbox 身份。路径穿越、符号链接和跨用户访问由文件系统边界拒绝。
+Skill 的选择影响 Prompt 和工具激活；共享投影按用户授权集合生成，不会因为某个 Agent 选择了 Skill 就改变 Sandbox 身份。路径穿越、沿符号链接访问和跨用户访问由文件系统边界拒绝。
 
 ## 维护建议
 

@@ -41,7 +41,7 @@ function followLink(event) {
   const link = event.target.closest("a");
   if (!link) return;
   const href = link.getAttribute("href");
-  if (href?.startsWith("/home/gem/")) {
+  if (href?.startsWith("/home/user/workspace/") || href?.startsWith("/home/user/skills/")) {
     event.preventDefault();
     try {
       emit("download", decodeURIComponent(href));

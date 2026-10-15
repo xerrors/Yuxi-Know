@@ -565,7 +565,7 @@ async def control_tree(*, db, scope: ActorScope, thread_id: str, idempotency_key
         raise StateConflictError("整树仍有未结束的 Turn")
     await db.execute(
         insert(CooperationRuntime)
-        .values(tree_root_thread_id=member.tree_root_thread_id, stopped=stopped, released=False)
+        .values(tree_root_thread_id=member.tree_root_thread_id, stopped=stopped)
         .on_conflict_do_update(index_elements=[CooperationRuntime.tree_root_thread_id], set_={"stopped": stopped})
     )
     receipt = await repo.create(

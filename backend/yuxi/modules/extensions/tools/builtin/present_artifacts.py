@@ -7,7 +7,7 @@ from langchain_core.messages import ToolMessage
 from langgraph.prebuilt.tool_node import ToolRuntime
 from langgraph.types import Command
 from pydantic import BaseModel, Field
-from yuxi.modules.extensions.tools.builtin.sandbox_scope import resolve_runtime_sandbox_scope
+from yuxi.modules.extensions.tools.builtin.file_context import resolve_file_context
 from yuxi.modules.extensions.tools.registry import tool
 from yuxi.modules.workspace.runtime_paths import normalize_artifact_path
 
@@ -61,17 +61,15 @@ def present_artifacts(
 
 def _normalize_presented_artifact_path(filepath: str, runtime: ToolRuntime) -> str:
     """校验交付物属于当前用户可见的普通文件。"""
-    from yuxi.modules.agents.runtime.sandbox.backend import ProvisionerSandboxBackend
+    from yuxi.modules.agents.runtime.sandbox.backend import UserSandboxBackend
 
     runtime_context = runtime.context
-    runtime_scope_id, uid, workdir_relative_path = resolve_runtime_sandbox_scope(runtime)
+    uid, workdir_relative_path = resolve_file_context(runtime)
 
     normalized_path = normalize_artifact_path(getattr(runtime_context, "workdir_path", None), filepath)
-    backend = ProvisionerSandboxBackend(
-        thread_id=runtime_scope_id,
+    backend = UserSandboxBackend(
         uid=str(uid),
         workdir_path=workdir_relative_path,
-        create_if_missing=True,
     )
     if not backend.regular_file_exists(normalized_path):
         raise ValueError(f"文件不存在或不是普通文件: {filepath}")

@@ -101,15 +101,11 @@ function Ensure-SecuritySecret($Name, [string[]]$OtherNames = @()) {
 function Assert-SecuritySecrets {
     $jwtSecret = Get-EnvValue "JWT_SECRET_KEY"
     $apiKeySecret = Get-EnvValue "API_KEY_DERIVATION_SECRET"
-    $sandboxSecret = Get-EnvValue "SANDBOX_PROVISIONER_TOKEN"
     if (-not (Test-SecuritySecretValue $jwtSecret)) {
         throw "JWT_SECRET_KEY must contain at least 32 non-whitespace characters."
     }
     if (-not (Test-SecuritySecretValue $apiKeySecret @($jwtSecret))) {
         throw "API_KEY_DERIVATION_SECRET must be at least 32 characters and independent from JWT_SECRET_KEY."
-    }
-    if (-not (Test-SecuritySecretValue $sandboxSecret @($jwtSecret, $apiKeySecret))) {
-        throw "SANDBOX_PROVISIONER_TOKEN must be at least 32 characters and independent from other security secrets."
     }
 }
 
@@ -144,9 +140,6 @@ function Ensure-JwtEnv {
     }
 }
 
-function Ensure-SandboxEnv {
-    Ensure-SecuritySecret "SANDBOX_PROVISIONER_TOKEN" @("JWT_SECRET_KEY", "API_KEY_DERIVATION_SECRET")
-}
 
 if ($ValidateSecurityEnv) {
     if (-not (Test-Path ".env")) {
@@ -174,7 +167,6 @@ if (Test-Path ".env") {
     Write-Host "✅ .env file already exists. Checking required settings." -ForegroundColor Green
     Ensure-RequiredApiEnv
     Ensure-JwtEnv
-    Ensure-SandboxEnv
     Assert-SecuritySecrets
 } else {
     Write-Host "📝 .env file not found. Let's set up your environment variables." -ForegroundColor Yellow
@@ -226,10 +218,6 @@ if (Test-Path ".env") {
         Write-Host "Generated YUXI_INSTANCE_ID and saved it to .env." -ForegroundColor Green
     }
 
-    $SANDBOX_PROVISIONER_TOKEN = Read-SecuritySecret "SANDBOX_PROVISIONER_TOKEN" @(
-        $JWT_SECRET_KEY,
-        $API_KEY_DERIVATION_SECRET
-    )
 
     # Create .env file
     $envContent = @"
@@ -255,7 +243,6 @@ SILICONFLOW_API_KEY=$apiKey
 JWT_SECRET_KEY=$JWT_SECRET_KEY
 API_KEY_DERIVATION_SECRET=$API_KEY_DERIVATION_SECRET
 YUXI_INSTANCE_ID=$YUXI_INSTANCE_ID
-SANDBOX_PROVISIONER_TOKEN=$SANDBOX_PROVISIONER_TOKEN
 "@
 
     $envContent | Out-File -FilePath ".env" -Encoding UTF8
@@ -270,7 +257,6 @@ SANDBOX_PROVISIONER_TOKEN=$SANDBOX_PROVISIONER_TOKEN
     Remove-Variable -Name "JWT_SECRET_KEY" -ErrorAction SilentlyContinue
     Remove-Variable -Name "API_KEY_DERIVATION_SECRET" -ErrorAction SilentlyContinue
     Remove-Variable -Name "YUXI_INSTANCE_ID" -ErrorAction SilentlyContinue
-    Remove-Variable -Name "SANDBOX_PROVISIONER_TOKEN" -ErrorAction SilentlyContinue
 }
 
 Write-Host ""
@@ -320,17 +306,6 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-$sandboxImage = "enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:1.11.0"
-if (-not (Test-SkipExistingImage $sandboxImage)) {
-    Write-Host "🔄 Pulling ${sandboxImage}..." -ForegroundColor Yellow
-    docker pull $sandboxImage
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "✅ Successfully pulled ${sandboxImage}" -ForegroundColor Green
-    } else {
-        Write-Host "❌ Failed to pull ${sandboxImage}" -ForegroundColor Red
-        exit 1
-    }
-}
 
 Write-Host ""
 Write-Host "🎉 Initialization complete!" -ForegroundColor Green

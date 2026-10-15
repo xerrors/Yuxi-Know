@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import tempfile
 import unittest
 from datetime import datetime
@@ -93,7 +92,8 @@ class AgentLoadTestScriptTest(unittest.IsolatedAsyncioTestCase):
             return httpx.Response(
                 200,
                 text=(
-                    'event: yuxi.session.run.created\ndata: {"session_id":"other","input_id":"input-1","turn_id":"turn-2","yuxi":{"run_id":"run-2"}}\n\n'
+                    'event: yuxi.session.run.created\ndata: {"session_id":"other","input_id":"input-1",'
+                    '"turn_id":"turn-2","yuxi":{"run_id":"run-2"}}\n\n'
                 ),
             )
 
@@ -308,40 +308,26 @@ class AgentLoadTestScriptTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(_parse_memory_mb("--"))
         self.assertAlmostEqual(_parse_memory_mb("1 GiB") or 0, 1024)
 
-    def test_resource_sampler_uses_distinct_sandbox_prefixes(self) -> None:
-        commands = []
-
-        def fake_run(command, *, allow_partial=False):
-            del allow_partial
-            commands.append(command)
-            if command[1:3] == ["network", "ls"]:
-                return "network-prefix-one\nother-network\n"
-            return "container-id\tcontainer-prefix-one\n"
-
-        sampler = LocalResourceSampler(
-            "project-one",
-            "container-prefix",
-            "network-prefix",
+    def test_resource_sampler_only_counts_current_compose_services(self) -> None:
+        """本机统计不把无关容器或远端 VM 当成零用量沙盒。"""
+        sampler = LocalResourceSampler("project-one")
+        stats = "\n".join(
+            json.dumps(row)
+            for row in [
+                {"ID": "api-id", "Name": "api", "MemUsage": "64MiB / 1GiB", "CPUPerc": "5%"},
+                {"ID": "other-id", "Name": "project-one-sandbox-old", "MemUsage": "128MiB / 1GiB", "CPUPerc": "90%"},
+            ]
         )
-        with patch("test.performance.load._run_local_command", side_effect=fake_run):
-            self.assertEqual(sampler._sandbox_containers(), ["container-id"])
-            self.assertEqual(sampler._sandbox_network_count(), 1)
+        with patch("test.performance.load._run_local_command", return_value=stats):
+            memory, cpu = sampler._container_stats({"api-id": "api"})
+        self.assertEqual(memory, {"api": 64.0})
+        self.assertEqual(cpu, {"api": 5.0})
 
-        self.assertEqual(commands[0][3], "name=container-prefix")
-        self.assertEqual(commands[1][4], "name=network-prefix")
-
-    def test_parser_reads_distinct_sandbox_prefix_environment(self) -> None:
-        with patch.dict(
-            os.environ,
-            {
-                "SANDBOX_DOCKER_SANDBOX_PREFIX": "container-prefix",
-                "SANDBOX_DOCKER_NETWORK_PREFIX": "network-prefix",
-            },
-        ):
-            args = build_parser().parse_args(["load"])
-
-        self.assertEqual(args.sandbox_container_prefix, "container-prefix")
-        self.assertEqual(args.sandbox_network_prefix, "network-prefix")
+    def test_parser_rejects_retired_docker_sandbox_options(self) -> None:
+        """已删除的部署旋钮不能继续改变压测范围。"""
+        for option in ("--sandbox-container-prefix", "--sandbox-network-prefix"):
+            with self.assertRaises(SystemExit):
+                build_parser().parse_args(["load", option, "unused"])
 
     def test_summarize_uses_nearest_rank_and_counts_failures(self) -> None:
         summary = summarize(

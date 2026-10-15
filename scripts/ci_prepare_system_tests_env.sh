@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
-# 为 Runtime System Tests 的两个 job 准备隔离的 Compose 环境：
-# 从模板生成 .env，注入 CI 密钥；OpenAI replay 不提供 Langfuse API。
-# 密钥值由 job 级 env 提供；调用方可在本脚本之后向 .env 追加自己的 CI-only 变量。
+# 专用 Cube CI runner 与执行节点共享 checkout 文件；不输出任何密钥。
 set -euo pipefail
+: "${CUBE_API_URL:?Configure the Cube runner control endpoint}"
+: "${CUBE_PROXY_NODE_IP:?Configure the Cube runner data endpoint}"
+test -r /dev/kvm && test -w /dev/kvm
+python3 - <<'PY'
+import os
+from pathlib import Path
 
-cp .env.template .env
-# sed 替换文本需转义 &、\ 与分隔符 /：密钥含这些字符时未转义会写错值或失败。
-sed_escape() {
-  printf '%s' "$1" | sed -e 's/[\\&/]/\\&/g'
-}
-sed -i "s/^JWT_SECRET_KEY=.*/JWT_SECRET_KEY=$(sed_escape "${JWT_SECRET_KEY}")/" .env
-sed -i "s/^API_KEY_DERIVATION_SECRET=.*/API_KEY_DERIVATION_SECRET=$(sed_escape "${API_KEY_DERIVATION_SECRET}")/" .env
-sed -i "s/^SANDBOX_PROVISIONER_TOKEN=.*/SANDBOX_PROVISIONER_TOKEN=$(sed_escape "${SANDBOX_PROVISIONER_TOKEN}")/" .env
-grep -E "^(JWT_SECRET_KEY|API_KEY_DERIVATION_SECRET|SANDBOX_PROVISIONER_TOKEN)=.+" .env
+keys = ("JWT_SECRET_KEY", "API_KEY_DERIVATION_SECRET", "CUBE_API_URL", "CUBE_API_KEY", "CUBE_PROXY_NODE_IP", "CUBE_PROXY_PORT_HTTP", "CUBE_TEMPLATE_ID", "SILICONFLOW_API_KEY")
+values = {key: os.environ[key] for key in keys if os.environ.get(key)}
+state = Path("docker/volumes/yuxi").resolve()
+values.update(CUBE_NODE_USER_DATA_DIR=str(state / "threads"), CUBE_NODE_SKILL_PROJECTION_DIR=str(state / "skill-projections"))
+lines = [line for line in Path(".env.template").read_text().splitlines() if line.split("=", 1)[0] not in values]
+lines.extend(f"{key}={value}" for key, value in values.items())
+path = Path(".env")
+path.write_text("\n".join(lines) + "\n")
+path.chmod(0o600)
+PY

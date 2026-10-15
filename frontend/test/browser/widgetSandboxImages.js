@@ -62,7 +62,7 @@ async (originalPage) => {
       const pinia = createPinia()
       const app = createApp({ render: () => h('div', [
         state.visible ? h(Answer, { content: state.content, threadId: state.threadId, message: {} }) : null,
-        state.artifacts ? h(Artifacts, { threadId, artifacts: [{ path: source, type: 'image' }] }) : null
+        state.artifacts ? h(Artifacts, { threadId, artifacts: [source] }) : null
       ]) })
       app.use(pinia); app.use(AntDesign); app.mount(host)
       Object.assign(window.widgetImageProbe, { app, host, state, widget, gallery, sources, theme: useThemeStore(pinia) })

@@ -113,7 +113,7 @@ async def test_personal_skills_are_available_independently_of_shared_selection(t
     assert set(scope["context_skills"]) == expected
     assert set(scope["effective_skills"]) == expected
     assert scope["runtime_skills"]["shared"]["description"] == "personal shared"
-    assert scope["runtime_skills"]["shared"]["path"] == "/home/gem/user-data/agents/skills/shared/SKILL.md"
+    assert scope["runtime_skills"]["shared"]["path"] == "/home/user/workspace/agents/skills/shared/SKILL.md"
     assert "other-user" not in scope["runtime_skills"]
     expected_contents = {}
     if preloads == "all" and selection:
@@ -206,8 +206,8 @@ async def test_resolve_runtime_skills_derives_authorized_scope(monkeypatch):
     assert scope["context_skills"] == ["alpha", "beta"]
     assert scope["effective_skills"] == ["alpha", "beta"]
     assert set(scope["runtime_skills"]) == {"alpha", "beta"}
-    assert scope["runtime_skills"]["alpha"]["path"] == "/home/gem/skills/alpha/SKILL.md"
-    assert scope["runtime_skills"]["beta"]["path"] == "/home/gem/user-data/agents/skills/beta/SKILL.md"
+    assert scope["runtime_skills"]["alpha"]["path"] == "/home/user/skills/alpha/SKILL.md"
+    assert scope["runtime_skills"]["beta"]["path"] == "/home/user/workspace/agents/skills/beta/SKILL.md"
     assert scope["runtime_skills"]["alpha"]["skills"] == ["beta"]
 
 

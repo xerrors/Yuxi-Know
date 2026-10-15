@@ -21,7 +21,7 @@ from yuxi.modules.agents.services.leases import (
     WORKER_ID,
     reconcile_expired_run_leases,
     reconcile_pending_runtime_cleanups,
-    release_idle_sandboxes,
+    maintain_user_sandboxes,
 )
 from yuxi.modules.agents.services.scheduler import recover_pending_dispatches
 from yuxi.modules.extensions.mcp.service import ensure_builtin_mcp_servers_in_db
@@ -43,6 +43,9 @@ async def _worker_startup(ctx):
     if not isinstance(ctx, dict):
         raise TypeError("ARQ worker context 必须是字典")
     AuthUtils.require_security_secrets()
+    from yuxi.modules.agents.runtime.sandbox.provider import check_sandbox_provider
+
+    await check_sandbox_provider()
     ctx["worker_id"] = WORKER_ID
     pg_manager.initialize()
     await require_current_schema(pg_manager)
@@ -130,7 +133,7 @@ async def _reconcile_sandboxes_forever() -> None:
     """外部沙盒回收独立运行，慢释放不占据调度恢复循环。"""
     while True:
         try:
-            await release_idle_sandboxes()
+            await maintain_user_sandboxes()
         except Exception:
             logger.exception("Sandbox cleanup reconciliation failed")
         await asyncio.sleep(RUN_RECONCILIATION_SECONDS)

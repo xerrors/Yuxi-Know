@@ -13,7 +13,7 @@ dependencies = [
     "uvicorn[standard]>=0.34.2",
     "arq>=0.26.3",
     "croniter>=6.0.0",
-    "agent-sandbox>=0.0.26",
+    "cubesandbox==0.7.3",
     "aiofiles>=24.1.0",
     "aiohttp>=3.14.1",
     "aiosqlite>=0.20.0",

@@ -13,6 +13,7 @@ from yuxi.api.routers.extensions.tools import tools
 from yuxi.api.routers.identity.auth import auth
 from yuxi.api.routers.identity.departments import department
 from yuxi.api.routers.identity.users import user_router
+from yuxi.api.routers.identity.sandbox import router as user_sandbox_router
 from yuxi.api.routers.knowledge.dashboard import knowledge_dashboard
 from yuxi.api.routers.knowledge.evaluation import evaluation
 from yuxi.api.routers.knowledge.graphs import graph
@@ -49,6 +50,7 @@ router.include_router(model_providers)  # /api/system/model-providers/* 独立�
 router.include_router(skills)  # /api/system/skills/* Skills 管理
 router.include_router(user_skills)  # /api/skills/* 用户可用 Skills
 router.include_router(tools)  # /api/system/tools/* 工具列表与配置
+router.include_router(user_sandbox_router)
 router.include_router(user_router)  # /api/user/* 用户级配置与凭据
 router.include_router(filesystem_router)  # /api/viewer/filesystem/* 工作台文件系统视图
 router.include_router(workspace_routes)  # /api/workspace/* 用户个人工作区

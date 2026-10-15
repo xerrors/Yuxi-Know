@@ -318,7 +318,7 @@ test('交付物展示不把最后可见工具后的正文收入过程区', () =>
     assert.deepEqual(items[1].items.map(item => item.key), ['prepare', 'tool-group-prepare-tools'])
     assert.equal(items[1].toolCallCount, 1)
     assert.deepEqual(items.slice(2).map(item => item.message.id), ['answer', 'confirm'])
-    assert.deepEqual(MessageProcessor.extractArtifactsFromMessageGroup({ messages }), [{ path: '/dog.png' }])
+    assert.deepEqual(MessageProcessor.extractArtifactsFromMessageGroup({ messages }), ['/dog.png'])
     assert.deepEqual(messages, original)
   }
 })

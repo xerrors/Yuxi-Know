@@ -26,10 +26,8 @@ class CooperationEvent(Base):
 
 
 class CooperationRuntime(Base):
-    """单独拥有共享沙盒回收状态，避免反向锁定业务 Session。"""
+    """拥有协作树停止状态，独立于用户 VM 生命周期。"""
 
     __tablename__ = "session_cooperation_runtimes"
     tree_root_thread_id = Column(String(64), ForeignKey("sessions.thread_id"), primary_key=True)
-    idle_since = Column(DateTime(timezone=True), nullable=True)
-    released = Column(Boolean, nullable=False, default=False)
     stopped = Column(Boolean, nullable=False, default=False)

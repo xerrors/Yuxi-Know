@@ -564,3 +564,66 @@ async def test_cancelling_recovery_isolates_bad_checkpoint(lease_database, monke
             assert (await db.get(AgentTurn, good.turn_id)).status == "cancelled"
     finally:
         await cleanup_agent_run_threads(sessions, [bad_thread, good_thread])
+
+
+async def test_cancelled_cleanup_holds_run_lock_until_external_command_finishes(lease_database, monkeypatch, tmp_path):
+    """取消清理协程不能提前释放 Run 锁，也不能误清已领取的新 attempt。"""
+    import threading
+
+    from sqlalchemy import text
+    from sqlalchemy.exc import DBAPIError
+
+    sessions = lease_database
+    run_id, thread_id, _ = await _create_run(sessions)
+    started, finish = threading.Event(), threading.Event()
+    command = tmp_path / "command"
+    command.write_text("old attempt")
+
+    def cancel_commands(*_):
+        """模拟仍在运行的外部清理，以文件作为命令存活证据。"""
+        started.set()
+        if not finish.wait(10):
+            raise TimeoutError("test cleanup was not released")
+        command.unlink(missing_ok=True)
+
+    task = None
+    try:
+        async with sessions() as db:
+            stale = await db.get(AgentRun, run_id)
+            stale.runtime_cleanup_pending = True
+            await db.commit()
+        monkeypatch.setattr(lease_worker.pg_manager, "get_async_session_context", lambda: _session_context(sessions))
+        monkeypatch.setattr(
+            lease_worker, "get_sandbox_provider", lambda: type("Provider", (), {"cancel_run": staticmethod(cancel_commands)})()
+        )
+        task = asyncio.create_task(lease_worker.complete_run_command_cleanup(stale))
+        assert await asyncio.to_thread(started.wait, 5)
+        task.cancel()
+        await asyncio.sleep(0)
+        async with sessions() as db:
+            with pytest.raises(DBAPIError) as error:
+                await db.execute(text("SELECT id FROM agent_runs WHERE id=:id FOR NO KEY UPDATE NOWAIT"), {"id": run_id})
+            assert error.value.orig.sqlstate == "55P03"
+        assert command.read_text() == "old attempt"
+        finish.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        async with sessions() as db:
+            assert (await db.get(AgentRun, run_id)).runtime_cleanup_pending is True
+        assert await lease_worker.complete_run_command_cleanup(stale)
+        async with sessions() as db:
+            run, acquired = await AgentRunRepository(db).mark_running(run_id, worker_id="new-attempt", lease_seconds=60)
+            assert acquired
+            await db.commit()
+        command.write_text("new attempt")
+        assert await lease_worker.complete_run_command_cleanup(stale)
+        assert command.read_text() == "new attempt"
+        async with sessions() as db:
+            current = await db.get(AgentRun, run_id)
+            assert current.status == "running" and current.worker_id == "new-attempt"
+            assert current.runtime_cleanup_pending is False
+    finally:
+        finish.set()
+        if task is not None and not task.done():
+            await asyncio.gather(task, return_exceptions=True)
+        await cleanup_agent_run_threads(sessions, [thread_id])

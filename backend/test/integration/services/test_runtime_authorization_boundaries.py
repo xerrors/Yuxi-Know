@@ -252,7 +252,7 @@ async def test_model_return_checks_permission_before_approval_interrupt(authoriz
                             tool_calls=[
                                 {
                                     "name": "write_file",
-                                    "args": {"file_path": "/home/gem/user-data/outside.md", "content": "denied"},
+                                    "args": {"file_path": "/home/user/workspace/outside.md", "content": "denied"},
                                     "id": "approval-call",
                                 }
                             ],

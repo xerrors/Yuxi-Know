@@ -27,7 +27,6 @@ updates:
   - package-ecosystem: docker
     directories:
       - /docker
-      - /docker/sandbox_provisioner
     schedule:
       interval: weekly
     open-pull-requests-limit: 0

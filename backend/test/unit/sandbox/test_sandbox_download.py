@@ -9,7 +9,7 @@ from yuxi.modules.agents.runtime.sandbox.download import (
     download_sandbox_directory,
 )
 
-REMOTE_DIR = "/home/gem/user-data/outputs/remote/demo"
+REMOTE_DIR = "/home/user/workspace/outputs/remote/demo"
 
 
 def _backend(*, ls=None, entries=(), download=None):
@@ -32,7 +32,7 @@ def _backend(*, ls=None, entries=(), download=None):
 @pytest.mark.parametrize(
     "path",
     [
-        "/home/gem/user-data/outputs/outside.txt",
+        "/home/user/workspace/outputs/outside.txt",
         f"{REMOTE_DIR}/../escape.txt",
     ],
     ids=["outside-root", "parent-traversal"],
@@ -52,18 +52,12 @@ def test_download_sandbox_directory_rejects_outside_paths_before_download(tmp_pa
     ("list_entries", "error"),
     [
         (
-            lambda _path: [
-                {"path": f"{REMOTE_DIR}/file-{index}.txt", "is_dir": False, "size": 1}
-                for index in range(1001)
-            ],
+            lambda _path: [{"path": f"{REMOTE_DIR}/file-{index}.txt", "is_dir": False, "size": 1} for index in range(1001)],
             "最多 1000 个文件",
         ),
         (
             lambda path: (
-                [
-                    {"path": f"{REMOTE_DIR}/dir-{index}", "is_dir": True}
-                    for index in range(MAX_SANDBOX_TREE_ENTRIES + 1)
-                ]
+                [{"path": f"{REMOTE_DIR}/dir-{index}", "is_dir": True} for index in range(MAX_SANDBOX_TREE_ENTRIES + 1)]
                 if path == REMOTE_DIR
                 else []
             ),
@@ -78,9 +72,7 @@ def test_download_sandbox_directory_rejects_outside_paths_before_download(tmp_pa
             "重复目录路径",
         ),
         (
-            lambda _path: [
-                {"path": f"{REMOTE_DIR}/large.bin", "is_dir": False, "size": MAX_SANDBOX_TREE_BYTES + 1}
-            ],
+            lambda _path: [{"path": f"{REMOTE_DIR}/large.bin", "is_dir": False, "size": MAX_SANDBOX_TREE_BYTES + 1}],
             "总大小超过限制",
         ),
     ],
@@ -98,6 +90,7 @@ def test_download_sandbox_directory_rejects_oversized_or_invalid_trees(tmp_path,
 
 def test_download_sandbox_directory_removes_partial_target_on_failure(tmp_path):
     """部分文件下载失败时回收本次创建的目标目录。"""
+
     def fail_second_file(paths):
         path = paths[0]
         if path.endswith("SKILL.md"):

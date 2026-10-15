@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from yuxi.api.dependencies.auth import get_current_user, get_db, get_required_user
 from yuxi.api.uploads import read_upload_with_limit
 from yuxi.infrastructure.minio import upload_image_to_minio
-from yuxi.modules.agents.services.environment import read_agent_env, write_agent_env
+from yuxi.modules.agents.services.environment import read_agent_env, verify_agent_env, write_agent_env
 from yuxi.modules.identity.models import User
 from yuxi.modules.identity.preferences import UserConfig, UserConfigSchema
 from yuxi.modules.identity.repositories.api_keys import (
@@ -197,3 +197,12 @@ async def update_agent_env(
 ):
     result = await write_agent_env(db, uid=current_user.uid, env=data.env)
     return AgentEnvResponse(env=result.env, updated_at=format_utc_datetime(result.updated_at))
+
+
+@user_router.post("/agent-env/verify")
+async def verify_saved_agent_env(
+    current_user: User = Depends(get_required_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """仅验证当前认证用户已保存的配置。"""
+    return await verify_agent_env(db, uid=str(current_user.uid))

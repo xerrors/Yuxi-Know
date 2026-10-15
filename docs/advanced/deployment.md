@@ -5,7 +5,7 @@
 ## 前置条件
 
 - Docker Engine 28.0 或更高版本；
-- Docker Compose v2.33.1 或更高版本（provisioner 使用 `gw_priority` 固定默认网关）；
+- Docker Compose v2.33.1 或更高版本；
 - 能访问所需镜像和模型服务的网络；
 - 使用本地 GPU OCR 时准备 NVIDIA Container Toolkit。
 
@@ -32,7 +32,10 @@ MINIO_ACCESS_KEY=<strong-minio-access-key>
 MINIO_SECRET_KEY=<strong-minio-secret-key>
 JWT_SECRET_KEY=<random-value-at-least-32-characters>
 API_KEY_DERIVATION_SECRET=<another-random-value-at-least-32-characters>
-SANDBOX_PROVISIONER_TOKEN=<another-random-value-at-least-32-characters>
+CUBE_API_URL=http://<private-node-address>:3000
+CUBE_PROXY_NODE_IP=<private-node-address>
+CUBE_NODE_USER_DATA_DIR=/absolute/yuxi/threads
+CUBE_NODE_SKILL_PROJECTION_DIR=/absolute/yuxi/skill-projections
 YUXI_INSTANCE_ID=<stable-instance-name>
 ```
 
@@ -75,15 +78,15 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
 docker compose --env-file .env.prod -f docker-compose.prod.yml --profile all up -d --build
 ```
 
-`schema-init` 为空库建立 business 12 与 knowledge 4，当前版本直接校验。现有业务数据库需要部署者先准备目标结构，初始化器拒绝其他业务版本，不清库，也不自动迁移 OIDC 账号。knowledge 3→4 保留未删除知识库的名称唯一索引升级，名称不区分大小写，已删除名称可复用；重名时保留原数据并拒绝升级。初始化成功后进程以退出码 0 结束，API、worker 和 provisioner 才会启动。
+`schema-init` 为空库直接建立 business 版本 2 与 knowledge 版本 1 基线，包含当前表、索引、约束和 LangGraph checkpoint 表。当前版本直接结束，初始化成功后进程以退出码 0 结束，API 与 worker 才会启动。
 
 ## 3. 数据库与文件目录
 
-新部署应使用空 PostgreSQL 数据库和独立的 Yuxi 文件目录。Schema 初始化进程负责建立当前表结构、版本标记和 LangGraph checkpoint 表。已有当前版本数据库可以直接重启同版本服务。已有业务库先备份数据库、停止 API 与 worker，由部署者完成目标表、约束及版本调整，再运行 schema-init 并启动服务。knowledge 3→4 仅在 business 12 下提供自动升级。知识域存在未删除的大小写同名记录时，初始化明确报出重名组数并拒绝升级；维护者修正冲突名称后重新执行，初始化器不自动重命名或删除用户数据。其余旧版本与未版本化旧表需使用对应旧版部署处理数据，再规划独立的数据导入。
+新部署使用空 PostgreSQL 数据库和独立的 Yuxi 文件目录。已有当前版本数据库可以直接重启同版本服务。其他版本和包含未版本化 Yuxi 表的数据库会被明确拒绝，初始化器不执行历史升级、回填或自动清库。当前版本以全新部署为前提；需要保留的数据由部署者独立备份和处理，不通过手改版本标记绕过结构校验。
 
-应用不再写入身份操作日志，新库不创建 `operation_logs` 表。已有数据库中的历史表可在备份并停止旧版服务后执行 `DROP TABLE IF EXISTS operation_logs;` 清理；此操作永久删除历史记录，Schema 初始化进程不会自动执行。
+应用不写入身份操作日志，初始 Schema 不创建 `operation_logs` 表。
 
-当前仓库只提供沙盒 provisioner 的 Kubernetes backend，不提供完整的应用 Deployment、StorageClass 或 Secret。部署时预先创建 `USER_DATA_PVC` 承载用户 Workspace，并创建 `SKILLS_PVC` 承载 Skill 数据。
+用户执行环境由专用 Linux/KVM 节点上的 Cube 提供。节点准备与 Workspace、Skills 共享目录要求见[沙盒配置与运维](./sandbox-operations.md)。
 
 ## 4. 验证部署
 
@@ -117,7 +120,7 @@ worker 的 Compose 健康检查通过 `python -m yuxi.services.worker_health` �
 | --- | --- | --- |
 | 5173 | Web | 开发 Web 界面 |
 | 5050 | API | API 和 Swagger 文档 |
-| 8002 | `sandbox-provisioner` | 本机排查 provisioner；只绑定 `127.0.0.1` |
+| Cube 私网控制面/代理 | 专用 Linux/KVM 节点 | 由部署提供，仅 API/worker 访问 |
 | 7474 / 7687 | Neo4j | HTTP 管理界面 / Bolt |
 | 9000 / 9001 | MinIO | 对象 API / 管理控制台 |
 | 19530 / 9091 | Milvus | gRPC / 健康检查 |
@@ -128,7 +131,7 @@ worker 的 Compose 健康检查通过 `python -m yuxi.services.worker_health` �
 
 PostgreSQL、Redis、MinIO、Milvus 和 Neo4j 的端口只绑定 `127.0.0.1`，不要把它们暴露到公网；Web 与 API 发布到所有接口。各端口可用环境变量覆盖（`YUXI_FRONTEND_PORT`、`YUXI_API_PORT`、`YUXI_NEO4J_HTTP_PORT`、`YUXI_MINIO_API_PORT`、`YUXI_MILVUS_PORT`、`YUXI_POSTGRES_PORT`、`YUXI_REDIS_PORT`），完整映射以 [docker-compose.yml](https://github.com/xerrors/Yuxi/blob/main/docker-compose.yml) 为准。
 
-常用入口：Web <http://localhost:5173>，API 文档 <http://localhost:5050/docs>，Neo4j <http://localhost:7474>，沙盒 provisioner <http://localhost:8002/health>。health 与 ready 接口的语义见上方「验证部署」。
+常用入口：Web <http://localhost:5173>，API 文档 <http://localhost:5050/docs>，Neo4j <http://localhost:7474>。用户执行环境状态在“设置 → Agent 环境”查看；health 与 ready 接口的语义见上方「验证部署」。
 
 ## 跨域（CORS）
 
@@ -151,7 +154,7 @@ YUXI_CORS_ORIGINS=https://a.example.com,https://b.example.com
 ### 查看日志
 
 ```bash
-docker compose --env-file .env.prod -f docker-compose.prod.yml logs --tail=200 api worker sandbox-provisioner
+docker compose --env-file .env.prod -f docker-compose.prod.yml logs --tail=200 api worker
 docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f api worker
 ```
 
@@ -184,11 +187,11 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml \
   up -d --force-recreate postgres graph minio api worker
 ```
 
-最后分别用新凭据和旧凭据执行一次受控登录验证；API/worker 的 `API_KEY_DERIVATION_SECRET` 与 `SANDBOX_PROVISIONER_TOKEN` 也必须保持为持久、独立且至少 32 个字符的值。
+最后分别用新凭据和旧凭据执行一次受控登录验证；API/worker 的 `API_KEY_DERIVATION_SECRET` 也必须保持为持久、独立且至少 32 个字符的值。
 
 ### 常用检查顺序
 
-1. `docker compose ps`：确认Schema 初始化成功、API/worker/provisioner 在运行。
+1. `docker compose ps`：确认 Schema 初始化成功、API 与 worker 在运行。
 2. `docker compose logs`：从最先失败的服务开始看，不只看最后一条 API 错误。
 3. `/api/system/ready`：确认接流量前置条件。
 4. 真实登录、对话和文件操作：确认业务链路。

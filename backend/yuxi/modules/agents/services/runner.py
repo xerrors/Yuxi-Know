@@ -17,6 +17,7 @@ from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.repositories.input import AgentInputRepository
+from yuxi.modules.agents.repositories.environment import AgentEnvRepository
 from yuxi.modules.agents.repositories.runs import TERMINAL_RUN_STATUSES, AgentRunRepository
 from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
@@ -36,7 +37,7 @@ from yuxi.modules.agents.services.leases import (
     WORKER_ID,
     mark_run_running,
     release_run_lease_for_retry,
-    release_runtime_if_idle,
+    complete_run_command_cleanup,
     renew_run_lease,
     run_attempt_finished,
 )
@@ -137,6 +138,7 @@ class TerminalTransition:
 class RunContext:
     run_id: str
     worker_id: str
+    uid: str | None = None
     cancel_event: asyncio.Event = field(default_factory=asyncio.Event)
     _watch_task: asyncio.Task | None = None
     _durable_cancel_task: asyncio.Task | None = None
@@ -173,6 +175,7 @@ class RunContext:
             poll_interval_seconds=RUN_CANCEL_POLL_SECONDS,
         )
         self.cancel_event.set()
+        await self._cancel_sandbox_commands()
 
     async def _watch_durable_cancel(self) -> None:
         """低频轮询 PostgreSQL，确保 Redis 丢信号时取消仍然 fail-closed。"""
@@ -187,6 +190,7 @@ class RunContext:
             else:
                 if cancelled:
                     self.cancel_event.set()
+                    await self._cancel_sandbox_commands()
                     return
             try:
                 await asyncio.wait_for(
@@ -211,7 +215,20 @@ class RunContext:
             if not renewed:
                 self.lease_lost = True
                 self.cancel_event.set()
+                await self._cancel_sandbox_commands()
                 return
+
+    async def _cancel_sandbox_commands(self) -> None:
+        """远端终止独立于 LangGraph 流关闭，避免工具收尾相互等待。"""
+        if self.uid is None:
+            return
+        from yuxi.infrastructure.filesystem import await_io
+        from yuxi.modules.agents.runtime.sandbox.provider import get_sandbox_provider
+
+        try:
+            await await_io(asyncio.to_thread(get_sandbox_provider().cancel_run, self.uid, self.run_id, self.worker_id))
+        except Exception:
+            logger.exception("Run 外部命令尚未确认停止，保留持久清理责任: run=%s", self.run_id)
 
 
 async def _release_runtime_before_terminal_event(run: AgentRun | None) -> None:
@@ -222,9 +239,9 @@ async def _release_runtime_before_terminal_event(run: AgentRun | None) -> None:
 
 
 async def _require_runtime_cleanup(run: AgentRun, message: str) -> None:
-    """把 provisioner/并发清理失败统一转成 ARQ 可重试的 durable cleanup。"""
+    """把外部命令/并发清理失败统一转成 ARQ 可重试的 durable cleanup。"""
     try:
-        cleaned = await release_runtime_if_idle(run)
+        cleaned = await complete_run_command_cleanup(run)
     except Exception as exc:
         raise RuntimeCleanupPendingError(message) from exc
     if not cleaned:
@@ -584,7 +601,11 @@ async def process_agent_run(ctx, run_id: str):
     turn_id = run.turn_id
     thread_id = run.thread_id
     user = None
-    run_ctx = RunContext(run_id=run_id, worker_id=worker_id)
+    from yuxi.modules.agents.runtime.sandbox.provider import sandbox_run_env, sandbox_run_owner
+
+    sandbox_owner_token = sandbox_run_owner.set((run_id, worker_id))
+    sandbox_env_token = sandbox_run_env.set(None)
+    run_ctx = RunContext(run_id=run_id, worker_id=worker_id, uid=uid)
     writer = PublicEventWriter(
         run_id=run_id,
         interval_ms=LOADING_FLUSH_INTERVAL_MS,
@@ -778,6 +799,9 @@ async def process_agent_run(ctx, run_id: str):
         terminal_set = False
         first_output_observed = bool(getattr(run, "first_output_at", None))
         async with pg_manager.get_async_session_context() as db:
+            # 密钥只留在本次执行上下文；并发命令复用，重试 attempt 重新取快照。
+            saved_env = await AgentEnvRepository(db).get_by_uid(uid)
+            sandbox_run_env.set(dict(saved_env.env or {}) if saved_env else {})
             stream = stream_agent_execution(
                 thread_id=thread_id,
                 meta=meta,
@@ -913,6 +937,8 @@ async def process_agent_run(ctx, run_id: str):
             worker_id=worker_id,
         )
     finally:
+        sandbox_run_env.reset(sandbox_env_token)
+        sandbox_run_owner.reset(sandbox_owner_token)
         await run_ctx.close()
         try:
             final_run = await _get_run(run_id)

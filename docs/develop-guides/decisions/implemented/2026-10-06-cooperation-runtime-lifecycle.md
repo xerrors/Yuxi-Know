@@ -14,15 +14,15 @@ Owner：backend/yuxi/modules/agents/services/leases.py
 
 ## 决策
 
-主动压缩使用本次请求独有的 UUID 沙盒 scope，context、创建和释放保持一致，挂载已授权的原 Project Workdir。原 Session 行锁继续保护 checkpoint；协作树的运行环境不进入压缩清理范围。
+维护沙盒 UUID scope 与协作树空闲回收部分由[工作区路径清理](./2026-10-15-workspace-path-cleanup.md)取代；用户 VM 生命周期由[Cube 用户环境](./2026-10-15-sandbox-environment.md)拥有。本记录继续拥有成员可见性与批量 Session 锁序决定。
 
-空闲回收扫描同时发现尚未登记空闲时间的 runtime。在专用沙盒生命周期锁内确认没有非终态 Run 后启动五分钟计时，再由相同 Owner 回收；任何新执行领取仍清除空闲状态。锁与调度隔离由[任务观察决策](./2026-10-07-cooperation-task-observation.md)补充。继续整树按 `thread_id` 顺序锁定成员，与批量删除保持一致。
+主动压缩只使用已授权 Project Workdir 和原 Session checkpoint，不拥有独立环境或回收状态。继续整树按 `thread_id` 顺序锁定成员，与批量删除保持一致。
 
 成员工作区接收父级实际可见性，并与 KeepAlive 激活状态共同约束已读和滚动。隐藏成员继续接收运行事件，重新显示时恢复观察并标记已读。
 
 ### 实现方案
 
-`compression` 拥有维护 scope，`leases` 拥有空闲发现和释放，`cooperation` 遵循既有 Session 锁顺序。`SessionWorkspace` 把侧栏打开状态、选中标签与父工作区状态传递给嵌入成员。生产入口和测试删除无 consumer 的旧 subagent 附件传递、来源过滤、后代取消返回值、旧 replay 分支及测试选择器；旧接口拒绝测试、外部协议 fixture 和历史记录继续保留其必要名称。
+`compression` 拥有 checkpoint 压缩，用户环境 provider 拥有空闲休眠，`cooperation` 遵循既有 Session 锁顺序。`SessionWorkspace` 把侧栏打开状态、选中标签与父工作区状态传递给嵌入成员。生产入口和测试删除无 consumer 的旧 subagent 附件传递、来源过滤、后代取消返回值、旧 replay 分支及测试选择器；旧接口拒绝测试、外部协议 fixture 和历史记录继续保留其必要名称。
 
 ## 替代方案
 
@@ -32,10 +32,10 @@ Owner：backend/yuxi/modules/agents/services/leases.py
 
 ## 后果
 
-主动压缩可访问持久 Workdir，不继承协作沙盒中的临时安装和进程。pending 取消后的空闲计时在下一次扫描开始。共享沙盒的其他并发文件语义沿用现有协作约定。
+主动压缩访问持久 Workdir，不改变同用户 VM 的身份、临时文件与进程。用户空闲休眠由 provider 根据所有 Run 和命令占用判定。
 
 ## 验证
 
-压缩回归在修复前分别以“复用会话沙盒”与“context/创建 scope 不一致”失败；pending 取消的真实 PostgreSQL 回归在修复前以 `idle_since` 仍为空失败。回归分别检查维护 scope、checkpoint 身份、持久空闲时间和回收标记。E2E 增加根与成员主动压缩后 `/tmp` 文件仍存在的独立断言。
+维护 scope、`idle_since` 与回收标记的历史验证只证明已被取代的实现。当前证据由工作区路径清理决定拥有；根与成员压缩后同用户 VM 及临时文件保持，成员实际可见性与 Session 锁序继续由对应回归覆盖。
 
 具体入口为 `test_context_compression_service.py`、`test_session_cooperation.py`、`test_session_cooperation_e2e.py` 与 `sessionWorkspaceVisibility.test.js`。实际运行结果及环境限制随交付报告记录；模型提供方初始化权限不足时，E2E 记为未完成验证。批量 Session 锁序由独立 Reviewer 对照继续与删除的真实查询复核。

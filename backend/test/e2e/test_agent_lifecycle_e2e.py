@@ -26,7 +26,7 @@ from test.e2e.e2e_helpers import (
 )
 from test.live_api_cleanup import make_test_session_title
 from test.support.public_events import read_events
-from yuxi.modules.agents.runtime.sandbox import ProvisionerSandboxBackend, get_sandbox_provider
+from yuxi.modules.agents.runtime.sandbox import UserSandboxBackend
 from yuxi.modules.agents.services.transport import get_redis_client
 from yuxi.modules.agents.services.tracing import get_langfuse_client
 from yuxi.modules.workspace.paths import user_workspace_dir
@@ -1151,8 +1151,8 @@ async def test_cancel_running_model_closes_audit_without_foreign_output(e2e_clie
         assert deleted.status_code in {200, 404}, deleted.text
 
 
-async def test_attachment_survives_run_runtime_recreation(e2e_client, e2e_headers):
-    """输入附件在 Project Workdir 中持久存在，释放并重建沙盒后仍可读取。"""
+async def test_attachment_reads_live_bytes_across_backends(e2e_client, e2e_headers):
+    """输入附件由 Project Workdir 持有，文件工具与公开 HTTP 读取同一份字节。"""
     me = await e2e_client.get("/api/auth/me", headers=e2e_headers)
     assert me.status_code == 200, me.text
     uid = str(me.json()["uid"])
@@ -1204,8 +1204,8 @@ async def test_attachment_survives_run_runtime_recreation(e2e_client, e2e_header
         assert completed["status"] == "completed", completed
         [attachment] = (await e2e_client.get(f"/api/v1/agents/sessions/{thread_id}/attachments", headers=e2e_headers)).json()["attachments"]
         path = str(attachment["original_path"])
-        assert path.startswith(f"/home/gem/user-data/{workdir_path}/uploads/")
-        sandbox = ProvisionerSandboxBackend(thread_id=thread_id, uid=uid, workdir_path=workdir_path)
+        assert path.startswith(f"/home/user/workspace/{workdir_path}/uploads/")
+        sandbox = UserSandboxBackend(uid=uid, workdir_path=workdir_path)
         assert sandbox.read(path).file_data["content"] == content
         edited = f"edited {uuid.uuid4()}"
         assert sandbox.edit(path, content, edited).error is None
@@ -1222,13 +1222,12 @@ async def test_attachment_survives_run_runtime_recreation(e2e_client, e2e_header
         restored = next(item for item in history["data"] if item["id"] == user_item["id"])
         assert restored["yuxi"]["delivery_status"] == "complete"
         assert restored == {**user_item, "yuxi": {**user_item["yuxi"], "delivery_status": "complete"}}
-        get_sandbox_provider().release(thread_id, uid=uid, workdir_path=workdir_path)
-        recreated = ProvisionerSandboxBackend(thread_id=thread_id, uid=uid, workdir_path=workdir_path)
-        assert recreated.read(path).file_data["content"] == edited
+        another_backend = UserSandboxBackend(uid=uid, workdir_path=workdir_path)
+        assert another_backend.read(path).file_data["content"] == edited
 
         removed = await e2e_client.delete(f"/api/v1/agents/sessions/{thread_id}/attachments/{attachment['file_id']}", headers=e2e_headers)
         assert removed.status_code == 200, removed.text
-        assert recreated.read(path).file_data is None
+        assert another_backend.read(path).file_data is None
         deleted_input = await e2e_client.get(
             f"/api/v1/agents/sessions/{thread_id}/inputs/{accepted.json()['input_id']}",
             headers=e2e_headers,
@@ -1243,8 +1242,6 @@ async def test_attachment_survives_run_runtime_recreation(e2e_client, e2e_header
         )
         assert not next(item for item in deleted_history.json()["data"] if item["id"] == user_item["id"])["yuxi"].get("attachments")
     finally:
-        if thread_id and workdir_path:
-            get_sandbox_provider().release(thread_id, uid=uid, workdir_path=workdir_path)
         await delete_agent(e2e_client, e2e_headers, slug)
         deleted = await e2e_client.delete("/api/system/model-providers/ci-replay", headers=e2e_headers)
         assert deleted.status_code in {200, 404}, deleted.text
@@ -1431,8 +1428,6 @@ async def test_large_tool_approval_resume_keeps_original_audit(e2e_client, e2e_h
                     headers={**e2e_headers, "Idempotency-Key": f"large-tool-cancel-{uuid.uuid4().hex}"},
                     json={"events": [{"type": "agent.session.input.cancel", "yuxi": {"turn_id": turn_id}}]},
                 )
-        if thread_id and workdir_path:
-            get_sandbox_provider().release(thread_id, uid=uid, workdir_path=workdir_path)
         await delete_agent(e2e_client, e2e_headers, slug)
         deleted = await e2e_client.delete("/api/system/model-providers/ci-replay", headers=e2e_headers)
         assert deleted.status_code in {200, 404}, deleted.text

@@ -86,8 +86,8 @@ async def test_viewer_rejects_paths_outside_current_workdir(test_client, standar
     headers = standard_user["headers"]
     thread_id = await create_default_agent_thread(test_client, headers, title_prefix="viewer-filesystem")
     for path in (
-        "/home/gem/user-data/agents/skills/private.txt",
-        "/home/gem/user-data/projects/other/file.txt",
+        "/home/user/workspace/agents/skills/private.txt",
+        "/home/user/workspace/projects/other/file.txt",
     ):
         response = await test_client.get(
             "/api/viewer/filesystem/file",
@@ -146,7 +146,7 @@ async def test_viewer_download_blocks_project_symlink_escape(test_client, standa
     thread_id = await create_default_agent_thread(test_client, headers, title_prefix="viewer-filesystem-security")
     workdir_path = await get_thread_workdir_path(thread_id)
 
-    project_root = f"/home/gem/user-data/{workdir_path}"
+    project_root = f"/home/user/workspace/{workdir_path}"
     file_path = f"{project_root}/escape.txt"
     (user_workdir_host_dir(uid, workdir_path) / "escape.txt").symlink_to("/etc/hosts")
 
@@ -165,7 +165,7 @@ async def test_viewer_upload_blocks_project_symlink_escape(test_client, standard
     thread_id = await create_default_agent_thread(test_client, headers, title_prefix="viewer-filesystem-security")
     workdir_path = await get_thread_workdir_path(thread_id)
 
-    project_root = f"/home/gem/user-data/{workdir_path}"
+    project_root = f"/home/user/workspace/{workdir_path}"
     outside_dir = tmp_path / f"yuxi-viewer-{uuid.uuid4().hex}"
     outside_dir.mkdir()
     parent_path = f"{project_root}/escape-dir"

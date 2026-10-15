@@ -12,6 +12,8 @@ Owner：backend/yuxi/modules/agents/services/cooperation.py
 
 ## 决策
 
+沙盒释放、树空闲计时和销毁重建部分由[工作区路径清理](./2026-10-15-workspace-path-cleanup.md)及[Cube 用户环境](./2026-10-15-sandbox-environment.md)取代；本记录继续拥有任务观察、失败隔离、Session 锁序与前端状态决定。
+
 侧边栏活动状态从当前 Turn、等待点类型、当前 Run 和待派发 Input 批量读取，与 Run 已读标记独立。前台事件实时更新，后台沿用会话列表轮询；查看 interrupted Run 不清除等待批准、回答或协作标签。相比把所有 interrupted Run 当作新回复，独立投影准确表达需要用户介入的等待，并保留已有未读提示。
 
 协作等待在 Turn 层保持非终态，前端以等待中的工作展示并保留停止入口。公开 item 的扩展 metadata 区分协作等待与真正中断，避免把协议的 `incomplete` 一律渲染为错误；恢复产生的结果按原调用 item 身份闭合工具状态。用户等待判断排除协作等待，使协作期间的普通输入仍按 FIFO 入队。
@@ -20,7 +22,7 @@ Owner：backend/yuxi/modules/agents/services/cooperation.py
 
 协作树摘要一次返回全部成员，批量读取且不包含输出正文。HTTP 观察入口不读取 checkpoint；前端每次轮询只发出一次请求，用完整成员状态判断整树是否可继续。
 
-恢复按阶段、按记录隔离失败，失败不续报完整恢复成功。取消已持久接受后，即时 checkpoint 清理失败仍返回接受结果，由后台重试并报告失败。沙盒清理运行在独立后台任务，释放持有专用生命周期排他锁，新执行领取需获得其共享锁；协作消息及状态通知不等待外部沙盒释放。取消释放任务时，等待已开始的外部释放结束后才释放锁。
+恢复按阶段、按记录隔离失败，失败不续报完整恢复成功。取消已持久接受后，即时 checkpoint 清理失败仍返回接受结果，由后台重试并报告失败。用户 VM 的生命周期互斥由 provider 持有，Run 命令清理由持久句柄及 owner 校验负责。协作消息及状态通知不等待外部环境操作。
 
 前端按 Thread 共享运行状态、历史、SSE、恢复查询及队列监控。最后一个观察者卸载时释放订阅；隐藏视图继续接收数据，但不标已读或滚动。终态历史重新读取事件发生后的快照，失败时保留流输出；异步结果同时校验状态实例和运行状态版本，避免卸载重挂及同一 SSE 跨 Run 恢复时被迟到查询覆盖。审批面板绑定共享等待点身份。视图保留独立输入草稿，首次进入从持久草稿初始化，同一视图切换后恢复自己的编辑。
 
@@ -53,7 +55,7 @@ Owner：backend/yuxi/modules/agents/services/cooperation.py
 
 前端测试验证双视图单次 SSE、最后一个观察者释放、旧历史与旧恢复回调的隔离、同流跨 Run 状态进展、审批身份、隐藏页面副作用和独立草稿。浏览器在实际页面与嵌入视图中验证共享状态、单次 SSE 请求、关闭一个视图后继续接收终态；该检查使用协议注入，不能替代真实 worker E2E。
 
-确定性协作 E2E 使用隔离环境的 superadmin 注册重放供应商，四项场景全部通过，验证精确 Input 等待、结果读取、人工回答、满容量调度、兄弟消息及整树停止与继续。根与成员主动压缩后，共享沙盒的临时文件仍保留；空闲回收后沙盒重建仅恢复持久文件。具体入口为 `test_session_cooperation.py`、`test_agent_run_lease.py`、`test_session_cooperation_state_recovery.py`、`test_run_worker.py`、`test_session_cooperation_e2e.py`、`sessionRuntime.test.js`、`sessionWorkspaceVisibility.test.js` 与 `thread_draft.test.js`；实际命令和结果随交付记录。
+确定性协作 E2E 使用隔离环境的 superadmin 注册重放供应商，四项场景全部通过，验证精确 Input 等待、结果读取、人工回答、满容量调度、兄弟消息及整树停止与继续。根与成员主动压缩后，共享沙盒的临时文件仍保留；这组历史证据中的空闲销毁重建已由当前用户 VM 休眠恢复取代。具体入口为 `test_session_cooperation.py`、`test_agent_run_lease.py`、`test_session_cooperation_state_recovery.py`、`test_run_worker.py`、`test_session_cooperation_e2e.py`、`sessionRuntime.test.js`、`sessionWorkspaceVisibility.test.js` 与 `thread_draft.test.js`；实际命令和结果随交付记录。
 
 标准事件回归覆盖 created、in_progress、completed、failed 和 cancelled，修复前五项均因缺少协议必需字段失败；修复后适配器测试文件 12 项通过。字段语义对照 [官方事件参考](https://developers.openai.com/api/reference/resources/beta/subresources/agents/streaming-events)与[主 Agent 字段语义](https://developers.openai.com/api/docs/guides/agents-api/multi-agent)，不通过改写 oracle 接受缺失字段。
 

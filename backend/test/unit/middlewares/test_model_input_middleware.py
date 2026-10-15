@@ -19,7 +19,7 @@ def _openai_model() -> ChatOpenAI:
     return ChatOpenAI(model="test-model", api_key="test-key", base_url="https://example.com/v1")
 
 
-def _read_file_image_message(path: str = "/home/gem/user-data/uploads/image.png") -> ToolMessage:
+def _read_file_image_message(path: str = "/home/user/workspace/uploads/image.png") -> ToolMessage:
     return ToolMessage(
         content_blocks=[{"type": "image", "base64": "abc", "mime_type": "image/png"}],
         tool_call_id="call_image",
@@ -111,7 +111,7 @@ async def test_translates_provider_image_rejection_to_ocr_fallback(error_message
     assert calls == 1
     assert response.result[0].content == "当前模型不支持图片输入，正在改用 OCR 工具提取图片文字。"
     assert response.result[0].tool_calls[0]["name"] == "ocr_parse_file"
-    assert response.result[0].tool_calls[0]["args"] == {"file_path": "/home/gem/user-data/uploads/image.png"}
+    assert response.result[0].tool_calls[0]["args"] == {"file_path": "/home/user/workspace/uploads/image.png"}
 
 
 @pytest.mark.asyncio
@@ -152,7 +152,7 @@ async def test_translates_openrouter_missing_vision_endpoint() -> None:
 
 def test_omits_historical_tool_image_after_ocr_fallback() -> None:
     middleware = ImageInputCompatibilityMiddleware()
-    path = "/home/gem/user-data/uploads/image.png"
+    path = "/home/user/workspace/uploads/image.png"
     messages = [
         _read_file_image_message(path),
         AIMessage(
@@ -217,7 +217,7 @@ async def test_image_rejection_respects_configured_ocr_tool(asynchronous: bool, 
     message = response.result[0]
     if enabled:
         assert [call["name"] for call in message.tool_calls] == ["ocr_parse_file"]
-        assert message.tool_calls[0]["args"]["file_path"] == "/home/gem/user-data/uploads/image.png"
+        assert message.tool_calls[0]["args"]["file_path"] == "/home/user/workspace/uploads/image.png"
     else:
         assert message.tool_calls == []
         assert "OCR 解析工具未启用" in message.content

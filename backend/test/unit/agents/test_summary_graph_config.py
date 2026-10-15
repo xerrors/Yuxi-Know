@@ -19,7 +19,7 @@ def _context(summary_threshold: int = 123) -> SimpleNamespace:
         tool_token_limit=3,
         model_retry_times=1,
         workdir_relative_path="projects/11111111-1111-4111-8111-111111111111",
-        workdir_path="/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111",
+        workdir_path="/home/user/workspace/projects/11111111-1111-4111-8111-111111111111",
     )
 
 
@@ -245,7 +245,7 @@ async def test_image_fallback_uses_authorized_tools_from_shipping_middleware_ord
             ToolMessage(
                 content_blocks=[{"type": "image", "base64": "abc", "mime_type": "image/png"}],
                 tool_call_id="read-image",
-                additional_kwargs={"read_file_path": "/home/gem/user-data/uploads/image.png"},
+                additional_kwargs={"read_file_path": "/home/user/workspace/uploads/image.png"},
             )
         ],
         runtime=SimpleNamespace(context=context),

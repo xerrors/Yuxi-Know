@@ -88,20 +88,14 @@ class ResourceSample:
     captured_at: str
     api_memory_mb: float | None = None
     worker_memory_mb: float | None = None
-    provisioner_memory_mb: float | None = None
-    sandbox_memory_mb: float | None = None
     total_memory_mb: float | None = None
     api_cpu_percent: float | None = None
     worker_cpu_percent: float | None = None
-    provisioner_cpu_percent: float | None = None
-    sandbox_cpu_percent: float | None = None
     total_cpu_percent: float | None = None
     redis_clients: int | None = None
     redis_pubsub_clients: int | None = None
     postgres_connections: int | None = None
     postgres_active_connections: int | None = None
-    sandbox_containers: int | None = None
-    sandbox_networks: int | None = None
     host_available_memory_mb: float | None = None
     host_load1: float | None = None
     error: str | None = None
@@ -239,15 +233,9 @@ def _run_local_command(command: Sequence[str], *, allow_partial: bool = False) -
 class LocalResourceSampler:
     """按 Compose project 采样本机容器和服务资源。"""
 
-    def __init__(
-        self,
-        compose_project: str,
-        sandbox_container_prefix: str,
-        sandbox_network_prefix: str,
-    ):
+    def __init__(self, compose_project: str):
+        """本机采样范围只包含当前 Compose 服务。"""
         self.compose_project = compose_project
-        self.sandbox_container_prefix = sandbox_container_prefix
-        self.sandbox_network_prefix = sandbox_network_prefix
 
     def collect(self, level: int, level_started: float) -> ResourceSample:
         """采集一次不会修改运行状态的资源快照。"""
@@ -259,23 +247,15 @@ class LocalResourceSampler:
         )
         try:
             compose_containers = self._compose_containers()
-            sandbox_containers = [container_id for container_id in self._sandbox_containers() if container_id not in compose_containers]
             service_by_id = {container_id: service for container_id, service in compose_containers.items()}
-            service_by_id.update({container_id: "sandbox" for container_id in sandbox_containers})
             memory, cpu = self._container_stats(service_by_id)
 
             sample.api_memory_mb = memory.get("api", 0.0)
             sample.worker_memory_mb = memory.get("worker", 0.0)
-            sample.provisioner_memory_mb = memory.get("sandbox-provisioner", 0.0)
-            sample.sandbox_memory_mb = memory.get("sandbox", 0.0)
             sample.total_memory_mb = round(sum(memory.values()), 2)
             sample.api_cpu_percent = cpu.get("api", 0.0)
             sample.worker_cpu_percent = cpu.get("worker", 0.0)
-            sample.provisioner_cpu_percent = cpu.get("sandbox-provisioner", 0.0)
-            sample.sandbox_cpu_percent = cpu.get("sandbox", 0.0)
             sample.total_cpu_percent = round(sum(cpu.values()), 2)
-            sample.sandbox_containers = len(sandbox_containers)
-            sample.sandbox_networks = self._sandbox_network_count()
             sample.redis_clients, sample.redis_pubsub_clients = self._redis_client_metrics(compose_containers)
             (
                 sample.postgres_connections,
@@ -300,25 +280,6 @@ class LocalResourceSampler:
         )
         return {container_id: service for line in output.splitlines() if line.strip() for container_id, service in [line.split("\t", 1)]}
 
-    def _sandbox_containers(self) -> list[str]:
-        output = _run_local_command(
-            [
-                "docker",
-                "ps",
-                "--filter",
-                f"name={self.sandbox_container_prefix}",
-                "--format",
-                "{{.ID}}\t{{.Names}}",
-            ]
-        )
-        return [
-            container_id
-            for line in output.splitlines()
-            if line.strip()
-            for container_id, name in [line.split("\t", 1)]
-            if name.startswith(self.sandbox_container_prefix)
-        ]
-
     def _container_stats(self, service_by_id: dict[str, str]) -> tuple[dict[str, float], dict[str, float]]:
         memory: dict[str, float] = {}
         cpu: dict[str, float] = {}
@@ -335,8 +296,6 @@ class LocalResourceSampler:
                 (value for key, value in service_by_id.items() if key.startswith(container_id) or container_id.startswith(key)),
                 None,
             )
-            if service is None and str(row.get("Name") or "").startswith(self.sandbox_container_prefix):
-                service = "sandbox"
             if service is None:
                 continue
             used_memory = str(row.get("MemUsage") or "").split("/", 1)[0]
@@ -373,26 +332,13 @@ class LocalResourceSampler:
                 "sh",
                 "-c",
                 (
-                    'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT count(*), count(*) FILTER (WHERE state = \'active\') FROM pg_stat_activity"'
+                    'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT count(*), '
+                    "count(*) FILTER (WHERE state = 'active') FROM pg_stat_activity\""
                 ),
             ]
         )
         total, active = output.strip().split("|", 1)
         return int(total), int(active)
-
-    def _sandbox_network_count(self) -> int:
-        output = _run_local_command(
-            [
-                "docker",
-                "network",
-                "ls",
-                "--filter",
-                f"name={self.sandbox_network_prefix}",
-                "--format",
-                "{{.Name}}",
-            ]
-        )
-        return sum(name.startswith(self.sandbox_network_prefix) for name in output.splitlines())
 
     @staticmethod
     def _host_available_memory_mb() -> float:
@@ -826,20 +772,14 @@ def _summarize_resources(samples: Sequence[ResourceSample]) -> dict[str, Any]:
     peak_fields = (
         "api_memory_mb",
         "worker_memory_mb",
-        "provisioner_memory_mb",
-        "sandbox_memory_mb",
         "total_memory_mb",
         "api_cpu_percent",
         "worker_cpu_percent",
-        "provisioner_cpu_percent",
-        "sandbox_cpu_percent",
         "total_cpu_percent",
         "redis_clients",
         "redis_pubsub_clients",
         "postgres_connections",
         "postgres_active_connections",
-        "sandbox_containers",
-        "sandbox_networks",
         "host_load1",
     )
     for field_name in peak_fields:
@@ -849,7 +789,7 @@ def _summarize_resources(samples: Sequence[ResourceSample]) -> dict[str, Any]:
     available_memory = [sample.host_available_memory_mb for sample in valid_samples if sample.host_available_memory_mb is not None]
     summary["host_available_memory_mb_min"] = round(min(available_memory), 2) if available_memory else None
     baseline = valid_samples[0]
-    for field_name in ("worker_memory_mb", "sandbox_memory_mb", "total_memory_mb"):
+    for field_name in ("worker_memory_mb", "total_memory_mb"):
         peak = summary.get(f"{field_name}_peak")
         baseline_value = getattr(baseline, field_name)
         summary[f"{field_name}_baseline"] = baseline_value
@@ -1035,15 +975,7 @@ async def async_main(args: argparse.Namespace) -> int:
         session_id = uuid.uuid4().hex[:8]
         results: list[TaskResult] = []
         resource_samples: list[ResourceSample] = []
-        resource_sampler = (
-            LocalResourceSampler(
-                args.compose_project,
-                args.sandbox_container_prefix,
-                args.sandbox_network_prefix,
-            )
-            if args.collect_local_resources
-            else None
-        )
+        resource_sampler = LocalResourceSampler(args.compose_project) if args.collect_local_resources else None
 
         print(f"场景={args.scenario} Agent={agent_slug} 并发阶梯={args.concurrency}")
         for level in args.concurrency:
@@ -1099,13 +1031,13 @@ async def async_main(args: argparse.Namespace) -> int:
         "timeout_seconds": args.timeout_seconds,
         "keep_threads": args.keep_threads,
         "collect_local_resources": args.collect_local_resources,
+        "resource_scope": "local_compose_services_and_host; Cube VM resources are not measured",
         "compose_project": args.compose_project if args.collect_local_resources else None,
-        "sandbox_container_prefix": args.sandbox_container_prefix if args.collect_local_resources else None,
-        "sandbox_network_prefix": args.sandbox_network_prefix if args.collect_local_resources else None,
         "resource_interval_seconds": args.resource_interval_seconds if args.collect_local_resources else None,
         "timing_metric": "created_to_first_model_request_ms",
         "timing_metric_definition": (
-            "PostgreSQL AgentRun.created_at 到 LangChain on_chat_model_start 的差值；回调在供应商 HTTP 发送前触发，是发送前近似边界，不包含首 token 等待。"
+            "PostgreSQL AgentRun.created_at 到 LangChain on_chat_model_start 的差值；"
+            "回调在供应商 HTTP 发送前触发，是发送前近似边界，不包含首 token 等待。"
         ),
         "client_timing_metric": "first_model_request_ms",
     }
@@ -1147,16 +1079,6 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
         "--compose-project",
         default=os.getenv("COMPOSE_PROJECT_NAME", "yuxi"),
         help="资源采样使用的 Compose project，默认 %(default)s",
-    )
-    parser.add_argument(
-        "--sandbox-container-prefix",
-        default=os.getenv("SANDBOX_DOCKER_SANDBOX_PREFIX") or f"{os.getenv('COMPOSE_PROJECT_NAME', 'yuxi')}-sandbox",
-        help="动态 Sandbox 容器名称前缀",
-    )
-    parser.add_argument(
-        "--sandbox-network-prefix",
-        default=os.getenv("SANDBOX_DOCKER_NETWORK_PREFIX") or f"{os.getenv('COMPOSE_PROJECT_NAME', 'yuxi')}-sandbox",
-        help="动态 Sandbox 网络名称前缀",
     )
     parser.add_argument("--resource-interval-seconds", type=float, default=2.0)
 

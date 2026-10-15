@@ -26,14 +26,14 @@ PostgreSQL 是 Input、Turn、Run 和终态的事实来源。Redis Stream、取�
 | `WORKER_POSTGRES_POOL_SIZE` + `WORKER_POSTGRES_MAX_OVERFLOW` | 120 + 40 | worker SQLAlchemy 最坏连接预算 160 |
 | `WORKER_LANGGRAPH_POSTGRES_POOL_SIZE` | 120 | worker LangGraph checkpoint 池 |
 | `POSTGRES_MAX_CONNECTIONS` | 600 | 上述单 worker 客户端预算共 450，余下 150 给迁移、健康检查和运维 |
-| `SANDBOX_DELETE_CONCURRENCY` | 32 | 有界并行回收 Sandbox，避免终态清理串行拖尾 |
-| `SANDBOX_DOCKER_ADDRESS_POOL` / `SANDBOX_DOCKER_SUBNET_PREFIX` | `10.253.240.0/20` / `28` | 最多提供 256 个独立 Sandbox 子网；部署前检查路由冲突 |
 
 Redis 256 是经过 100 并发验证的单个客户端池保护上限，并非进程总连接预算或取消协议的最低要求；移除每 Run Pub/Sub 后，100 并发实测只使用 36 个 Redis 客户端连接。暂时保留 256 可以吸收 SSE、事件发布、缓存和控制面峰值，也避免为降低一个不预分配的上限引入新的配置档位。
 
 资源受限部署可以压低该上限，但必须重新跑目标并发并确认没有连接池耗尽或事件缺失。
 
-不新增取消轮询间隔、durable watcher 间隔或取消 channel 配置。200ms/1s 是 worker 内部协议参数；把它们暴露成部署旋钮会产生彼此不兼容且未经验证的组合。现有配置只保留确实需要随 worker 数量和机器容量变化的池、槽位与 Sandbox 资源上限。
+不新增取消轮询间隔、durable watcher 间隔或取消 channel 配置。200ms/1s 是 worker 内部协议参数；把它们暴露成部署旋钮会产生彼此不兼容且未经验证的组合。现有配置只保留确实需要随 worker 数量和机器容量变化的池与执行槽位。
+
+本机资源采样只包含当前 Compose 服务和宿主机；远端 Cube VM 的 CPU、内存与网络资源未测量，不用零值替代。
 
 ## 实测基线（2026-09-04 快照）
 

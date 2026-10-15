@@ -25,7 +25,7 @@ test("API、订阅和下载都使用固定 APP Key / end_user，幂等键与 cur
     idempotencyKey: "request-1",
   });
   await api.events("thread-1", "v2-cursor");
-  await api.download("thread-1", "/home/gem/user-data/报告 #1.txt");
+  await api.download("thread-1", "/home/user/workspace/报告 #1.txt");
   assert.ok(
     captured.every(
       ({ options }) =>

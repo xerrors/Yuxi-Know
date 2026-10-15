@@ -55,7 +55,6 @@ async def test_api_startup_validates_full_schema_without_running_ddl(
     calls: list[object] = []
     monkeypatch.setenv("API_KEY_DERIVATION_SECRET", "schema-test-api-secret-at-least-thirty-two-characters")
     monkeypatch.setenv("JWT_SECRET_KEY", "schema-test-jwt-secret-at-least-thirty-two-characters")
-    monkeypatch.setenv("SANDBOX_PROVISIONER_TOKEN", "schema-test-sandbox-token-at-least-thirty-two-characters")
     monkeypatch.setattr(lifespan_module.pg_manager, "initialize", lambda: calls.append("initialize"))
 
     async def require_current_schema(_manager) -> None:
@@ -103,14 +102,13 @@ async def test_required_startup_component_failure_still_releases_every_runtime_c
 
     assert app.state.startup_components == {"default_agents": {"status": "error", "required": True, "code": "RuntimeError"}}
     assert "password" not in str(exc_info.value)
-    assert released == ["sandbox_provider", "queue_clients", "neo4j", "postgres"]
+    assert released == ["queue_clients", "neo4j", "postgres"]
 
 
 async def test_invalid_oidc_configuration_blocks_startup_before_database(monkeypatch):
     """延迟配置读取仍在启动阶段拒绝不完整的 OIDC 信任根。"""
     monkeypatch.setenv("API_KEY_DERIVATION_SECRET", "fixture-api-key-secret-at-least-thirty-two-characters")
     monkeypatch.setenv("JWT_SECRET_KEY", "fixture-jwt-secret-at-least-thirty-two-characters")
-    monkeypatch.setenv("SANDBOX_PROVISIONER_TOKEN", "fixture-sandbox-token-at-least-thirty-two-characters")
     monkeypatch.setenv("OIDC_ENABLED", "true")
     monkeypatch.setenv("OIDC_ISSUER_URL", "")
 

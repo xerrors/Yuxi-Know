@@ -30,15 +30,15 @@ test('交付物只归属于调用 present_artifacts 的对话', () => {
             tool_call_result: { content: '已将交付物展示给用户' },
             args: JSON.stringify({
               filepaths: [
-                '/home/gem/user-data/outputs/bubble_sort.py',
-                '/home/gem/user-data/outputs/bubble_sort.js'
+                '/home/user/workspace/outputs/bubble_sort.py',
+                '/home/user/workspace/outputs/bubble_sort.js'
               ]
             })
           },
           {
             function: { name: 'present_artifacts' },
             status: 'success',
-            args: { filepaths: ['/home/gem/user-data/outputs/bubble_sort.py'] }
+            args: { filepaths: ['/home/user/workspace/outputs/bubble_sort.py'] }
           }
         ]
       }
@@ -49,8 +49,8 @@ test('交付物只归属于调用 present_artifacts 的对话', () => {
   }
 
   assert.deepEqual(MessageProcessor.extractArtifactsFromMessageGroup(artifactSession), [
-    { path: '/home/gem/user-data/outputs/bubble_sort.py' },
-    { path: '/home/gem/user-data/outputs/bubble_sort.js' }
+    '/home/user/workspace/outputs/bubble_sort.py',
+    '/home/user/workspace/outputs/bubble_sort.js'
   ])
   assert.deepEqual(MessageProcessor.extractArtifactsFromMessageGroup(laterSession), [])
 })
@@ -91,8 +91,8 @@ test('交付物忽略历史图片类型，保序去重，失败与待执行调�
     ]
   }
   assert.deepEqual(MessageProcessor.extractArtifactsFromMessageGroup(group), [
-    { path: '/a.png' },
-    { path: '/report.md' }
+    '/a.png',
+    '/report.md'
   ])
 })
 

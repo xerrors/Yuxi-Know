@@ -91,49 +91,8 @@ def make_test_session_metadata(test_name: str, *, e2e: bool = False, **extra: ob
     return metadata
 
 
-async def _list_provisioned_sandbox_ids(
-    client: httpx.AsyncClient,
-    headers: dict[str, str],
-) -> set[str]:
-    """从 provisioner 管理 API 回读当前沙盒标识。"""
-
-    response = await client.get("/api/sandboxes", headers=headers)
-    if response.status_code != 200:
-        raise RuntimeError(f"Failed to list provisioned sandboxes for cleanup: {response.text}")
-
-    payload = response.json()
-    sandboxes = payload.get("sandboxes") if isinstance(payload, dict) else None
-    if not isinstance(sandboxes, list):
-        raise RuntimeError("Provisioner cleanup response is missing a sandboxes list")
-
-    sandbox_ids: set[str] = set()
-    for sandbox in sandboxes:
-        sandbox_id = sandbox.get("sandbox_id") if isinstance(sandbox, dict) else None
-        if not isinstance(sandbox_id, str) or not sandbox_id:
-            raise RuntimeError("Provisioner cleanup entry is missing sandbox_id")
-        sandbox_ids.add(sandbox_id)
-    return sandbox_ids
 
 
-async def cleanup_provisioned_sandboxes(
-    client: httpx.AsyncClient,
-    headers: dict[str, str],
-) -> None:
-    """通过 provisioner 管理 API 删除测试环境中的全部沙盒。"""
-
-    initial_ids = await _list_provisioned_sandbox_ids(client, headers)
-    failures: list[str] = []
-    for sandbox_id in sorted(initial_ids):
-        delete_response = await client.delete(f"/api/sandboxes/{sandbox_id}", headers=headers)
-        if delete_response.status_code not in {200, 404}:
-            failures.append(f"Failed to delete provisioned sandbox {sandbox_id}: {delete_response.text}")
-
-    remaining_ids = initial_ids & await _list_provisioned_sandbox_ids(client, headers)
-    if remaining_ids:
-        failures.append(f"Provisioner cleanup left sandboxes behind: {', '.join(sorted(remaining_ids))}")
-
-    if failures:
-        raise RuntimeError("; ".join(failures))
 
 
 def _is_pytest_resource(name: object) -> bool:

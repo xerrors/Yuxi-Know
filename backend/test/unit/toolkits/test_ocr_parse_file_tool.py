@@ -30,7 +30,7 @@ async def test_cancelled_ocr_waits_for_local_io_without_publishing(workspace_roo
     import threading
 
     _mock_system_options(monkeypatch)
-    source = "/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/scan.png"
+    source = "/home/user/workspace/projects/11111111-1111-4111-8111-111111111111/scan.png"
     started, release = threading.Event(), threading.Event()
     temporary_paths = []
 
@@ -59,7 +59,7 @@ async def test_cancelled_ocr_waits_for_local_io_without_publishing(workspace_roo
             wait(path)
         return original_read(path, *args, **kwargs)
 
-    monkeypatch.setattr(builtin_tools, "ProvisionerSandboxBackend", Backend)
+    monkeypatch.setattr(builtin_tools, "UserSandboxBackend", Backend)
     monkeypatch.setattr(ocr_service, "parse", parse)
     monkeypatch.setattr(Path, "read_text", read)
     task = asyncio.create_task(ocr_parse_file.coroutine(file_path=source, runtime=_runtime(), ocr_engine="disable"))
@@ -78,7 +78,6 @@ async def test_cancelled_ocr_waits_for_local_io_without_publishing(workspace_roo
 def _patch_sandbox_backend(monkeypatch: pytest.MonkeyPatch, files: dict[str, bytes]):
     class FakeBackend:
         def __init__(self, **kwargs):
-            assert kwargs["create_if_missing"] is True
             self.scope = kwargs
 
         def download_authorized_file_to_path(self, path, target_path, max_bytes):
@@ -89,7 +88,7 @@ def _patch_sandbox_backend(monkeypatch: pytest.MonkeyPatch, files: dict[str, byt
             Path(target_path).write_bytes(content)
             return len(content)
 
-    monkeypatch.setattr(builtin_tools, "ProvisionerSandboxBackend", FakeBackend, raising=False)
+    monkeypatch.setattr(builtin_tools, "UserSandboxBackend", FakeBackend, raising=False)
     return files
 
 
@@ -102,7 +101,7 @@ def _runtime(
         "thread_id": thread_id,
         "runtime_scope_id": thread_id,
         "workdir_relative_path": "projects/11111111-1111-4111-8111-111111111111",
-        "workdir_path": "/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111",
+        "workdir_path": "/home/user/workspace/projects/11111111-1111-4111-8111-111111111111",
         "uid": uid,
     }
     return SimpleNamespace(
@@ -111,7 +110,7 @@ def _runtime(
             thread_id=thread_id,
             runtime_scope_id=thread_id,
             workdir_relative_path="projects/11111111-1111-4111-8111-111111111111",
-            workdir_path="/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111",
+            workdir_path="/home/user/workspace/projects/11111111-1111-4111-8111-111111111111",
             uid=uid,
         ),
         state={},
@@ -130,7 +129,7 @@ async def test_ocr_parse_file_writes_markdown_to_outputs(tmp_path, workspace_roo
     monkeypatch.setattr(ocr_service, "resolve_ocr_engine_id", resolve_engine)
     thread_id = "thread-1"
     uid = "user-1"
-    source_virtual_path = "/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/scan.png"
+    source_virtual_path = "/home/user/workspace/projects/11111111-1111-4111-8111-111111111111/scan.png"
     _patch_sandbox_backend(monkeypatch, {source_virtual_path: b"fake image"})
     captured: dict[str, object] = {}
 
@@ -156,9 +155,9 @@ async def test_ocr_parse_file_writes_markdown_to_outputs(tmp_path, workspace_roo
     )
 
     output_virtual_path = result["parsed_path"]
-    assert output_virtual_path.startswith("/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/outputs/ocr/scan_")
+    assert output_virtual_path.startswith("/home/user/workspace/projects/11111111-1111-4111-8111-111111111111/outputs/ocr/scan_")
     assert output_virtual_path.endswith("/document.md")
-    output_file = workspace_root / output_virtual_path.removeprefix("/home/gem/user-data/")
+    output_file = workspace_root / output_virtual_path.removeprefix("/home/user/workspace/")
     markdown = output_file.read_text()
     assert "识别结果" in markdown
     assert (output_file.parent / "images/chart.png").read_bytes() == b"image"
@@ -187,7 +186,7 @@ async def test_ocr_parse_file_uses_default_engine(tmp_path, monkeypatch: pytest.
     monkeypatch.setattr(ocr_service, "resolve_ocr_engine_id", resolve_engine)
     thread_id = "thread-1"
     uid = "user-1"
-    source_virtual_path = "/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/uploads/upload.pdf"
+    source_virtual_path = "/home/user/workspace/projects/11111111-1111-4111-8111-111111111111/uploads/upload.pdf"
     _patch_sandbox_backend(monkeypatch, {source_virtual_path: b"fake pdf"})
     captured: dict[str, object] = {}
 
@@ -213,7 +212,7 @@ async def test_ocr_parse_file_accepts_disable_for_pdf(tmp_path, monkeypatch: pyt
     _mock_system_options(monkeypatch)
     thread_id = "thread-1"
     uid = "user-1"
-    source_virtual_path = "/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/uploads/text-layer.pdf"
+    source_virtual_path = "/home/user/workspace/projects/11111111-1111-4111-8111-111111111111/uploads/text-layer.pdf"
     _patch_sandbox_backend(monkeypatch, {source_virtual_path: b"fake pdf"})
     captured: dict[str, object] = {}
 
@@ -239,7 +238,7 @@ async def test_ocr_parse_file_accepts_disable_for_pdf(tmp_path, monkeypatch: pyt
     "file_path",
     [
         "/etc/passwd",
-        "/home/gem/user-data/../secrets.png",
+        "/home/user/workspace/../secrets.png",
     ],
 )
 async def test_ocr_parse_file_rejects_path_outside_user_data(tmp_path, monkeypatch: pytest.MonkeyPatch, file_path: str) -> None:
@@ -256,7 +255,7 @@ async def test_ocr_parse_file_rejects_directory(tmp_path, monkeypatch: pytest.Mo
     _mock_system_options(monkeypatch)
     thread_id = "thread-1"
     uid = "user-1"
-    dir_virtual_path = "/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/directory"
+    dir_virtual_path = "/home/user/workspace/projects/11111111-1111-4111-8111-111111111111/directory"
     _patch_sandbox_backend(monkeypatch, {})
 
     with pytest.raises(ValueError, match="不存在或不是普通文件"):
@@ -290,7 +289,7 @@ async def test_ocr_directory_copy_failure_leaves_no_partial_output(workspace_roo
     import os
 
     _mock_system_options(monkeypatch)
-    source = "/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/scan.png"
+    source = "/home/user/workspace/projects/11111111-1111-4111-8111-111111111111/scan.png"
     _patch_sandbox_backend(monkeypatch, {source: b"input"})
 
     def copy(source_fd, target_fd):

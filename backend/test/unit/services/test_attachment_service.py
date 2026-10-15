@@ -142,7 +142,7 @@ async def test_store_attachment_normalizes_persisted_file_name(monkeypatch):
     )
 
     assert backend.files["/uploads/file-1_report.txt"] == b"content"
-    assert record["original_path"] == "/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/uploads/file-1_report.txt"
+    assert record["original_path"] == "/home/user/workspace/projects/11111111-1111-4111-8111-111111111111/uploads/file-1_report.txt"
     assert backend.files[_scope_path(record["original_path"])] == b"content"
 
 

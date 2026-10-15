@@ -111,10 +111,9 @@ ensure_security_secret() {
 }
 
 validate_security_env() {
-    local jwt_secret api_key_secret sandbox_secret
+    local jwt_secret api_key_secret
     jwt_secret=$(get_env_value "JWT_SECRET_KEY")
     api_key_secret=$(get_env_value "API_KEY_DERIVATION_SECRET")
-    sandbox_secret=$(get_env_value "SANDBOX_PROVISIONER_TOKEN")
 
     security_secret_is_valid "$jwt_secret" || {
         echo "JWT_SECRET_KEY must contain at least 32 non-whitespace characters." >&2
@@ -122,10 +121,6 @@ validate_security_env() {
     }
     security_secret_is_valid "$api_key_secret" "$jwt_secret" || {
         echo "API_KEY_DERIVATION_SECRET must be at least 32 characters and independent from JWT_SECRET_KEY." >&2
-        return 1
-    }
-    security_secret_is_valid "$sandbox_secret" "$jwt_secret" "$api_key_secret" || {
-        echo "SANDBOX_PROVISIONER_TOKEN must be at least 32 characters and independent from other security secrets." >&2
         return 1
     }
 }
@@ -163,9 +158,6 @@ ensure_jwt_env() {
     fi
 }
 
-ensure_sandbox_env() {
-    ensure_security_secret "SANDBOX_PROVISIONER_TOKEN" "JWT_SECRET_KEY" "API_KEY_DERIVATION_SECRET"
-}
 
 if [ "${1:-}" = "--validate-security-env" ]; then
     if [ ! -f ".env" ]; then
@@ -195,7 +187,6 @@ if [ -f ".env" ]; then
     echo "✅ .env file already exists. Checking required settings."
     ensure_required_api_env
     ensure_jwt_env
-    ensure_sandbox_env
     validate_security_env
     chmod 600 .env
 else
@@ -252,8 +243,6 @@ else
         echo "Generated YUXI_INSTANCE_ID and saved it to .env."
     fi
 
-    read_security_secret "SANDBOX_PROVISIONER_TOKEN" "$JWT_SECRET_KEY" "$API_KEY_DERIVATION_SECRET"
-    SANDBOX_PROVISIONER_TOKEN="$SECURITY_SECRET_VALUE"
 
     # Create .env file
     cat > .env << EOF
@@ -279,7 +268,6 @@ EOF
 JWT_SECRET_KEY=${JWT_SECRET_KEY}
 API_KEY_DERIVATION_SECRET=${API_KEY_DERIVATION_SECRET}
 YUXI_INSTANCE_ID=${YUXI_INSTANCE_ID}
-SANDBOX_PROVISIONER_TOKEN=${SANDBOX_PROVISIONER_TOKEN}
 EOF
 
     validate_security_env
@@ -329,12 +317,6 @@ else
     exit 1
 fi
 
-sandbox_image="enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:1.11.0"
-if ! skip_existing_image "$sandbox_image"; then
-    echo "🔄 Pulling ${sandbox_image}..."
-    docker pull "$sandbox_image"
-    echo "✅ Successfully pulled ${sandbox_image}"
-fi
 
 echo ""
 echo "🎉 Initialization complete!"

@@ -67,7 +67,7 @@ image_response = requests.get(
 )
 image_response.raise_for_status()
 
-workdir = Path("/home/gem/user-data/projects/<当前项目目录>")
+workdir = Path("/home/user/workspace/projects/<当前项目目录>")
 output_path = workdir / "generated-image.png"
 output_path.parent.mkdir(parents=True, exist_ok=True)
 output_path.write_bytes(image_response.content)

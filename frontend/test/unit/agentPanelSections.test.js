@@ -68,7 +68,7 @@ test('normalizePreviewResponse 解包 JSON artifact 的统一预览结构', asyn
   )
 
   const parsed = await normalizePreviewResponse(jsonResponse, {
-    path: '/home/gem/user-data/projects/demo/outputs/result.json'
+    path: '/home/user/workspace/projects/demo/outputs/result.json'
   })
 
   assert.equal(parsed.content, '{"result":42}')
@@ -142,7 +142,7 @@ test('文件树仅在页面可见的运行期文件视图中轮询', () => {
       ...base,
       activeSection: { type: 'file' },
       activePreview: {
-        path: '/home/gem/user-data/projects/abc/outputs/report.md',
+        path: '/home/user/workspace/projects/abc/outputs/report.md',
         workdir: true
       }
     }),
@@ -152,7 +152,7 @@ test('文件树仅在页面可见的运行期文件视图中轮询', () => {
     shouldPollAgentPanelFilesystem({
       ...base,
       activeSection: { type: 'file' },
-      activePreview: { path: '/home/gem/user-data/saved_artifacts/report.md', workdir: false }
+      activePreview: { path: '/home/user/workspace/saved_artifacts/report.md', workdir: false }
     }),
     false
   )

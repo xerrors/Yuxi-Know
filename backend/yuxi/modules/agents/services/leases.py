@@ -6,14 +6,13 @@ import asyncio
 import uuid
 from datetime import datetime
 
-from sqlalchemy import or_, select, text
+from sqlalchemy import select
 
 from yuxi.modules.agents.services.cooperation_notifications import notify_turn_state
-from yuxi.modules.agents.runtime_locks import cooperation_lock_key, sandbox_release_lock_key
+from yuxi.infrastructure.filesystem import await_io
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.agents.models.runs import AgentRun
-from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.repositories.input import AgentInputRepository
 from yuxi.modules.agents.repositories.runs import TERMINAL_RUN_STATUSES, AgentRunRepository
 from yuxi.modules.agents.repositories.sessions import SessionRepository
@@ -22,10 +21,6 @@ from yuxi.modules.agents.runtime.sandbox.provider import get_sandbox_provider
 from yuxi.modules.agents.services.event_writer import publish_run_settlement
 from yuxi.modules.agents.services.scheduler import dispatch_next_input
 from yuxi.modules.agents.services.tracing import finish_turn_observation_if_terminal
-from yuxi.modules.workspace.services.bindings import (
-    resolve_session_workdir_path,
-)
-from yuxi.shared.datetime import utc_now
 
 RUN_LEASE_SECONDS = 120
 
@@ -33,124 +28,24 @@ RUN_LEASE_SECONDS = 120
 WORKER_ID = f"worker-{uuid.uuid4().hex}"
 
 
-SANDBOX_IDLE_SECONDS = 300
-
-
-async def release_runtime_if_idle(run: AgentRun) -> bool:
-    """结束当前执行的清理责任，共享沙盒由独立空闲回收释放。"""
-    from yuxi.modules.agents.models.cooperation import CooperationRuntime
-
+async def complete_run_command_cleanup(run: AgentRun) -> bool:
+    """确认该 Run 外部命令清理后才释放 cleanup 责任。"""
     async with pg_manager.get_async_session_context() as db:
         current = await db.scalar(select(AgentRun).where(AgentRun.id == run.id).with_for_update(key_share=True))
         if current is None:
             raise RuntimeError("Run 的 cleanup Owner 不存在")
         if not current.runtime_cleanup_pending:
             return True
-        await db.execute(
-            text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
-            {"key": cooperation_lock_key(current.runtime_scope_id)},
-        )
+        # 与 retry 领取持同一 Run 锁；取消也必须等待外部清理结束后才能释放。
+        await await_io(asyncio.to_thread(get_sandbox_provider().cancel_run, current.uid, current.id))
         current.runtime_cleanup_pending = False
-        active = await db.scalar(
-            select(AgentRun.id)
-            .where(AgentRun.runtime_scope_id == current.runtime_scope_id, AgentRun.status.notin_(TERMINAL_RUN_STATUSES))
-            .limit(1)
-        )
-        if active is None:
-            runtime = await db.get(CooperationRuntime, current.runtime_scope_id)
-            if runtime is not None and runtime.idle_since is None:
-                runtime.idle_since = utc_now()
         await db.flush()
     return True
 
 
-async def release_idle_sandboxes() -> None:
-    """分页回收空闲沙盒，独立记录失败并继续其他树。"""
-    from datetime import timedelta
-
-    from yuxi.modules.agents.models.cooperation import CooperationRuntime
-
-    cutoff = utc_now() - timedelta(seconds=SANDBOX_IDLE_SECONDS)
-    after = ""
-    failures = 0
-    while True:
-        async with pg_manager.get_async_session_context() as db:
-            roots = list(
-                (
-                    await db.scalars(
-                        select(CooperationRuntime.tree_root_thread_id)
-                        .where(
-                            CooperationRuntime.released.is_(False),
-                            or_(CooperationRuntime.idle_since.is_(None), CooperationRuntime.idle_since <= cutoff),
-                            CooperationRuntime.tree_root_thread_id > after,
-                        )
-                        .order_by(CooperationRuntime.tree_root_thread_id)
-                        .limit(100)
-                    )
-                ).all()
-            )
-        if not roots:
-            break
-        for root_id in roots:
-            try:
-                await _release_idle_sandbox(root_id, cutoff)
-            except Exception:
-                failures += 1
-                logger.exception("Sandbox idle release failed: tree_root_id=%s", root_id)
-        after = roots[-1]
-    if failures:
-        raise RuntimeError(f"空闲沙盒回收失败：{failures} 棵树")
-
-
-async def _release_idle_sandbox(root_id: str, cutoff: datetime) -> None:
-    """只锁沙盒生命周期，领取执行与回收互斥，消息仍可提交。"""
-    from yuxi.modules.agents.models.cooperation import CooperationRuntime
-
-    async with pg_manager.get_async_session_context() as db:
-        if not await db.scalar(
-            text("SELECT pg_try_advisory_xact_lock(hashtextextended(:key, 0))"),
-            {"key": sandbox_release_lock_key(root_id)},
-        ):
-            return
-        runtime = await db.get(CooperationRuntime, root_id, populate_existing=True)
-        if runtime is None or runtime.released:
-            return
-        if (
-            await db.scalar(
-                select(AgentRun.id).where(AgentRun.runtime_scope_id == root_id, AgentRun.status.notin_(TERMINAL_RUN_STATUSES)).limit(1)
-            )
-            is not None
-        ):
-            return
-        # pending Run 取消不会经过执行清理，周期扫描补齐这一空闲转换。
-        if runtime.idle_since is None:
-            runtime.idle_since = utc_now()
-            return
-        if runtime.idle_since > cutoff:
-            return
-        root = await db.scalar(select(Session).where(Session.thread_id == root_id))
-        workdir = await resolve_session_workdir_path(agent_session=root, uid=root.uid, db=db)
-        release = asyncio.create_task(
-            asyncio.to_thread(
-                get_sandbox_provider().release,
-                root_id,
-                uid=root.uid,
-                clear_cache_on_delete_failure=True,
-                workdir_path=workdir,
-            )
-        )
-        try:
-            await asyncio.shield(release)
-        except asyncio.CancelledError:
-            # to_thread 不会随协程取消；外部释放结束前不能交出生命周期锁。
-            while not release.done():
-                try:
-                    await asyncio.shield(release)
-                except asyncio.CancelledError:
-                    continue
-            release.result()
-            raise
-        runtime.released = True
+async def maintain_user_sandboxes() -> None:
+    """维护用户环境；所有会话空闲后暂停，不删除 VM。"""
+    await asyncio.to_thread(get_sandbox_provider().maintain)
 
 
 async def mark_run_running(run_id: str, worker_id: str) -> bool:
@@ -258,7 +153,7 @@ async def reconcile_pending_runtime_cleanups() -> list[str]:
     failures = 0
     for run in pending_runs:
         try:
-            if not await release_runtime_if_idle(run):
+            if not await complete_run_command_cleanup(run):
                 continue
             if run.status in TERMINAL_RUN_STATUSES:
                 await publish_run_settlement(run.id, run.status, thread_id=run.thread_id)

@@ -51,7 +51,6 @@ def test_api_key_derivation_secret_is_required_and_strong(monkeypatch):
         ("JWT_SECRET_KEY", "x" * 30, "至少 32"),
         ("JWT_SECRET_KEY", " jwt-secret-that-is-long-enough ", "首尾空白"),
         ("API_KEY_DERIVATION_SECRET", "x" * 30, "至少 32"),
-        ("SANDBOX_PROVISIONER_TOKEN", "x" * 30, "至少 32"),
     ],
 )
 def test_runtime_rejects_invalid_effective_security_secret(monkeypatch, name, value, message):
@@ -60,7 +59,6 @@ def test_runtime_rejects_invalid_effective_security_secret(monkeypatch, name, va
     monkeypatch.setenv("YUXI_ENV", "production")
     monkeypatch.setenv("JWT_SECRET_KEY", "jwt-secret-that-is-distinct-and-at-least-32")
     monkeypatch.setenv("API_KEY_DERIVATION_SECRET", "api-key-secret-that-is-distinct-and-at-least-32")
-    monkeypatch.setenv("SANDBOX_PROVISIONER_TOKEN", "sandbox-secret-that-is-distinct-and-at-least-32")
     monkeypatch.setenv(name, value)
 
     with pytest.raises(ValueError, match=message):
@@ -71,14 +69,11 @@ def test_runtime_rejects_invalid_effective_security_secret(monkeypatch, name, va
     ("first_name", "second_name"),
     [
         ("JWT_SECRET_KEY", "API_KEY_DERIVATION_SECRET"),
-        ("API_KEY_DERIVATION_SECRET", "SANDBOX_PROVISIONER_TOKEN"),
-        ("JWT_SECRET_KEY", "SANDBOX_PROVISIONER_TOKEN"),
     ],
 )
 def test_security_secrets_must_not_be_reused(monkeypatch, first_name, second_name):
     monkeypatch.setenv("JWT_SECRET_KEY", "jwt-secret-that-is-distinct-and-at-least-32")
     monkeypatch.setenv("API_KEY_DERIVATION_SECRET", "api-key-secret-that-is-distinct-and-at-least-32")
-    monkeypatch.setenv("SANDBOX_PROVISIONER_TOKEN", "sandbox-secret-that-is-distinct-and-at-least-32")
     shared_secret = "shared-security-secret-that-is-at-least-32-chars"
     monkeypatch.setenv(first_name, shared_secret)
     monkeypatch.setenv(second_name, shared_secret)

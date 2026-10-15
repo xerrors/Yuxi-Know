@@ -714,30 +714,6 @@ async def test_lost_worker_publishes_failure_to_waiting_member(tree, monkeypatch
         assert (await db.get(AgentTurn, member["turn_id"])).status == "failed"
 
 
-async def test_idle_reaper_preserves_active_tree(tree, monkeypatch):
-    """恢复过期空闲标记时，真实活跃 Run 仍阻止释放共享环境。"""
-    from datetime import timedelta
-
-    from yuxi.modules.agents.models.cooperation import CooperationRuntime
-    from yuxi.modules.agents.services.leases import release_idle_sandboxes
-
-    factory, _, root_id, _ = tree
-    async with factory() as db:
-        runtime = await db.get(CooperationRuntime, root_id)
-        runtime.idle_since = utc_now() - timedelta(minutes=6)
-        await db.commit()
-
-    from types import SimpleNamespace
-
-    def release_other_tree(candidate, **kwargs):
-        assert candidate != root_id, "活跃树不应调用沙盒释放器"
-
-    monkeypatch.setattr("yuxi.modules.agents.services.leases.get_sandbox_provider", lambda: SimpleNamespace(release=release_other_tree))
-    await release_idle_sandboxes()
-    async with factory() as db:
-        assert not (await db.get(CooperationRuntime, root_id)).released
-
-
 async def test_durable_tree_and_run_binding_reject_wrong_owner(tree):
     """绕过服务直接写入错误树归属和 runtime，数据库必须拒绝。"""
     from sqlalchemy import text
@@ -946,30 +922,20 @@ async def test_child_status_notification_preserves_self_and_parent_recipients(tr
         assert all(event.payload["waiting_for"] == "approval" and event.turn_id == member["turn_id"] for event in events)
 
 
-async def test_cancelling_last_pending_run_starts_tree_idle_timeout(tree, monkeypatch):
-    """最后一个 pending Run 取消后，已使用的共享沙盒仍进入空闲回收。"""
-    from datetime import timedelta
-    from types import SimpleNamespace
-
+async def test_cancelling_last_pending_run_keeps_tree_stop_state(tree):
+    """取消 pending Run 持久化终态，不登记协作树沙盒回收计时。"""
     from yuxi.modules.agents.models.cooperation import CooperationRuntime
-    from yuxi.modules.agents.services.leases import release_idle_sandboxes, release_runtime_if_idle
+    from yuxi.modules.agents.services.leases import complete_run_command_cleanup
     from yuxi.modules.agents.services.turns import cancel_turn
 
     factory, run_id, root_id, uid = tree
     member = await child(tree)
     async with factory() as db:
         root_run = await db.get(AgentRun, run_id)
-        await settle_locked_run(
-            db=db,
-            run=root_run,
-            worker_id="root-worker",
-            status="failed",
-            token_usage=None,
-        )
+        await settle_locked_run(db=db, run=root_run, worker_id="root-worker", status="failed", token_usage=None)
         await db.commit()
-    await release_runtime_if_idle(root_run)
+    await complete_run_command_cleanup(root_run)
     async with factory() as db:
-        assert (await db.get(CooperationRuntime, root_id)).idle_since is None
         await cancel_turn(
             db=db,
             scope=ActorScope(uid=uid, app_id=None),
@@ -977,22 +943,10 @@ async def test_cancelling_last_pending_run_starts_tree_idle_timeout(tree, monkey
             turn_id=member["turn_id"],
             idempotency_key="cancel-last-pending",
         )
-    released = []
-    monkeypatch.setattr(
-        "yuxi.modules.agents.services.leases.get_sandbox_provider",
-        lambda: SimpleNamespace(release=lambda scope, **kwargs: released.append(scope)),
-    )
-    await release_idle_sandboxes()
     async with factory() as db:
-        runtime = await db.get(CooperationRuntime, root_id)
-        assert runtime.idle_since is not None, "最后一个 pending Run 取消后必须登记树空闲"
-        assert root_id not in released
-        runtime.idle_since = utc_now() - timedelta(minutes=6)
-        await db.commit()
-    await release_idle_sandboxes()
-    async with factory() as db:
-        assert (await db.get(CooperationRuntime, root_id)).released
-        assert root_id in released
+        assert (await db.get(AgentRun, member["run_id"])).status == "cancelled"
+        assert (await db.get(AgentTurn, member["turn_id"])).status == "cancelled"
+        assert (await db.get(CooperationRuntime, root_id)).stopped is False
 
 
 async def complete_member(factory, member, content):
@@ -1289,123 +1243,6 @@ async def test_bad_wait_does_not_block_other_wait_recovery(tree):
         new_run = await db.get(AgentRun, recovered.current_run_id)
         message = await db.get(Message, new_run.input_message_id)
         assert message.extra_metadata["resume"]["wait_timed_out"] is True
-
-
-async def test_sandbox_release_allows_messages_but_defers_execution(tree, monkeypatch):
-    """外部释放停顿时，消息提交不等树锁，新执行在专用锁释放后才能领取。"""
-    import threading
-    from datetime import timedelta
-    from types import SimpleNamespace
-
-    from yuxi.modules.agents.models.cooperation import CooperationRuntime
-    from yuxi.modules.agents.repositories.turn import AgentTurnRepository
-    from yuxi.modules.agents.services.leases import release_idle_sandboxes
-
-    factory, run_id, root_id, uid = tree
-    started, finish = threading.Event(), threading.Event()
-
-    def release(*_args, **_kwargs):
-        """暂停外部释放，构造真实 PostgreSQL 锁竞争窗口。"""
-        started.set()
-        assert finish.wait(10), "test release was not unblocked"
-
-    monkeypatch.setattr("yuxi.modules.agents.services.leases.get_sandbox_provider", lambda: SimpleNamespace(release=release))
-    async with factory() as db:
-        run = await db.get(AgentRun, run_id)
-        await AgentRunRepository(db).set_terminal_status(run_id, status="failed", worker_id="root-worker")
-        await AgentTurnRepository(db).set_terminal(await db.get(AgentTurn, run.turn_id), status="failed")
-        runtime = await db.get(CooperationRuntime, root_id)
-        runtime.idle_since = utc_now() - timedelta(minutes=6)
-        await db.commit()
-    cleanup = asyncio.create_task(release_idle_sandboxes())
-    try:
-        assert await asyncio.to_thread(started.wait, 3)
-        async with asyncio.timeout(3):
-            async with factory() as db:
-                root = await db.scalar(select(Session).where(Session.thread_id == root_id))
-                await CooperationRepository(db).append(
-                    sender=root, recipient=root, key="during-release", kind="message", content="available"
-                )
-                turn = AgentTurn(id=str(uuid.uuid4()), thread_id=root_id, uid=uid, status="running")
-                db.add(turn)
-                await db.flush()
-                pending = await AgentRunRepository(db).create_run(
-                    run_id=str(uuid.uuid4()),
-                    thread_id=root_id,
-                    runtime_scope_id=root_id,
-                    agent_slug=root.agent_id,
-                    uid=uid,
-                    turn_id=turn.id,
-                    session_record_id=root.id,
-                    input_payload={},
-                )
-                turn.current_run_id = pending.id
-                pending_id = pending.id
-                await db.commit()
-                _, acquired = await AgentRunRepository(db).mark_running(pending_id, worker_id="after-release", lease_seconds=120)
-                assert not acquired
-                await db.commit()
-    finally:
-        finish.set()
-        await cleanup
-    async with factory() as db:
-        assert await db.scalar(select(CooperationEvent.id).where(CooperationEvent.idempotency_key == "during-release"))
-        _, acquired = await AgentRunRepository(db).mark_running(pending_id, worker_id="after-release", lease_seconds=120)
-        assert acquired
-        await db.commit()
-        assert (await db.get(CooperationRuntime, root_id)).released is False
-
-
-async def test_sandbox_release_keeps_lock_through_repeated_cancellation(tree, monkeypatch):
-    """重复取消不能在外部释放结束前交出真实生命周期锁。"""
-    import threading
-    from datetime import timedelta
-    from types import SimpleNamespace
-
-    from sqlalchemy import text
-
-    from yuxi.modules.agents.models.cooperation import CooperationRuntime
-    from yuxi.modules.agents.repositories.turn import AgentTurnRepository
-    from yuxi.modules.agents.services.leases import _release_idle_sandbox
-
-    factory, run_id, root_id, _ = tree
-    started, finish = threading.Event(), threading.Event()
-
-    def release(*_args, **_kwargs):
-        """保持外部副作用未完成，独立检查数据库锁。"""
-        started.set()
-        assert finish.wait(10), "test release was not unblocked"
-
-    monkeypatch.setattr("yuxi.modules.agents.services.leases.get_sandbox_provider", lambda: SimpleNamespace(release=release))
-    async with factory() as db:
-        run = await db.get(AgentRun, run_id)
-        await AgentRunRepository(db).set_terminal_status(run_id, status="failed", worker_id="root-worker")
-        await AgentTurnRepository(db).set_terminal(await db.get(AgentTurn, run.turn_id), status="failed")
-        (await db.get(CooperationRuntime, root_id)).idle_since = utc_now() - timedelta(minutes=6)
-        await db.commit()
-    cleanup = asyncio.create_task(_release_idle_sandbox(root_id, utc_now() - timedelta(minutes=5)))
-    try:
-        assert await asyncio.to_thread(started.wait, 3)
-        cleanup.cancel()
-        await asyncio.sleep(0)
-        cleanup.cancel()
-        await asyncio.sleep(0.1)
-        async with factory() as db:
-            acquired = await db.scalar(
-                text("SELECT pg_try_advisory_xact_lock_shared(hashtextextended(:key, 0))"),
-                {"key": f"sandbox-release:{root_id}"},
-            )
-            assert not acquired, "external release still running after lifecycle lock was lost"
-        assert not cleanup.done()
-    finally:
-        finish.set()
-        with pytest.raises(asyncio.CancelledError):
-            await cleanup
-    async with factory() as db:
-        assert await db.scalar(
-            text("SELECT pg_try_advisory_xact_lock_shared(hashtextextended(:key, 0))"),
-            {"key": f"sandbox-release:{root_id}"},
-        )
 
 
 async def test_expired_lease_failure_does_not_block_other_runs(tree, monkeypatch):

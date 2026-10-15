@@ -1,263 +1,377 @@
-from __future__ import annotations
+"""单节点用户 VM 的持久生命周期与普通账号命令执行。"""
 
-import hashlib
+import base64
 import os
+import secrets
 import threading
 import time
-import weakref
-from dataclasses import dataclass
+import uuid
+from contextvars import ContextVar
+from datetime import timedelta
+from pathlib import Path
 
-from yuxi.infrastructure.observability.logging import logger
+from yuxi.modules.agents.runtime.sandbox.cube import CubeAdapter, Environment
+
 from yuxi.infrastructure.runtime_settings import get_int_env
-from yuxi.modules.agents.runtime.sandbox.provisioner_client import ProvisionerClient, SandboxRecord
 from yuxi.modules.agents.repositories.environment import AgentEnvRepository
-from yuxi.modules.workspace.paths import normalize_workdir_path, workspace_uid_dirname
+from yuxi.modules.agents.repositories.sandbox import SandboxRepository
+from yuxi.modules.extensions.skills.projection import get_user_skills_root_dir
+from yuxi.modules.workspace.paths import ensure_user_workspace, workspace_uid_dirname
+from yuxi.modules.workspace.runtime_paths import WORKSPACE_PATH, SHARED_SKILLS_PATH
+from yuxi.shared.datetime import format_utc_datetime, utc_now
+from yuxi.shared.errors import StateConflictError, UpstreamError
+
+# 工具自建 Backend 仍继承当前可信 Run/attempt，模型无法覆盖执行身份。
+sandbox_run_owner: ContextVar[tuple[str, str] | None] = ContextVar("sandbox_run_owner", default=None)
+sandbox_run_env: ContextVar[dict[str, str] | None] = ContextVar("sandbox_run_env", default=None)
 
 
-def sandbox_provisioner_token() -> str:
-    token = os.getenv("SANDBOX_PROVISIONER_TOKEN") or ""
-    if token != token.strip() or len(token) < 32:
-        raise ValueError("SANDBOX_PROVISIONER_TOKEN must contain at least 32 characters")
-    return token
+class CubeSandboxProvider:
+    """PostgreSQL 拥有状态，进程内仅保留无状态客户端。"""
 
+    def __init__(self, adapter: CubeAdapter | None = None, repository: SandboxRepository | None = None):
+        """装配真实执行与持久边界。"""
+        self.adapter = adapter or CubeAdapter()
+        self.repository = repository or SandboxRepository()
 
-def sandbox_id_for_thread(
-    thread_id: str,
-    *,
-    uid: str | None = None,
-) -> str:
-    runtime_id = str(thread_id or "").strip()
-    uid_id = str(uid or "").strip()
-    identity = f"{uid_id}:{runtime_id}" if uid_id else runtime_id
-    digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()
-    return digest[:12]
+    def get(self, uid: str) -> Environment:
+        """显式创建或恢复用户原实例，不静默替换损坏环境。"""
+        with self.repository.user_lock(uid) as connection:
+            return self._ensure(connection, uid)
 
-
-def _sandbox_key(
-    uid: str,
-    runtime_thread_id: str,
-) -> str:
-    return f"{uid}::{runtime_thread_id}"
-
-
-@dataclass(slots=True)
-class SandboxConnection:
-    cache_key: str
-    thread_id: str
-    uid: str
-    sandbox_id: str
-    sandbox_url: str
-    generation: str | None = None
-    workdir_path: str | None = None
-
-
-class SandboxIdentityMismatchError(RuntimeError):
-    """Sandbox runtime 的持久挂载身份与请求不一致。"""
-
-
-class ProvisionerSandboxProvider:
-    def __init__(self):
-        provider_name = (os.getenv("SANDBOX_PROVIDER") or "provisioner").strip().lower()
-        if provider_name != "provisioner":
-            raise ValueError("Only SANDBOX_PROVIDER=provisioner is supported.")
-        provisioner_url = (os.getenv("SANDBOX_PROVISIONER_URL") or "http://sandbox-provisioner:8002").strip()
-
-        self._client = ProvisionerClient(
-            provisioner_url,
-            token=sandbox_provisioner_token(),
-            delete_timeout_seconds=get_int_env("SANDBOX_PROVISIONER_DELETE_TIMEOUT_SECONDS", 120),
-        )
-        self._lock = threading.Lock()
-        # 活跃或等待中的调用者持有强引用；空闲作用域的锁自动回收。
-        self._thread_locks: weakref.WeakValueDictionary[str, threading.Lock] = weakref.WeakValueDictionary()
-        self._connections: dict[str, SandboxConnection] = {}
-        self._last_touch_at: dict[str, float] = {}
-        self._touch_interval_seconds = int(os.getenv("SANDBOX_KEEPALIVE_INTERVAL_SECONDS") or 30)
-
-    def _thread_lock(self, cache_key: str) -> threading.Lock:
-        with self._lock:
-            lock = self._thread_locks.get(cache_key)
-            if lock is None:
-                lock = threading.Lock()
-                self._thread_locks[cache_key] = lock
-            return lock
-
-    def _record_to_connection(
-        self,
-        *,
-        cache_key: str,
-        thread_id: str,
-        uid: str,
-        record: SandboxRecord,
-    ) -> SandboxConnection:
-        connection = SandboxConnection(
-            cache_key=cache_key,
-            thread_id=thread_id,
-            uid=uid,
-            sandbox_id=record.sandbox_id,
-            sandbox_url=record.sandbox_url,
-            generation=record.generation,
-            workdir_path=record.workdir_path,
-        )
-        self._connections[cache_key] = connection
-        self._last_touch_at[cache_key] = time.time()
-        return connection
-
-    def _should_touch(self, cache_key: str) -> bool:
-        if self._touch_interval_seconds <= 0:
-            return False
-        last_touch = self._last_touch_at.get(cache_key)
-        if last_touch is None:
-            return True
-        return (time.time() - last_touch) >= self._touch_interval_seconds
-
-    def _touch_if_needed(self, connection: SandboxConnection) -> bool:
-        if self._should_touch(connection.cache_key):
-            is_alive = self._client.touch(connection.sandbox_id)
-            self._last_touch_at[connection.cache_key] = time.time()
-            if not is_alive:
-                return False
-        record = self._client.discover(connection.sandbox_id)
-        if record is None:
-            return False
-        if record.workdir_path != connection.workdir_path:
-            raise SandboxIdentityMismatchError("sandbox Workdir changed within one runtime scope")
-        connection.sandbox_url = record.sandbox_url
-        connection.generation = record.generation
-        return True
-
-    def get(
-        self,
-        thread_id: str,
-        *,
-        uid: str,
-        create_if_missing: bool = False,
-        inherit_env: bool = True,
-        workdir_path: str | None = None,
-    ) -> SandboxConnection | None:
-        normalized_workdir_path = normalize_workdir_path(workdir_path) if workdir_path else None
-        cache_key = _sandbox_key(uid, thread_id)
-        lock = self._thread_lock(cache_key)
-        with lock:
-            current = self._connections.get(cache_key)
-            if current:
-                if current.uid != uid:
-                    raise RuntimeError(f"sandbox scope {cache_key} belongs to uid {current.uid}, not {uid}")
-                if current.workdir_path != normalized_workdir_path:
-                    raise SandboxIdentityMismatchError("sandbox Workdir does not match the existing runtime scope")
-                try:
-                    if self._touch_if_needed(current):
-                        return current
-                    self._connections.pop(cache_key, None)
-                    self._last_touch_at.pop(cache_key, None)
-                except SandboxIdentityMismatchError:
-                    raise
-                except Exception as exc:  # noqa: BLE001
-                    logger.warning(f"Failed to touch sandbox {current.sandbox_id} for {cache_key}: {exc}")
-                    return current
-
-            sandbox_id = sandbox_id_for_thread(thread_id, uid=uid)
-            if create_if_missing:
-                record = self._client.create(
-                    sandbox_id,
-                    thread_id,
-                    workspace_uid_dirname(uid),
-                    AgentEnvRepository.load_for_sync_runtime(uid) if inherit_env else {},
-                    workdir_path=normalized_workdir_path,
-                    inherit_env=inherit_env,
-                )
-                if record.workdir_path != normalized_workdir_path:
-                    raise RuntimeError("created sandbox Workdir does not match requested scope")
-            else:
-                record = self._client.discover(sandbox_id)
-                if record is None:
-                    return None
-                if record.workdir_path != normalized_workdir_path:
-                    raise RuntimeError("discovered sandbox Workdir does not match requested scope")
-
-            return self._record_to_connection(
-                cache_key=cache_key,
-                thread_id=thread_id,
-                uid=uid,
-                record=record,
-            )
-
-    def release(
-        self,
-        thread_id: str,
-        *,
-        uid: str,
-        clear_cache_on_delete_failure: bool = False,
-        workdir_path: str | None = None,
-    ) -> None:
-        """释放一个指定作用域的 Sandbox，并清理本地连接缓存。"""
-        normalized_workdir_path = normalize_workdir_path(workdir_path) if workdir_path else None
-        cache_key = _sandbox_key(uid, thread_id)
-        lock = self._thread_lock(cache_key)
-        with lock:
-            connection = self._connections.get(cache_key)
-            if connection and connection.workdir_path != normalized_workdir_path:
-                raise SandboxIdentityMismatchError("sandbox Workdir does not match the existing runtime scope")
-            if connection is None:
-                sandbox_id = sandbox_id_for_thread(thread_id, uid=uid)
-                record = self._client.discover(sandbox_id)
-                if record is None:
-                    return
-                if record.workdir_path != normalized_workdir_path:
-                    raise SandboxIdentityMismatchError("sandbox Workdir does not match the requested release scope")
-                generation = record.generation
-            else:
-                sandbox_id = connection.sandbox_id
-                generation = connection.generation
+    def status(self, uid: str) -> dict:
+        """查询状态不触碰 connect，因此不唤醒 VM。"""
+        with self.repository.connect() as connection:
+            row = self.repository.environment(connection, uid)
+            runs = self.repository.active_runs(connection, uid)
+            commands = self.repository.commands(connection, uid)
+        state = row["state"] if row else "not_created"
+        error = row["error"] if row else None
+        if row and state in {"creating", "rebuilding", "resuming", "pausing"}:
+            with self.repository.user_lock(uid, wait=False) as connection:
+                if connection is not None:
+                    current = self.repository.environment(connection, uid)
+                    if current["state"] in {"creating", "rebuilding", "resuming", "pausing"}:
+                        state, error = "failed", "上次环境操作已中断，请核对执行节点后重建"
+                    else:
+                        state, error = current["state"], current["error"]
+        if row and row["sandbox_id"] and state in {"running", "paused"}:
             try:
-                self._client.delete(sandbox_id, expected_generation=generation)
+                state = self.adapter.state(self._reference(row)).lower()
             except Exception:
-                if clear_cache_on_delete_failure:
-                    self._connections.pop(cache_key, None)
-                    self._last_touch_at.pop(cache_key, None)
-                raise
-            self._connections.pop(cache_key, None)
-            self._last_touch_at.pop(cache_key, None)
+                state, error = "failed", "Cube 实例无法查询，请检查执行节点；不会自动重建环境"
+        busy = bool(runs or commands) or state in {"creating", "rebuilding", "resuming", "pausing"}
+        idle_seconds = get_int_env("SANDBOX_IDLE_SECONDS", 300)
+        deadline = (
+            row["last_active_at"] + timedelta(seconds=idle_seconds) if row and state == "running" and not busy and not error else None
+        )
+        return {
+            "state": state,
+            "generation": row["generation"] if row else 0,
+            "error": error,
+            "active_runs": [{key: run[key] for key in ("id", "thread_id", "turn_id", "status")} for run in runs],
+            "active_operations": len(commands),
+            "busy": busy,
+            "last_active_at": format_utc_datetime(row["last_active_at"]) if row else None,
+            "paused_at": format_utc_datetime(row["paused_at"]) if row and state == row["state"] == "paused" else None,
+            "idle_timeout_seconds": idle_seconds,
+            "idle_deadline_at": format_utc_datetime(deadline) if deadline is not None else None,
+            "server_time": format_utc_datetime(utc_now()),
+        }
 
-    def shutdown(self) -> None:
-        with self._lock:
-            connections = list(self._connections.values())
-            self._connections.clear()
-            self._last_touch_at.clear()
+    def rebuild(self, uid: str) -> dict:
+        """空闲时替换 VM，宿主 Workspace 与 Skills 不参与删除。"""
+        with self.repository.user_lock(uid) as connection:
+            if self.repository.active_runs(connection, uid) or self.repository.commands(connection, uid):
+                raise StateConflictError("仍有 Run 或操作正在使用环境，请先停止并等待清理完成", code="sandbox_busy")
+            row = self.repository.environment(connection, uid)
+            if row:
+                row["state"] = "rebuilding"
+                self.repository.save_environment(connection, row)
+                try:
+                    if row["sandbox_id"]:
+                        self.adapter.destroy(self._reference(row))
+                    else:
+                        # 控制面曾断连，先核对该操作的真实实例，避免重复创建。
+                        for instance in self.adapter.find_created(row["operation_id"]):
+                            sandbox_id = instance.get("sandboxID") or instance.get("sandboxId") or instance.get("sandbox_id")
+                            if not sandbox_id:
+                                raise RuntimeError("Cube 实例身份缺失")
+                            self.adapter.destroy(Environment(sandbox_id, "", row["envd_token"]))
+                except Exception as exc:
+                    self._failed(connection, row, exc)
+                    raise UpstreamError("旧环境删除未确认，重建未继续") from exc
+            self._create(connection, uid, generation=row["generation"] + 1 if row else 1)
+        return self.status(uid)
 
-        for connection in connections:
+    def disk_usage(self, uid: str) -> dict:
+        """手动读取主目录所在磁盘，沿用普通命令的恢复与清理语义。"""
+        output, exit_code, truncated = self.execute(
+            uid,
+            "import os; s=os.statvfs('/home/user'); print(s.f_blocks*s.f_frsize, (s.f_blocks-s.f_bfree)*s.f_frsize, s.f_bavail*s.f_frsize)",
+            "/home/user",
+            timeout=10,
+            output_budget=256,
+            python=True,
+        )
+        if exit_code != 0 or truncated:
+            raise UpstreamError("磁盘用量读取失败，请重试")
+        try:
+            total, used, available = map(int, output.split())
+            if total <= 0 or used < 0 or available < 0 or used + available > total:
+                raise ValueError("invalid disk usage")
+        except ValueError as exc:
+            raise UpstreamError("磁盘用量读取失败，请重试") from exc
+        return {"used_bytes": used, "available_bytes": available}
+
+    def execute(
+        self,
+        uid: str,
+        command: str,
+        cwd: str,
+        timeout: int,
+        cancelled: threading.Event | None = None,
+        *,
+        stdin_data: bytes | None = None,
+        output_budget: int | None = None,
+        python: bool = False,
+    ):
+        """流式运行独立进程组，取消不依赖 Python 线程终止。"""
+        cancelled = cancelled or threading.Event()
+        command_id = uuid.uuid4().hex
+        with self.repository.user_lock(uid) as connection:
+            environment = self._ensure(connection, uid)
+            generation = self.repository.environment(connection, uid)["generation"]
+            self._add_command(connection, uid, generation, command_id, "file" if python else "process", timeout + 60)
+        budget = output_budget if output_budget is not None else get_int_env("SANDBOX_MAX_OUTPUT_BYTES", 262144)
+        output = bytearray()
+        truncated = False
+        stopped = False
+        pgid = None
+        finished = threading.Event()
+
+        def stop():
+            """超时或取消只终止本次命令组。"""
+            cancelled.set()
             try:
-                self._client.delete(
-                    connection.sandbox_id,
-                    expected_generation=connection.generation,
-                )
-            except Exception as exc:  # noqa: BLE001
-                logger.warning(f"Failed to release sandbox {connection.sandbox_id} for {connection.cache_key}: {exc}")
+                self.adapter.cancel(environment, pgid, command_id)
+            except Exception:
+                self.repository.mark_cleanup(uid, command_id)
+
+        def watch():
+            """同时响应超时和协程取消，命令流阻塞也能发送终止信号。"""
+            deadline = time.monotonic() + timeout
+            while not finished.wait(0.1):
+                if cancelled.is_set() or time.monotonic() >= deadline:
+                    stop()
+                    return
+
+        watcher = threading.Thread(target=watch, daemon=True)
+        watcher.start()
+        try:
+            envs = {} if python else sandbox_run_env.get()
+            if envs is None:
+                envs = AgentEnvRepository.load_for_sync_runtime(uid)
+            if cancelled.is_set():
+                raise StateConflictError("命令在启动前已取消")
+            for event in self.adapter.stream(
+                environment, command, cwd, command_id, envs, timeout=timeout, stdin_data=stdin_data, python=python
+            ):
+                if "start" in event:
+                    pgid = int(event["start"]["pid"])
+                    self.repository.command_started(command_id, pgid)
+                if cancelled.is_set():
+                    return output.decode("utf-8", errors="replace"), 143, truncated
+                data = event.get("data", {})
+                for channel in ("stdout", "stderr"):
+                    if channel in data:
+                        raw = base64.b64decode(data[channel], validate=True)
+                        remaining = max(0, budget - len(output))
+                        output.extend(raw[:remaining])
+                        truncated |= len(raw) > remaining
+                if "end" in event:
+                    exit_code = int(event["end"]["exitCode"])
+                    # shell 终态不保证普通后台子进程退出，明确收尾同一组。
+                    self.adapter.cancel(environment, pgid, command_id, terminal_confirmed=True)
+                    stopped = True
+            if not stopped:
+                raise RuntimeError("命令未取得可靠终态")
+            return output.decode("utf-8", errors="replace"), exit_code, truncated
+        finally:
+            finished.set()
+            watcher.join()
+            if not stopped:
+                try:
+                    self.adapter.cancel(environment, pgid, command_id)
+                    stopped = True
+                except Exception:
+                    self.repository.mark_cleanup(uid, command_id)
+            if stopped:
+                self.repository.finish_command(uid, command_id)
+
+    def cancel_run(self, uid: str, run_id: str, owner: str | None = None) -> None:
+        """终态前或恢复时清理指定 Run 的真实命令，不影响其他 Run。"""
+        with self.repository.connect() as connection:
+            commands = self.repository.commands(connection, uid, run_id=run_id)
+        for command in commands:
+            if owner is None or command["owner"] == owner:
+                self._cleanup_command(command)
+
+    def maintain(self) -> None:
+        """清理失联句柄，再暂停所有使用者均空闲的环境。"""
+        failures = []
+        for command in self.repository.stale_commands():
+            try:
+                self._cleanup_command(command)
+            except Exception as exc:
+                failures.append(exc)
+        idle_seconds = get_int_env("SANDBOX_IDLE_SECONDS", 300)
+        for candidate in self.repository.environments():
+            with self.repository.user_lock(candidate["uid"], wait=False) as connection:
+                if connection is None:
+                    continue
+                row = self.repository.environment(connection, candidate["uid"])
+                if row["state"] != "running" or (utc_now() - row["last_active_at"]).total_seconds() < idle_seconds:
+                    continue
+                if self.repository.active_runs(connection, row["uid"]) or self.repository.commands(connection, row["uid"]):
+                    continue
+                row["state"] = "pausing"
+                self.repository.save_environment(connection, row)
+                try:
+                    paused = self.adapter.pause(self._reference(row))
+                    row["state"] = "paused"
+                    row["paused_at"] = utc_now() if paused else None
+                    self.repository.save_environment(connection, row)
+                except Exception as exc:
+                    self._failed(connection, row, exc)
+                    failures.append(exc)
+        if failures:
+            raise UpstreamError(f"环境维护未完成：{len(failures)} 项，请核对执行节点")
+
+    def _ensure(self, connection, uid: str) -> Environment:
+        """在用户锁内核对已登记实例，只对首次使用执行创建。"""
+        row = self.repository.environment(connection, uid)
+        if row is None:
+            return self._create(connection, uid, generation=1)
+        if row["state"] not in {"running", "paused"}:
+            raise StateConflictError("环境操作未完成或已失败，请核对后在设置中显式重建", code="sandbox_unavailable")
+        environment = self._reference(row)
+        try:
+            state = self.adapter.state(environment).lower()
+            if state == "paused":
+                row["state"] = "resuming"
+                self.repository.save_environment(connection, row)
+                self.adapter.resume(environment)
+            elif state != "running":
+                raise RuntimeError("Cube 实例未就绪")
+            row.update(state="running", last_active_at=utc_now(), paused_at=None, error=None)
+            self.repository.save_environment(connection, row)
+            return environment
+        except Exception as exc:
+            self._failed(connection, row, exc)
+            raise UpstreamError("原用户环境无法恢复；不会自动创建空环境") from exc
+
+    def _create(self, connection, uid: str, *, generation: int) -> Environment:
+        """先持久化操作身份，再创建并在初始化前保存实例引用。"""
+        safe_uid = workspace_uid_dirname(uid)
+        ensure_user_workspace(uid)
+        get_user_skills_root_dir(uid).mkdir(parents=True, exist_ok=True)
+        roots = [os.environ.get(name, "") for name in ("CUBE_NODE_USER_DATA_DIR", "CUBE_NODE_SKILL_PROJECTION_DIR")]
+        if not all(root and Path(root).is_absolute() for root in roots):
+            raise RuntimeError("Cube 节点的用户文件与 Skill 投影根必须配置为绝对路径")
+        mounts = [
+            {"hostPath": f"{roots[0]}/shared/{safe_uid}/workspace", "mountPath": WORKSPACE_PATH, "readOnly": False},
+            {"hostPath": f"{roots[1]}/{safe_uid}", "mountPath": SHARED_SKILLS_PATH, "readOnly": True},
+        ]
+        row = dict(
+            uid=uid,
+            generation=generation,
+            sandbox_id=None,
+            traffic_token="",
+            envd_token=secrets.token_urlsafe(32),
+            state="creating",
+            operation_id=uuid.uuid4().hex,
+            last_active_at=utc_now(),
+            paused_at=None,
+            error=None,
+        )
+        self.repository.save_environment(connection, row)
+
+        def created(reference):
+            """Cube 返回实例即落盘，初始化失败也可显式回收。"""
+            row.update(sandbox_id=reference.sandbox_id, traffic_token=reference.traffic_token)
+            self.repository.save_environment(connection, row)
+
+        try:
+            environment = self.adapter.create(
+                mounts=mounts,
+                metadata={"yuxi-uid": safe_uid, "yuxi-operation": row["operation_id"], "yuxi-generation": str(generation)},
+                envd_token=row["envd_token"],
+                on_created=created,
+            )
+            row.update(state="running", last_active_at=utc_now())
+            self.repository.save_environment(connection, row)
+            return environment
+        except Exception as exc:
+            self._failed(connection, row, exc)
+            raise UpstreamError("Cube 创建或初始化失败，请检查执行节点后显式重建") from exc
+
+    def _add_command(self, connection, uid, generation, command_id, kind, timeout):
+        """可信上下文决定 Run/attempt，独立 Skill 操作仍登记占用。"""
+        owner = sandbox_run_owner.get()
+        self.repository.add_command(
+            connection,
+            dict(
+                id=command_id,
+                uid=uid,
+                generation=generation,
+                run_id=owner[0] if owner else None,
+                owner=owner[1] if owner else None,
+                kind=kind,
+                deadline=utc_now() + timedelta(seconds=timeout),
+            ),
+        )
+
+    def _cleanup_command(self, command: dict) -> None:
+        """以持久句柄核对代次，命令停止确认前不移除记录。"""
+        uid = command["uid"]
+        with self.repository.user_lock(uid) as connection:
+            row = self.repository.environment(connection, uid)
+            current = next((item for item in self.repository.commands(connection, uid) if item["id"] == command["id"]), None)
+            if current is None:
+                return
+            if row is None or row["generation"] != command["generation"]:
+                raise StateConflictError("旧环境命令句柄代次不匹配，拒绝操作新 VM")
+            self.adapter.cancel(self._reference(row), command["pgid"], command["id"])
+            self.repository.remove_command(connection, uid, command["id"])
+
+    def _failed(self, connection, row, exc) -> None:
+        """仅保存脱敏诊断，不把 SDK 响应凭据写入业务错误。"""
+        state = {"resuming": "paused", "pausing": "running"}.get(row["state"], row["state"])
+        if state not in {"running", "paused"}:
+            state = "failed"
+        row.update(state=state, error=f"{type(exc).__name__}: Cube 操作失败，请核对执行节点")
+        self.repository.save_environment(connection, row)
+
+    @staticmethod
+    def _reference(row: dict) -> Environment:
+        """控制凭据只在执行侧装配。"""
+        return Environment(row["sandbox_id"], row["traffic_token"], row["envd_token"])
 
 
-_sandbox_provider: ProvisionerSandboxProvider | None = None
-_sandbox_provider_lock = threading.Lock()
+_sandbox_provider: CubeSandboxProvider | None = None
 
 
-def init_sandbox_provider() -> ProvisionerSandboxProvider:
+def get_sandbox_provider() -> CubeSandboxProvider:
+    """取得本进程无长期连接的控制客户端。"""
     global _sandbox_provider
-    with _sandbox_provider_lock:
-        if _sandbox_provider is None:
-            _sandbox_provider = ProvisionerSandboxProvider()
-        return _sandbox_provider
+    if _sandbox_provider is None:
+        _sandbox_provider = CubeSandboxProvider()
+    return _sandbox_provider
 
 
-def get_sandbox_provider() -> ProvisionerSandboxProvider:
-    provider = _sandbox_provider
-    if provider is not None:
-        return provider
-    return init_sandbox_provider()
+async def check_sandbox_provider() -> None:
+    """启动 readiness 核对控制面、模板和真实数据代理。"""
+    import asyncio
 
-
-def shutdown_sandbox_provider() -> None:
-    global _sandbox_provider
-    with _sandbox_provider_lock:
-        provider = _sandbox_provider
-        _sandbox_provider = None
-    if provider is not None:
-        provider.shutdown()
+    await asyncio.to_thread(get_sandbox_provider().adapter.health)

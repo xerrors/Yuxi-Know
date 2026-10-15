@@ -25,7 +25,7 @@ from yuxi.modules.extensions.skills.package import (
 from yuxi.modules.extensions.skills.resolved import ResolvedSkill
 from yuxi.modules.identity.models import User
 from yuxi.modules.workspace.paths import ensure_user_workspace, user_workspace_dir
-from yuxi.modules.workspace.runtime_paths import VIRTUAL_PATH_PREFIX, normalize_runtime_path
+from yuxi.modules.workspace.runtime_paths import normalize_runtime_path, workspace_scope_from_runtime_path
 
 PERSONAL_SKILL_SOURCE_TYPE = "personal"
 
@@ -73,11 +73,8 @@ async def confirm_personal_skill_install_draft(
 async def install_personal_skills_from_source(
     *,
     uid: str,
-    thread_id: str,
     source: str,
     skill_names: list[str] | None = None,
-    workdir_relative_path: str | None = None,
-    workdir_path: str | None = None,
 ) -> tuple[list[str], list[dict[str, str]]]:
     """获取沙盒或远程包并安装到用户个人来源，汇总逐项结果。"""
     source = source.strip()
@@ -88,11 +85,8 @@ async def install_personal_skills_from_source(
             source_dir = await asyncio.to_thread(
                 _download_sandbox_skill,
                 source,
-                thread_id,
                 uid,
                 Path(tmp),
-                workdir_relative_path,
-                workdir_path,
             )
             item = await install_personal_skill_dir(uid, source_dir)
             return [item.slug], []
@@ -103,7 +97,7 @@ async def install_personal_skills_from_source(
 
     installed: list[str] = []
     failures: list[dict[str, str]] = []
-    downloads = await download_remote_skills(source=source, skills=skill_names)
+    downloads = await download_remote_skills(source=source, skills=skill_names, uid=uid)
     try:
         for result in downloads.results:
             if isinstance(result, SkillDownloadFailure):
@@ -262,28 +256,16 @@ def _resolve_personal_skill_dir(root: Path, slug: str) -> Path:
 
 def _download_sandbox_skill(
     sandbox_path: str,
-    thread_id: str,
     uid: str,
     staging_root: Path,
-    workdir_relative_path: str | None = None,
-    workdir_path: str | None = None,
 ) -> Path:
     """从当前用户沙盒下载 Skill 目录到本地暂存区。"""
-    from yuxi.modules.agents.runtime.sandbox import ProvisionerSandboxBackend
+    from yuxi.modules.agents.runtime.sandbox import UserSandboxBackend
 
     sandbox_path = normalize_runtime_path(sandbox_path)
-    allowed = sandbox_path.startswith(f"{VIRTUAL_PATH_PREFIX.rstrip('/')}/")
-    allowed = allowed or bool(workdir_path and sandbox_path.startswith(f"{workdir_path.rstrip('/')}/"))
-    if not allowed:
-        raise ValueError(f"不支持的沙盒路径: {sandbox_path}。请使用当前 Project Workdir 下的目录，或 /home/gem/user-data/...")
-
+    workspace_scope_from_runtime_path(sandbox_path)
     staging = staging_root / "package"
-    backend = ProvisionerSandboxBackend(
-        thread_id=thread_id,
-        uid=uid,
-        workdir_path=workdir_relative_path,
-        create_if_missing=True,
-    )
+    backend = UserSandboxBackend(uid=uid)
     download_sandbox_directory(
         backend,
         sandbox_path,

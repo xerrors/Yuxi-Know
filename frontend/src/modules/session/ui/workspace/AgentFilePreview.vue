@@ -536,7 +536,7 @@ const zoomInDisabled = computed(() => htmlPreviewScale.value >= HTML_PREVIEW_SCA
 const zoomOutDisabled = computed(() => htmlPreviewScale.value <= HTML_PREVIEW_SCALE_MIN)
 const htmlPreviewScalePercent = computed(() => Math.round(htmlPreviewScale.value * 100))
 const displayFilePath = computed(() =>
-  String(props.filePath || '').replace(/^\/home\/gem\/user-data(?=\/|$)/, '~')
+  String(props.filePath || '').replace(/^\/home\/user\/workspace(?=\/|$)/, '~')
 )
 
 const isMarkdown = computed(() => isMarkdownPreview(props.filePath, props.file?.previewType))

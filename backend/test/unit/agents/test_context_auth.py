@@ -353,7 +353,7 @@ async def test_prepare_agent_runtime_context_filters_resources_and_derives_runti
                 "skill-a": {
                     "name": "Skill A",
                     "description": "",
-                    "path": "/home/gem/skills/skill-a/SKILL.md",
+                    "path": "/home/user/skills/skill-a/SKILL.md",
                     "tools": [],
                     "mcps": [],
                     "skills": ["skill-b"],

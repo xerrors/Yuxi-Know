@@ -225,5 +225,5 @@ async def test_api_lifespan_starts_mcp_and_cleans_up_after_failure(monkeypatch):
     with pytest.raises(RuntimeError, match="MCP startup failed"):
         async with lifecycle.lifespan(app):
             pytest.fail("MCP failure must prevent serving requests")
-    assert released == ["sandbox_provider", "queue_clients", "neo4j", "postgres"]
+    assert released == ["queue_clients", "neo4j", "postgres"]
     assert app.state.startup_complete is False

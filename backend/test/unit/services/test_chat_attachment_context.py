@@ -11,7 +11,7 @@ def test_attachment_context_is_added_only_to_model_message():
         [
             {
                 "file_name": "report.pdf",
-                "path": "/home/gem/user-data/projects/project-1/uploads/report.pdf",
+                "path": "/home/user/workspace/projects/project-1/uploads/report.pdf",
             }
         ],
     )
@@ -28,7 +28,7 @@ def test_attachment_context_preserves_multimodal_content_blocks():
 
     model_message = _with_attachment_context(
         original,
-        [{"file_name": "notes.md", "path": "/home/gem/user-data/projects/project-1/uploads/notes.md"}],
+        [{"file_name": "notes.md", "path": "/home/user/workspace/projects/project-1/uploads/notes.md"}],
     )
 
     assert model_message.content[:2] == original.content

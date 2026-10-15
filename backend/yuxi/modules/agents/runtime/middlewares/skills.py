@@ -20,7 +20,7 @@ from yuxi.modules.extensions.skills.resolved import RuntimeSkill
 from yuxi.modules.extensions.skills.runtime import build_dependency_bundle
 from yuxi.modules.extensions.tools import get_all_tool_instances
 from yuxi.modules.extensions.tools.builtin import BASE_TOOL_NAMES
-from yuxi.modules.workspace.runtime_paths import VIRTUAL_PERSONAL_SKILLS_PATH, VIRTUAL_SKILLS_PATH
+from yuxi.modules.workspace.runtime_paths import PERSONAL_SKILLS_PATH, SHARED_SKILLS_PATH
 
 
 def _activated_skills_reducer(left: list[str] | None, right: list[str] | None) -> list[str]:
@@ -60,8 +60,8 @@ class SkillsMiddleware(AgentMiddleware):
         super().__init__()
         self.enable_skills_prompt = enable_skills_prompt
         self.skills_sources_for_prompt = skills_sources_for_prompt or [
-            f"{VIRTUAL_SKILLS_PATH}/",
-            f"{VIRTUAL_PERSONAL_SKILLS_PATH}/",
+            f"{SHARED_SKILLS_PATH}/",
+            f"{PERSONAL_SKILLS_PATH}/",
         ]
 
     async def awrap_model_call(self, request: ModelRequest, handler: Callable[[ModelRequest], ModelResponse]) -> ModelResponse:
@@ -260,7 +260,7 @@ class SkillsMiddleware(AgentMiddleware):
         if not raw:
             return None
         pure = PurePosixPath(raw if raw.startswith("/") else f"/{raw}")
-        for root in (VIRTUAL_SKILLS_PATH, VIRTUAL_PERSONAL_SKILLS_PATH):
+        for root in (SHARED_SKILLS_PATH, PERSONAL_SKILLS_PATH):
             try:
                 relative = pure.relative_to(PurePosixPath(root))
             except ValueError:

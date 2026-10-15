@@ -133,7 +133,7 @@ WORKFLOW_CONTRACTS = (
         commands=(
             "docker compose exec -T api uv run --no-sync --no-dev pytest test/integration/api/test_system_router_api.py::test_health_endpoint_is_public test/integration/api/test_system_router_api.py::test_readiness_endpoint_proves_core_runtime_dependencies test/integration/api/test_system_router_api.py::test_discovery_and_openapi_declare_full_knowledge_capabilities -q",
             "docker compose exec -T api uv run --no-sync --no-dev pytest test/integration/services/test_schema_migration_version.py -q",
-            "docker compose exec -T -e TEST_BASE_URL=http://127.0.0.1:1 -e SANDBOX_PROVISIONER_URL=http://127.0.0.1:1 -e SANDBOX_PROVISIONER_TOKEN=fixture-probe-not-used-sandbox-token -e TEST_USERNAME=fixture-probe -e TEST_PASSWORD=fixture-probe api uv run --no-sync --no-dev pytest test/integration/services/test_agent_input_concurrency.py test/integration/services/test_thread_priority_inputs.py test/integration/services/test_input_attachments.py test/integration/services/test_session_title_generation.py -q",
+            "docker compose exec -T -e TEST_BASE_URL=http://127.0.0.1:1 -e CUBE_API_URL=http://127.0.0.1:1 -e TEST_USERNAME=fixture-probe -e TEST_PASSWORD=fixture-probe api uv run --no-sync --no-dev pytest test/integration/services/test_agent_input_concurrency.py test/integration/services/test_thread_priority_inputs.py test/integration/services/test_input_attachments.py test/integration/services/test_session_title_generation.py -q",
             "docker compose exec -T api uv run --no-sync --no-dev pytest test/integration/services/test_agent_run_lease.py -q",
             'docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_turn_result_causality.py -q',
             'docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_chat_router.py::test_public_thread_endpoints_require_authentication test/integration/api/test_chat_router.py::test_public_create_rejects_empty_input test/integration/api/test_chat_router.py::test_public_missing_thread_and_turn_return_not_found test/integration/api/test_chat_router.py::test_public_input_rejects_unbound_attachment_without_persisting_receipt test/integration/api/test_removed_api_endpoints.py::test_removed_agent_session_entrypoints_are_unreachable test/integration/api/test_public_agents_key_boundary.py test/integration/services/test_agent_input_schema.py test/integration/services/test_project_thread_archive.py test/integration/services/test_run_stream_redis.py -q',
@@ -145,8 +145,9 @@ WORKFLOW_CONTRACTS = (
             "docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_session_cooperation_e2e.py -q --durations=10",
             "docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_agent_lifecycle_key_scope_e2e.py -q --durations=10",
             'docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/services/test_identity_admin_service.py test/integration/services/test_api_key_user_lifecycle.py test/integration/api/test_apikey_router.py -q',
-            'docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/services/test_project_workdir_provisioner.py::test_sessions_share_workdir_only_through_project test/integration/services/test_user_skill_projection.py test/integration/api/test_skill_artifact_authorization.py -q',
-            "docker compose exec -T api uv run --no-sync --no-dev pytest test/integration/services/test_project_workdir_provisioner.py -q",
+            'docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/services/test_project_workdir.py::test_sessions_share_workdir_only_through_project test/integration/services/test_user_skill_projection.py test/integration/api/test_skill_artifact_authorization.py -q',
+            "docker compose exec -T api uv run --no-sync --no-dev pytest test/integration/sandbox -q",
+            "CUBE_TEST_ISOLATED_TOPOLOGY=1 bash scripts/test_cube_worker_recovery.sh",
         ),
         required_paths=(
             "backend/yuxi/**",
@@ -156,6 +157,7 @@ WORKFLOW_CONTRACTS = (
             "docker/**",
             "scripts/ci_prepare_system_tests_env.sh",
             "scripts/ci_build_topology_images.sh",
+            "scripts/test_cube_worker_recovery.sh",
             ".github/workflows/system-tests.yml",
         ),
     ),

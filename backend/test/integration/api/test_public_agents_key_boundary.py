@@ -10,7 +10,7 @@ import asyncpg
 import pytest
 from test.integration.api.helpers import delete_created_threads
 from yuxi.modules.workspace.filesystem import Workspace
-from yuxi.modules.workspace.runtime_paths import runtime_user_data_path
+from yuxi.modules.workspace.runtime_paths import runtime_workspace_path
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
@@ -224,7 +224,7 @@ async def test_key_without_end_user_id_cannot_reach_product_project_files(test_c
             headers={**key_headers, "Idempotency-Key": str(uuid.uuid4())},
         )
         assert foreign_project.status_code == 404, foreign_project.text
-        product_runtime_path = runtime_user_data_path(product_file)
+        product_runtime_path = runtime_workspace_path(product_file)
         foreign_read = await test_client.get(
             f"/api/v1/agents/sessions/{app_thread_id}/artifacts/{product_runtime_path.lstrip('/')}",
             headers=key_headers,
@@ -233,7 +233,7 @@ async def test_key_without_end_user_id_cannot_reach_product_project_files(test_c
         foreign_write = await test_client.post(
             f"/api/v1/agents/sessions/{app_thread_id}/artifacts/save",
             json={
-                "path": runtime_user_data_path(app_file),
+                "path": runtime_workspace_path(app_file),
                 "destination_path": f"/{product['workdir_path'].strip('/')}",
             },
             headers=key_headers,

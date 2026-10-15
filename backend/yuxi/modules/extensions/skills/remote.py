@@ -10,13 +10,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
 
-from yuxi.infrastructure.observability.logging import logger
-from yuxi.modules.agents.runtime.sandbox import ProvisionerSandboxBackend
+from yuxi.modules.agents.runtime.sandbox import UserSandboxBackend
 from yuxi.modules.agents.runtime.sandbox.download import download_sandbox_directory
-from yuxi.modules.agents.runtime.sandbox.provider import get_sandbox_provider
 from yuxi.modules.extensions.options import remote_skill_source_policy
 from yuxi.modules.extensions.skills.package import is_valid_skill_slug
-from yuxi.modules.workspace.runtime_paths import VIRTUAL_PATH_PREFIX
+from yuxi.modules.workspace.runtime_paths import WORKSPACE_PATH
 
 ANSI_ESCAPE_RE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
 CONTROL_SEQUENCE_RE = re.compile(r"\x1B\][^\x07]*(?:\x07|\x1B\\)|\x1B[\(\)][A-Za-z0-9]")
@@ -24,7 +22,6 @@ CLI_TIMEOUT_SECONDS = 300
 GITHUB_REPO_PATTERN = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?/(?!\.{1,2}$)[A-Za-z0-9_.-]+$")
 GITHUB_HOST = "github.com"
 INVALID_SOURCE_MESSAGE = "source 仅支持远程 Skill 来源白名单中的 HTTPS 地址"
-REMOTE_SKILL_SANDBOX_ROOT = f"{VIRTUAL_PATH_PREFIX.rstrip('/')}/outputs"
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,12 +53,12 @@ class RemoteSkillDownloads:
             await asyncio.to_thread(shutil.rmtree, self.temp_home, ignore_errors=True)
 
 
-async def list_remote_skills(source: str) -> list[dict[str, str]]:
+async def list_remote_skills(source: str, *, uid: str) -> list[dict[str, str]]:
     """列出允许来源中的可安装 Skill。"""
     policy = await remote_skill_source_policy.get()
     normalized_source = _normalize_source(source, policy["allowed_hosts"])
 
-    sandbox = _RemoteSkillSandbox.create()
+    sandbox = _RemoteSkillRequest.create(uid)
     try:
         output = await sandbox.run(["npx", "-y", "skills", "add", normalized_source, "--list"])
     finally:
@@ -77,6 +74,7 @@ async def download_remote_skills(
     *,
     source: str,
     skills: list[str],
+    uid: str,
 ) -> RemoteSkillDownloads:
     """批量从远程仓库拉取 skill 目录，但不写数据库。"""
     policy = await remote_skill_source_policy.get()
@@ -95,7 +93,7 @@ async def download_remote_skills(
     if not requests:
         return RemoteSkillDownloads(temp_home=None, results=list(results.values()))
 
-    sandbox = _RemoteSkillSandbox.create()
+    sandbox = _RemoteSkillRequest.create(uid)
     temp_home: str | None = None
     try:
         try:
@@ -149,7 +147,7 @@ async def download_remote_skills(
     return RemoteSkillDownloads(temp_home=temp_home, results=[results[index] for index in range(len(skills))])
 
 
-async def search_remote_skills(query: str) -> list[dict[str, str]]:
+async def search_remote_skills(query: str, *, uid: str) -> list[dict[str, str]]:
     """使用 npx skills find <query> 搜索远程 skills。"""
     query_val = str(query or "").strip()
     if not query_val:
@@ -157,7 +155,7 @@ async def search_remote_skills(query: str) -> list[dict[str, str]]:
     if any(ch in query_val for ch in ("\n", "\r", "\x00")):
         raise ValueError("搜索关键字包含非法字符")
 
-    sandbox = _RemoteSkillSandbox.create()
+    sandbox = _RemoteSkillRequest.create(uid)
     try:
         output = await sandbox.run(["npx", "-y", "skills", "find", query_val])
     finally:
@@ -167,23 +165,28 @@ async def search_remote_skills(query: str) -> list[dict[str, str]]:
 
 
 @dataclass(slots=True)
-class _RemoteSkillSandbox:
-    """在一次性 Sandbox 中执行不可信的远程 Skill CLI。"""
+class _RemoteSkillRequest:
+    """在操作者环境执行远程 Skill CLI，临时文件按请求隔离。"""
 
-    thread_id: str
     home: str
-    backend: ProvisionerSandboxBackend
+    backend: UserSandboxBackend
 
     @classmethod
-    def create(cls) -> _RemoteSkillSandbox:
-        thread_id = f"remote-skill-{uuid.uuid4().hex}"
-        home = f"{REMOTE_SKILL_SANDBOX_ROOT}/.{thread_id}"
-        return cls(
-            thread_id=thread_id,
-            home=home,
-            # 远程仓库不可信，不能接触全局或用户级 Sandbox 凭据。
-            backend=ProvisionerSandboxBackend(thread_id=thread_id, uid=thread_id, inherit_env=False),
-        )
+    def create(cls, uid: str) -> _RemoteSkillRequest:
+        """每个请求只创建自己的共享临时目录，VM 始终属于操作者。"""
+        from yuxi.modules.workspace.paths import ensure_user_workspace
+        from yuxi.modules.workspace.filesystem import Workspace
+
+        request_id = f"remote-skill-{uuid.uuid4().hex}"
+        home = f"{WORKSPACE_PATH}/.remote-skills/{request_id}"
+        ensure_user_workspace(uid)
+        workspace = Workspace(uid)
+        try:
+            workspace.create_authorized_directory("/", ".remote-skills", root="/")
+        except FileExistsError:
+            pass
+        workspace.create_authorized_directory("/.remote-skills", request_id, root="/")
+        return cls(home=home, backend=UserSandboxBackend(uid=uid))
 
     async def run(self, args: list[str]) -> str:
         """执行 Skills CLI，并返回原始命令输出。"""
@@ -195,7 +198,7 @@ class _RemoteSkillSandbox:
                 f"HOME={shlex.quote(self.home)} {shlex.join(args)}",
             ]
         )
-        result = await asyncio.to_thread(self.backend.execute, command, timeout=CLI_TIMEOUT_SECONDS)
+        result = await self.backend.aexecute(command, timeout=CLI_TIMEOUT_SECONDS)
         output = str(result.output or "")
         if result.exit_code != 0:
             cleaned_lines = _clean_cli_output(output)
@@ -215,17 +218,8 @@ class _RemoteSkillSandbox:
         )
 
     async def cleanup(self) -> None:
-        """删除一次性 Sandbox 及其线程目录。"""
-        try:
-            await asyncio.to_thread(
-                get_sandbox_provider().release,
-                self.thread_id,
-                uid=self.thread_id,
-                clear_cache_on_delete_failure=True,
-            )
-        except Exception as exc:
-            logger.error(f"销毁远程 Skill Sandbox 失败: {exc}")
-            raise
+        """只移除本请求的临时文件，不暂停或销毁用户环境。"""
+        await asyncio.to_thread(self.backend.delete_authorized_path, self.home, root=WORKSPACE_PATH)
 
 
 def _normalize_source(source: str, allowed_hosts: list[str]) -> str:

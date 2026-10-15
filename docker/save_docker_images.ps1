@@ -17,18 +17,26 @@ Write-Host "开始导出Docker镜像到 $OutputFile..." -ForegroundColor Cyan
 
 # 从各个文件中提取的基础镜像列表
 $Images = @(
+    # 应用与基础设施（docker-compose*.yml、docker/*.Dockerfile）
     "python:3.13-slim",
     "ghcr.io/astral-sh/uv:0.12.6",
-    "node:24-alpine",
     "node:24-slim",
+    "node:24-alpine",
     "nginx:alpine",
     "postgres:16",
     "redis:7.4.10-alpine",
     "neo4j:5.26.29",
     "quay.io/coreos/etcd:v3.5.25",
     "milvusdb/milvus:v3.0.2",
-    # "lmsysorg/sglang:v0.4.9.post3-cu126",
-    # "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlex/paddlex:paddlex3.0.1-paddlepaddle3.0.0-gpu-cuda11.8-cudnn8.9-trt8.6"
+    # Cube 沙盒（docker/cube/Dockerfile.user、Dockerfile.runner、build-template.sh）
+    "node:24-bullseye-slim",
+    "ghcr.io/tencentcloud/cubesandbox-base:2026.16",
+    "ubuntu:24.04",
+    "registry:2"
+    # 按需：在目标机器上本地构建 mineru/paddlex 时才需要的基础镜像
+    # "docker.m.daocloud.io/vllm/vllm-openai:v0.11.2",
+    # "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlex/paddlex:paddlex3.0.1-paddlepaddle3.0.0-gpu-cuda11.8-cudnn8.9-trt8.6",
+    # "lmsysorg/sglang:v0.4.9.post3-cu126"
 )
 
 # MinIO 的官方镜像已不再公开分发，改为按仓库内 Dockerfile 构建后再导出。

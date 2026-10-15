@@ -52,11 +52,11 @@ metadata:
 
 test('relative document images resolve beside their artifact with the same authorization boundary', async () => {
   const { resolveMarkdownImageUrl } = await import('../../src/shared/lib/markdown_preview.js')
-  const base = '/api/v1/agents/sessions/thread-1/artifacts/home/gem/user-data/project/parsed/document.md'
+  const base = '/api/v1/agents/sessions/thread-1/artifacts/home/user/workspace/project/parsed/document.md'
   const origin = 'https://yuxi.example'
   assert.equal(
     resolveMarkdownImageUrl('images/chart.png', base, origin),
-    '/api/v1/agents/sessions/thread-1/artifacts/home/gem/user-data/project/parsed/images/chart.png'
+    '/api/v1/agents/sessions/thread-1/artifacts/home/user/workspace/project/parsed/images/chart.png'
   )
   assert.equal(resolveMarkdownImageUrl('images/chart.png', '', origin), null)
   assert.equal(resolveMarkdownImageUrl('https://outside.example/api/knowledge/knowledge-bases/a/images/x.png', base, origin), null)

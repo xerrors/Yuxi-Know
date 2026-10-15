@@ -14,7 +14,7 @@ from test.e2e.e2e_helpers import register_replay_provider as _provider
 from test.e2e.e2e_helpers import wait_for_consumed_input
 from test.support.permission_convergence import SHARED, create_agent
 from yuxi.modules.workspace.paths import user_workspace_dir
-from yuxi.modules.workspace.runtime_paths import VIRTUAL_PATH_PREFIX
+from yuxi.modules.workspace.runtime_paths import WORKSPACE_PATH
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.e2e, pytest.mark.slow, pytest.mark.timeout(120)]
 
@@ -68,7 +68,7 @@ async def test_tool_boundary_rechecks_current_caller_and_retains_history(actors,
     else:
         replay["action"].update(
             name="write_file",
-            arguments={"file_path": f"{VIRTUAL_PATH_PREFIX}/{filename}", "content": "FORBIDDEN_SIDE_EFFECT"},
+            arguments={"file_path": f"{WORKSPACE_PATH}/{filename}", "content": "FORBIDDEN_SIDE_EFFECT"},
         )
     agent = await create_agent(
         actors,
@@ -113,7 +113,7 @@ async def test_tool_boundary_rechecks_current_caller_and_retains_history(actors,
         )
         file = user_workspace_dir(user["uid"]) / workdir / filename
         if revocation in {"agent", "account"}:
-            replay["action"]["arguments"]["file_path"] = f"{VIRTUAL_PATH_PREFIX}/{workdir}/{filename}"
+            replay["action"]["arguments"]["file_path"] = f"{WORKSPACE_PATH}/{workdir}/{filename}"
         if revocation == "agent":
             response = await client.put(
                 f"/api/agent/{agent['slug']}",
@@ -213,7 +213,7 @@ async def test_queued_input_after_revocation_fails_without_another_model_call(ac
     """已经接收的 FIFO 输入启动时重查权限，两轮都终结且历史保留。"""
     client, db = actors["client"], actors["db"]
     user = actors["identities"]["user0"]
-    replay["action"].update(name="write_file", arguments={"file_path": f"{VIRTUAL_PATH_PREFIX}/forbidden.txt", "content": "forbidden"})
+    replay["action"].update(name="write_file", arguments={"file_path": f"{WORKSPACE_PATH}/forbidden.txt", "content": "forbidden"})
     agent, provider, model = await prepared_agent(actors, replay)
     try:
         initial = await client.post(

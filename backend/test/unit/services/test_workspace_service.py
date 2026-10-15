@@ -423,7 +423,7 @@ async def test_search_workspace_files_matches_filenames(tmp_path: Path, monkeypa
     names = [entry["name"] for entry in response["entries"]]
     assert names == ["MEMORY.md"]
     assert response["entries"][0]["path"] == "/agents/MEMORY.md"
-    assert response["entries"][0]["virtual_path"] == "/home/gem/user-data/agents/MEMORY.md"
+    assert response["entries"][0]["virtual_path"] == "/home/user/workspace/agents/MEMORY.md"
 
     empty = await svc.search_workspace_files(query="   ", current_user=_user())
     assert empty["entries"] == []
@@ -435,9 +435,9 @@ def test_workspace_entry_preserves_current_virtual_path_contract() -> None:
     root = svc._entry_from_metadata("/", metadata)
     directory = svc._entry_from_metadata("/notes", metadata)
 
-    assert root["virtual_path"] == "/home/gem/user-data"
+    assert root["virtual_path"] == "/home/user/workspace"
     assert directory["path"] == "/notes/"
-    assert directory["virtual_path"] == "/home/gem/user-data/notes/"
+    assert directory["virtual_path"] == "/home/user/workspace/notes/"
 
 
 @pytest.mark.asyncio

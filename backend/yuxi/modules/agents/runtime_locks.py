@@ -1,4 +1,4 @@
-"""协作树与沙盒回收共同使用的持久锁键；已部署键字节不可变。"""
+"""协作树与用户环境生命周期的持久锁键。"""
 
 
 def cooperation_lock_key(runtime_scope_id: str) -> str:
@@ -6,6 +6,6 @@ def cooperation_lock_key(runtime_scope_id: str) -> str:
     return f"cooperation:{runtime_scope_id}"
 
 
-def sandbox_release_lock_key(runtime_scope_id: str) -> str:
-    """回收持独占锁，执行持共享尝试锁，均先于树写入锁。"""
-    return f"sandbox-release:{runtime_scope_id}"
+def user_environment_lock_key(uid: str) -> str:
+    """用户环境生命周期与执行领取共同使用的锁键。"""
+    return f"user-environment:{uid}"

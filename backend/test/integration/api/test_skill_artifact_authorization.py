@@ -77,7 +77,7 @@ async def test_skill_artifact_rechecks_authorization_after_share_revoke(
         user_thread = await create_default_agent_thread(
             test_client, user_headers, title_prefix=f"skill-artifact-user-{suffix[:8]}"
         )
-        artifact_path = f"home/gem/skills/{slug}/SKILL.md"
+        artifact_path = f"home/user/skills/{slug}/SKILL.md"
         admin_url = f"/api/v1/agents/sessions/{admin_thread}/artifacts/{artifact_path}"
         user_url = f"/api/v1/agents/sessions/{user_thread}/artifacts/{artifact_path}"
 

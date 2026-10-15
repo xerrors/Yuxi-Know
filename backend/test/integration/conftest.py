@@ -21,7 +21,6 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from test.live_api_cleanup import (  # noqa: E402
-    cleanup_provisioned_sandboxes,
     cleanup_pytest_knowledge_resources,
     cleanup_test_chat_resources,
     list_test_session_resources,
@@ -36,8 +35,6 @@ ADMIN_PASSWORD = os.getenv("TEST_PASSWORD")
 
 _ADMIN_TOKEN_CACHE: str | None = None
 HTTP_TIMEOUT = httpx.Timeout(60.0, connect=5.0)
-SANDBOX_PROVISIONER_URL = os.getenv("SANDBOX_PROVISIONER_URL", "http://sandbox-provisioner:8002").rstrip("/")
-SANDBOX_PROVISIONER_TOKEN = os.getenv("SANDBOX_PROVISIONER_TOKEN", "")
 
 
 def _has_shared_integration_tests(request: pytest.FixtureRequest) -> bool:
@@ -176,31 +173,6 @@ def cleanup_test_knowledge_resources(request: pytest.FixtureRequest):
     anyio.run(run_cleanup)
     yield
     anyio.run(run_cleanup)
-
-
-def _cleanup_provisioned_sandboxes() -> None:
-    if not SANDBOX_PROVISIONER_TOKEN:
-        raise RuntimeError("SANDBOX_PROVISIONER_TOKEN is required for integration sandbox cleanup")
-
-    async def run_cleanup() -> None:
-        headers = {"Authorization": f"Bearer {SANDBOX_PROVISIONER_TOKEN}"}
-        async with httpx.AsyncClient(
-            base_url=SANDBOX_PROVISIONER_URL,
-            timeout=HTTP_TIMEOUT,
-            follow_redirects=True,
-        ) as client:
-            await cleanup_provisioned_sandboxes(client, headers)
-
-    anyio.run(run_cleanup)
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_test_sandboxes(request: pytest.FixtureRequest):
-    if _has_shared_integration_tests(request):
-        _cleanup_provisioned_sandboxes()
-    yield
-    if _has_shared_integration_tests(request):
-        _cleanup_provisioned_sandboxes()
 
 
 @pytest_asyncio.fixture(scope="function")

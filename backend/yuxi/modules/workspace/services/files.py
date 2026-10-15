@@ -15,7 +15,7 @@ from yuxi.modules.workspace.filesystem import Workspace
 from yuxi.modules.workspace.paths import ensure_user_workspace, normalize_workspace_scope, validate_directory_name
 from yuxi.modules.workspace.preview import preview_workspace_file
 from yuxi.modules.workspace.repositories.projects import ProjectRepository
-from yuxi.modules.workspace.runtime_paths import runtime_user_data_path
+from yuxi.modules.workspace.runtime_paths import runtime_workspace_path
 from yuxi.modules.workspace.services.file_entries import file_entry, sort_file_entries
 from yuxi.shared.errors import (
     ContentTooLargeError,
@@ -367,7 +367,7 @@ def _validate_child_name(name: str, *, field_name: str) -> str:
 
 def _entry_from_metadata(workspace_path: str, item: dict) -> dict:
     entry = file_entry(workspace_path, item)
-    entry["virtual_path"] = runtime_user_data_path(workspace_path)
+    entry["virtual_path"] = runtime_workspace_path(workspace_path)
     if entry["is_dir"]:
         entry["size"] = 0
         if entry["path"] != "/":

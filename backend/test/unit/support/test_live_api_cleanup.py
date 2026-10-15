@@ -9,7 +9,6 @@ from test.live_api_cleanup import (
     TEST_SESSION_TITLE_PREFIX,
     CleanupSessionResource,
     cleanup_test_chat_resources,
-    cleanup_provisioned_sandboxes,
     cleanup_pytest_knowledge_resources,
     is_test_session_title,
     make_test_session_metadata,
@@ -22,56 +21,10 @@ from test.live_api_cleanup import (
 pytestmark = pytest.mark.asyncio
 
 
-async def test_cleanup_deletes_every_sandbox_through_provisioner_api():
-    """测试环境沙盒只能通过 provisioner 的受控管理接口清理。"""
-
-    deleted_paths: list[str] = []
-    sandbox_ids = {"sandbox-one", "sandbox-two"}
-    authorization_headers: list[str | None] = []
-
-    def handle_request(request: httpx.Request) -> httpx.Response:
-        authorization_headers.append(request.headers.get("Authorization"))
-        if request.method == "DELETE":
-            deleted_paths.append(request.url.path)
-            sandbox_ids.discard(request.url.path.rsplit("/", 1)[-1])
-            return httpx.Response(200, json={"ok": True})
-        return httpx.Response(
-            200,
-            json={
-                "sandboxes": [{"sandbox_id": sandbox_id} for sandbox_id in sorted(sandbox_ids)],
-                "count": len(sandbox_ids),
-            },
-        )
-
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handle_request), base_url="http://provisioner") as client:
-        await cleanup_provisioned_sandboxes(client, {"Authorization": "Bearer test-token"})
-
-    assert deleted_paths == ["/api/sandboxes/sandbox-one", "/api/sandboxes/sandbox-two"]
-    assert authorization_headers == ["Bearer test-token"] * 4
 
 
-async def test_cleanup_rejects_delete_that_does_not_remove_sandbox():
-    """DELETE 即使返回 200，回读仍存在时也不得伪装清理成功。"""
-
-    def handle_request(request: httpx.Request) -> httpx.Response:
-        if request.method == "DELETE":
-            return httpx.Response(200, json={"ok": True})
-        return httpx.Response(200, json={"sandboxes": [{"sandbox_id": "sandbox-stale"}], "count": 1})
-
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handle_request), base_url="http://provisioner") as client:
-        with pytest.raises(RuntimeError, match="left sandboxes behind: sandbox-stale"):
-            await cleanup_provisioned_sandboxes(client, {"Authorization": "Bearer test-token"})
 
 
-async def test_cleanup_rejects_invalid_provisioner_list_payload():
-    """provisioner 未返回真实沙盒列表时必须拒绝伪装成清理成功。"""
-
-    def handle_request(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"count": 0})
-
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handle_request), base_url="http://provisioner") as client:
-        with pytest.raises(RuntimeError, match="missing a sandboxes list"):
-            await cleanup_provisioned_sandboxes(client, {"Authorization": "Bearer test-token"})
 
 
 async def _patch_chat_cleanup_database(

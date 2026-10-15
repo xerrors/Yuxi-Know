@@ -1,0 +1,31 @@
+# 仅供开发验证的嵌套 KVM 节点。部署时优先使用原生 Linux/KVM。
+name: yuxi-cube
+services:
+  node:
+    build:
+      context: .
+      dockerfile: Dockerfile.runner
+    user: "0:0"
+    environment:
+      CUBE_GUEST_BOOTSTRAP_PASSWORD: ${CUBE_GUEST_BOOTSTRAP_PASSWORD:?Set the private Guest bootstrap password}
+    group_add:
+      - "${CUBE_KVM_GID:-108}"
+    devices:
+      - /dev/kvm:/dev/kvm
+    cap_drop: [ALL]
+    # virtiofsd 翻译宿主文件所有权需要这些能力；不授予用户 VM。
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, FSETID, SETGID, SETUID, MKNOD, SETFCAP, SETPCAP]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 10g
+    cpus: 4
+    volumes:
+      - ${CUBE_DATA_DIR:?Set CUBE_DATA_DIR}/vm:/cube/vm
+      - ${CUBE_SHARED_DIR:?Set the Yuxi state directory}/threads:/cube/shared/threads
+      - ${CUBE_SHARED_DIR:?Set the Yuxi state directory}/skill-projections:/cube/shared/skill-projections
+    ports:
+      - "127.0.0.1:10022:10022"
+      - "127.0.0.1:13000:13000"
+      - "127.0.0.1:18080:18080"
+      - "${CUBE_GATEWAY_IP:?Set the private Docker gateway IP}:13001:13000"
+      - "${CUBE_GATEWAY_IP:?Set the private Docker gateway IP}:18081:18080"
+    stop_grace_period: 90s

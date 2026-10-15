@@ -98,7 +98,7 @@ const emit = defineEmits(['saved', 'open-preview'])
 const normalizedArtifacts = computed(() =>
   normalizeArtifacts(props.artifacts)
     .reverse()
-    .map((artifact) => ({ ...artifact, name: artifact.path.split('/').pop() || artifact.path }))
+    .map((path) => ({ path, name: path.split('/').pop() || path }))
 )
 const expanded = ref(false)
 const visibleArtifacts = computed(() =>

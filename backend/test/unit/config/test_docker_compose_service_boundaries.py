@@ -31,7 +31,6 @@ EXPECTED_AGENT_CAPACITY = {
         "LANGGRAPH_POSTGRES_POOL_SIZE": "${WORKER_LANGGRAPH_POSTGRES_POOL_SIZE:-120}",
     },
 }
-EXPECTED_SANDBOX_STOP_TIMEOUT = "${SANDBOX_CONTAINER_STOP_TIMEOUT_SECONDS:-2}"
 FORBIDDEN_DIRECT_DOCKER_ACCESS_MARKERS = frozenset(
     {"--unix-socket", "/var/run/docker.sock", "YUXI_DOCKER_API_SOCKET", "docker.from_env(", "DockerClient("}
 )
@@ -44,7 +43,6 @@ WORKSPACE_PERMISSION_OWNER_PATHS = (
     "backend/yuxi/modules/workspace/paths.py",
     "backend/yuxi/modules/workspace/filesystem.py",
     "backend/yuxi/modules/workspace/services/files.py",
-    "docker/sandbox_provisioner/app.py",
 )
 LEGACY_WORKSPACE_PERMISSION_MARKERS = frozenset({"0o777", "0o666", "chmod a+rwx", "_ensure_user_data_writable", "_chmod_writable"})
 
@@ -144,7 +142,7 @@ def test_api_and_worker_do_not_mount_unused_host_dependencies(filename: str):
 
 
 @pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
-def test_api_worker_and_provisioner_use_explicit_storage_domains(filename: str):
+def test_api_worker_use_explicit_storage_domains(filename: str):
     """shipping 服务不得通过广域 saves 重新获得未声明的文件能力。"""
     compose = load_compose(filename)
     for service_name in ("api", "worker"):
@@ -152,10 +150,6 @@ def test_api_worker_and_provisioner_use_explicit_storage_domains(filename: str):
         assert REQUIRED_STORAGE_TARGETS[service_name] <= targets
         assert "/app/saves" not in targets
         assert "/app/.env" not in targets
-    provisioner_targets = {_volume_target(volume) for volume in compose["services"]["sandbox-provisioner"].get("volumes") or []}
-    assert {"/app/user-data", "/app/skill-projections"} <= provisioner_targets
-    assert "/app/projects" not in provisioner_targets
-    assert "/app/saves" not in provisioner_targets
 
 
 @pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
@@ -177,21 +171,9 @@ def test_default_agent_capacity_supports_one_hundred_concurrent_runs(filename: s
         for key, expected in expected_environment.items():
             assert environment[key] == expected
 
-    provisioner_environment = services["sandbox-provisioner"]["environment"]
-    assert "SANDBOX_DELETE_CONCURRENCY=${SANDBOX_DELETE_CONCURRENCY:-32}" in provisioner_environment
-    assert "DOCKER_ADDRESS_POOL=${SANDBOX_DOCKER_ADDRESS_POOL:-10.253.240.0/20}" in provisioner_environment
-    assert "DOCKER_SUBNET_PREFIX=${SANDBOX_DOCKER_SUBNET_PREFIX:-28}" in provisioner_environment
     assert services["postgres"]["command"][-1] == "max_connections=${POSTGRES_MAX_CONNECTIONS:-600}"
 
 
-@pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
-def test_sandbox_provisioner_exposes_resource_limit_environment(filename: str) -> None:
-    """单沙盒资源上界必须可由部署覆盖，缺失即回退到无上界创建。"""
-    environment = load_compose(filename)["services"]["sandbox-provisioner"]["environment"]
-
-    assert "SANDBOX_MEM_LIMIT=${SANDBOX_MEM_LIMIT:-2g}" in environment
-    assert "SANDBOX_CPUS=${SANDBOX_CPUS:-2}" in environment
-    assert "SANDBOX_PIDS_LIMIT=${SANDBOX_PIDS_LIMIT:-512}" in environment
 
 
 @pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
@@ -257,7 +239,7 @@ def test_workspace_permission_guard_detects_reintroduced_world_writable_mode() -
 def test_schema_initializer_gates_every_shipping_file_consumer(filename: str) -> None:
     """文件 consumer 只能在 Schema 初始化成功后启动。"""
     compose = load_compose(filename)
-    for service_name in ("api", "worker", "sandbox-provisioner"):
+    for service_name in ("api", "worker"):
         dependency = compose["services"][service_name]["depends_on"]["schema-init"]
         assert dependency["condition"] == "service_completed_successfully"
     initializer = compose["services"]["schema-init"]
@@ -313,25 +295,11 @@ def test_api_and_worker_use_distinct_local_runtime_directories(filename: str):
     assert all(not path.startswith("/app/saves/") for path in EXPECTED_RUNTIME_DIRS.values())
 
 
-@pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
-def test_docker_provisioner_keeps_required_docker_socket(filename: str):
-    """Docker provisioner 仍需拥有创建动态 sandbox 的 Docker socket。"""
-    compose = load_compose(filename)
-    volumes = compose["services"]["sandbox-provisioner"].get("volumes") or []
-
-    assert "/var/run/docker.sock" in {_volume_target(volume) for volume in volumes}
 
 
-@pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
-def test_docker_provisioner_exposes_bounded_container_stop_timeout(filename: str):
-    """Docker Sandbox 的优雅停止等待必须由 provisioner 部署配置拥有。"""
-    compose = load_compose(filename)
-    environment = compose["services"]["sandbox-provisioner"].get("environment") or []
-
-    assert f"SANDBOX_CONTAINER_STOP_TIMEOUT_SECONDS={EXPECTED_SANDBOX_STOP_TIMEOUT}" in environment
 
 
-def test_integration_cleanup_does_not_bypass_sandbox_provisioner():
+def test_integration_cleanup_does_not_access_docker_daemon():
     """集成测试清理不得要求 API 容器直接访问 Docker daemon。"""
     source = "\n".join((project_root() / path).read_text() for path in SANDBOX_CLEANUP_OWNER_PATHS)
 
@@ -396,3 +364,16 @@ def test_nginx_maps_mjs_to_javascript_mime():
 def test_mime_guard_detects_missing_mjs_mapping():
     """删除 .mjs 映射后部署契约 guard 必须失败。"""
     assert _maps_mjs_to_javascript_mime("types { application/javascript js; }") is False
+
+
+@pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
+def test_shipping_uses_only_cube_environment_configuration(filename):
+    """API/worker 必须声明实际共享目录，旧执行服务不能再注册。"""
+    compose = load_compose(filename)
+    assert "sandbox-provisioner" not in compose["services"]
+    for name in ("api", "worker"):
+        env = compose["services"][name]["environment"]
+        assert env["CUBE_NODE_USER_DATA_DIR"].startswith("${CUBE_NODE_USER_DATA_DIR:?")
+        assert env["CUBE_NODE_SKILL_PROJECTION_DIR"].startswith("${CUBE_NODE_SKILL_PROJECTION_DIR:?")
+        assert env["SANDBOX_IDLE_SECONDS"] == "${SANDBOX_IDLE_SECONDS:-300}"
+        assert not any(key.startswith("SANDBOX_PROVISIONER") for key in env)

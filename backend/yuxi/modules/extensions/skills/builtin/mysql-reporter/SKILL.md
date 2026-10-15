@@ -12,7 +12,7 @@ version: "2026.09.17"
 ## 操作流程
 
 1. 理解用户的指令，明确报表的需求和目标
-2. 通过 terminal 进入技能目录：`cd /home/gem/skills/mysql-reporter`
+2. 通过 terminal 进入技能目录：`cd /home/user/skills/mysql-reporter`
 3. 使用 `uv run scripts/list_tables.py` 查看可用表；如果脚本提示缺少 MySQL 配置，按“环境变量缺失处理”回复用户
 4. 必要时用 `uv run scripts/describe_table.py --table 表名` 查看表结构
 5. 生成正确且高效的只读 SQL，通过 `uv run scripts/query.py --sql "SQL语句" --timeout 60` 执行查询并获取结果

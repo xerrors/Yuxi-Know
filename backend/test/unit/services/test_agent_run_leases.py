@@ -37,7 +37,7 @@ async def test_cleanup_reconciler_keeps_pending_run_for_dispatch_recovery(monkey
     settlement = AsyncMock()
     monkeypatch.setattr(leases.pg_manager, "get_async_session_context", session_context)
     monkeypatch.setattr(leases, "AgentRunRepository", Repo)
-    monkeypatch.setattr(leases, "release_runtime_if_idle", cleanup)
+    monkeypatch.setattr(leases, "complete_run_command_cleanup", cleanup)
     monkeypatch.setattr(leases, "dispatch_next_input", dispatch)
     monkeypatch.setattr(leases, "publish_run_settlement", settlement)
     from yuxi.modules.agents.services import turns
@@ -50,3 +50,22 @@ async def test_cleanup_reconciler_keeps_pending_run_for_dispatch_recovery(monkey
     cleanup.assert_awaited_once_with(run)
     dispatch.assert_not_awaited()
     settlement.assert_not_awaited()
+
+
+async def test_stale_cleanup_does_not_touch_commands_of_new_attempt(monkeypatch, tmp_path):
+    """清理候选已被处理并重新领取时，不得终止新 attempt 的命令。"""
+    marker = tmp_path / "new-attempt-command"
+    marker.write_text("running")
+    current = SimpleNamespace(id="run-1", uid="user-1", runtime_cleanup_pending=False)
+    db = SimpleNamespace(scalar=AsyncMock(return_value=current), flush=AsyncMock())
+
+    @asynccontextmanager
+    async def session_context():
+        yield db
+
+    provider = SimpleNamespace(cancel_run=lambda *_: marker.unlink())
+    monkeypatch.setattr(leases.pg_manager, "get_async_session_context", session_context)
+    monkeypatch.setattr(leases, "get_sandbox_provider", lambda: provider)
+    stale = SimpleNamespace(id="run-1", uid="user-1", runtime_cleanup_pending=True)
+    assert await leases.complete_run_command_cleanup(stale)
+    assert marker.read_text() == "running"

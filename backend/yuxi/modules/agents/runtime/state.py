@@ -7,9 +7,9 @@ from typing import Annotated, TypedDict
 from langchain.agents import AgentState
 
 
-def merge_artifacts(existing: list[str | dict] | None, new: list[str | dict] | None) -> list[str]:
-    """按路径保序去重，并读取旧 checkpoint 的交付物对象。"""
-    return list(dict.fromkeys(item if isinstance(item, str) else item["path"] for item in (existing or []) + (new or [])))
+def merge_artifacts(existing: list[str] | None, new: list[str] | None) -> list[str]:
+    """对交付物字符串路径保序去重。"""
+    return list(dict.fromkeys((existing or []) + (new or [])))
 
 
 class BaseState(AgentState):

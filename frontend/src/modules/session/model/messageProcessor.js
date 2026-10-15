@@ -89,7 +89,7 @@ export class MessageProcessor {
         const filepaths = Array.isArray(args?.filepaths) ? args.filepaths : []
         for (const filepath of filepaths) {
           const normalizedPath = typeof filepath === 'string' ? filepath.trim() : ''
-          if (normalizedPath) artifacts.push({ path: normalizedPath })
+          if (normalizedPath) artifacts.push(normalizedPath)
         }
       }
     }

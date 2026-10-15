@@ -758,7 +758,7 @@ async def test_save_thread_artifact_copies_output_file(test_client, standard_use
         artifact_path=True,
     )
     destination_path = "/saved_artifacts"
-    expected_saved_path = f"/home/gem/user-data/saved_artifacts/{filename}"
+    expected_saved_path = f"/home/user/workspace/saved_artifacts/{filename}"
     if destination_name:
         destination_name = f"{destination_name}-{uuid.uuid4().hex[:8]}"
         directory = await test_client.post(
@@ -768,7 +768,7 @@ async def test_save_thread_artifact_copies_output_file(test_client, standard_use
         )
         assert directory.status_code == 200, directory.text
         destination_path = f"/{destination_name}"
-        expected_saved_path = f"/home/gem/user-data/{destination_name}/{filename}"
+        expected_saved_path = f"/home/user/workspace/{destination_name}/{filename}"
 
     response = await test_client.post(
         f"/api/v1/agents/sessions/{thread_id}/artifacts/save",
@@ -827,8 +827,8 @@ async def test_save_thread_artifact_to_workspace_auto_renames_conflicts(test_cli
     first_payload = first_response.json()
     second_payload = second_response.json()
     assert {first_payload["saved_path"], second_payload["saved_path"]} == {
-        f"/home/gem/user-data/saved_artifacts/{filename}",
-        f"/home/gem/user-data/saved_artifacts/{renamed_filename}",
+        f"/home/user/workspace/saved_artifacts/{filename}",
+        f"/home/user/workspace/saved_artifacts/{renamed_filename}",
     }
 
     first_download = await test_client.get(first_payload["saved_artifact_url"], headers=headers)
@@ -842,7 +842,7 @@ async def test_save_thread_artifact_to_workspace_rejects_invalid_paths(test_clie
 
     invalid_response = await test_client.post(
         f"/api/v1/agents/sessions/{thread_id}/artifacts/save",
-        json={"path": "/home/gem/user-data/not-allowed/demo.txt"},
+        json={"path": "/home/user/workspace/not-allowed/demo.txt"},
         headers=headers,
     )
     assert invalid_response.status_code == 404, invalid_response.text

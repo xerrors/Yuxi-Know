@@ -30,8 +30,8 @@ pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
 @tool
 def parse_sandbox_file(path: str) -> str:
     """解析沙盒文件，路径域不匹配时抛异常（复现线上事故的工具行为）。"""
-    if not path.startswith("/home/gem/user-data/"):
-        raise ValueError(f"只允许解析 /home/gem/user-data 下的沙盒虚拟路径，收到 {path}")
+    if not path.startswith("/home/user/workspace/"):
+        raise ValueError(f"只允许解析 /home/user/workspace 下的沙盒虚拟路径，收到 {path}")
     return f"parsed:{path}"
 
 
@@ -127,7 +127,7 @@ async def test_tool_runtime_error_becomes_tool_message_and_run_continues():
 
 async def test_tool_runtime_error_without_guard_kills_run():
     """对照组：不挂载中间件时同一异常必须打穿 run（否则上面一条没有证明力）。"""
-    with pytest.raises(ValueError, match="只允许解析 /home/gem/user-data 下的沙盒虚拟路径"):
+    with pytest.raises(ValueError, match="只允许解析 /home/user/workspace 下的沙盒虚拟路径"):
         await _run_agent([], "parse_sandbox_file")
 
 
@@ -281,7 +281,7 @@ async def test_guard_keeps_normal_tool_result_untouched():
             if self.turn == 1:
                 message = AIMessage(
                     content="",
-                    tool_calls=[{"name": "parse_sandbox_file", "args": {"path": "/home/gem/user-data/a.pdf"}, "id": "call-ok"}],
+                    tool_calls=[{"name": "parse_sandbox_file", "args": {"path": "/home/user/workspace/a.pdf"}, "id": "call-ok"}],
                 )
             elif type(messages[-1]) is ToolMessage:
                 message = AIMessage(content="已根据工具结果继续回答")
@@ -294,7 +294,7 @@ async def test_guard_keeps_normal_tool_result_untouched():
     state = await agent.ainvoke({"messages": [HumanMessage("解析这个文件")]}, config=config)
 
     tool_messages = [message for message in state["messages"] if message.type == "tool"]
-    assert [message.content for message in tool_messages] == ["parsed:/home/gem/user-data/a.pdf"]
+    assert [message.content for message in tool_messages] == ["parsed:/home/user/workspace/a.pdf"]
 
 
 async def test_cancel_waits_for_tool_effect_before_releasing_execution():

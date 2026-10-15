@@ -2,25 +2,13 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import PurePosixPath
 
 from yuxi.modules.workspace.paths import normalize_workdir_path, normalize_workspace_scope
 
-_DEFAULT_VIRTUAL_PATH_PREFIX = "/home/gem/user-data"
-
-
-def _get_virtual_path_prefix() -> str:
-    """读取并规范化 Sandbox 的 user-data 虚拟根路径。"""
-    prefix = os.getenv("SANDBOX_VIRTUAL_PATH_PREFIX") or _DEFAULT_VIRTUAL_PATH_PREFIX
-    prefix = prefix.strip() or _DEFAULT_VIRTUAL_PATH_PREFIX
-    return prefix if prefix.startswith("/") else f"/{prefix}"
-
-
-VIRTUAL_PATH_PREFIX = _get_virtual_path_prefix()
-
-VIRTUAL_SKILLS_PATH = "/home/gem/skills"
-VIRTUAL_PERSONAL_SKILLS_PATH = f"{VIRTUAL_PATH_PREFIX.rstrip('/')}/agents/skills"
+WORKSPACE_PATH = "/home/user/workspace"
+SHARED_SKILLS_PATH = "/home/user/skills"
+PERSONAL_SKILLS_PATH = f"{WORKSPACE_PATH.rstrip('/')}/agents/skills"
 LARGE_TOOL_RESULTS_DIR_NAME = "large_tool_results"
 CONVERSATION_HISTORY_DIR_NAME = "conversation_history"
 
@@ -56,13 +44,13 @@ def normalize_artifact_path(workdir_path: str, path: str) -> str:
 
 def runtime_workdir_path(workdir_path: str) -> str:
     """把持久化 Workdir 标识映射到 Sandbox runtime。"""
-    return f"{VIRTUAL_PATH_PREFIX.rstrip('/')}/{normalize_workdir_path(workdir_path)}"
+    return f"{WORKSPACE_PATH.rstrip('/')}/{normalize_workdir_path(workdir_path)}"
 
 
 def workdir_runtime_paths(workdir_path: str) -> tuple[str, str]:
     """返回当前 Workdir runtime 的大结果与对话历史目录。"""
     normalized = normalize_runtime_path(workdir_path).rstrip("/")
-    if not normalized.startswith(f"{VIRTUAL_PATH_PREFIX.rstrip('/')}/"):
+    if not normalized.startswith(f"{WORKSPACE_PATH.rstrip('/')}/"):
         raise ValueError("workdir_path must be a Backend runtime path")
     outputs = f"{normalized}/outputs"
     return (
@@ -71,21 +59,21 @@ def workdir_runtime_paths(workdir_path: str) -> tuple[str, str]:
     )
 
 
-def runtime_user_data_path(workspace_path: str) -> str:
-    """把 UserWorkspace scope 映射到 Sandbox user-data runtime。"""
+def runtime_workspace_path(workspace_path: str) -> str:
+    """把 UserWorkspace scope 映射到 Sandbox Workspace runtime。"""
     pure = PurePosixPath(normalize_workspace_scope(workspace_path))
-    root = VIRTUAL_PATH_PREFIX.rstrip("/")
+    root = WORKSPACE_PATH.rstrip("/")
     return root if pure.as_posix() == "/" else f"{root}{pure.as_posix()}"
 
 
 def workspace_scope_from_runtime_path(runtime_path: str) -> str:
-    """把 Sandbox user-data runtime 路径还原为 UserWorkspace scope。"""
+    """把 Sandbox Workspace runtime 路径还原为 UserWorkspace scope。"""
     normalized = normalize_runtime_path(runtime_path)
-    root = VIRTUAL_PATH_PREFIX.rstrip("/")
+    root = WORKSPACE_PATH.rstrip("/")
     if normalized == root:
         return "/"
     if not normalized.startswith(f"{root}/"):
-        raise ValueError("runtime path is outside user-data")
+        raise ValueError("runtime path is outside Workspace")
     return f"/{normalized[len(root) + 1 :]}"
 
 
@@ -95,7 +83,7 @@ def runtime_path_for_workdir_scope(workdir_path: str, path: str | None) -> str:
     pure = PurePosixPath(normalize_workspace_scope(raw))
     workspace_root = f"/{normalize_workdir_path(workdir_path)}"
     workspace_path = workspace_root if pure.as_posix() == "/" else f"{workspace_root}{pure.as_posix()}"
-    return runtime_user_data_path(workspace_path)
+    return runtime_workspace_path(workspace_path)
 
 
 def workdir_scope_from_runtime_path(workdir_path: str, runtime_path: str) -> str:
@@ -115,21 +103,21 @@ def is_runtime_path(path: str) -> bool:
         normalized = normalize_runtime_path(path)
     except ValueError:
         return False
-    roots = (VIRTUAL_PATH_PREFIX.rstrip("/"), VIRTUAL_SKILLS_PATH.rstrip("/"))
+    roots = (WORKSPACE_PATH.rstrip("/"), SHARED_SKILLS_PATH.rstrip("/"))
     return any(normalized == root or normalized.startswith(f"{root}/") for root in roots)
 
 
 __all__ = [
     "CONVERSATION_HISTORY_DIR_NAME",
     "LARGE_TOOL_RESULTS_DIR_NAME",
-    "VIRTUAL_PATH_PREFIX",
-    "VIRTUAL_PERSONAL_SKILLS_PATH",
-    "VIRTUAL_SKILLS_PATH",
+    "WORKSPACE_PATH",
+    "PERSONAL_SKILLS_PATH",
+    "SHARED_SKILLS_PATH",
     "is_runtime_path",
     "normalize_runtime_path",
     "normalize_artifact_path",
     "runtime_path_for_workdir_scope",
-    "runtime_user_data_path",
+    "runtime_workspace_path",
     "runtime_workdir_path",
     "workdir_scope_from_runtime_path",
     "workspace_scope_from_runtime_path",

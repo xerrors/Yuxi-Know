@@ -13,9 +13,9 @@ from yuxi.modules.system.services import options as option_values
 
 @pytest.fixture(autouse=True)
 def api_key_derivation_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.provider.check_sandbox_provider", AsyncMock())
     monkeypatch.setenv("JWT_SECRET_KEY", "test-jwt-secret-that-is-at-least-32-chars")
     monkeypatch.setenv("API_KEY_DERIVATION_SECRET", "test-api-key-derivation-secret-32-chars")
-    monkeypatch.setenv("SANDBOX_PROVISIONER_TOKEN", "test-sandbox-token-that-is-at-least-32-chars")
 
 
 @pytest.mark.asyncio
@@ -88,7 +88,7 @@ async def test_worker_startup_ensures_builtin_mcp_servers(monkeypatch: pytest.Mo
     monkeypatch.setattr(config_options, "ensure_options_in_db", fake_ensure_options_in_db)
     monkeypatch.setattr(option_values, "invalidate_option_cache", fake_invalidate_option_cache)
     monkeypatch.setattr(worker_bootstrap, "recover_pending_dispatches", fake_recover_pending_dispatches)
-    for name in ("reconcile_stopped_trees", "recover_cooperation_waits", "release_idle_sandboxes"):
+    for name in ("reconcile_stopped_trees", "recover_cooperation_waits", "maintain_user_sandboxes"):
         monkeypatch.setattr(worker_bootstrap, name, AsyncMock(return_value=[]))
     monkeypatch.setattr(worker_bootstrap, "reconcile_expired_run_leases", fake_reconcile_expired_run_leases)
     monkeypatch.setattr(

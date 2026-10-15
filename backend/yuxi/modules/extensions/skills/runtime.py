@@ -16,7 +16,7 @@ from yuxi.modules.extensions.skills.personal import list_personal_skills
 from yuxi.modules.extensions.skills.projection import refresh_user_skill_projection_async
 from yuxi.modules.extensions.skills.resolved import RuntimeSkill, SkillRuntimeSnapshot
 from yuxi.modules.identity.models import User
-from yuxi.modules.workspace.runtime_paths import VIRTUAL_PERSONAL_SKILLS_PATH, VIRTUAL_SKILLS_PATH
+from yuxi.modules.workspace.runtime_paths import PERSONAL_SKILLS_PATH, SHARED_SKILLS_PATH
 
 
 async def sync_agent_context_skills(context) -> None:
@@ -112,7 +112,7 @@ def build_runtime_skills(skills: list) -> dict[str, RuntimeSkill]:
     for item in skills:
         if not item.slug:
             continue
-        root = VIRTUAL_PERSONAL_SKILLS_PATH if getattr(item, "source_scope", None) == "personal" else VIRTUAL_SKILLS_PATH
+        root = PERSONAL_SKILLS_PATH if getattr(item, "source_scope", None) == "personal" else SHARED_SKILLS_PATH
         result[item.slug] = {
             "name": item.name,
             "description": item.description,

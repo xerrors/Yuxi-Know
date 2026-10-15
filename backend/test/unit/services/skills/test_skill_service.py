@@ -214,7 +214,8 @@ async def test_create_remote_skill_draft_stages_success_and_failure(
 
     preparation = FakePreparation()
 
-    async def fake_download_remote_skills(*, source, skills):
+    async def fake_download_remote_skills(*, source, skills, uid):
+        assert uid == str(_user().uid)
         assert source == "anthropics/skills"
         assert skills == ["pdf", "broken", "duplicate"]
         return preparation

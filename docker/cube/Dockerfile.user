@@ -1,0 +1,36 @@
+FROM node:24-bullseye-slim AS node-runtime
+
+FROM ghcr.io/tencentcloud/cubesandbox-base:2026.16
+ARG CUBE_UID=1000
+ARG CUBE_GID=1000
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 git ca-certificates procps curl wget jq ripgrep file zip unzip fonts-noto-cjk poppler-utils \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=node-runtime /usr/local/bin/node /usr/local/bin/node
+COPY --from=node-runtime /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
+COPY --from=ghcr.io/astral-sh/uv:0.12.6 /uv /uvx /usr/local/bin/
+RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
+    && node --version && npm --version && git --version
+RUN UV_PYTHON_INSTALL_DIR=/opt/python UV_PYTHON_BIN_DIR=/usr/local/bin \
+        uv python install --default 3.13.15 \
+    && sandbox_python_bin="$(python3 -c 'import sysconfig; print(sysconfig.get_path("scripts"))')" \
+    && ln -s "$sandbox_python_bin/pip3" /usr/local/bin/pip \
+    && ln -s "$sandbox_python_bin/pip3" /usr/local/bin/pip3 \
+    && python --version && python3 --version && pip --version && uv --version && uvx --version
+RUN uv pip install --python /usr/local/bin/python3 --break-system-packages \
+        playwright==1.64.0 httpx==0.28.1 beautifulsoup4==4.15.0 Pillow==12.3.0 openpyxl==3.1.5 PyMySQL==1.2.3 \
+    && sandbox_python_bin="$(python3 -c 'import sysconfig; print(sysconfig.get_path("scripts"))')" \
+    && ln -s "$sandbox_python_bin/playwright" /usr/local/bin/playwright \
+    && PLAYWRIGHT_BROWSERS_PATH=/home/user/.cache/ms-playwright python3 -m playwright install --with-deps chromium \
+    && rm -rf /var/lib/apt/lists/*
+RUN rm -f /etc/sudoers.d/user \
+    && (gpasswd -d user sudo 2>/dev/null || true) \
+    && printf 'user ALL=(ALL:ALL) !ALL\n' > /etc/sudoers.d/99-yuxi-deny \
+    && chmod 0440 /etc/sudoers.d/99-yuxi-deny \
+    && groupmod -g ${CUBE_GID} user \
+    && usermod -u ${CUBE_UID} -g user user \
+    && chown -R user:user /home/user \
+    && mkdir -p /home/user/workspace /home/user/skills \
+    && chown user:user /home/user/workspace \
+    && touch /var/log/envd.log && chmod 0600 /var/log/envd.log

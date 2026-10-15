@@ -1396,9 +1396,9 @@ const currentArtifacts = computed(() => {
   return Array.isArray(artifacts) ? artifacts : []
 })
 const currentArtifactFiles = computed(() =>
-  normalizeArtifacts(currentArtifacts.value).map((artifact) => ({
-    ...artifact,
-    name: getPanelFileName(artifact)
+  normalizeArtifacts(currentArtifacts.value).map((path) => ({
+    path,
+    name: getPanelFileName({ path })
   }))
 )
 /** 返回待办状态的无障碍文案。 */

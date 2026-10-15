@@ -329,8 +329,8 @@ test("历史回读、流式正文、生成中追加消息和携带身份下载�
     status: "completed",
   };
   backend.state.artifacts = [
-    { path: "/home/gem/user-data/报告 #1.txt", type: "file" },
-    "/home/gem/user-data/legacy.txt",
+    "/home/user/workspace/报告 #1.txt",
+    "/home/user/workspace/second.txt",
   ];
   backend.emit({
     type: "agent.session.turn.item.done",
@@ -338,7 +338,7 @@ test("历史回读、流式正文、生成中追加消息和携带身份下载�
   });
   backend.emit({ type: "agent.session.turn.completed" });
   await expect(page.getByLabel("对话消息")).toContainText("你好，已完成");
-  await expect(page.getByRole("button", { name: "legacy.txt 点击下载" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "second.txt 点击下载" })).toBeVisible();
   const downloading = page.waitForEvent("download");
   await page.getByRole("button", { name: "报告 #1.txt 点击下载" }).click();
   const file = await downloading;
@@ -597,7 +597,7 @@ test("中文 Markdown 产物链接只编码一次并下载正确文件", async (
   backend.state.items[1] = message(
     "output-2",
     "assistant",
-    "[下载报告](/home/gem/user-data/报告%20%231.txt)",
+    "[下载报告](/home/user/workspace/报告%20%231.txt)",
   );
   await page.goto("/");
   await page.getByRole("button", { name: "打开对话列表" }).click();

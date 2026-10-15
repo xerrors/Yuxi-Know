@@ -37,7 +37,7 @@ def _runtime_skill(
     return {
         "name": name or slug,
         "description": description,
-        "path": f"/home/gem/skills/{slug}/SKILL.md",
+        "path": f"/home/user/skills/{slug}/SKILL.md",
         "tools": tools or [],
         "mcps": mcps or [],
         "skills": [],
@@ -142,8 +142,8 @@ async def test_preloaded_skill_injects_full_instructions_once_and_hides_lazy_rea
 
     assert len(captured) == 2
     assert all(text.count("USE_ALPHA_TOOL") == 1 for text in captured)
-    assert all("Read `/home/gem/skills/alpha/SKILL.md`" not in text for text in captured)
-    assert all("Read `/home/gem/skills/beta/SKILL.md`" in text for text in captured)
+    assert all("Read `/home/user/skills/alpha/SKILL.md`" not in text for text in captured)
+    assert all("Read `/home/user/skills/beta/SKILL.md`" in text for text in captured)
 
 
 @pytest.mark.asyncio
@@ -731,7 +731,7 @@ def test_read_file_activates_only_readable_skill() -> None:
                 }
             )
         ),
-        tool_call={"name": "read_file", "args": {"file_path": "/home/gem/skills/alpha/SKILL.md"}},
+        tool_call={"name": "read_file", "args": {"file_path": "/home/user/skills/alpha/SKILL.md"}},
     )
 
     updated = middleware._process_tool_call_result(result, request)
@@ -760,7 +760,7 @@ def test_failed_read_file_does_not_activate_skill(wrapped_in_command) -> None:
                 }
             )
         ),
-        tool_call={"name": "read_file", "args": {"file_path": "/home/gem/skills/alpha/SKILL.md"}},
+        tool_call={"name": "read_file", "args": {"file_path": "/home/user/skills/alpha/SKILL.md"}},
     )
 
     assert middleware._process_tool_call_result(result, request) is result
@@ -785,7 +785,7 @@ def test_zero_line_read_does_not_activate_skill(limit) -> None:
                 }
             )
         ),
-        tool_call={"name": "read_file", "args": {"file_path": "/home/gem/skills/alpha/SKILL.md", "limit": limit}},
+        tool_call={"name": "read_file", "args": {"file_path": "/home/user/skills/alpha/SKILL.md", "limit": limit}},
     )
 
     assert middleware._process_tool_call_result(result, request) is result
@@ -794,7 +794,7 @@ def test_zero_line_read_does_not_activate_skill(limit) -> None:
 def test_personal_workspace_path_activates_skill() -> None:
     middleware = SkillsMiddleware()
 
-    slug = middleware._extract_skill_slug_from_skill_md_path("/home/gem/user-data/agents/skills/alpha/SKILL.md")
+    slug = middleware._extract_skill_slug_from_skill_md_path("/home/user/workspace/agents/skills/alpha/SKILL.md")
 
     assert slug == "alpha"
 
@@ -816,7 +816,7 @@ def test_read_file_denies_skill_outside_readable_scope() -> None:
                 }
             )
         ),
-        tool_call={"name": "read_file", "args": {"file_path": "/home/gem/skills/beta/SKILL.md"}},
+        tool_call={"name": "read_file", "args": {"file_path": "/home/user/skills/beta/SKILL.md"}},
     )
 
     updated = middleware._process_tool_call_result(result, request)

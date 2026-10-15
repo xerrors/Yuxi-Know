@@ -342,7 +342,7 @@ class Workspace:
         return self._metadata_from_stat(item_stat)
 
     def delete_authorized_path(self, path: str, *, root: str, expected_identity: tuple[int, int] | None = None) -> None:
-        """递归删除 Workdir 内的真实文件或目录，不允许删除根。"""
+        """递归删除授权目录项，符号链接只删除链接本身，不允许删除根。"""
         self._require_within(path, root, allow_root=False)
         base, parts = self._resolve_path(path)
         parent_fd = self._open_directory(base, parts[:-1])
@@ -405,11 +405,10 @@ class Workspace:
             raise
         if expected_identity is not None and (item_stat.st_dev, item_stat.st_ino) != expected_identity:
             return
-        if stat.S_ISLNK(item_stat.st_mode):
-            raise PermissionError("symlink paths are not allowed")
         if not stat.S_ISDIR(item_stat.st_mode):
-            if not stat.S_ISREG(item_stat.st_mode):
-                raise PermissionError("only regular files and directories can be deleted")
+            if not (stat.S_ISREG(item_stat.st_mode) or stat.S_ISLNK(item_stat.st_mode)):
+                raise PermissionError("only regular files, directories and symlinks can be deleted")
+            # unlink 只移除已固定父目录中的目录项，不访问链接目标。
             os.unlink(name, dir_fd=parent_fd)
             return
         child_fd = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent_fd)

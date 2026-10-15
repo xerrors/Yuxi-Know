@@ -17,6 +17,15 @@
               v-model:value="row.key"
               placeholder="例如：API_KEY"
               class="env-input font-mono"
+              :class="{
+                'is-verified': keyVerification?.get(getRowKey(row)) === true,
+                'is-mismatched': keyVerification?.get(getRowKey(row)) === false
+              }"
+              :aria-label="
+                keyVerification?.has(getRowKey(row))
+                  ? `${row.key}：${keyVerification.get(getRowKey(row)) ? '已生效' : '配置不一致'}`
+                  : undefined
+              "
               :disabled="isKeyLocked(row)"
             />
           </div>
@@ -83,6 +92,10 @@ const props = defineProps({
   concealLockedValues: {
     type: Boolean,
     default: false
+  },
+  keyVerification: {
+    type: Map,
+    default: null
   }
 })
 
@@ -290,6 +303,14 @@ watch(
   .env-input {
     border-radius: 6px;
     font-size: 12px;
+
+    &.is-verified {
+      color: var(--color-success-700);
+    }
+
+    &.is-mismatched {
+      color: var(--color-warning-700);
+    }
 
     &.font-mono {
       font-family: 'JetBrains Mono', 'Fira Code', 'Menlo', monospace;

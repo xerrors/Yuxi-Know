@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from yuxi.modules.agents.services import thread_access
 from types import SimpleNamespace
 
@@ -37,6 +36,7 @@ class _Graph:
 @pytest.mark.unit
 @pytest.mark.asyncio
 @pytest.mark.parametrize("thread_id", ["thread-1", "child-thread"])
+@pytest.mark.parametrize("compression_fails", [False, True])
 @pytest.mark.parametrize(
     "config_snapshot",
     [
@@ -46,7 +46,7 @@ class _Graph:
     ],
 )
 async def test_compress_thread_context_uses_locked_idle_thread(
-    monkeypatch: pytest.MonkeyPatch, thread_id: str, config_snapshot: dict | None
+    monkeypatch: pytest.MonkeyPatch, thread_id: str, compression_fails: bool, config_snapshot: dict | None
 ) -> None:
     """空快照与摘要配置保持冻结，压缩只操作已锁定的空闲会话。"""
     events = []
@@ -86,32 +86,29 @@ async def test_compress_thread_context_uses_locked_idle_thread(
     async def workdir(**_kwargs):
         return "projects/project-1"
 
-    runtime_scopes = []
-
-    async def runtime(**kwargs):
-        runtime_scopes.append(kwargs["thread_id"])
-        events.append("runtime")
-
-    async def release(**kwargs):
-        assert kwargs["thread_id"] == runtime_scopes[0]
-        events.append("release")
+    async def prepare(context):
+        """记录准备顺序并核对已装配的线程目录。"""
+        assert context.thread_id == thread_id
+        assert context.workdir_relative_path == "projects/project-1"
+        events.append("prepare")
 
     async def compress(**kwargs):
-        assert kwargs["context"].runtime_scope_id == runtime_scopes[0]
+        assert kwargs["context"].runtime_scope_id is None
         assert kwargs["context"].thread_id == thread_id
         expected_prompt = "CHANGED_SUMMARY"
         if config_snapshot is not None:
             expected_prompt = config_snapshot.get("summary_prompt", _Context().summary_prompt)
         assert kwargs["context"].summary_prompt == expected_prompt
         events.append(("compress", kwargs["context"].model))
+        if compression_fails:
+            raise RuntimeError("compression failed")
         return {"status": "completed", "after_tokens": 300}
 
     monkeypatch.setattr(thread_access, "SessionRepository", SessionRepo)
     monkeypatch.setattr(service, "AgentRepository", AgentRepo)
     monkeypatch.setattr(service, "_ensure_thread_idle", idle)
     monkeypatch.setattr(service, "ensure_session_workdir_available", workdir)
-    monkeypatch.setattr(service, "_ensure_runtime_available", runtime)
-    monkeypatch.setattr(service, "_release_runtime", release)
+    monkeypatch.setattr(service, "prepare_agent_runtime_context", prepare)
     monkeypatch.setattr(service, "_compress_agent_checkpoint", compress)
     monkeypatch.setattr(service, "get_agent_backend", lambda _backend_id: agent)
 
@@ -121,20 +118,28 @@ async def test_compress_thread_context_uses_locked_idle_thread(
         assert events == [("lock", thread_id), "idle"]
         return
 
+    if compression_fails:
+        with pytest.raises(RuntimeError, match="compression failed"):
+            await service.compress_thread_context(
+                thread_id=thread_id,
+                current_user=SimpleNamespace(uid="user-1", role="user"),
+                db=Db(),
+            )
+        assert events == [("lock", thread_id), "idle", "prepare", ("compress", "provider:model")]
+        return
+
     result = await service.compress_thread_context(
         thread_id=thread_id,
         current_user=SimpleNamespace(uid="user-1", role="user"),
         db=Db(),
     )
 
-    assert runtime_scopes[0] not in {"thread-1", "child-thread"}, "压缩不得复用任何会话的执行沙盒"
     assert result == {"status": "completed", "after_tokens": 300}
     assert events == [
         ("lock", thread_id),
         "idle",
-        "runtime",
+        "prepare",
         ("compress", "provider:model"),
-        "release",
         "commit",
     ]
 
@@ -155,69 +160,6 @@ async def test_compress_rejects_same_user_from_other_app(monkeypatch: pytest.Mon
     with pytest.raises(DomainError) as exc:
         await service.compress_thread_context(thread_id="thread-1", current_user=SimpleNamespace(uid="user-1"), db=object(), app_id="app-b")
     assert isinstance(exc.value, ResourceNotFoundError)
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_runtime_is_released_when_checkpoint_compression_fails(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    events = []
-
-    async def runtime(**_kwargs):
-        events.append("runtime")
-
-    async def compress(**_kwargs):
-        events.append("compress")
-        raise RuntimeError("summary failed")
-
-    async def release(**_kwargs):
-        events.append("release")
-
-    monkeypatch.setattr(service, "_ensure_runtime_available", runtime)
-    monkeypatch.setattr(service, "_compress_agent_checkpoint", compress)
-    monkeypatch.setattr(service, "_release_runtime", release)
-
-    with pytest.raises(RuntimeError, match="summary failed"):
-        await service._compress_agent_checkpoint_in_runtime(
-            agent=object(),
-            context=BaseContext(**{}),
-            runtime_scope_id="compression-runtime",
-            uid="user-1",
-            workdir_path="projects/project-1",
-        )
-
-    assert events == ["runtime", "compress", "release"]
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_runtime_is_released_when_provisioning_fails_without_masking_error(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    events = []
-
-    async def runtime(**_kwargs):
-        events.append("runtime")
-        raise RuntimeError("provisioning failed")
-
-    async def release(**_kwargs):
-        events.append("release")
-        raise asyncio.CancelledError("release cancelled")
-
-    monkeypatch.setattr(service, "_ensure_runtime_available", runtime)
-    monkeypatch.setattr(service, "_release_runtime", release)
-
-    with pytest.raises(RuntimeError, match="provisioning failed"):
-        await service._compress_agent_checkpoint_in_runtime(
-            agent=object(),
-            context=BaseContext(**{}),
-            runtime_scope_id="compression-runtime",
-            uid="user-1",
-            workdir_path="projects/project-1",
-        )
-
-    assert events == ["runtime", "release"]
 
 
 @pytest.mark.unit

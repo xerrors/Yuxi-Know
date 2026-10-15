@@ -9,12 +9,12 @@ from uuid import uuid4
 from langgraph.prebuilt.tool_node import ToolRuntime
 from pydantic import BaseModel, Field
 from yuxi.infrastructure.filesystem import await_io
-from yuxi.modules.agents.runtime.sandbox import ProvisionerSandboxBackend
-from yuxi.modules.extensions.tools.builtin.sandbox_scope import resolve_runtime_sandbox_scope, runtime_scope_value
+from yuxi.modules.agents.runtime.sandbox import UserSandboxBackend
+from yuxi.modules.extensions.tools.builtin.file_context import resolve_file_context, runtime_context_value
 from yuxi.modules.extensions.tools.registry import tool
 from yuxi.modules.system.options import system_options
 from yuxi.modules.workspace.filesystem import Workspace
-from yuxi.modules.workspace.runtime_paths import VIRTUAL_PATH_PREFIX, VIRTUAL_SKILLS_PATH, runtime_workdir_path
+from yuxi.modules.workspace.runtime_paths import WORKSPACE_PATH, SHARED_SKILLS_PATH, runtime_workdir_path
 from yuxi.modules.workspace.workdir import Workdir
 
 _OCR_OUTPUT_DIR_NAME = "ocr"
@@ -56,13 +56,11 @@ async def ocr_parse_file(file_path: str, runtime: ToolRuntime, ocr_engine: str |
     """解析文件并整体保存到当前 Workdir，返回入口路径与短预览。"""
     from yuxi.modules.documents.service import parse
 
-    runtime_scope_id, uid, workdir_relative_path = resolve_runtime_sandbox_scope(runtime)
+    uid, workdir_relative_path = resolve_file_context(runtime)
     source_virtual_path = _resolve_ocr_source_path(file_path, runtime)
-    backend = ProvisionerSandboxBackend(
-        thread_id=runtime_scope_id,
+    backend = UserSandboxBackend(
         uid=uid,
         workdir_path=workdir_relative_path,
-        create_if_missing=True,
     )
     from yuxi.modules.documents.service import resolve_ocr_engine_id
 
@@ -102,7 +100,7 @@ async def ocr_parse_file(file_path: str, runtime: ToolRuntime, ocr_engine: str |
 
 def _resolve_ocr_source_path(file_path: str, runtime: ToolRuntime) -> str:
     """校验 OCR 输入位于当前用户可见文件范围。"""
-    resolve_runtime_sandbox_scope(runtime)
+    resolve_file_context(runtime)
 
     normalized_input = str(file_path or "").strip()
     if not normalized_input:
@@ -111,9 +109,9 @@ def _resolve_ocr_source_path(file_path: str, runtime: ToolRuntime) -> str:
         raise ValueError("只允许解析当前用户可见范围内的文件")
 
     clean_virtual_path = "/" + normalized_input.lstrip("/")
-    workdir_path = str(runtime_scope_value(runtime, "workdir_path") or "").rstrip("/")
-    allowed = clean_virtual_path.startswith(f"{workdir_path}/") or clean_virtual_path.startswith(f"{VIRTUAL_PATH_PREFIX.rstrip('/')}/")
-    allowed = allowed or clean_virtual_path.startswith(f"{VIRTUAL_SKILLS_PATH}/")
+    workdir_path = str(runtime_context_value(runtime, "workdir_path") or "").rstrip("/")
+    allowed = clean_virtual_path.startswith(f"{workdir_path}/") or clean_virtual_path.startswith(f"{WORKSPACE_PATH.rstrip('/')}/")
+    allowed = allowed or clean_virtual_path.startswith(f"{SHARED_SKILLS_PATH}/")
     if not workdir_path or not allowed:
         raise ValueError("只允许解析当前用户可见范围内的文件")
 

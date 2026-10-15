@@ -106,7 +106,7 @@ async def create_remote_skill_draft(
 
     downloads = None
     try:
-        downloads = await download_remote_skills(source=source, skills=skills)
+        downloads = await download_remote_skills(source=source, skills=skills, uid=str(operator.uid))
         items: list[dict[str, Any]] = []
         failures: list[dict[str, str]] = []
         seen_slugs: set[str] = set()

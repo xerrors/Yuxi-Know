@@ -218,6 +218,48 @@ def test_workspace_boundary_rejects_deleting_its_root(tmp_path: Path, monkeypatc
         Workspace("user-1").delete_authorized_path("/", root="/")
 
 
+@pytest.mark.parametrize("recursive", [False, True])
+@pytest.mark.parametrize("link_kind", ["file", "directory", "dangling"])
+def test_delete_unlinks_symlinks_without_touching_targets(tmp_path, monkeypatch, recursive, link_kind):
+    """直接删除与递归清理都只移除链接，外部目标保持原样。"""
+    root = tmp_path / "workspace"
+    cleanup = root / "cleanup"
+    cleanup.mkdir(parents=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    marker = outside / "keep.txt"
+    marker.write_bytes(b"keep")
+    target = {"file": marker, "directory": outside, "dangling": outside / "missing"}[link_kind]
+    link = cleanup / "link"
+    link.symlink_to(target, target_is_directory=link_kind == "directory")
+    monkeypatch.setattr(workspace_filesystem_module, "user_workspace_dir", lambda _uid: root)
+
+    Workspace("user-1").delete_authorized_path("/cleanup" if recursive else "/cleanup/link", root="/")
+
+    assert not link.is_symlink()
+    assert cleanup.exists() is not recursive
+    assert marker.read_bytes() == b"keep"
+    assert sorted(item.name for item in outside.iterdir()) == ["keep.txt"]
+
+
+def test_delete_rejects_symlink_parent_without_touching_target(tmp_path, monkeypatch):
+    """删除不能沿中间目录链接越过 Workspace。"""
+    root = tmp_path / "workspace"
+    root.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    marker = outside / "keep.txt"
+    marker.write_bytes(b"keep")
+    (root / "link").symlink_to(outside, target_is_directory=True)
+    monkeypatch.setattr(workspace_filesystem_module, "user_workspace_dir", lambda _uid: root)
+
+    with pytest.raises(PermissionError):
+        Workspace("user-1").delete_authorized_path("/link/keep.txt", root="/")
+
+    assert marker.read_bytes() == b"keep"
+    assert (root / "link").is_symlink()
+
+
 def test_search_tree_prunes_hidden_excluded_and_overdeep_directories(tmp_path: Path, monkeypatch) -> None:
     workspace_root = tmp_path / "workspace"
     workspace_root.mkdir()

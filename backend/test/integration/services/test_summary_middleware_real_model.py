@@ -14,7 +14,7 @@ from yuxi.modules.models.providers.cache import ModelInfo
 from yuxi.modules.workspace.runtime_paths import workdir_runtime_paths
 
 VIRTUAL_PATH_LARGE_TOOL_RESULTS, VIRTUAL_PATH_CONVERSATION_HISTORY = workdir_runtime_paths(
-    "/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111"
+    "/home/user/workspace/projects/11111111-1111-4111-8111-111111111111"
 )
 
 pytestmark = [

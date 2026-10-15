@@ -15,6 +15,7 @@ on:
       - 'docker-compose.prod.yml'
       - 'scripts/ci_prepare_system_tests_env.sh'
       - 'scripts/ci_build_topology_images.sh'
+      - 'scripts/test_cube_worker_recovery.sh'
       - '.github/workflows/system-tests.yml'
   push:
     tags: ['v[0-9]*']
@@ -32,6 +33,7 @@ on:
       - 'docker-compose.prod.yml'
       - 'scripts/ci_prepare_system_tests_env.sh'
       - 'scripts/ci_build_topology_images.sh'
+      - 'scripts/test_cube_worker_recovery.sh'
       - '.github/workflows/system-tests.yml'
   workflow_dispatch:
 
@@ -45,7 +47,11 @@ concurrency:
 env:
   JWT_SECRET_KEY: ci-jwt-secret-at-least-thirty-two-characters
   API_KEY_DERIVATION_SECRET: ci-api-key-derivation-secret-at-least-32-chars
-  SANDBOX_PROVISIONER_TOKEN: ci-sandbox-token-at-least-thirty-two-characters
+  CUBE_API_URL: ${{ vars.CUBE_API_URL }}
+  CUBE_API_KEY: ${{ secrets.CUBE_API_KEY }}
+  CUBE_PROXY_NODE_IP: ${{ vars.CUBE_PROXY_NODE_IP }}
+  CUBE_PROXY_PORT_HTTP: ${{ vars.CUBE_PROXY_PORT_HTTP || '80' }}
+  CUBE_TEMPLATE_ID: yuxi-user
   E2E_USERNAME: ci_e2e_admin
   E2E_PASSWORD: ci-e2e-password-at-least-eight
 
@@ -54,8 +60,7 @@ jobs:
   # 单独成 job 与主链路并行；两个 job 共享层缓存，各自持有完整拓扑。
   background-job-worker-path:
     name: 后台作业 worker path
-    runs-on: ubuntu-latest
-    # 与主链路相同：冷缓存构建（含 provisioner Debian/Python 下载）叠加 Milvus 拓扑热身，预算需覆盖最慢真实构建。
+    runs-on: [self-hosted, linux, x64, yuxi-cube]
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
@@ -70,13 +75,6 @@ jobs:
           key: buildkit-api-${{ runner.os }}-${{ hashFiles('backend/uv.lock', 'backend/pyproject.toml', 'docker/api.Dockerfile') }}
           restore-keys: |
             buildkit-api-${{ runner.os }}-
-      - name: Restore sandbox-provisioner image layer cache
-        uses: actions/cache@v4
-        with:
-          path: /tmp/yuxi-buildkit-cache/sandbox-provisioner
-          key: buildkit-sandbox-provisioner-${{ runner.os }}-${{ hashFiles('docker/sandbox_provisioner/requirements.txt', 'docker/sandbox_provisioner/Dockerfile') }}
-          restore-keys: |
-            buildkit-sandbox-provisioner-${{ runner.os }}-
       - name: Restore minio image layer cache
         uses: actions/cache@v4
         with:
@@ -85,13 +83,13 @@ jobs:
           restore-keys: |
             buildkit-minio-${{ runner.os }}-
       - name: Build topology images with cached layers
-        run: bash scripts/ci_build_topology_images.sh /tmp/yuxi-buildkit-cache/api /tmp/yuxi-buildkit-cache/sandbox-provisioner /tmp/yuxi-buildkit-cache/minio
+        run: bash scripts/ci_build_topology_images.sh /tmp/yuxi-buildkit-cache/api /tmp/yuxi-buildkit-cache/minio
       - name: Prepare isolated storage for runtime identity
         run: |
           docker compose run --rm --no-deps --user 0:0 api \
             install -d -o 1000 -g 1000 -m 0700 /app/user-data /app/skill-sources /app/skill-projections
       - name: Start background-job runtime topology
-        run: docker compose up -d postgres redis minio etcd milvus sandbox-provisioner api worker
+        run: docker compose up -d postgres redis minio etcd milvus api worker
       - name: Wait for background-job topology readiness
         run: |
           for attempt in $(seq 1 60); do
@@ -168,8 +166,7 @@ jobs:
 
   system-tests:
     name: PostgreSQL, readiness and Agent lifecycle
-    runs-on: ubuntu-latest
-    # 新 runner 首次构建 sandbox-provisioner 会下载 Debian 与 Python 依赖，启动预算需覆盖冷缓存构建。
+    runs-on: [self-hosted, linux, x64, yuxi-cube]
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7
@@ -184,13 +181,6 @@ jobs:
           key: buildkit-api-${{ runner.os }}-${{ hashFiles('backend/uv.lock', 'backend/pyproject.toml', 'docker/api.Dockerfile') }}
           restore-keys: |
             buildkit-api-${{ runner.os }}-
-      - name: Restore sandbox-provisioner image layer cache
-        uses: actions/cache@v4
-        with:
-          path: /tmp/yuxi-buildkit-cache/sandbox-provisioner
-          key: buildkit-sandbox-provisioner-${{ runner.os }}-${{ hashFiles('docker/sandbox_provisioner/requirements.txt', 'docker/sandbox_provisioner/Dockerfile') }}
-          restore-keys: |
-            buildkit-sandbox-provisioner-${{ runner.os }}-
       - name: Restore minio image layer cache
         uses: actions/cache@v4
         with:
@@ -199,18 +189,13 @@ jobs:
           restore-keys: |
             buildkit-minio-${{ runner.os }}-
       - name: Build topology images with cached layers
-        run: bash scripts/ci_build_topology_images.sh /tmp/yuxi-buildkit-cache/api /tmp/yuxi-buildkit-cache/sandbox-provisioner /tmp/yuxi-buildkit-cache/minio
-      # 冷 runner 的镜像下载属于环境准备，不能消耗单个 Run 的执行预算。
-      - name: Pull sandbox runtime image before timed E2E runs
-        run: |
-          sandbox_runtime_image=$(docker compose config --format json | python3 -c 'import json, sys; print(json.load(sys.stdin)["services"]["sandbox-provisioner"]["environment"]["SANDBOX_IMAGE"])')
-          docker pull "$sandbox_runtime_image"
+        run: bash scripts/ci_build_topology_images.sh /tmp/yuxi-buildkit-cache/api /tmp/yuxi-buildkit-cache/minio
       - name: Prepare isolated storage for runtime identity
         run: |
           docker compose run --rm --no-deps --user 0:0 api \
             install -d -o 1000 -g 1000 -m 0700 /app/user-data /app/skill-sources /app/skill-projections
       - name: Start focused runtime topology
-        run: docker compose up -d postgres redis minio milvus graph sandbox-provisioner api worker
+        run: docker compose up -d postgres redis minio milvus graph api worker
       - name: Wait for Milvus retrieval readiness
         run: |
           for attempt in $(seq 1 60); do
@@ -230,7 +215,7 @@ jobs:
             sleep 2
           done
           docker compose ps
-          docker compose logs api worker sandbox-provisioner --tail 200
+          docker compose logs api worker --tail 200
           exit 1
       - name: Initialize isolated E2E administrator
         run: |
@@ -329,7 +314,7 @@ jobs:
       - name: Verify knowledge statistics projection
         run: docker compose exec -T api uv run --no-sync --no-dev pytest test/integration/services/test_knowledge_stats_refresh.py -q
       - name: Verify Input FIFO transaction and recovery
-        run: docker compose exec -T -e TEST_BASE_URL=http://127.0.0.1:1 -e SANDBOX_PROVISIONER_URL=http://127.0.0.1:1 -e SANDBOX_PROVISIONER_TOKEN=fixture-probe-not-used-sandbox-token -e TEST_USERNAME=fixture-probe -e TEST_PASSWORD=fixture-probe api uv run --no-sync --no-dev pytest test/integration/services/test_agent_input_concurrency.py test/integration/services/test_thread_priority_inputs.py test/integration/services/test_input_attachments.py test/integration/services/test_session_title_generation.py -q
+        run: docker compose exec -T -e TEST_BASE_URL=http://127.0.0.1:1 -e CUBE_API_URL=http://127.0.0.1:1 -e TEST_USERNAME=fixture-probe -e TEST_PASSWORD=fixture-probe api uv run --no-sync --no-dev pytest test/integration/services/test_agent_input_concurrency.py test/integration/services/test_thread_priority_inputs.py test/integration/services/test_input_attachments.py test/integration/services/test_session_title_generation.py -q
       - name: Verify Run lease ownership
         run: docker compose exec -T api uv run --no-sync --no-dev pytest test/integration/services/test_agent_run_lease.py -q
       - name: Verify Turn result causality
@@ -399,14 +384,16 @@ jobs:
       - name: Verify Workdir and Skill authorization
         run: |
           docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest \
-            test/integration/services/test_project_workdir_provisioner.py::test_sessions_share_workdir_only_through_project \
+            test/integration/services/test_project_workdir.py::test_sessions_share_workdir_only_through_project \
             test/integration/services/test_user_skill_projection.py \
             test/integration/api/test_skill_artifact_authorization.py -q
+      - name: Verify Cube Agent concurrent cancellation through HTTP and worker
+        run: CUBE_TEST_ISOLATED_TOPOLOGY=1 bash scripts/test_cube_worker_recovery.sh
       - name: Verify real Sandbox storage isolation and shared projections
-        run: docker compose exec -T api uv run --no-sync --no-dev pytest test/integration/services/test_project_workdir_provisioner.py -q
+        run: docker compose exec -T api uv run --no-sync --no-dev pytest test/integration/sandbox -q
       - name: Runtime logs on failure
         if: failure() || cancelled()
-        run: docker compose logs api worker sandbox-provisioner --tail 300
+        run: docker compose logs api worker --tail 300
       - name: Stop runtime topology
         if: always()
         run: docker compose down -v

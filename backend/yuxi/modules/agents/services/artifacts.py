@@ -21,10 +21,10 @@ from yuxi.modules.extensions.skills.models import Skill
 from yuxi.modules.identity.repositories.users import UserRepository
 from yuxi.modules.workspace.errors import FileTransferLimitError
 from yuxi.modules.workspace.runtime_paths import (
-    VIRTUAL_SKILLS_PATH,
+    SHARED_SKILLS_PATH,
     is_runtime_path,
     normalize_artifact_path,
-    runtime_user_data_path,
+    runtime_workspace_path,
     workspace_scope_from_runtime_path,
 )
 from yuxi.modules.workspace.services.bindings import resolve_authorized_workdir
@@ -52,7 +52,7 @@ def _normalize_artifact_path(workdir_path: str, path: str) -> str:
 
 
 async def _require_skill_artifact_access(*, normalized_path: str, current_uid: str, db) -> tuple[Skill, str] | None:
-    skills_prefix = f"{VIRTUAL_SKILLS_PATH}/"
+    skills_prefix = f"{SHARED_SKILLS_PATH}/"
     if not normalized_path.startswith(skills_prefix):
         return None
     slug = normalized_path[len(skills_prefix) :].split("/", 1)[0]
@@ -126,7 +126,7 @@ async def resolve_thread_artifact_view(
 ) -> PreparedFile | PreviewResult | dict:
     """把实时授权文件导出为自动清理的 HTTP 文件响应。"""
     access = await resolve_authorized_workdir(thread_id=thread_id, uid=current_uid, db=db, app_id=app_id)
-    normalized = _normalize_artifact_path(runtime_user_data_path(access.workdir.root_path), path)
+    normalized = _normalize_artifact_path(runtime_workspace_path(access.workdir.root_path), path)
     skill_source = await _require_skill_artifact_access(normalized_path=normalized, current_uid=current_uid, db=db)
     is_preview = preview and not download
     descriptor, temp_path = tempfile.mkstemp(prefix="yuxi-artifact-", suffix=PurePosixPath(normalized).suffix)
@@ -189,7 +189,7 @@ async def save_thread_artifact_to_workspace_view(
 ) -> dict[str, str]:
     """把可见 artifact 复制到用户选择的工作区目录。"""
     access = await resolve_authorized_workdir(thread_id=thread_id, uid=current_uid, db=db, app_id=app_id)
-    normalized = _normalize_artifact_path(runtime_user_data_path(access.workdir.root_path), path)
+    normalized = _normalize_artifact_path(runtime_workspace_path(access.workdir.root_path), path)
     raw_destination = str(destination_path or DEFAULT_ARTIFACT_DESTINATION).strip()
     destination = PurePosixPath(raw_destination)
     if (
@@ -228,7 +228,7 @@ async def save_thread_artifact_to_workspace_view(
         for index in range(MAX_SAVED_ARTIFACT_NAME_ATTEMPTS + 1):
             candidate_name = file_name if index == 0 else f"{stem} ({index}){suffix}"
             target_scope = f"{destination_scope.rstrip('/')}/{candidate_name}"
-            target = runtime_user_data_path(target_scope)
+            target = runtime_workspace_path(target_scope)
             try:
                 await asyncio.to_thread(
                     access.workdir.workspace.upload_authorized_file_from_path,

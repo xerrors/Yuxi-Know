@@ -12,13 +12,13 @@ Yuxi 的配置分成两类：启动进程时读取的环境变量，以及运行
 
 数据库中保存的非空值优先于环境变量；布尔值和列表即使是 `false` 或空列表，也会被视为管理员明确保存的值。没有数据库值时，系统才读取对应环境变量或代码默认值。
 
-启动期环境变量由 Docker Compose 注入 API、worker、provisioner 和依赖服务。它们决定服务地址、密钥、存储位置和沙盒承载方式。修改环境变量后需要重新创建读取它的容器；只执行 `docker compose restart` 不会更新容器环境：
+启动期环境变量由 Docker Compose 注入 API、worker 和依赖服务。它们决定服务地址、密钥、存储位置和沙盒承载方式。修改环境变量后需要重新创建读取它的容器；只执行 `docker compose restart` 不会更新容器环境：
 
 ```bash
 docker compose up -d --force-recreate api worker
 ```
 
-如果改的是 provisioner 变量，把服务名换成 `sandbox-provisioner`；生产环境还要带上 `--env-file .env.prod -f docker-compose.prod.yml`。
+Cube 连接参数供 API/worker 使用，节点挂载目录必须与 Yuxi 共享同一份文件；生产环境还要带上 `--env-file .env.prod -f docker-compose.prod.yml`。
 
 ## 管理员系统配置
 
@@ -26,15 +26,23 @@ docker compose up -d --force-recreate api worker
 
 系统配置保存到 PostgreSQL 的 `config_options` 表。API 和 worker 通过 Redis 保存短期缓存；保存成功后缓存会失效，下一次读取从数据库取得新值。Redis 不可用时，读取路径回源 PostgreSQL，不把缓存当作最终事实。
 
-运行中的已初始化组件不保证热更新。例如模型供应商使用的 API Key 环境变量、OCR 服务地址、沙盒连接和数据库地址变化后，应重新创建实际读取这些变量的 API、worker 或 provisioner。
+运行中的已初始化组件不保证热更新。例如模型供应商使用的 API Key 环境变量、OCR 服务地址、沙盒连接和数据库地址变化后，应重新创建实际读取这些变量的 API 或 worker。
+
+## 用户 Agent 环境变量
+
+登录用户在“设置 → Agent 环境”保存自己的沙盒环境变量。Run 开始执行时从 PostgreSQL 读取一次配置，同一次执行中的所有普通 shell 命令使用该快照，无需重启 VM。保存、修改或删除变量对后续新启动的运行生效，当前执行保持原配置；重试 attempt 和人工等待后恢复产生的新 Run 重新读取配置。快照只保留在执行内存中，不写入运行清单或 checkpoint。平台启动变量和管理密钥不注入用户 VM。
+
+保存后点击“验证配置”，系统在用户 VM 中启动普通账号命令，逐项显示“已生效”或“值不一致”，响应不包含变量值。验证会创建或唤醒环境，结果仅证明该次新命令；用户 shell 启动配置覆盖变量时允许不匹配。未保存编辑禁止验证，编辑、刷新、保存使旧结果失效；验证期间其他页面修改配置时需刷新后重新验证。
+
+当前固定 Cube 版本不提供保留软件与 Home 配置的重启入口。休眠恢复保留进程状态，重建清除软件与 Home；两者都不替代重启。环境状态与重建操作见[沙盒配置与运维](./sandbox-operations.md)。
 
 ## 各主题的配置入口
 
 - 模型供应商、聊天模型、嵌入模型和重排模型：[模型配置](../intro/model-config.md)。
 - OCR 引擎和各服务凭证：[文档处理与 OCR](./document-processing.md)，其中字段读取规则遵循本页的优先级。
-- 沙盒应用层与 provisioner：[沙盒配置与运维](./sandbox-operations.md)。
+- 沙盒应用层与 Cube 执行节点：[沙盒配置与运维](./sandbox-operations.md)。
 - 环境变量集中在仓库根 `.env.template`，不另外维护重复配置清单；Agent 并发相关变量的联动核算见 [Agent 并发容量](./agent-concurrency-capacity.md)。
 
 ## 修改后的确认方式
 
-修改系统配置后，重新打开配置页面确认保存值，并用一次真实请求确认行为。只看到 HTTP 200 或提示“保存成功”不能证明模型、OCR 或检索链路已经可用：模型在供应商页面执行连接测试后再发起一次真实对话，OCR 查看健康状态后解析一份测试文件，知识库回到文件列表确认状态和检索结果，沙盒检查 provisioner `/health` 后执行一次真实文件操作。
+修改系统配置后，重新打开配置页面确认保存值，并用一次真实请求确认行为。只看到 HTTP 200 或提示“保存成功”不能证明模型、OCR 或检索链路已经可用：模型在供应商页面执行连接测试后再发起一次真实对话，OCR 查看健康状态后解析一份测试文件，知识库回到文件列表确认状态和检索结果，沙盒在用户设置检查环境状态后执行一次真实文件操作。

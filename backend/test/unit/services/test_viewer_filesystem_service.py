@@ -115,7 +115,7 @@ async def test_viewer_root_is_realtime_project_workdir(realtime_viewer):
 
 @pytest.mark.asyncio
 async def test_viewer_rejects_other_project_and_user_data(realtime_viewer):
-    for path in ("/home/gem/user-data/projects/other/file.txt", "/home/gem/user-data/a.txt"):
+    for path in ("/home/user/workspace/projects/other/file.txt", "/home/user/workspace/a.txt"):
         with pytest.raises(DomainError) as exc:
             await svc.read_viewer_file_content(thread_id="thread-1", path=path, current_user=SimpleNamespace(uid="user-1"), db=object())
         assert isinstance(exc.value, PermissionDeniedError)
@@ -176,7 +176,7 @@ async def test_viewer_rejects_other_workdir_runtime_identity(realtime_viewer):
     with pytest.raises(DomainError) as exc:
         await svc.read_viewer_file_content(
             thread_id="thread-1",
-            path="/home/gem/user-data/projects/other/report.txt",
+            path="/home/user/workspace/projects/other/report.txt",
             current_user=SimpleNamespace(uid="user-1"),
             db=object(),
         )
@@ -301,7 +301,7 @@ async def test_viewer_upload_returns_scope_path_and_artifact_url(realtime_viewer
             "size": 7,
             "modified_at": "1970-01-01T00:00:00+00:00",
             "artifact_url": (
-                "/api/v1/agents/sessions/thread-1/artifacts/home/gem/user-data/projects/11111111-1111-4111-8111-111111111111/new.txt"
+                "/api/v1/agents/sessions/thread-1/artifacts/home/user/workspace/projects/11111111-1111-4111-8111-111111111111/new.txt"
             ),
         }
     ]

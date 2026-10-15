@@ -22,20 +22,6 @@ constraints = [
 ]
 
 [[package]]
-name = "agent-sandbox"
-version = "0.0.30"
-source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
-dependencies = [
-    { name = "httpx", extra = ["socks"] },
-    { name = "pydantic" },
-    { name = "volcengine-python-sdk" },
-]
-sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/32/5c/94d924db07da1e4f0925dd593939e652bb45d60cc749756bcce2d302817d/agent_sandbox-0.0.30.tar.gz", hash = "sha256:29677beca8fabf9ee1ec7c0e5637d15ba37a7e1f58cc8deb82611772fdec43bb", size = 111818, upload-time = "2026-03-24T09:38:19.299Z" }
-wheels = [
-    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/5b/bc/b83d625cf8cb9611c379b452d60da47a26fb7ccfa6c56c63cde4e45214c2/agent_sandbox-0.0.30-py2.py3-none-any.whl", hash = "sha256:bbcca45a202abb7cd01162473f01f3218de5037745ef4fa539e617a3cc973896", size = 243633, upload-time = "2026-03-24T09:38:17.8Z" },
-]
-
-[[package]]
 name = "aiofiles"
 version = "25.1.0"
 source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
@@ -540,6 +526,19 @@ wheels = [
 ]
 
 [[package]]
+name = "cubesandbox"
+version = "0.7.3"
+source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
+dependencies = [
+    { name = "httpx" },
+    { name = "requests" },
+]
+sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/1a/88/8268b855f8b8cced152bdc20377b2ac112a0cfd00314f0483863eaced23b/cubesandbox-0.7.3.tar.gz", hash = "sha256:70f5615603ce07d0885c5ae7142746157cad71b0e04bbf7cc07456eb924e501c", size = 76843, upload-time = "2026-10-12T08:40:50.855Z" }
+wheels = [
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/a2/07/da5528b21fdd3116411ab12d269cb28fb23caba76efb95d405ffb13be49a/cubesandbox-0.7.3-py3-none-any.whl", hash = "sha256:811ba07d97b2756f68299213881f93f04bc4e61f89bf60ed870a923807a9d087", size = 50875, upload-time = "2026-10-12T08:40:49.794Z" },
+]
+
+[[package]]
 name = "dashscope"
 version = "1.27.1"
 source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
@@ -981,11 +980,6 @@ wheels = [
     { url = "https://pypi.tuna.tsinghua.edu.cn/packages/2a/39/e50c7c3a983047577ee07d2a9e53faf5a69493943ec3f6a384bdc792deb2/httpx-0.28.1-py3-none-any.whl", hash = "sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad", size = 73517, upload-time = "2024-12-06T15:37:21.509Z" },
 ]
 
-[package.optional-dependencies]
-socks = [
-    { name = "socksio" },
-]
-
 [[package]]
 name = "httpx-sse"
 version = "0.4.3"
@@ -1078,7 +1072,7 @@ source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
 dependencies = [
     { name = "jsonpointer" },
 ]
-sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/42/78/18813351fe5d63acad16aec57f94ec2b70a09e53ca98145589e185423873/jsonpatch-1.33.tar.gz", hash = "sha256:9fcd4009c41e6d12348b4a0ff2563ba56a2923a7dfee731d004e212e1ee5030c" }
+sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/42/78/18813351fe5d63acad16aec57f94ec2b70a09e53ca98145589e185423873/jsonpatch-1.33.tar.gz", hash = "sha256:9fcd4009c41e6d12348b4a0ff2563ba56a2923a7dfee731d004e212e1ee5030c", size = 21699, upload-time = "2023-06-26T12:07:29.144Z" }
 wheels = [
     { url = "https://pypi.tuna.tsinghua.edu.cn/packages/73/07/02e16ed01e04a374e644b575638ec7987ae846d25ad97bcc9945a3ee4b0e/jsonpatch-1.33-py2.py3-none-any.whl", hash = "sha256:0ae28c0cd062bbd8b8ecc26d7d164fbbea9652a1a3693f3b956c1eae5145dade", size = 12898, upload-time = "2023-06-16T21:01:28.466Z" },
 ]
@@ -2891,15 +2885,6 @@ wheels = [
 ]
 
 [[package]]
-name = "socksio"
-version = "1.0.0"
-source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
-sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/f8/5c/48a7d9495be3d1c651198fd99dbb6ce190e2274d0f28b9051307bdec6b85/socksio-1.0.0.tar.gz", hash = "sha256:f88beb3da5b5c38b9890469de67d0cb0f9d494b78b106ca1845f96c10b91c4ac", size = 19055, upload-time = "2020-04-17T15:50:34.664Z" }
-wheels = [
-    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/37/c3/6eeb6034408dac0fa653d126c9204ade96b819c936e136c5e8a6897eee9c/socksio-1.0.0-py3-none-any.whl", hash = "sha256:95dc1f15f9b34e8d7b16f06d74b8ccf48f609af32ab33c608d08761c5dcbb1f3", size = 12763, upload-time = "2020-04-17T15:50:31.878Z" },
-]
-
-[[package]]
 name = "soupsieve"
 version = "2.9.2"
 source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
@@ -3229,21 +3214,6 @@ wheels = [
 ]
 
 [[package]]
-name = "volcengine-python-sdk"
-version = "5.0.46"
-source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
-dependencies = [
-    { name = "certifi" },
-    { name = "python-dateutil" },
-    { name = "six" },
-    { name = "urllib3" },
-]
-sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/6e/c6/2094e5ef1303393aa78599cd750f95f32143643ee330ddfe0b23faaf59fd/volcengine_python_sdk-5.0.46.tar.gz", hash = "sha256:3d7ee12ad559d07bb53a160b4ba98feaeee09f4a03d87a86855b162571ff717a", size = 10694620, upload-time = "2026-08-20T11:55:35.039Z" }
-wheels = [
-    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/e4/f0/171e760424849eabfe735c4b37e29949b2279555dd1654819db973ee7be7/volcengine_python_sdk-5.0.46-py2.py3-none-any.whl", hash = "sha256:f73e8f675f9ff545d0fec54b7057436dba0f1c420fcb235848a76a5120e5bf18", size = 43011218, upload-time = "2026-08-20T11:55:28.333Z" },
-]
-
-[[package]]
 name = "watchfiles"
 version = "1.2.0"
 source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
@@ -3533,7 +3503,6 @@ name = "yuxi"
 version = "0.8.0.dev0"
 source = { editable = "." }
 dependencies = [
-    { name = "agent-sandbox" },
     { name = "aiofiles" },
     { name = "aiohttp" },
     { name = "aiosqlite" },
@@ -3542,6 +3511,7 @@ dependencies = [
     { name = "asyncpg" },
     { name = "beautifulsoup4" },
     { name = "croniter" },
+    { name = "cubesandbox" },
     { name = "dashscope" },
     { name = "deepagents" },
     { name = "docling-slim", extra = ["format-office", "format-pdf-pypdfium2"] },
@@ -3606,7 +3576,6 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "agent-sandbox", specifier = ">=0.0.26" },
     { name = "aiofiles", specifier = ">=24.1.0" },
     { name = "aiohttp", specifier = ">=3.14.1" },
     { name = "aiosqlite", specifier = ">=0.20.0" },
@@ -3615,6 +3584,7 @@ requires-dist = [
     { name = "asyncpg", specifier = ">=0.30.0" },
     { name = "beautifulsoup4", specifier = ">=4.12.0" },
     { name = "croniter", specifier = ">=6.0.0" },
+    { name = "cubesandbox", specifier = "==0.7.3" },
     { name = "dashscope", specifier = ">=1.23.2" },
     { name = "deepagents", specifier = ">=0.7.7,<0.8" },
     { name = "docling-slim", extras = ["format-office", "format-pdf-pypdfium2"], specifier = "==2.122.0" },

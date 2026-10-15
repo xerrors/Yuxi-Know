@@ -43,9 +43,12 @@ def e2e_base_url() -> str:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def cleanup_e2e_test_resources(e2e_base_url: str):
+def cleanup_e2e_test_resources(e2e_base_url: str, request):
     """在 E2E 会话前后清理测试对话、临时智能体和知识库。"""
 
+    if all(item.get_closest_marker("self_managed_resources") for item in request.session.items):
+        yield
+        return
     if not CLEANUP_USERNAME or not CLEANUP_PASSWORD:
         yield
         return

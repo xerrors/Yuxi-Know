@@ -2,8 +2,8 @@
 
 from sqlalchemy import text
 
-BUSINESS_SCHEMA_VERSION = 12
-KNOWLEDGE_SCHEMA_VERSION = 4
+BUSINESS_SCHEMA_VERSION = 2
+KNOWLEDGE_SCHEMA_VERSION = 1
 SCHEMA_VERSION_TABLE = "yuxi_schema_migrations"
 
 
@@ -37,4 +37,4 @@ async def require_current_schema(manager) -> None:
         mismatches.append("fresh initialization is in progress")
     if mismatches:
         detail = ", ".join(mismatches)
-        raise RuntimeError(f"Database schema migration is incomplete or incompatible: {detail}")
+        raise RuntimeError(f"Database schema initialization is incomplete or incompatible: {detail}")

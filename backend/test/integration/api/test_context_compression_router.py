@@ -116,7 +116,7 @@ async def test_compress_thread_persists_canonical_checkpoint_through_http(
                 "_summarization_event": {
                     "cutoff_index": 2,
                     "summary_message": AIMessage(content="summary of the first exchange"),
-                    "file_path": "/home/gem/user-data/projects/history.md",
+                    "file_path": "/home/user/workspace/projects/history.md",
                 },
                 "_summarization_session_id": "session-1",
             }, {
@@ -124,7 +124,7 @@ async def test_compress_thread_persists_canonical_checkpoint_through_http(
                 "before_tokens": 30,
                 "after_tokens": 20,
                 "compressed_messages": 2,
-                "file_path": "/home/gem/user-data/projects/history.md",
+                "file_path": "/home/user/workspace/projects/history.md",
             }
 
     async def resolve_model(*_args, **_kwargs):

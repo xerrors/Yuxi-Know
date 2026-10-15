@@ -14,7 +14,7 @@ const executable = compileScript(descriptor, { id: 'artifact-presentation' })
   .content.replace(/^import .+ from '[^']+'\n/gm, '')
   .replace('export default', 'return')
 
-/** 执行实际文件卡片 setup，核对旧图片对象仅按文件展示。 */
+/** 执行实际文件卡片 setup，核对字符串产物构建折叠文件列表。 */
 function setupCard(t, artifacts) {
   const scope = effectScope()
   const props = reactive({ artifacts, threadId: 'thread-a' })
@@ -26,15 +26,16 @@ function setupCard(t, artifacts) {
   return view
 }
 
-test('旧路径和图片交付物对象只提取路径并保序去重', () => {
-  assert.deepEqual(
-    normalizeArtifacts([' /a.png ', { path: '/a.png', type: 'image' }, '/b.png', '', null]),
-    [{ path: '/a.png' }, { path: '/b.png' }]
-  )
+test('交付物字符串路径保序去重', () => {
+  assert.deepEqual(normalizeArtifacts([' /a.png ', '/a.png', '/b.png', '']), ['/a.png', '/b.png'])
 })
 
-test('旧图片与普通文件共享折叠文件列表，不提供图片展示', (t) => {
-  const view = setupCard(t, [{ path: '/image.png', type: 'image' }, '/a.md', '/b.md', '/c.md'])
+test('不兼容旧交付物对象', () => {
+  assert.throws(() => normalizeArtifacts([{ path: '/a.png', type: 'image' }]), TypeError)
+})
+
+test('字符串交付物构建统一折叠文件列表', (t) => {
+  const view = setupCard(t, ['/image.png', '/a.md', '/b.md', '/c.md'])
   assert.equal(view.normalizedArtifacts.value.length, 4)
   assert.equal(view.visibleArtifacts.value.length, 3)
   view.expanded.value = true

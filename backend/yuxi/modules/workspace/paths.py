@@ -6,6 +6,7 @@ import hashlib
 import os
 import re
 import uuid
+from collections.abc import Collection
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 
@@ -71,15 +72,21 @@ def normalize_managed_workdir_path(workdir_path: str) -> str:
         pure = PurePosixPath(normalize_workdir_path(workdir_path))
     except ValueError:
         raise ValueError(error_message) from None
-    if len(pure.parts) != 2 or pure.parts[0] != WORKDIR_PROJECTS_DIR_NAME:
-        raise ValueError(error_message)
-
-    workdir_name = pure.parts[1]
-    match = _MANAGED_WORKDIR_NAME_RE.fullmatch(workdir_name)
-    if match is None:
+    if len(pure.parts) == 3 and pure.parts[0] == WORKDIR_PROJECTS_DIR_NAME:
+        date, name = pure.parts[1:]
+        if not re.fullmatch(r"[0-9]{8}", date) or not re.fullmatch(r"[0-9a-f]{6}(?:-[1-9][0-9]*)?", name):
+            raise ValueError(error_message)
+        date_format = "%Y%m%d"
+    elif len(pure.parts) == 2 and pure.parts[0] == WORKDIR_PROJECTS_DIR_NAME:
+        match = _MANAGED_WORKDIR_NAME_RE.fullmatch(pure.parts[1])
+        if match is None:
+            raise ValueError(error_message)
+        date = match.group("timestamp")
+        date_format = _MANAGED_WORKDIR_TIMESTAMP_FORMAT
+    else:
         raise ValueError(error_message)
     try:
-        datetime.strptime(match.group("timestamp"), _MANAGED_WORKDIR_TIMESTAMP_FORMAT)
+        datetime.strptime(date, date_format)
     except ValueError:
         raise ValueError(error_message) from None
     return pure.as_posix()
@@ -128,34 +135,37 @@ def allocate_default_user_workdir_path(
     project_id: str,
     *,
     allocated_at: datetime | None = None,
+    reserved_paths: Collection[str] = (),
 ) -> str:
-    """按上海时间与 Project ID 分配未占用的 managed Workdir 路径。"""
+    """按上海日期与六位 Project 标识分配未占用的 managed Workdir 路径。"""
     canonical_project_id = str(uuid.UUID(str(project_id)))
-    timestamp = ensure_shanghai(allocated_at or shanghai_now()).strftime(_MANAGED_WORKDIR_TIMESTAMP_FORMAT)
-    base_name = f"{timestamp}_{canonical_project_id[:8]}"
+    date = ensure_shanghai(allocated_at or shanghai_now()).strftime("%Y%m%d")
+    base_name = canonical_project_id[:6]
     suffix = 0
     while True:
         name = base_name if suffix == 0 else f"{base_name}-{suffix}"
-        if not _user_workspace_entry_exists(uid, name):
-            return f"{WORKDIR_PROJECTS_DIR_NAME}/{name}"
+        relative_path = f"{WORKDIR_PROJECTS_DIR_NAME}/{date}/{name}"
+        if relative_path not in reserved_paths and not _user_workspace_entry_exists(uid, relative_path):
+            return relative_path
         suffix += 1
 
 
-def _user_workspace_entry_exists(uid: str, workdir_name: str) -> bool:
+def _user_workspace_entry_exists(uid: str, workdir_path: str) -> bool:
     """以 no-follow 方式判断 managed Workdir 名称是否已被占用。"""
     try:
         workspace_fd = _open_user_workspace_fd(uid)
     except FileNotFoundError:
         return False
 
+    parts = PurePosixPath(workdir_path).parts
     parent_fd = None
     try:
         try:
-            parent_fd = _open_workspace_child_fd(workspace_fd, (WORKDIR_PROJECTS_DIR_NAME,))
+            parent_fd = _open_workspace_child_fd(workspace_fd, parts[:-1])
         except FileNotFoundError:
             return False
         try:
-            os.stat(workdir_name, dir_fd=parent_fd, follow_symlinks=False)
+            os.stat(parts[-1], dir_fd=parent_fd, follow_symlinks=False)
         except FileNotFoundError:
             return False
         return True

@@ -70,6 +70,11 @@ class ProjectRepository:
         )
         return list(result.scalars().all())
 
+    async def list_bound_workdir_paths_for_user(self, uid: str) -> set[str]:
+        """读取全部持久目录绑定，包含软删除项目以避免复用其文件。"""
+        result = await self.db.scalars(select(Project.workdir_path).where(Project.uid == str(uid)))
+        return set(result.all())
+
     async def list_selectable_workdir_paths_for_user(self, uid: str) -> list[str]:
         """列出用户已选择 Project 的去重 Workdir 路径。"""
         result = await self.db.execute(

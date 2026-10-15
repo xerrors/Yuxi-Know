@@ -7,14 +7,14 @@ from langgraph.types import Command
 from pydantic import BaseModel, Field
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.modules.extensions.tools.registry import tool
-from yuxi.modules.workspace.runtime_paths import VIRTUAL_PERSONAL_SKILLS_PATH
+from yuxi.modules.workspace.runtime_paths import PERSONAL_SKILLS_PATH
 
 
 class InstallSkillInput(BaseModel):
     source: str = Field(
         description=(
             "Skill 来源，支持两种格式:\n1. Sandbox 路径: 当前 Project Workdir 或 "
-            "/home/gem/user-data/ 下的绝对路径\n2. Git 仓库: owner/repo 或完整 GitHub URL"
+            "/home/user/workspace/ 下的绝对路径\n2. Git 仓库: owner/repo 或完整 GitHub URL"
         )
     )
     skill_names: list[str] | None = Field(
@@ -39,11 +39,10 @@ async def install_skill(
     runtime_context = getattr(runtime, "context", None)
     source = str(source or "").strip()
     uid = getattr(runtime_context, "uid", None)
-    thread_id = getattr(runtime_context, "thread_id", None)
 
-    logger.info(f"install_skill called with uid={uid}, thread_id={thread_id}, source={source}")
+    logger.info(f"install_skill called with uid={uid}, source={source}")
 
-    if not uid or not thread_id:
+    if not uid:
         return Command(update={"messages": [ToolMessage(content="错误：无法获取当前会话信息", tool_call_id=tool_call_id)]})
     if not source:
         return Command(update={"messages": [ToolMessage(content="错误：Skill 来源不能为空", tool_call_id=tool_call_id)]})
@@ -53,18 +52,15 @@ async def install_skill(
 
         installed_slugs, failed_items = await install_personal_skills_from_source(
             uid=uid,
-            thread_id=thread_id,
             source=source,
             skill_names=skill_names,
-            workdir_relative_path=getattr(runtime_context, "workdir_relative_path", None),
-            workdir_path=getattr(runtime_context, "workdir_path", None),
         )
 
         lines = []
         if installed_slugs:
             lines.append(f"已安装 Skill: {', '.join(installed_slugs)}")
             for slug in installed_slugs:
-                lines.append(f"Skill 路径: {VIRTUAL_PERSONAL_SKILLS_PATH}/{slug}/SKILL.md")
+                lines.append(f"Skill 路径: {PERSONAL_SKILLS_PATH}/{slug}/SKILL.md")
         if failed_items:
             for item in failed_items:
                 lines.append(f"安装失败 ({item['slug']}): {item.get('error', '未知错误')}")

@@ -2,7 +2,7 @@
 
 from sqlalchemy import func, or_, select, text
 
-from yuxi.modules.agents.runtime_locks import cooperation_lock_key, sandbox_release_lock_key
+from yuxi.modules.agents.runtime_locks import cooperation_lock_key, user_environment_lock_key
 from yuxi.modules.agents.models.cooperation import CooperationEvent, CooperationRuntime
 from yuxi.modules.agents.models.inputs import AgentInput, AgentInputReceipt
 from yuxi.modules.agents.models.messages import Message
@@ -204,7 +204,7 @@ class CooperationRepository:
         # 回收仅持有专用生命周期锁；执行暂缓领取，不堵塞消息树锁。
         if not await self.db.scalar(
             text("SELECT pg_try_advisory_xact_lock_shared(hashtextextended(:key, 0))"),
-            {"key": sandbox_release_lock_key(run.runtime_scope_id)},
+            {"key": user_environment_lock_key(run.uid)},
         ):
             return False
         await self.db.execute(
@@ -231,7 +231,7 @@ class CooperationRepository:
 
         await self.db.execute(
             insert(CooperationRuntime)
-            .values(tree_root_thread_id=run.runtime_scope_id, idle_since=None, released=False, stopped=False)
-            .on_conflict_do_update(index_elements=[CooperationRuntime.tree_root_thread_id], set_={"idle_since": None, "released": False})
+            .values(tree_root_thread_id=run.runtime_scope_id, stopped=False)
+            .on_conflict_do_nothing(index_elements=[CooperationRuntime.tree_root_thread_id])
         )
         return True

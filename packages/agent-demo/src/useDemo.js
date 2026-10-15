@@ -280,9 +280,7 @@ export function useDemo() {
     try {
       const result = await threadApi.state(state.threadId);
       if (current(owner) && request === artifactRequest)
-        state.artifacts = (result.agent_state.artifacts || []).map((artifact) =>
-          typeof artifact === "string" ? artifact : artifact.path,
-        );
+        state.artifacts = result.agent_state.artifacts || [];
     } catch (error) {
       showError(error, owner);
     }

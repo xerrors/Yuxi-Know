@@ -18,7 +18,7 @@ MAX_PROJECT_NAME_LENGTH = 255
 
 
 async def _lock_project_workdir_changes(*, db, uid: str) -> None:
-    """串行化同一用户的 linked Project 绑定与测试目录删除。"""
+    """串行化同一用户的 Project 目录分配、绑定与测试目录删除。"""
     await db.execute(
         text("SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"),
         {"lock_key": f"project-workdir:{uid}"},
@@ -64,7 +64,9 @@ async def create_project_record(
     if directory_mode == "managed":
         if workdir_path is not None:
             raise InvalidInputError("managed Project 不接受 workdir_path")
-        normalized_path = allocate_default_user_workdir_path(str(uid), project_id)
+        await _lock_project_workdir_changes(db=db, uid=str(uid))
+        reserved_paths = await ProjectRepository(db).list_bound_workdir_paths_for_user(str(uid))
+        normalized_path = allocate_default_user_workdir_path(str(uid), project_id, reserved_paths=reserved_paths)
     else:
         if workdir_path is None:
             raise InvalidInputError("linked Project 必须指定 workdir_path")

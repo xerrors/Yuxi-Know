@@ -5,6 +5,7 @@
 ## 你需要准备什么
 
 - 已安装 [Docker Engine](https://docs.docker.com/get-docker/) 和 Docker Compose v2。
+- 已按[沙盒配置与运维](../advanced/sandbox-operations.md#原生执行节点)准备专用 Linux/KVM Cube 执行节点、用户模板及与应用共享的 Workspace、Skills 目录。macOS 和 Windows 应用环境也需要可访问的 Linux/KVM 节点。
 - 一个可用的大模型 API。下面的初始化脚本以 SiliconFlow 为例；也可以先复制 `.env.template`，改用其他受支持的供应商。
 - 能够访问 Docker 镜像仓库和模型服务的网络。默认拓扑会启动知识库和图谱依赖，但 OCR 服务只在需要时通过 `all` profile 启动。
 
@@ -39,7 +40,7 @@ Windows PowerShell：
 
 - 必填的 `SILICONFLOW_API_KEY`。
 - 可选的网页搜索供应商和对应密钥（豆包或 Tavily）。
-- `JWT_SECRET_KEY`、`API_KEY_DERIVATION_SECRET` 和 `SANDBOX_PROVISIONER_TOKEN` 三个相互独立的随机密钥，每个至少 32 个字符。
+- `JWT_SECRET_KEY` 和 `API_KEY_DERIVATION_SECRET` 两个相互独立的随机密钥，每个至少 32 个字符。
 - `YUXI_INSTANCE_ID`，用于标识这套部署。
 
 脚本还会拉取开发环境需要的基础镜像。它不会把密钥打印到终端，Linux/macOS 下会把 `.env` 权限设为 `600`。已有 `.env` 时，脚本只补齐缺失项；升级时请保留原有密钥，尤其是 `JWT_SECRET_KEY` 和 `API_KEY_DERIVATION_SECRET`。
@@ -50,7 +51,9 @@ Windows PowerShell：
 cp .env.template .env
 ```
 
-然后在 `.env` 中填入模型 API Key 和三个独立的安全密钥。开发 Compose 会为部分基础服务提供默认值；生产部署不要沿用这些默认值。
+然后在 `.env` 中填入模型 API Key 和两个独立的安全密钥。开发 Compose 会为部分基础服务提供默认值；生产部署不要沿用这些默认值。
+
+无论使用脚本还是手动初始化，都需要按[执行节点配置](../advanced/sandbox-operations.md#原生执行节点)在 `.env` 中填写 `CUBE_API_URL`、`CUBE_PROXY_NODE_IP`、`CUBE_NODE_USER_DATA_DIR` 和 `CUBE_NODE_SKILL_PROJECTION_DIR`；控制面启用认证时还需填写节点提供的 `CUBE_API_KEY`。初始化脚本不部署 Cube 节点，也不生成其控制凭据。启动前运行 `docker compose config --quiet`，确认必填配置齐全。
 
 ## 3. 启动服务
 
@@ -88,11 +91,11 @@ curl --fail http://localhost:5050/api/system/ready
 
 ### 容器没有变成 healthy
 
-先确认 Schema 初始化进程、API、worker 和 provisioner 的日志：
+先确认 Schema 初始化进程、API 与 worker 的日志：
 
 ```bash
 docker compose ps
-docker compose logs --tail=100 schema-init api worker sandbox-provisioner
+docker compose logs --tail=100 schema-init api worker
 ```
 
 `schema-init` 是一次性 Schema 初始化服务，成功后会退出，这是正常状态。API 和 worker 必须在它成功后才能启动。
