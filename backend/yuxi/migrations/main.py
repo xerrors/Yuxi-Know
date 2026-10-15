@@ -38,6 +38,7 @@ async def _require_empty_database() -> None:
             "tasks",  # 已退役的后台作业表仍属于旧库。
             "conversations",  # 已退役的业务表仍属于旧库，禁止被当作空库。
             "agent_input_messages",
+            "tool_calls",
             "checkpoint_writes",
             "checkpoint_blobs",
             "checkpoints",

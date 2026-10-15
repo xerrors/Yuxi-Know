@@ -182,8 +182,8 @@ export const agentApi = {
   annotateTurnReferences: (threadId, turnId) =>
     apiPost(`/api/agent/threads/${threadId}/turns/${turnId}/references`),
 
-  getThreadInput: (threadId, inputId) =>
-    apiGet(`/api/v1/agents/sessions/${threadId}/inputs/${inputId}`),
+  getThreadInput: (threadId, inputId, options = {}) =>
+    apiGet(`/api/v1/agents/sessions/${threadId}/inputs/${inputId}`, options),
 
   streamThreadEvents: (threadId, afterCursor = null, { signal } = {}) => {
     const headers = {

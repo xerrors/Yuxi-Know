@@ -231,13 +231,6 @@ class RunContext:
             logger.exception("Run 外部命令尚未确认停止，保留持久清理责任: run=%s", self.run_id)
 
 
-async def _release_runtime_before_terminal_event(run: AgentRun | None) -> None:
-    """在终态事件可见前收敛 runtime，避免客户端撞上随后发生的删除。"""
-    if run is None:
-        return
-    await _require_runtime_cleanup(run, f"Run {run.id} 尚未完成 runtime cleanup")
-
-
 async def _require_runtime_cleanup(run: AgentRun, message: str) -> None:
     """把外部命令/并发清理失败统一转成 ARQ 可重试的 durable cleanup。"""
     try:
@@ -450,7 +443,8 @@ async def _publish_committed_terminal(
     run: AgentRun | None, *, run_id: str, status: str, thread_id: str | None, publish_end: bool = True
 ) -> None:
     """已提交的状态释放运行资源后才发布；状态核对由执行结果边界负责。"""
-    await _release_runtime_before_terminal_event(run)
+    if run is not None:
+        await _require_runtime_cleanup(run, f"Run {run.id} 尚未完成命令清理")
     if publish_end:
         await publish_run_settlement(run_id, status, thread_id=thread_id)
 

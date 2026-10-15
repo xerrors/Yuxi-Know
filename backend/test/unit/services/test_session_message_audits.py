@@ -162,6 +162,7 @@ async def test_get_thread_message_audits_view_serializes_model_and_tool_facts(mo
         "message_type": "tool_audit",
         "operation_id": "call-1",
         "tool_call_id": "call-1",
+        "source": None,
         "tool_name": "search",
         "tool_input": {"q": "Yuxi"},
         "tool_output": {"type": "tool", "content": "查询结果", "status": "success"},

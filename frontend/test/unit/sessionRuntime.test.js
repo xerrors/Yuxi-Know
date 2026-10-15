@@ -361,7 +361,7 @@ test('旧 checkpoint 查询不能覆盖新 Run 的状态事件', async (t) => {
     new Promise((resolve) => {
       releaseState = resolve
     })
-  const old = runtime.fetchAgentState(null, 'thread')
+  const old = runtime.fetchAgentState('thread')
   await tick()
   const stream = runtime.startRunStream('thread', 'run', null, { turnId: 'turn' })
   await tick()

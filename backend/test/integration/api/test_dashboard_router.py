@@ -10,7 +10,9 @@ import uuid
 import pytest
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.agents.models.sessions import Session
+from yuxi.shared.datetime import utc_now
 
 from test.live_api_cleanup import make_test_session_title
 
@@ -26,6 +28,80 @@ async def _set_session_statuses(member_thread_id: str, deleted_thread_id: str) -
             await db.execute(update(Session).where(Session.thread_id == member_thread_id).values(status="active"))
             await db.execute(update(Session).where(Session.thread_id == deleted_thread_id).values(status="deleted"))
             await db.commit()
+    finally:
+        await engine.dispose()
+
+
+async def test_dashboard_http_reads_tool_messages_and_counts_only_started_executions(test_client, admin_headers):
+    """真实 HTTP 从工具 Message 读取结果，并区分失败、中断和审批拒绝。"""
+    from sqlalchemy import select
+
+    default_agent = await test_client.get("/api/agent/default", headers=admin_headers)
+    assert default_agent.status_code == 200, default_agent.text
+    agent = default_agent.json()["agent"]
+    marker = f"dashboard-tools-{uuid.uuid4().hex[:10]}"
+    created = await test_client.post(
+        "/api/v1/agents/sessions",
+        headers={**admin_headers, "Idempotency-Key": marker},
+        json={"agent_id": agent["slug"], "title": make_test_session_title(marker)},
+    )
+    assert created.status_code == 201, created.text
+    thread_id = created.json()["id"]
+    before = await test_client.get("/api/dashboard/stats/tools", headers=admin_headers)
+    assert before.status_code == 200, before.text
+    baseline = before.json()
+    before_series = await test_client.get("/api/dashboard/stats/calls/timeseries?type=tools&time_range=14days", headers=admin_headers)
+    assert before_series.status_code == 200, before_series.text
+
+    engine = create_async_engine(os.environ["POSTGRES_URL"])
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as db:
+            session = await db.scalar(select(Session).where(Session.thread_id == thread_id))
+            model = Message(session_record_id=session.id, role="assistant", content="tool source")
+            db.add(model)
+            await db.flush()
+            now = utc_now()
+            for status, started, source in [
+                ("completed", now, None),
+                ("failed", now, None),
+                ("interrupted", now, None),
+                ("failed", None, "approval_rejection"),
+            ]:
+                db.add(
+                    Message(
+                        session_record_id=session.id,
+                        role="tool",
+                        message_type="tool_audit",
+                        execution_status=status,
+                        started_at=started,
+                        content="persisted tool output",
+                        operation_id=f"{marker}-{source or status}",
+                        extra_metadata={
+                            "tool_name": source or status,
+                            "input": {"query": "persisted input"},
+                            "output": "persisted tool output",
+                            "source_model_message_id": model.id,
+                            "source": source,
+                        },
+                    )
+                )
+            await db.commit()
+
+        detail = await test_client.get(f"/api/dashboard/sessions/{thread_id}", headers=admin_headers)
+        stats = await test_client.get("/api/dashboard/stats/tools", headers=admin_headers)
+        series = await test_client.get("/api/dashboard/stats/calls/timeseries?type=tools&time_range=14days", headers=admin_headers)
+        assert detail.status_code == stats.status_code == series.status_code == 200
+        message = next(item for item in detail.json()["messages"] if item["id"] == model.id)
+        assert "tool_calls" not in message
+        tools = message["tool_executions"]
+        assert [tool["execution_status"] for tool in tools] == ["completed", "failed", "interrupted", "failed"]
+        assert all(tool["tool_output"] == "persisted tool output" for tool in tools)
+        assert all(tool["tool_input"] == {"query": "persisted input"} for tool in tools)
+        assert tools[-1]["source"] == "approval_rejection" and tools[-1]["started_at"] is None
+        assert stats.json()["total_calls"] == baseline["total_calls"] + 3
+        assert stats.json()["successful_calls"] == baseline["successful_calls"] + 1
+        assert stats.json()["failed_calls"] == baseline["failed_calls"] + 1
+        assert series.json()["total_count"] == before_series.json()["total_count"] + 3
     finally:
         await engine.dispose()
 

@@ -34,23 +34,10 @@ async def get_thread_audits(*, db: AsyncSession, scope: ActorScope, thread_id: s
     }
 
 
-def _serialize_tool_call(tool_call: Any) -> dict[str, Any]:
-    """序列化普通历史和审计共用的 ToolCall 结构。"""
-    return {
-        "id": tool_call.langgraph_tool_call_id or str(tool_call.id),
-        "name": tool_call.tool_name,
-        "function": {"name": tool_call.tool_name},
-        "args": tool_call.tool_input or {},
-        "tool_call_result": {"content": tool_call.tool_output or ""} if tool_call.status == "success" else None,
-        "status": tool_call.status,
-        "error_message": tool_call.error_message,
-    }
-
-
 def _serialize_message_audit(message: Any) -> dict[str, Any]:
     """按真实角色序列化持久消息，模型和工具保留专有字段。"""
     if message.role == "tool":
-        return _serialize_tool_audit(message)
+        return serialize_tool_audit(message)
     if message.role == "assistant":
         return _serialize_model_audit(message)
     metadata = message.extra_metadata if isinstance(message.extra_metadata, dict) else {}
@@ -94,17 +81,18 @@ def _serialize_model_audit(message: Any) -> dict[str, Any]:
         "content_blocks": content_blocks if isinstance(content_blocks, list) else [],
         "error_type": metadata.get("error_type"),
         "error_message": metadata.get("error_message"),
-        "tool_calls": [_serialize_tool_call(tool_call) for tool_call in message.tool_calls],
+        "tool_calls": list(metadata.get("tool_calls") or []),
     }
 
 
-def _serialize_tool_audit(message: Any) -> dict[str, Any]:
+def serialize_tool_audit(message: Any) -> dict[str, Any]:
     """将 ToolMessage 审计事实收敛为前端调试 DTO。"""
     metadata = message.extra_metadata if isinstance(message.extra_metadata, dict) else {}
     return {
         **_serialize_audit_base(message, metadata),
         "type": "tool",
-        "tool_call_id": metadata.get("tool_call_id"),
+        "tool_call_id": message.operation_id,
+        "source": metadata.get("source"),
         "tool_name": metadata.get("tool_name"),
         "tool_input": dict(metadata["input"]) if isinstance(metadata.get("input"), dict) else {},
         "tool_output": metadata.get("output"),

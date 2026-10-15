@@ -9,8 +9,6 @@ const IDLE_QUEUE_SNAPSHOT = Object.freeze({
 
 export function useAgentThreadState({
   chatState,
-  getCurrentThreadId,
-  onStopThread = null,
   onBeforeResetThread = null,
   onBeforeCleanupThread = null
 }) {
@@ -44,27 +42,14 @@ export function useAgentThreadState({
         queuedInputs: [],
         queueSnapshot: { ...IDLE_QUEUE_SNAPSHOT },
         continueQueueInFlight: false,
-        inputMonitors: {},
         inputQueueMonitor: null
       }
     }
     return chatState.threadStates[threadId]
   }
 
-  const stopThreadStream = (threadId) => {
-    if (!threadId) return
-    if (typeof onStopThread === 'function') {
-      onStopThread(threadId)
-    }
-  }
-
   const abortAllInputMonitors = (threadState) => {
     if (!threadState) return
-    for (const entry of Object.values(threadState.inputMonitors || {})) {
-      entry.controller?.abort()
-      clearTimeout(entry.timer)
-    }
-    threadState.inputMonitors = {}
     clearTimeout(threadState.inputQueueMonitor?.timer)
     threadState.inputQueueMonitor?.controller?.abort()
     threadState.inputQueueMonitor = null
@@ -87,16 +72,13 @@ export function useAgentThreadState({
     delete chatState.threadStates[threadId]
   }
 
-  const resetOngoingRunGroup = (threadId = null, { preserveInputMonitors = false } = {}) => {
-    const targetThreadId =
-      threadId || (typeof getCurrentThreadId === 'function' ? getCurrentThreadId() : null)
-
-    if (targetThreadId) {
-      const threadState = getThreadState(targetThreadId)
+  const resetOngoingRunGroup = (threadId, { preserveInputMonitors = false } = {}) => {
+    if (threadId) {
+      const threadState = getThreadState(threadId)
       if (!threadState) return
 
       if (typeof onBeforeResetThread === 'function') {
-        onBeforeResetThread(targetThreadId)
+        onBeforeResetThread(threadId)
       }
 
       if (threadState.runStreamAbortController) {
@@ -107,7 +89,6 @@ export function useAgentThreadState({
       threadState.runReconnectTimer = null
       if (!preserveInputMonitors) {
         abortAllInputMonitors(threadState)
-        threadState.inputMonitors = {}
       }
 
       threadState.ongoingRunGroup = createOngoingRunGroupState()
@@ -123,8 +104,7 @@ export function useAgentThreadState({
   return {
     getThreadState,
     cleanupThreadState,
-    resetOngoingRunGroup,
-    stopThreadStream
+    resetOngoingRunGroup
   }
 }
 

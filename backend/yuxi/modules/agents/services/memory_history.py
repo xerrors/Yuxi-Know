@@ -4,6 +4,7 @@ import json
 
 from yuxi.modules.agents.message_preview import build_message_search_snippet
 from yuxi.modules.agents.repositories.memory_history import MemoryHistoryRepository
+from yuxi.modules.agents.repositories.messages import MessageRepository
 from yuxi.shared.strings import truncate_utf8
 
 # ==== 历史对话检索参数 ====
@@ -31,6 +32,7 @@ class MemoryHistoryService:
     def __init__(self, db):
         """绑定查询仓储，不提交事务。"""
         self.repository = MemoryHistoryRepository(db)
+        self.messages = MessageRepository(db)
 
     async def search_memory_messages(self, *, uid: str, query: str, limit: int = 5) -> dict:
         """搜索当前用户可见的普通主 Agent 历史消息。"""
@@ -126,21 +128,22 @@ class MemoryHistoryService:
         """按数量和字节预算装配显式请求的工具调用。"""
         if not include_tools or not message_ids:
             return [], False
-        rows = await self.repository.tools(message_ids, limit=MEMORY_HISTORY_TOOL_CALL_MAX_COUNT + 1)
+        rows = await self.messages.list_tool_executions(message_ids, limit=MEMORY_HISTORY_TOOL_CALL_MAX_COUNT + 1)
         truncated = len(rows) > MEMORY_HISTORY_TOOL_CALL_MAX_COUNT
         tool_calls: list[dict] = []
         used_bytes = 0
         for row in rows[:MEMORY_HISTORY_TOOL_CALL_MAX_COUNT]:
-            tool_input = json.dumps(row.tool_input or {}, ensure_ascii=False, separators=(",", ":"))
+            metadata = row.extra_metadata or {}
+            tool_input = json.dumps(metadata.get("input") or {}, ensure_ascii=False, separators=(",", ":"))
             tool_input, input_truncated = truncate_utf8(tool_input, 1024)
-            tool_output, output_truncated = truncate_utf8(row.tool_output, 2048)
-            error, error_truncated = truncate_utf8(row.error_message, 512)
+            tool_output, output_truncated = truncate_utf8(row.content, 2048)
+            error, error_truncated = truncate_utf8(metadata.get("error_message"), 512)
             tool_item = {
-                "tool_call_id": row.langgraph_tool_call_id,
-                "name": row.tool_name,
+                "tool_call_id": row.operation_id,
+                "name": metadata["tool_name"],
                 "input": tool_input,
                 "output": tool_output,
-                "status": row.status,
+                "status": row.execution_status,
                 "error": error,
             }
             if input_truncated or output_truncated or error_truncated:

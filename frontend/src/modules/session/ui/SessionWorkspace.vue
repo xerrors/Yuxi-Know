@@ -2682,7 +2682,7 @@ const selectChat = async (chatId) => {
 
   isLoadingMessages.value = true
   try {
-    await fetchThreadMessages({ agentId: targetAgentId, threadId: chatId })
+    await fetchThreadMessages({ threadId: chatId })
     if (workspaceActive.value && pageVisible.value && currentThreadId.value === chatId) {
       void chatThreadsStore.markThreadViewed(chatId)
     }
@@ -2694,7 +2694,6 @@ const selectChat = async (chatId) => {
 
   await nextTick()
   await scrollController.scrollToBottomStaticForce()
-  // await fetchAgentState(targetAgentId, chatId)
   await handleAgentStateRefresh(chatId)
   syncThreadConfigSnapshot(chatId, { overwrite: false })
   await resumeActiveRunForThread(chatId)
@@ -2943,7 +2942,7 @@ const handleSendMessage = async ({ images = [], mode = 'follow_up', retry = fals
       threadState.isStreaming = false
       threadState.activeRunSteerable = false
       try {
-        await fetchAgentState(currentAgentId.value, threadId, { required: true })
+        await fetchAgentState(threadId, { required: true })
       } catch {
         message.error('审批状态恢复失败，请刷新页面后重试')
       }
@@ -2976,7 +2975,7 @@ const handleContextCompression = async () => {
   threadState.contextCompressing = true
   try {
     const response = await agentApi.compressThreadContext(threadId)
-    await fetchAgentState(currentAgentId.value, threadId)
+    await fetchAgentState(threadId)
     if (response?.status === 'completed') message.success('上下文压缩完成')
     else message.info('当前没有足够的历史消息可压缩')
   } catch (error) {
@@ -3061,7 +3060,7 @@ const handleApprovalWithStream = async (answer) => {
     resetOngoingRunGroup(threadId, { preserveInputMonitors: true })
     // 首个流事件前读取已持久化的续跑关系；读取失败不能把已创建的 Run 当成创建失败。
     try {
-      await fetchThreadMessages({ agentId: currentAgentId.value, threadId })
+      await fetchThreadMessages({ threadId })
     } catch (error) {
       console.warn('Failed to refresh history before resume stream:', error)
     }
@@ -3181,7 +3180,7 @@ const handleAgentStateRefresh = async (threadId = null) => {
   isRefreshingState.value = true
   try {
     await Promise.all([
-      fetchAgentState(currentAgentId.value, chatId),
+      fetchAgentState(chatId),
       fetchThreadAttachments(chatId)
     ])
   } finally {

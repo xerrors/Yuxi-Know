@@ -18,7 +18,7 @@ from yuxi.workers.background_jobs import process_background_job
 import yuxi.workers.background_jobs as job_worker
 import yuxi.workers.background_job_context as job_context
 from yuxi.modules.background_jobs.registry import get_job_definition
-from yuxi.shared.datetime import format_utc_datetime, utc_now
+from yuxi.shared.datetime import utc_now
 import yuxi.modules.knowledge.services.background_jobs as knowledge_job_service
 
 
@@ -35,11 +35,7 @@ def disable_pending_publication(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 class FakeRecord(SimpleNamespace):
-    def to_dict(self) -> dict[str, Any]:
-        data = vars(self).copy()
-        for key in ("created_at", "updated_at", "started_at", "completed_at", "heartbeat_at", "lease_expires_at"):
-            data[key] = format_utc_datetime(data.get(key))
-        return data
+    """模拟仓储实体，保持内部时间与状态原值。"""
 
 
 def make_record(**overrides) -> FakeRecord:
@@ -491,7 +487,7 @@ async def test_pending_cancel_is_only_an_intent_until_execution_acknowledges(mon
     job = await observer.cancel_job("job-1")
 
     assert job.status == "pending"
-    assert job.cancel_requested is True
+    assert job.cancel_requested == 1
     assert await observer.delete_job("job-1") is False
 
 
@@ -506,7 +502,7 @@ async def test_registration_and_cancel_do_not_require_a_worker_handler():
     assert observer._repo.events == ["persist"]
     cancelled = await observer.cancel_job(job.id)
     assert cancelled.status == "pending"
-    assert cancelled.cancel_requested is True
+    assert cancelled.cancel_requested == 1
 
 
 async def test_report_progress_100_does_not_infer_success_or_failure():
@@ -586,10 +582,7 @@ def test_unknown_handler_version_is_rejected() -> None:
 
 def test_document_job_result_keeps_bounded_references_and_counts():
     """任务摘要不携带完整文件数据或异常秘密，计数仍覆盖全部结果。"""
-    items = [
-        {"file_id": f"file-{index}", "status": "failed", "error": "private-token", "markdown": "private-body"}
-        for index in range(250)
-    ]
+    items = [{"file_id": f"file-{index}", "status": "failed", "error": "private-token", "markdown": "private-body"} for index in range(250)]
     result = knowledge_job_service._document_result(items, processed=250, failed=250)
 
     assert result["failed"] == 250 and result["succeeded"] == 0
@@ -644,3 +637,24 @@ async def test_document_job_failure_keeps_details_and_rejects_success(monkeypatc
     assert context.result["failed"] == int(bool(failure))
     assert context.result["succeeded"] == 2 - int(bool(failure))
     assert [item["file_id"] for item in context.result["items"]] == ["ok", "bad"]
+
+
+async def test_registration_returns_repository_record_without_state_copy(monkeypatch):
+    """内部返回同一持久实体，时间和状态不经序列化重建。"""
+    repository = FakeRepo()
+    monkeypatch.setattr(job_service, "BackgroundJobRepository", lambda: repository)
+    job, created = await JobTracker().register(name="direct-record", job_type="domain-owned")
+    assert created and job is repository.record
+    assert job.created_at == repository.record.created_at
+
+
+def test_job_summary_does_not_construct_full_result():
+    """列表直接生成摘要字段，不为随后丢弃的详情执行投影。"""
+    from yuxi.modules.background_jobs.models import BackgroundJobRecord
+
+    record = BackgroundJobRecord(
+        id="test", name="test", type="test", status="pending", cancel_requested=0, handler_version=1, attempt_count=0, timeout_seconds=60
+    )
+    record._result_summary = lambda: pytest.fail("列表不能构建结果详情")
+    summary = record.to_summary_dict()
+    assert "result" not in summary and "payload" not in summary and "worker_id" not in summary

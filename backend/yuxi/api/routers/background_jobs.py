@@ -35,7 +35,7 @@ async def cancel_job(job_id: str, current_user: User = Depends(get_admin_user)):
     return {
         "job_id": job_id,
         "status": job.status,
-        "cancel_requested": job.cancel_requested,
+        "cancel_requested": bool(job.cancel_requested),
     }
 
 

@@ -16,7 +16,7 @@ from yuxi.modules.agents.repositories.input_receipt import AgentInputReceiptRepo
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.modules.agents.models.sessions import Session
-from yuxi.modules.agents.models.messages import Message, ToolCall
+from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.workspace.models import Project
 from yuxi.modules.identity.models import User
 from yuxi.shared.datetime import utc_now
@@ -129,8 +129,6 @@ async def cleanup_agent_run_threads(session_factory, thread_ids: list[str]) -> N
         if input_ids:
             await db.execute(delete(AgentInput).where(AgentInput.id.in_(input_ids)))
         if session_record_ids:
-            message_ids = select(Message.id).where(Message.session_record_id.in_(session_record_ids))
-            await db.execute(delete(ToolCall).where(ToolCall.message_id.in_(message_ids)))
             await db.execute(delete(Message).where(Message.session_record_id.in_(session_record_ids)))
         await db.execute(delete(AgentRun).where(AgentRun.thread_id.in_(thread_ids)))
         await db.execute(delete(AgentTurn).where(AgentTurn.thread_id.in_(thread_ids)))

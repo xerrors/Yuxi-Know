@@ -3,7 +3,7 @@
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from yuxi.modules.agents.models.messages import Message, ToolCall
+from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.repositories.messages import (
     MESSAGE_SEARCH_EXCLUDED_TYPES,
@@ -102,23 +102,6 @@ class MemoryHistoryRepository:
             rows = before + after
 
         return agent_session, rows
-
-    async def tools(self, message_ids: list[int], *, limit: int) -> list:
-        """按已授权消息集合读取兼容工具记录。"""
-        result = await self.db.execute(
-            select(
-                ToolCall.langgraph_tool_call_id,
-                ToolCall.tool_name,
-                ToolCall.tool_input,
-                ToolCall.tool_output,
-                ToolCall.status,
-                ToolCall.error_message,
-            )
-            .where(ToolCall.message_id.in_(message_ids))
-            .order_by(ToolCall.created_at.asc(), ToolCall.id.asc())
-            .limit(limit)
-        )
-        return list(result.all())
 
     def _memory_session_conditions(self, uid: str) -> list:
         """构建用户可见主 Agent Session 条件。"""

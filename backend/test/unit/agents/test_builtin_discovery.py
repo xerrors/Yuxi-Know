@@ -155,7 +155,7 @@ async def test_each_graph_uses_its_own_run_context(monkeypatch, backend_id):
         "load_chat_model",
         lambda fully_specified_name, session_id, uid, max_retries: FakeListChatModel(responses=[session_id, uid]),
     )
-    monkeypatch.setattr(backend, "_get_checkpointer", AsyncMock(return_value=None))
+    monkeypatch.setattr(module, "get_langgraph_checkpointer", lambda _manager: None)
     graphs = []
     for thread_id, uid in [("first-thread", "first-uid"), ("second-thread", "second-uid")]:
         context = SimpleNamespace(
@@ -203,7 +203,7 @@ async def test_reused_prepared_context_refreshes_skills_before_each_graph(monkey
         "load_chat_model",
         lambda **kwargs: FakeListChatModel(responses=[projection.read_text()]),
     )
-    monkeypatch.setattr(backend, "_get_checkpointer", AsyncMock(return_value=None))
+    monkeypatch.setattr(module, "get_langgraph_checkpointer", lambda _manager: None)
     context = SimpleNamespace(_runtime_prepared=True, model="test:model", thread_id="test-thread", uid="test-uid")
 
     for content in ["first skill revision", "second skill revision"]:

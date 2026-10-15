@@ -8,7 +8,7 @@ from typing import TypedDict
 import pytest
 from langgraph.graph import START, StateGraph
 from psycopg_pool import AsyncConnectionPool
-from yuxi.modules.agents.runtime.base import BaseAgent
+from yuxi.infrastructure.postgres.checkpointer import get_langgraph_checkpointer
 from yuxi.infrastructure.postgres.manager import PostgresManager
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
@@ -31,10 +31,8 @@ async def test_graphs_share_pool_not_lock_and_restore_independent_history(monkey
         manager.__init__()
         manager._initialized = True
         manager.langgraph_pool = pool
-        monkeypatch.setattr("yuxi.modules.agents.runtime.base.pg_manager", manager)
-        agent = object.__new__(BaseAgent)
-        first = await agent._get_checkpointer()
-        second = await agent._get_checkpointer()
+        first = get_langgraph_checkpointer(manager)
+        second = get_langgraph_checkpointer(manager)
         configs = [{"configurable": {"thread_id": f"pytest-checkpoint-{uuid.uuid4()}"}} for _ in range(2)]
         try:
             async with first.lock:
@@ -52,7 +50,7 @@ async def test_graphs_share_pool_not_lock_and_restore_independent_history(monkey
                 ]
             assert [run.result() for run in runs] == [{"value": 1}, {"value": 11}]
 
-            reader = await agent._get_checkpointer()
+            reader = get_langgraph_checkpointer(manager)
             for index, config in enumerate(configs):
                 restored = await reader.aget_tuple(config)
                 assert restored.checkpoint["channel_values"]["value"] == index * 10 + 1

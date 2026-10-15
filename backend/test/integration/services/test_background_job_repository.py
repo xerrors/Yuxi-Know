@@ -339,7 +339,7 @@ async def test_pending_dataset_cancel_commits_domain_and_job_terminal_together(b
     cancelled = await JobTracker().cancel_job(job_id)
 
     assert cancelled.status == "pending"
-    assert cancelled.cancel_requested is True
+    assert cancelled.cancel_requested == 1
     dataset = await EvaluationRepository().get_dataset(dataset_id)
     assert dataset.build_metadata["status"] == "pending"
     await publish_pending_jobs()

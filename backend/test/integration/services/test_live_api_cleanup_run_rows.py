@@ -24,7 +24,7 @@ from test.live_api_cleanup import (
     validate_test_workdirs_exclusive,
 )
 from yuxi.modules.agents.models.inputs import AgentInput, AgentInputReceipt
-from yuxi.modules.agents.models.messages import Message, ToolCall
+from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.agents.models.runs import AgentRun, AgentRunAttempt
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.models.turns import AgentTurn
@@ -126,7 +126,20 @@ async def _seed_thread(session_factory, *, thread_prefix: str) -> dict:
         )
         db.add(output_message)
         await db.flush()
-        db.add(ToolCall(message_id=output_message.id, tool_name="fs", tool_input={}))
+        db.add(
+            Message(
+                session_record_id=output_message.session_record_id,
+                turn_id=output_message.turn_id,
+                run_id=output_message.run_id,
+                role="tool",
+                message_type="tool_audit",
+                operation_id="fs",
+                content="",
+                execution_status="running",
+                started_at=output_message.created_at,
+                extra_metadata={"source_model_message_id": output_message.id, "tool_name": "fs", "input": {}},
+            )
+        )
         attempt = AgentRunAttempt(
             run_id=run_id,
             attempt_no=1,
@@ -183,7 +196,6 @@ async def test_delete_test_session_rows_removes_history_and_preserves_neighbor(c
                 assert await db.get(model, neighbor[key]) is not None
             assert await db.scalar(select(Message.id).where(Message.source_input_id == target["input_id"])) is None
             assert await db.scalar(select(Message.id).where(Message.source_input_id == neighbor["input_id"])) is not None
-            assert await db.scalar(select(ToolCall.id).where(ToolCall.message_id == target["output_message_id"])) is None
     finally:
         await _cleanup_seed(cleanup_database, [target, neighbor])
 

@@ -79,6 +79,7 @@ class _FakeAsyncEmbeddingClient:
         self.calls += 1
         return self.responses.pop(0)
 
+
 def _requests_embedding_response(status_code: int, content: bytes | None = None) -> requests.Response:
     response = requests.Response()
     response.status_code = status_code
@@ -121,7 +122,8 @@ def test_resolve_chat_model_spec_rejects_all_empty():
 
 def test_select_embedding_model_loads_model_from_cache(monkeypatch):
     monkeypatch.setattr(
-        model_cache, "get_model_info",
+        model_cache,
+        "get_model_info",
         lambda spec: _model_info("embedding") if spec == "test-provider:namespace/embedding-model" else None,
     )
 
@@ -137,7 +139,8 @@ def test_select_model_wraps_langchain_model_and_expands_model_params(monkeypatch
     captured = {}
 
     monkeypatch.setattr(
-        model_cache, "get_model_info",
+        model_cache,
+        "get_model_info",
         lambda spec: _chat_model_info("test-provider", "namespace/chat-model") if spec == "test-provider:namespace/chat-model" else None,
     )
 
@@ -167,7 +170,8 @@ def test_select_model_maps_anthropic_max_completion_tokens(monkeypatch):
     captured = {}
 
     monkeypatch.setattr(
-        model_cache, "get_model_info",
+        model_cache,
+        "get_model_info",
         lambda spec: _chat_model_info("anthropic", "mimo-v2.5", provider_type="anthropic") if spec == "anthropic:mimo-v2.5" else None,
     )
     monkeypatch.setattr(
@@ -184,7 +188,8 @@ def test_load_chat_model_uses_toolcall_chunk_fix_for_openai_compatible(monkeypat
     from yuxi.modules.models.chat import ChatCompletionsAdapter
 
     monkeypatch.setattr(
-        model_cache, "get_model_info",
+        model_cache,
+        "get_model_info",
         lambda spec: (
             _chat_model_info("siliconflow-cn", "deepseek-ai/DeepSeek-V4-Flash")
             if spec == "siliconflow-cn:deepseek-ai/DeepSeek-V4-Flash"
@@ -205,7 +210,8 @@ def test_load_chat_model_uses_toolcall_chunk_fix_for_openai_compatible(monkeypat
 
 def test_load_chat_model_keeps_non_siliconflow_openai_streaming(monkeypatch):
     monkeypatch.setattr(
-        model_cache, "get_model_info",
+        model_cache,
+        "get_model_info",
         lambda spec: (
             _chat_model_info("openai-compatible", "namespace/chat-model") if spec == "openai-compatible:namespace/chat-model" else None
         ),
@@ -223,7 +229,8 @@ def test_load_chat_model_keeps_non_siliconflow_openai_streaming(monkeypatch):
 async def test_opencode_session_headers_reach_stream_and_regular_requests(monkeypatch, provider_id):
     """真实 SDK 请求携带稳定会话头，其他供应商不受影响。"""
     monkeypatch.setattr(
-        model_cache, "get_model_info",
+        model_cache,
+        "get_model_info",
         lambda _spec: _chat_model_info(provider_id, "test-model"),
     )
     requests_seen = []
@@ -281,7 +288,8 @@ async def test_opencode_session_headers_reach_stream_and_regular_requests(monkey
 def test_opencode_standalone_models_have_distinct_stable_sessions(monkeypatch):
     """无 Thread 的独立操作使用各模型实例自己的会话 ID。"""
     monkeypatch.setattr(
-        model_cache, "get_model_info",
+        model_cache,
+        "get_model_info",
         lambda _spec: _chat_model_info("opencode-go", "test-model"),
     )
     first = load_chat_model("opencode-go:test-model")
@@ -303,7 +311,8 @@ async def test_load_chat_model_user_uid_header_follows_opt_in(monkeypatch, inclu
     """按开关与 uid 存在性注入 x-yuxi-uid；缺 uid 的路径不注入也不伪造身份。"""
     monkeypatch.setenv("YUXI_UID_SIGNATURE_SECRET", "unit-test-signing-secret")
     monkeypatch.setattr(
-        model_cache, "get_model_info",
+        model_cache,
+        "get_model_info",
         lambda _spec: _chat_model_info("uid-provider", "test-model", include_user_uid=include_user_uid),
     )
     requests_seen = []
@@ -322,7 +331,8 @@ async def test_load_chat_model_user_uid_header_follows_opt_in(monkeypatch, inclu
 def test_load_chat_model_rejects_header_unsafe_uid(monkeypatch):
     """含 CR/LF 等头注入字符的 uid 显式失败，不发出畸形请求。"""
     monkeypatch.setattr(
-        model_cache, "get_model_info",
+        model_cache,
+        "get_model_info",
         lambda _spec: _chat_model_info("uid-provider", "test-model", include_user_uid=True),
     )
 
@@ -334,7 +344,8 @@ async def test_load_chat_model_signs_user_uid_header(monkeypatch):
     """开启开关后，出站请求附带时间戳与可独立重算的 HMAC-SHA256 签名。"""
     monkeypatch.setenv("YUXI_UID_SIGNATURE_SECRET", "unit-test-signing-secret")
     monkeypatch.setattr(
-        model_cache, "get_model_info",
+        model_cache,
+        "get_model_info",
         lambda _spec: _chat_model_info("uid-provider", "test-model", include_user_uid=True),
     )
     requests_seen = []
@@ -354,7 +365,8 @@ def test_load_chat_model_rejects_signing_without_secret(monkeypatch):
     """开启 UID 头但固定签名密钥缺失时拒绝发请求，不静默降级为未签名。"""
     monkeypatch.delenv("YUXI_UID_SIGNATURE_SECRET", raising=False)
     monkeypatch.setattr(
-        model_cache, "get_model_info",
+        model_cache,
+        "get_model_info",
         lambda _spec: _chat_model_info("uid-provider", "test-model", include_user_uid=True),
     )
 
@@ -365,7 +377,8 @@ def test_load_chat_model_rejects_signing_without_secret(monkeypatch):
 def test_load_chat_model_rejects_uid_header_for_gemini(monkeypatch):
     """直接遇到启用 UID 头的 Gemini 缓存配置时显式失败。"""
     monkeypatch.setattr(
-        model_cache, "get_model_info",
+        model_cache,
+        "get_model_info",
         lambda _spec: _chat_model_info("uid-provider", "test-model", provider_type="gemini", include_user_uid=True),
     )
 
@@ -434,7 +447,8 @@ async def test_user_uid_header_reaches_real_stream_and_regular_requests(monkeypa
     """开启后流式与非流式出站请求都携带 x-yuxi-uid，调用方已有请求头保留。"""
     monkeypatch.setenv("YUXI_UID_SIGNATURE_SECRET", "unit-test-signing-secret")
     monkeypatch.setattr(
-        model_cache, "get_model_info",
+        model_cache,
+        "get_model_info",
         lambda _spec: _chat_model_info("uid-provider", "test-model", include_user_uid=True),
     )
     requests_seen = []
@@ -462,7 +476,8 @@ async def test_user_uid_signing_fails_closed_when_secret_removed_after_load(monk
     """构图后密钥被移除（例如只重建了部分容器）时，发送边界显式失败而非发未签名头。"""
     monkeypatch.setenv("YUXI_UID_SIGNATURE_SECRET", "unit-test-signing-secret")
     monkeypatch.setattr(
-        model_cache, "get_model_info",
+        model_cache,
+        "get_model_info",
         lambda _spec: _chat_model_info("uid-provider", "test-model", include_user_uid=True),
     )
     model = load_chat_model("uid-provider:test-model", uid="user-42")
@@ -477,7 +492,8 @@ async def test_user_uid_signature_refreshed_after_window_expiry(monkeypatch):
     """同一模型实例跨越验签窗口后再次发送时重新签名，不复用构图时的时间戳。"""
     monkeypatch.setenv("YUXI_UID_SIGNATURE_SECRET", "unit-test-signing-secret")
     monkeypatch.setattr(
-        model_cache, "get_model_info",
+        model_cache,
+        "get_model_info",
         lambda _spec: _chat_model_info("uid-provider", "test-model", include_user_uid=True),
     )
     clock = {"now": 1_700_000_000}
@@ -501,7 +517,8 @@ def test_anthropic_model_signs_user_uid_at_every_send_boundary(monkeypatch):
     """anthropic 家族同样在发送边界现算签名，跨窗口复用实例不带过期时间戳。"""
     monkeypatch.setenv("YUXI_UID_SIGNATURE_SECRET", "unit-test-signing-secret")
     monkeypatch.setattr(
-        model_cache, "get_model_info",
+        model_cache,
+        "get_model_info",
         lambda _spec: _chat_model_info("uid-provider", "test-model", provider_type="anthropic", include_user_uid=True),
     )
     clock = {"now": 1_700_000_000}
@@ -523,7 +540,8 @@ def test_anthropic_model_signs_user_uid_at_every_send_boundary(monkeypatch):
 def test_anthropic_model_without_uid_switch_sends_no_extra_headers(monkeypatch):
     """未开启开关的 anthropic provider 不写入任何 UID 头。"""
     monkeypatch.setattr(
-        model_cache, "get_model_info",
+        model_cache,
+        "get_model_info",
         lambda _spec: _chat_model_info("uid-provider", "test-model", provider_type="anthropic"),
     )
 
@@ -536,7 +554,8 @@ def test_load_chat_model_merges_request_body_overrides_into_extra_body(monkeypat
     captured_body = {}
 
     monkeypatch.setattr(
-        model_cache, "get_model_info",
+        model_cache,
+        "get_model_info",
         lambda spec: (
             _chat_model_info(
                 "siliconflow-cn",
@@ -692,6 +711,7 @@ async def test_embedding_429_retries_ten_times_before_success(monkeypatch, async
     )
 
     if async_mode:
+
         async def fake_sleep(delay):
             sleeps.append(delay)
 
@@ -735,6 +755,7 @@ async def test_embedding_5xx_uses_short_retry_budget(monkeypatch, async_mode):
     )
 
     if async_mode:
+
         async def fake_sleep(delay):
             sleeps.append(delay)
 
@@ -765,7 +786,8 @@ async def test_embedding_5xx_uses_short_retry_budget(monkeypatch, async_mode):
 
 def test_get_reranker_loads_model_from_cache(monkeypatch):
     monkeypatch.setattr(
-        model_cache, "get_model_info",
+        model_cache,
+        "get_model_info",
         lambda spec: _model_info("rerank") if spec == "test-provider:namespace/rerank-model" else None,
     )
 
@@ -773,3 +795,12 @@ def test_get_reranker_loads_model_from_cache(monkeypatch):
 
     assert isinstance(reranker, OpenAIReranker)
     assert reranker.model == "namespace/rerank-model"
+
+
+async def test_embedding_uses_resolved_credential_without_second_environment_lookup(monkeypatch, httpx_mock):
+    """Provider 已解析的凭据必须原样出现在执行请求中。"""
+    monkeypatch.setenv("resolved-credential", "wrong-credential")
+    httpx_mock.add_response(method="POST", url="https://example.com/v1/embeddings", json={"data": [{"embedding": [1.0]}]})
+    model = OtherEmbedding(model="example", base_url="https://example.com/v1/embeddings", api_key="resolved-credential")
+    assert await model.aencode(["example"]) == [[1.0]]
+    assert httpx_mock.get_request().headers["Authorization"] == "Bearer resolved-credential"

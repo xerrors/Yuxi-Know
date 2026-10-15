@@ -1,4 +1,3 @@
-import { unref } from 'vue'
 import { message } from 'ant-design-vue'
 import { applyAgentEvent } from '@/modules/session/model/agentItems'
 
@@ -6,7 +5,6 @@ import { applyAgentEvent } from '@/modules/session/model/agentItems'
 export function useAgentStreamHandler({
   getThreadState,
   processApprovalInStream,
-  currentAgentId,
   streamSmoother
 }) {
   const handlePublicEvent = (event, threadId) => {
@@ -43,7 +41,7 @@ export function useAgentStreamHandler({
       state.activeRunId = event.yuxi.run_id
       state.turnStatus = event.turn.status
       state.replyLoadingVisible = false
-      return processApprovalInStream?.(event, threadId, unref(currentAgentId)) || false
+      return processApprovalInStream?.(event, threadId) || false
     }
     return false
   }

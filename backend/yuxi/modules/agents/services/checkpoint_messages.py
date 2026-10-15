@@ -80,7 +80,6 @@ async def save_messages_from_langgraph_state(
         message_repo = MessageRepository(db)
         model_audit_repo = ModelMessageAuditRepository(db)
         tool_audit_repo = ToolMessageAuditRepository(db)
-        existing_ids = await message_repo.get_message_source_ids_by_thread_id(thread_id)
         current_model_audits = await model_audit_repo.list_for_run(run_id)
         model_operation_ids = {message.operation_id for message in current_model_audits if message.operation_id}
         current_tool_audits = await tool_audit_repo.list_for_run(run_id)
@@ -114,15 +113,6 @@ async def save_messages_from_langgraph_state(
                 if msg_id and str(msg_id) in model_operation_ids:
                     # Checkpoint 包含完整历史；相同来源键只对账最后一条 AIMessage。
                     state_model_messages[str(msg_id)] = msg_dict
-                elif not current_model_audits and msg_id not in existing_ids:
-                    last_ai_message = await _save_ai_message(
-                        message_repo,
-                        thread_id,
-                        msg_dict,
-                        trace_info=trace_info,
-                        run_id=run_id,
-                        turn_id=turn_id,
-                    )
             elif msg_type == "tool":
                 tool_call_id = str(msg_dict.get("tool_call_id") or "")
                 if tool_call_id in rejected_calls and tool_call_id not in tool_audits_by_operation:
@@ -177,7 +167,7 @@ async def save_messages_from_langgraph_state(
                 tool_call_id=tool_call_id,
                 msg_dict=msg_dict,
             )
-        if current_model_audits and (complete_run or interrupt_run):
+        if complete_run or interrupt_run:
             terminal_ai_message = reconciled_audits.get(last_state_ai_id or "")
             if complete_run and pending_steer is None and terminal_ai_message is None:
                 raise ValueError("最终 State AIMessage 无法与当前 Run 的 Model lifecycle 事实关联")
@@ -316,65 +306,12 @@ async def save_partial_message(
         return None
 
 
-def _ai_message_content_and_tool_calls(msg_dict: dict) -> tuple[str, list[dict]]:
-    """提取 AIMessage 可展示正文和兼容 ToolCall 投影。"""
+def _ai_message_content(msg_dict: dict) -> str:
+    """提取 checkpoint AIMessage 的可展示正文。"""
     content = msg_dict.get("content", "")
-    tool_calls_data = msg_dict.get("tool_calls") or []
     if isinstance(content, list):
-        if not tool_calls_data:
-            tool_calls_data = [
-                {"id": item.get("id"), "name": item.get("name"), "args": item.get("args") or {}}
-                for item in content
-                if isinstance(item, dict) and item.get("type") == "tool_call"
-            ]
-        content = "\n".join(item.get("text", "") for item in content if isinstance(item, dict) and isinstance(item.get("text"), str))
-    elif not isinstance(content, str):
-        content = str(content)
-    return content, list(tool_calls_data)
-
-
-async def _project_ai_tool_calls(
-    repository: MessageRepository,
-    *,
-    message_id: int,
-    tool_calls_data: list[dict],
-) -> None:
-    """从 AIMessage 单向投影阶段二仍需兼容的 ToolCall。"""
-    for tool_call in tool_calls_data:
-        await repository.add_tool_call(
-            message_id=message_id,
-            tool_name=tool_call.get("name") or "unknown",
-            tool_input=tool_call.get("args", {}),
-            status="pending",
-            langgraph_tool_call_id=tool_call.get("id"),
-        )
-
-
-async def _save_ai_message(
-    repository: MessageRepository,
-    thread_id: str,
-    msg_dict: dict,
-    *,
-    trace_info: dict[str, Any] | None,
-    run_id: str,
-    turn_id: str,
-):
-    """保存当前 Run 未进入 Model audit 的可见 AI 输出。"""
-    content, _ = _ai_message_content_and_tool_calls(msg_dict)
-    extra_metadata = dict(msg_dict)
-    if trace_info:
-        extra_metadata.update(trace_info)
-
-    ai_msg = await repository.add_message_by_thread_id(
-        thread_id=thread_id,
-        role="assistant",
-        content=content,
-        message_type="text",
-        extra_metadata=extra_metadata,
-        run_id=run_id,
-        turn_id=turn_id,
-    )
-    return ai_msg
+        return "\n".join(item.get("text", "") for item in content if isinstance(item, dict) and isinstance(item.get("text"), str))
+    return content if isinstance(content, str) else str(content)
 
 
 async def _reconcile_model_audit_message(
@@ -393,7 +330,7 @@ async def _reconcile_model_audit_message(
     if message is None:
         return None
 
-    content, tool_calls_data = _ai_message_content_and_tool_calls(msg_dict)
+    content = _ai_message_content(msg_dict)
     metadata = {**dict(message.extra_metadata or {}), **dict(msg_dict)}
     if trace_info:
         metadata.update(trace_info)
@@ -405,12 +342,6 @@ async def _reconcile_model_audit_message(
         message.finished_at = utc_now()
         metadata["finished_by_reconcile"] = True
     await db.flush()
-    if tool_calls_data:
-        await _project_ai_tool_calls(
-            MessageRepository(db),
-            message_id=message.id,
-            tool_calls_data=tool_calls_data,
-        )
     return message
 
 

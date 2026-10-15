@@ -32,20 +32,15 @@ export function useAgentInputQueue({
 
   const stopInputMonitor = (threadId, inputId) => {
     const ts = getThreadState(threadId)
-    const entry = ts?.inputMonitors?.[inputId]
-    if (!entry) return
-    delete ts.inputMonitors[inputId]
-    if (Object.keys(ts.inputMonitors).length === 0) stopInputQueueMonitor(ts)
+    const monitor = ts?.inputQueueMonitor
+    if (!monitor) return
+    monitor.inputIds.delete(inputId)
+    if (monitor.inputIds.size === 0) stopInputQueueMonitor(ts)
   }
 
   const stopAllInputMonitors = (threadId) => {
     const ts = getThreadState(threadId)
     if (!ts) return
-    for (const entry of Object.values(ts.inputMonitors || {})) {
-      clearTimeout(entry.timer)
-      entry.controller?.abort()
-    }
-    ts.inputMonitors = {}
     stopInputQueueMonitor(ts)
   }
 
@@ -56,17 +51,16 @@ export function useAgentInputQueue({
   const startInputMonitor = (threadId, inputId) => {
     if (!isThreadActive(threadId)) return
     const ts = getThreadState(threadId)
-    if (!ts || !inputId || ts.inputMonitors?.[inputId]) return
-    ts.inputMonitors ||= {}
-    ts.inputQueueMonitor ||= { controller: new AbortController(), timer: null }
+    if (!ts || !inputId || ts.inputQueueMonitor?.inputIds.has(inputId)) return
+    ts.inputQueueMonitor ||= { controller: new AbortController(), timer: null, inputIds: new Set() }
     const monitor = ts.inputQueueMonitor
-    ts.inputMonitors[inputId] = { controller: monitor.controller, timer: null }
-    if (Object.keys(ts.inputMonitors).length > 1) return
+    monitor.inputIds.add(inputId)
+    if (monitor.inputIds.size > 1) return
 
     const poll = async () => {
       if (monitor.controller.signal.aborted) return
       let retryDelay = 1000
-      for (const currentInputId of Object.keys(ts.inputMonitors)) {
+      for (const currentInputId of [...monitor.inputIds]) {
         if (monitor.controller.signal.aborted) return
         try {
           const input = await agentApi.getThreadInput(threadId, currentInputId, {
@@ -109,7 +103,7 @@ export function useAgentInputQueue({
           }
         }
       }
-      if (!monitor.controller.signal.aborted && Object.keys(ts.inputMonitors).length > 0) {
+      if (!monitor.controller.signal.aborted && monitor.inputIds.size > 0) {
         monitor.timer = setTimeout(poll, retryDelay)
       } else {
         stopInputQueueMonitor(ts)

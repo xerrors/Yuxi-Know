@@ -121,7 +121,7 @@ export const useSessionRuntimeStore = defineStore('sessionRuntime', () => {
     })
   }
 
-  const fetchAgentState = async (_agentId, threadId, { required = false } = {}) => {
+  const fetchAgentState = async (threadId, { required = false } = {}) => {
     const success = await once(`state:${threadId}`, async () => {
       if (!threadId) return false
       const state = getThreadState(threadId)

@@ -6,6 +6,8 @@ from yuxi.modules.agents.runtime.agent_backends.chatbot.context import ChatBotCo
 from yuxi.modules.agents.runtime.agent_backends.chatbot.prompt import TODO_MID_PROMPT, build_prompt_with_context
 from yuxi.modules.agents.runtime.agent_backends.chatbot.state import ChatBotState
 from yuxi.modules.agents.runtime.base import BaseAgent
+from yuxi.infrastructure.postgres.checkpointer import get_langgraph_checkpointer
+from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.agents.runtime.checkpoint_cleanup import CheckpointCleanupModel
 from yuxi.modules.agents.runtime.context import DEFAULT_TOOL_RESULT_EVICTION_K_TOKENS
 from yuxi.modules.agents.runtime.middlewares import (
@@ -109,5 +111,5 @@ class ChatbotAgent(BaseAgent):
             system_prompt=prompt,
             middleware=middlewares,
             state_schema=ChatBotState,
-            checkpointer=await self._get_checkpointer(),
+            checkpointer=get_langgraph_checkpointer(pg_manager),
         )

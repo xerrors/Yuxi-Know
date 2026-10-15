@@ -16,7 +16,7 @@ Runtime 保留 LangGraph v3 ProtocolEvent，checkpoint 通过执行结果返回�
 
 子任务通过持久 Input、Receipt 和 FIFO 调度创建自己的 Thread、Turn、Run。自身 Turn 拥有结果、等待点和恢复，runtime 使用自身 Thread，父子共享 Project Workdir。父取消按委派关系递归取消相应子 Turn；父完成或失败不取消子任务。Thread 授权与本轮委派分开：独立用户 follow-up 不继承旧创建者，仍使用已授权的子 Thread 和 Project。委派事务固化子 Thread 的实际模型和审批默认值，各 Input 冻结本次配置。
 
-Message 和 ToolCall 保存可公开 item 的稳定身份及索引，实时和历史复用公开投影。前端和 CLI 直接消费公开 item 与 Turn 事件，按 item 身份合并重放和快照。普通用户恢复可见工具过程，完整审计权限保持独立。已完成块的索引边界进入 Message 快照，重连补回漏收的 done，展示平滑不覆盖恢复后的完整值。取消快照只允许有效 lease Owner 更新已公开的 assistant message，不开放新的输出、工具或 Memory 写入。执行消费者等待下一事件和停在 yield 时分别通过 CancelledError 与 GeneratorExit 关闭；两条路径在同一取消分支保存正文，仍要求持久 cancel_requested 和相同 worker Owner，随后重新抛出关闭异常。附件绑定在同一输入事务内保存于公开用户 item。
+Message 保存可公开 item 的稳定身份及索引，实时和历史复用公开投影。前端和 CLI 直接消费公开 item 与 Turn 事件，按 item 身份合并重放和快照。普通用户恢复可见工具过程，完整审计权限保持独立。已完成块的索引边界进入 Message 快照，重连补回漏收的 done，展示平滑不覆盖恢复后的完整值。取消快照只允许有效 lease Owner 更新已公开的 assistant message，不开放新的输出、工具或 Memory 写入。执行消费者等待下一事件和停在 yield 时分别通过 CancelledError 与 GeneratorExit 关闭；两条路径在同一取消分支保存正文，仍要求持久 cancel_requested 和相同 worker Owner，随后重新抛出关闭异常。附件绑定在同一输入事务内保存于公开用户 item。
 
 保留现有 HTTP 路径、单事件提交及幂等键。省略 mode 时在 Thread 锁内固定有效 mode 和目标，取消同样在事务内固定目标。仅支持新初始化的 Schema、Redis 格式和 cursor，不读取旧数据或协议。
 

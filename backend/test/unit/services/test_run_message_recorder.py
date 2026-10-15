@@ -563,7 +563,7 @@ async def test_collector_projects_tool_start_and_successful_finish(monkeypatch):
 
 
 def test_tool_output_without_content_does_not_enter_compatibility_projection():
-    """原始 lifecycle envelope 不得作为普通 ToolCall 输出。"""
+    """原始 lifecycle envelope 不得作为普通工具输出。"""
     assert service.normalize_tool_result({"type": "tool", "status": "success", "private_lifecycle_field": "audit-only"}).audit_content == ""
 
 
@@ -637,7 +637,7 @@ async def test_collector_treats_error_tool_message_as_failed_finish(monkeypatch)
 
 @pytest.mark.asyncio
 async def test_raw_tool_error_waits_for_run_terminal(monkeypatch):
-    """裸 tool-error 可能是 LangGraph interrupt，不能提前把 pending ToolCall 判为失败。"""
+    """裸 tool-error 可能是 LangGraph interrupt，不能提前把 等待中的工具执行判为失败。"""
     db = _FakeDb()
     observed: list[dict] = []
 

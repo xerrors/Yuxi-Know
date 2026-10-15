@@ -63,9 +63,6 @@ class Workdir:
     def read_file(self, path: str, max_bytes: int) -> bytes:
         return self.workspace.read_authorized_file(self.resolve_path(path), max_bytes)
 
-    def read_file_prefix(self, path: str, max_bytes: int) -> tuple[bytes, bool]:
-        return self.workspace.read_authorized_file_prefix(self.resolve_path(path), max_bytes)
-
     def write_file(self, path: str, content: bytes) -> dict:
         return self.workspace.write_authorized_file(self.resolve_path(path), content)
 

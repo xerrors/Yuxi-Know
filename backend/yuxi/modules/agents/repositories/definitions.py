@@ -133,10 +133,6 @@ class AgentRepository:
         result = await self.db.execute(statement)
         return result.scalar_one_or_none()
 
-    async def list_by_slugs(self, slugs: list[str]) -> list[Agent]:
-        result = await self.db.execute(select(Agent).where(Agent.slug.in_(slugs)))
-        return list(result.scalars().all())
-
     async def get_visible_by_slug(
         self,
         *,

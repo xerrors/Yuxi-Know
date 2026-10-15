@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from yuxi.modules.agents.models.messages import AUDIT_MESSAGE_TYPES, TOOL_AUDIT_MESSAGE_TYPE, Message, ToolCall
+from yuxi.modules.agents.models.messages import AUDIT_MESSAGE_TYPES, TOOL_AUDIT_MESSAGE_TYPE, Message
 from yuxi.modules.agents.models.runs import AGENT_RUN_TERMINAL_STATUSES, AgentRun, AgentRunAttempt
 from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.shared.datetime import utc_now
@@ -679,7 +679,6 @@ class AgentRunRepository:
             run.id,
             execution_status=audit_status,
             now=current_time,
-            preserve_pending_tool_calls=status == "interrupted",
         )
         await self._finish_open_attempt(
             run.id,
@@ -711,39 +710,22 @@ class AgentRunRepository:
         *,
         execution_status: str,
         now: datetime,
-        preserve_pending_tool_calls: bool = False,
     ) -> None:
         """在 Run owning transaction 内关闭尚无 terminal 事实的 Model/Tool 审计行。"""
-        running_tools = await self.db.execute(
-            select(Message.extra_metadata).where(
-                Message.run_id == run_id,
-                Message.message_type == TOOL_AUDIT_MESSAGE_TYPE,
-                Message.execution_status == "running",
-            )
-        )
-        tool_metadata = {
-            metadata["compatibility_tool_call_id"]: metadata
-            for metadata in running_tools.scalars().all()
-            if isinstance(metadata, dict) and isinstance(metadata.get("compatibility_tool_call_id"), int)
-        }
-        if tool_metadata and not preserve_pending_tool_calls:
-            tool_calls = await self.db.scalars(select(ToolCall).where(ToolCall.id.in_(tool_metadata)))
-            for tool_call in tool_calls:
-                metadata = tool_metadata[tool_call.id]
-                tool_call.status = "error"
-                tool_call.error_message = metadata.get("error_message") or (f"Tool 审计由 Run 终态收敛为 {execution_status}")
-        await self.db.execute(
-            update(Message)
-            .where(
+        messages = await self.db.scalars(
+            select(Message).where(
                 Message.run_id == run_id,
                 Message.message_type.in_(AUDIT_MESSAGE_TYPES),
                 Message.execution_status == "running",
             )
-            .values(
-                execution_status=execution_status,
-                finished_at=func.coalesce(Message.finished_at, now),
-            )
         )
+        for message in messages:
+            message.execution_status = execution_status
+            message.finished_at = message.finished_at or now
+            if message.message_type == TOOL_AUDIT_MESSAGE_TYPE:
+                metadata = dict(message.extra_metadata or {})
+                metadata["error_message"] = metadata.get("error_message") or f"工具执行由 Run 终态收敛为 {execution_status}"
+                message.extra_metadata = metadata
 
     async def _project_input_delivery_status(self, run: AgentRun) -> None:
         """在 owning transaction 内同步输入消息的终态投影。"""

@@ -8,14 +8,14 @@ from typing import Any, Literal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from yuxi.modules.agents.models.messages import MODEL_AUDIT_MESSAGE_TYPE, TOOL_AUDIT_MESSAGE_TYPE, Message, ToolCall
+from yuxi.modules.agents.models.messages import MODEL_AUDIT_MESSAGE_TYPE, TOOL_AUDIT_MESSAGE_TYPE, Message
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.repositories.sessions import SessionRepository
 
 
 class ToolMessageAuditRepository:
-    """以当前 Run lease 为边界持久化 ToolMessage 与 ToolCall 兼容投影。"""
+    """以当前 Run lease 为边界持久化唯一工具执行事实。"""
 
     def __init__(self, db_session: AsyncSession):
         self.db = db_session
@@ -34,7 +34,7 @@ class ToolMessageAuditRepository:
         started_at: datetime,
         metadata: dict[str, Any] | None = None,
     ) -> tuple[Message, bool]:
-        """幂等创建 running ToolMessage，并从该事实建立 ToolCall 兼容投影。"""
+        """幂等创建属于当前 Run 的工具执行事实。"""
         operation_id = tool_call_id.strip()
         normalized_name = tool_name.strip()
         if not operation_id:
@@ -66,7 +66,6 @@ class ToolMessageAuditRepository:
         audit_metadata = {
             **dict(metadata or {}),
             "audit_kind": "tool",
-            "tool_call_id": operation_id,
             "tool_name": normalized_name,
             "input": dict(tool_input),
             "source_model_operation_id": source_message.operation_id,
@@ -90,25 +89,6 @@ class ToolMessageAuditRepository:
         await self.db.flush()
         await self.db.refresh(message)
 
-        tool_call = await self._get_tool_call_for_message(source_message.id, operation_id)
-        if tool_call is None:
-            tool_call = ToolCall(
-                message_id=source_message.id,
-                langgraph_tool_call_id=operation_id,
-                tool_name=normalized_name,
-                tool_input=dict(tool_input),
-                status="pending",
-            )
-            self.db.add(tool_call)
-        elif tool_call.status != "pending":
-            raise ValueError("已结束 ToolCall 不能开始新的 ToolMessage lifecycle")
-        else:
-            tool_call.tool_name = normalized_name
-            tool_call.tool_input = dict(tool_input)
-        await self.db.flush()
-        audit_metadata["compatibility_tool_call_id"] = tool_call.id
-        message.extra_metadata = audit_metadata
-        await self.db.flush()
         return message, True
 
     async def complete(
@@ -124,14 +104,13 @@ class ToolMessageAuditRepository:
         duration_ms: int | None,
         finished_sequence: int | None,
     ) -> Message:
-        """完成同一 ToolMessage，并同步成功 ToolCall 投影。"""
+        """完成同一工具执行事实。"""
         return await self._finish(
             run_id=run_id,
             thread_id=thread_id,
             worker_id=worker_id,
             tool_call_id=tool_call_id,
             execution_status="completed",
-            tool_call_status="success",
             output=output,
             content=content,
             error_message=None,
@@ -162,9 +141,9 @@ class ToolMessageAuditRepository:
         ):
             raise ValueError("工具拒绝结果缺少当前 Run 的已接受审批")
         source = await self._find_source_model_message(run, tool_call_id)
-        call = await self._get_tool_call_for_message(source.id, tool_call_id) if source else None
-        if call is None or call.status != "pending":
+        if source is None:
             raise ValueError("工具拒绝结果缺少待处理的模型声明")
+        declaration = next(call for call in source.extra_metadata["tool_calls"] if call["id"] == tool_call_id)
         message = Message(
             session_record_id=run.session_record_id,
             turn_id=run.turn_id,
@@ -178,19 +157,16 @@ class ToolMessageAuditRepository:
             finished_at=utc_now(),
             extra_metadata={
                 "audit_kind": "tool",
-                "tool_call_id": tool_call_id,
-                "tool_name": call.tool_name,
-                "input": call.tool_input,
+                "tool_name": declaration["name"],
+                "input": declaration["args"],
                 "output": content,
                 "error_message": content,
                 "source": "approval_rejection",
                 "source_model_message_id": source.id,
                 "source_model_operation_id": source.operation_id,
-                "compatibility_tool_call_id": call.id,
             },
         )
         self.db.add(message)
-        call.status, call.tool_output, call.error_message = "error", content, content
         await self.db.flush()
         return message
 
@@ -215,7 +191,6 @@ class ToolMessageAuditRepository:
             worker_id=worker_id,
             tool_call_id=tool_call_id,
             execution_status="failed",
-            tool_call_status="error",
             output=output,
             content=content,
             error_message=error_message,
@@ -291,7 +266,6 @@ class ToolMessageAuditRepository:
         worker_id: str,
         tool_call_id: str,
         execution_status: Literal["completed", "failed"],
-        tool_call_status: Literal["success", "error"],
         output: Any,
         content: str,
         error_message: str | None,
@@ -299,7 +273,7 @@ class ToolMessageAuditRepository:
         duration_ms: int | None,
         finished_sequence: int | None,
     ) -> Message:
-        """原子关闭 Tool 审计及其兼容 ToolCall。"""
+        """原子关闭唯一工具执行事实。"""
         operation_id = tool_call_id.strip()
         if not operation_id:
             raise ValueError("Tool tool_call_id 不能为空")
@@ -330,8 +304,6 @@ class ToolMessageAuditRepository:
         if message.execution_status != "running":
             raise ValueError(f"Tool 审计事实不能从 {message.execution_status} 转为 {execution_status}")
 
-        tool_call = await self._require_compatibility_tool_call(metadata, operation_id)
-
         message.content = content
         message.finished_at = message.finished_at or finished_at
         if duration_ms is not None:
@@ -343,9 +315,6 @@ class ToolMessageAuditRepository:
             metadata["finished_sequence"] = finished_sequence
         message.extra_metadata = metadata
 
-        tool_call.tool_output = content or None
-        tool_call.status = tool_call_status
-        tool_call.error_message = error_message
         await self.db.flush()
         await self.db.refresh(message)
         return message
@@ -373,17 +342,8 @@ class ToolMessageAuditRepository:
         )
         return result.scalar_one_or_none()
 
-    async def _get_tool_call_for_message(self, message_id: int, operation_id: str) -> ToolCall | None:
-        result = await self.db.execute(
-            select(ToolCall).where(
-                ToolCall.message_id == message_id,
-                ToolCall.langgraph_tool_call_id == operation_id,
-            )
-        )
-        return result.scalar_one_or_none()
-
     async def _find_source_model_message(self, run: AgentRun, tool_call_id: str) -> Message | None:
-        """在当前 Run 及合法 resume 祖先中查找 ToolCall 声明。"""
+        """在当前 Run 及合法 resume 祖先中查找模型工具声明。"""
         source_run_ids = await self._source_run_ids(run)
         result = await self.db.execute(
             select(Message)
@@ -424,18 +384,6 @@ class ToolMessageAuditRepository:
             seen.add(parent.id)
             parent_id = parent.resume_from_run_id
         return source_run_ids
-
-    async def _require_compatibility_tool_call(
-        self,
-        metadata: dict[str, Any],
-        operation_id: str,
-    ) -> ToolCall:
-        """读取并校验审计绑定的兼容 ToolCall。"""
-        tool_call_id = metadata.get("compatibility_tool_call_id")
-        tool_call = await self.db.get(ToolCall, tool_call_id) if isinstance(tool_call_id, int) else None
-        if tool_call is None or tool_call.langgraph_tool_call_id != operation_id:
-            raise ValueError("ToolMessage 缺少 ToolCall 兼容投影")
-        return tool_call
 
     @staticmethod
     def _require_same_owner(message: Message, *, session_record_id: int, turn_id: str) -> None:

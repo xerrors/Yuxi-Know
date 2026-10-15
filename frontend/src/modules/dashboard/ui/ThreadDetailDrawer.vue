@@ -113,16 +113,16 @@
               <div class="message-text">{{ msg.content }}</div>
 
               <!-- 工具调用折叠区域 -->
-              <div v-if="msg.tool_calls && msg.tool_calls.length > 0" class="tool-calls-container">
+              <div v-if="msg.tool_executions && msg.tool_executions.length > 0" class="tool-calls-container">
                 <div class="tool-calls-title">
-                  <Wrench class="icon-inline" /> 工具执行记录 ({{ msg.tool_calls.length }})
+                  <Wrench class="icon-inline" /> 工具执行记录 ({{ msg.tool_executions.length }})
                 </div>
 
                 <div
-                  v-for="(tc, tcIdx) in msg.tool_calls"
+                  v-for="(tc, tcIdx) in msg.tool_executions"
                   :key="tc.id || tcIdx"
                   class="tool-call-item"
-                  :class="tc.status"
+                  :class="tc.execution_status"
                 >
                   <div
                     class="tool-call-summary"
@@ -132,21 +132,15 @@
                       <span class="tool-name">{{ tc.tool_name }}</span>
                       <a-tag
                         :color="
-                          tc.status === 'success'
+                          tc.execution_status === 'completed'
                             ? 'green'
-                            : tc.status === 'error'
+                            : tc.execution_status === 'failed'
                               ? 'red'
                               : 'orange'
                         "
                         size="small"
                       >
-                        {{
-                          tc.status === 'success'
-                            ? '成功'
-                            : tc.status === 'error'
-                              ? '失败'
-                              : '执行中'
-                        }}
+                        {{ executionLabel(tc) }}
                       </a-tag>
                     </div>
                     <span class="tool-expand-arrow">
@@ -165,7 +159,7 @@
 
                     <div v-if="tc.tool_output" class="tool-detail-section">
                       <div class="detail-label">执行结果 (Output):</div>
-                      <pre class="output-code">{{ tc.tool_output }}</pre>
+                      <pre class="output-code">{{ formatJson(tc.tool_output) }}</pre>
                     </div>
 
                     <div v-if="tc.error_message" class="tool-detail-section error-section">
@@ -195,6 +189,17 @@ const visible = ref(false)
 const loading = ref(false)
 const detail = ref(null)
 const expandedTools = ref(new Set())
+
+const executionLabel = (execution) => {
+  if (execution.source === 'approval_rejection') return '已拒绝'
+  return {
+    completed: '成功',
+    failed: '失败',
+    running: '执行中',
+    interrupted: '已中断',
+    abandoned: '已结束'
+  }[execution.execution_status]
+}
 
 const drawerWidth = 'min(720px, 100vw)'
 
@@ -505,7 +510,9 @@ defineExpose({
     margin-bottom: 8px;
     overflow: hidden;
 
-    &.error {
+    &.failed,
+    &.interrupted,
+    &.abandoned {
       border-color: var(--color-error-200);
     }
 

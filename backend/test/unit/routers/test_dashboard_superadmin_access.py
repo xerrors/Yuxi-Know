@@ -20,7 +20,7 @@ from yuxi.modules.agents.models.definitions import Agent
 from yuxi.infrastructure.postgres.base import Base
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.identity.models import Department, User
-from yuxi.modules.agents.models.messages import Message, ToolCall
+from yuxi.modules.agents.models.messages import Message
 from yuxi.shared.datetime import utc_now
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.unit]
@@ -100,8 +100,6 @@ async def dashboard_session():
         )
         message_a = Message(agent_session=session_a, role="assistant", content="A", created_at=now)
         message_b = Message(agent_session=session_b, role="assistant", content="B", created_at=now)
-        tool_call_a = ToolCall(message=message_a, tool_name="dept_a_tool", status="success", created_at=now)
-        tool_call_b = ToolCall(message=message_b, tool_name="dept_b_tool", status="success", created_at=now)
         db.add_all(
             [
                 dept_a,
@@ -116,10 +114,36 @@ async def dashboard_session():
                 session_b,
                 message_a,
                 message_b,
-                tool_call_a,
-                tool_call_b,
             ]
         )
+        await db.flush()
+        tool_call_a = Message(
+            session_record_id=message_a.session_record_id,
+            turn_id=message_a.turn_id,
+            run_id=message_a.run_id,
+            role="tool",
+            message_type="tool_audit",
+            operation_id="dept_a_tool",
+            content="",
+            execution_status="completed",
+            started_at=now,
+            extra_metadata={"source_model_message_id": message_a.id, "tool_name": "dept_a_tool", "input": {}},
+            created_at=now,
+        )
+        tool_call_b = Message(
+            session_record_id=message_b.session_record_id,
+            turn_id=message_b.turn_id,
+            run_id=message_b.run_id,
+            role="tool",
+            message_type="tool_audit",
+            operation_id="dept_b_tool",
+            content="",
+            execution_status="completed",
+            started_at=now,
+            extra_metadata={"source_model_message_id": message_b.id, "tool_name": "dept_b_tool", "input": {}},
+            created_at=now,
+        )
+        db.add_all([tool_call_a, tool_call_b])
         await db.commit()
         for item in [
             dept_a,

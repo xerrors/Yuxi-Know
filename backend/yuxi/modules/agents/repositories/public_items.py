@@ -6,7 +6,7 @@ from yuxi.modules.agents.repositories.pagination import order_page
 
 from sqlalchemy import JSON, String, and_, case, cast, column, func, literal, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import defer, selectinload
+from sqlalchemy.orm import defer
 
 from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.agents.models.runs import AgentRun
@@ -159,7 +159,6 @@ class PublicItemRepository:
             .outerjoin(AgentRun, Message.run_id == AgentRun.id)
             .outerjoin(AgentTurn, Message.turn_id == AgentTurn.id)
             .where(Session.thread_id == thread_id, Session.uid == uid, Session.app_id == app_id)
-            .options(selectinload(Message.tool_calls))
             .order_by(Message.id)
         )
         if turn_id is not None:

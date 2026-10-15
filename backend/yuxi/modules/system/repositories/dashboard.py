@@ -7,7 +7,7 @@ from sqlalchemy import Integer, String, and_, case, cast, distinct, func, litera
 from sqlalchemy.ext.asyncio import AsyncSession
 from yuxi.infrastructure.minio.client import normalize_public_minio_url
 from yuxi.modules.agents.models.definitions import Agent
-from yuxi.modules.agents.models.messages import AUDIT_MESSAGE_TYPES, Message, ToolCall
+from yuxi.modules.agents.models.messages import AUDIT_MESSAGE_TYPES, TOOL_AUDIT_MESSAGE_TYPE, Message
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.identity.models import User
@@ -312,59 +312,69 @@ class DashboardRepository:
         query_now = now or utc_now()
         valid_filters = [Session.status != "deleted", User.is_deleted == 0]
         total_result = await self.db_session.execute(
-            select(func.count(ToolCall.id))
-            .join(Message, ToolCall.message_id == Message.id)
+            select(func.count(Message.id))
             .join(Session, Message.session_record_id == Session.id)
             .join(User, Session.uid == User.uid)
             .join(Agent, Session.agent_id == Agent.slug)
-            .where(*valid_filters)
+            .where(*valid_filters, Message.message_type == TOOL_AUDIT_MESSAGE_TYPE, Message.started_at.is_not(None))
         )
         successful_result = await self.db_session.execute(
-            select(func.count(ToolCall.id))
-            .join(Message, ToolCall.message_id == Message.id)
+            select(func.count(Message.id))
             .join(Session, Message.session_record_id == Session.id)
             .join(User, Session.uid == User.uid)
             .join(Agent, Session.agent_id == Agent.slug)
-            .where(*valid_filters, ToolCall.status == "success")
+            .where(
+                *valid_filters,
+                Message.message_type == TOOL_AUDIT_MESSAGE_TYPE,
+                Message.started_at.is_not(None),
+                Message.execution_status == "completed",
+            )
         )
         total_calls = total_result.scalar() or 0
         successful_calls = successful_result.scalar() or 0
 
+        # PostgreSQL 分组复用同一 JSON 表达式，使提取键使用同一绑定参数。
+        tool_name = Message.extra_metadata["tool_name"].as_string()
         most_used_result = await self.db_session.execute(
-            select(ToolCall.tool_name, func.count(ToolCall.id).label("count"))
-            .join(Message, ToolCall.message_id == Message.id)
+            select(tool_name, func.count(Message.id).label("count"))
             .join(Session, Message.session_record_id == Session.id)
             .join(User, Session.uid == User.uid)
             .join(Agent, Session.agent_id == Agent.slug)
-            .where(*valid_filters)
-            .group_by(ToolCall.tool_name)
-            .order_by(func.count(ToolCall.id).desc())
+            .where(*valid_filters, Message.message_type == TOOL_AUDIT_MESSAGE_TYPE, Message.started_at.is_not(None))
+            .group_by(tool_name)
+            .order_by(func.count(Message.id).desc())
             .limit(10)
         )
         error_result = await self.db_session.execute(
-            select(ToolCall.tool_name, func.count(ToolCall.id).label("error_count"))
-            .join(Message, ToolCall.message_id == Message.id)
+            select(tool_name, func.count(Message.id).label("error_count"))
             .join(Session, Message.session_record_id == Session.id)
             .join(User, Session.uid == User.uid)
             .join(Agent, Session.agent_id == Agent.slug)
-            .where(*valid_filters, ToolCall.status == "error")
-            .group_by(ToolCall.tool_name)
+            .where(
+                *valid_filters,
+                Message.message_type == TOOL_AUDIT_MESSAGE_TYPE,
+                Message.started_at.is_not(None),
+                Message.execution_status == "failed",
+            )
+            .group_by(tool_name)
         )
 
+        error_rows = error_result.all()
         daily_tool_calls = []
         for day_offset in range(7):
             day_start = query_now - timedelta(days=day_offset + 1)
             day_end = query_now - timedelta(days=day_offset)
             daily_result = await self.db_session.execute(
-                select(func.count(ToolCall.id))
-                .join(Message, ToolCall.message_id == Message.id)
+                select(func.count(Message.id))
                 .join(Session, Message.session_record_id == Session.id)
                 .join(User, Session.uid == User.uid)
                 .join(Agent, Session.agent_id == Agent.slug)
                 .where(
                     *valid_filters,
-                    ToolCall.created_at >= day_start,
-                    ToolCall.created_at < day_end,
+                    Message.message_type == TOOL_AUDIT_MESSAGE_TYPE,
+                    Message.started_at.is_not(None),
+                    Message.created_at >= day_start,
+                    Message.created_at < day_end,
                 )
             )
             daily_tool_calls.append({"date": day_start.strftime("%Y-%m-%d"), "call_count": daily_result.scalar() or 0})
@@ -372,10 +382,10 @@ class DashboardRepository:
         return {
             "total_calls": total_calls,
             "successful_calls": successful_calls,
-            "failed_calls": total_calls - successful_calls,
+            "failed_calls": sum(count for _, count in error_rows),
             "success_rate": round(successful_calls / total_calls * 100, 2) if total_calls else 0,
             "most_used_tools": [{"tool_name": name, "count": count} for name, count in most_used_result.all()],
-            "tool_error_distribution": {name: count for name, count in error_result.all()},
+            "tool_error_distribution": {name: count for name, count in error_rows},
             "daily_tool_calls": list(reversed(daily_tool_calls)),
         }
 
@@ -397,12 +407,11 @@ class DashboardRepository:
 
         tool_rows = (
             await self.db_session.execute(
-                select(Session.agent_id, func.count(ToolCall.id))
-                .join(Message, ToolCall.message_id == Message.id)
+                select(Session.agent_id, func.count(Message.id))
                 .join(Session, Message.session_record_id == Session.id)
                 .join(User, Session.uid == User.uid)
                 .join(Agent, Session.agent_id == Agent.slug)
-                .where(*valid_filters)
+                .where(*valid_filters, Message.message_type == TOOL_AUDIT_MESSAGE_TYPE, Message.started_at.is_not(None))
                 .group_by(Session.agent_id)
             )
         ).all()
@@ -556,23 +565,25 @@ class DashboardRepository:
                 )
                 rows.extend(result.all())
         else:
-            tool_group = self._time_group_format(ToolCall.created_at, time_range)
+            tool_group = self._time_group_format(Message.created_at, time_range)
+            tool_name = Message.extra_metadata["tool_name"].as_string()
             result = await self.db_session.execute(
                 select(
                     tool_group.label("date"),
-                    func.count(ToolCall.id).label("count"),
-                    ToolCall.tool_name.label("category"),
+                    func.count(Message.id).label("count"),
+                    tool_name.label("category"),
                 )
-                .join(Message, ToolCall.message_id == Message.id)
                 .join(Session, Message.session_record_id == Session.id)
                 .join(User, Session.uid == User.uid)
                 .join(Agent, Session.agent_id == Agent.slug)
                 .where(
-                    ToolCall.created_at >= query_start_time,
+                    Message.message_type == TOOL_AUDIT_MESSAGE_TYPE,
+                    Message.started_at.is_not(None),
+                    Message.created_at >= query_start_time,
                     Session.status != "deleted",
                     User.is_deleted == 0,
                 )
-                .group_by(tool_group, ToolCall.tool_name)
+                .group_by(tool_group, tool_name)
                 .order_by(tool_group)
             )
             rows = list(result.all())
@@ -631,12 +642,16 @@ class DashboardRepository:
 
         if metric_type == "tools":
             total_result = await self.db_session.execute(
-                select(func.count(ToolCall.id))
-                .join(Message, ToolCall.message_id == Message.id)
+                select(func.count(Message.id))
                 .join(Session, Message.session_record_id == Session.id)
                 .join(User, Session.uid == User.uid)
                 .join(Agent, Session.agent_id == Agent.slug)
-                .where(Session.status != "deleted", User.is_deleted == 0)
+                .where(
+                    Message.message_type == TOOL_AUDIT_MESSAGE_TYPE,
+                    Message.started_at.is_not(None),
+                    Session.status != "deleted",
+                    User.is_deleted == 0,
+                )
             )
             total_count = total_result.scalar() or 0
         else:

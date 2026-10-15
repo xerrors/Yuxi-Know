@@ -24,7 +24,7 @@ Agent 权限与配置编排由 service 拥有，repository 只接收已准备结
 
 ## 后果
 
-AgentInput 消费、模型/工具审计和公开 item 继续各自拥有来源投影与原子执行事实；MessageRepository 拥有共同消息和兼容 ToolCall 操作。MemoryHistoryRepository 只查询，MemoryHistoryService 装配预算。subscriptions、checkpoint_state、checkpoint_messages 与 message_audits 分别表达订阅、读取 checkpoint、对账结算与审计读取；当前契约见[输入队列机制](../../../mechanisms/agent-request-queue.md#事务与消息归属)。
+AgentInput 消费、模型/工具审计和公开 item 继续各自拥有来源投影与原子执行事实；MessageRepository 拥有共同消息操作，工具执行只保存为 Message；双写部分由[工具执行收敛](./2026-10-15-tool-execution-convergence.md)取代。MemoryHistoryRepository 只查询，MemoryHistoryService 装配预算。subscriptions、checkpoint_state、checkpoint_messages 与 message_audits 分别表达订阅、读取 checkpoint、对账结算与审计读取；当前契约见[输入队列机制](../../../mechanisms/agent-request-queue.md#事务与消息归属)。
 
 幂等锁前/锁后检查留在真实用例，不引入事务回调框架；promote_input 保留先锁定授权 Thread 后重放，避免扩大已删除资源的重放规则。get_pending_steer 的两个丢弃返回值调用用于取得 Input 行锁，终态与 lease 恢复沿同一 Input→Run 顺序操作。协作通知是单向服务叶子，核心生命周期不再反向导入协作命令。cooperation 与 sandbox-release 键字节由共同运行锁契约保留；身份最后超管的 DDL/应用镜像仍属于身份阶段，其他域的锁键仍由各自 Owner 拥有。
 

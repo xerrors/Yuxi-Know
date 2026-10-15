@@ -17,7 +17,7 @@ API 在 `/api/mcp` 提供只读知识库 MCP，与 HTTP API 共用进程和端�
 - `frontend`：Vue 3 / Vite 前端，挂载 `frontend/src` 并热更新。
 - `api`：FastAPI API 服务，挂载 `backend/yuxi` 和测试目录；API 与 worker 的源码修改通过显式重启生效。
 - `worker`：ARQ worker，执行已经派发的 AgentRun 与注册的 后台作业，并周期触发用户自建 Agent 定时任务；三者分别使用 PostgreSQL 中的运行租约、任务租约和调度锁闭合并发与恢复。
-- `schema-init`：Compose 中唯一初始化 Yuxi 数据库 Schema 的一次性进程，为全新部署直接建立 business 版本 2 与 knowledge 版本 1 基线、约束和 checkpoint 表；精确当前版本直接结束，其他版本或未版本化旧表明确拒绝，不执行历史升级或清库。API 与 worker 等待其成功后只校验 Schema 版本。
+- `schema-init`：Compose 中唯一初始化 Yuxi 数据库 Schema 的一次性进程，为全新部署直接建立 business 版本 3 与 knowledge 版本 1 基线、约束和 checkpoint 表；精确当前版本直接结束，其他版本或未版本化旧表明确拒绝，不执行历史升级或清库。API 与 worker 等待其成功后只校验 Schema 版本。
 - Cube Linux/KVM 执行节点：每个用户拥有一个持久普通账号 VM，Workspace 与授权 Skills 共享宿主文件。
 - `postgres`：业务数据、知识库元数据、持久 Input 队列、Turn/Run 与 LangGraph checkpoint。
 - `redis`：ARQ 投递、运行事件、取消信号以及跨进程配置和模型缓存。
@@ -61,7 +61,7 @@ Yuxi 始终交付完整知识能力。API 注册知识库、图谱、评估、Da
 
 - Agent 生命周期：Thread 保存长期对话，Input 保存持久接收与优先队列，Turn 保存一轮工作，Run/Attempt 保存执行段、输出和租约；人工等待与 execution tree 绑定明确的 Turn/Run。
 - 用户定时 Agent：任务定义和 occurrence 独立持久化；worker 锁定到期任务后复用统一 Thread/Input/Turn/Run 用例，定时 occurrence 保留来源关联。
-- 后台作业：用于知识库解析、评估和图谱构建。业务 service 登记持久 `job_type + handler_version + payload`，事务提交后通过后台作业 dispatch 入口投递；`worker` 从 registry 惰性加载领域 Handler，并通过 BackgroundJob 行的唯一 owner、heartbeat 和 lease 执行。知识文件中间态绑定 BackgroundJob/attempt owner，worker 调用领域 failure hook，与 作业终态同事务收敛文件错误态；PG pending 行由启动与周期 publisher 补发。JobTracker 保存进度、有限结果摘要及执行方确认的终态，业务失败判定由领域 service 拥有；取消先保存请求，由执行方在安全检查点响应。后台作业只向管理员开放。共享 ARQ worker 的执行槽由 Compose 配置，后台作业 的 PG claim 上限为 4，不能占满 AgentRun 容量。
+- 后台作业：用于知识库解析、评估和图谱构建。业务 service 登记持久 `job_type + handler_version + payload`，事务提交后通过后台作业 dispatch 入口投递；`worker` 从 registry 惰性加载领域 Handler，并通过 BackgroundJob 行的唯一 owner、heartbeat 和 lease 执行。知识文件中间态绑定 BackgroundJob/attempt owner，worker 调用领域 failure hook，与 作业终态同事务收敛文件错误态；PG pending 行由启动与周期 publisher 补发。JobTracker 内部直接使用 repository 返回的持久记录，HTTP 观察按白名单序列化；列表不生成结果详情。进度与终态属于执行方，业务失败判定由领域 service 拥有；取消先保存请求，由执行方在安全检查点响应。后台作业只向管理员开放。共享 ARQ worker 的执行槽由 Compose 配置，后台作业 的 PG claim 上限为 4，不能占满 AgentRun 容量。
 
 测试代码位于 `backend/test`，按 `unit`、`integration`、`e2e` 分层。新增或修改后端行为时，测试应放在最能覆盖真实风险的层级。
 

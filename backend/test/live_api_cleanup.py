@@ -519,7 +519,6 @@ async def _delete_test_session_rows(conn: asyncpg.Connection, thread_ids_list: l
         "DELETE FROM agent_input_receipts WHERE thread_id = ANY($1::text[])",
         thread_ids_list,
     )
-    await conn.execute("DELETE FROM tool_calls WHERE message_id = ANY($1::int[])", message_ids)
     await conn.execute("DELETE FROM agent_attachments WHERE input_id = ANY($1::text[])", input_ids)
     await conn.execute("DELETE FROM messages WHERE id = ANY($1::int[])", message_ids)
     await conn.execute(

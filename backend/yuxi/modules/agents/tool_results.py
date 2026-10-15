@@ -17,7 +17,7 @@ class ToolResult:
 
 
 def tool_result_text(value: Any) -> str:
-    """审计与 checkpoint 兼容投影共享稳定 JSON 文本规则。"""
+    """工具执行审计与 checkpoint 对账共用稳定 JSON 文本规则。"""
     if value is None:
         return ""
     if isinstance(value, str):

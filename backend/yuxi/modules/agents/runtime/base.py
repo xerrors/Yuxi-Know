@@ -9,8 +9,6 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.stream.transformers import CustomTransformer
 
 from yuxi.infrastructure.observability.logging import logger
-from yuxi.infrastructure.postgres.checkpointer import get_langgraph_checkpointer
-from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.agents.runtime.context import DEFAULT_MAX_EXECUTION_STEPS, BaseContext, resolve_agent_resource_options
 
 
@@ -143,10 +141,6 @@ class BaseAgent:
         例如: graph = workflow.compile(checkpointer=checkpointer)
         """
         pass
-
-    async def _get_checkpointer(self):
-        """每次构图独享 saver，避免全局 Agent 缓存把不同用户的 I/O 串行化。"""
-        return get_langgraph_checkpointer(pg_manager)
 
     def load_metadata(self) -> dict:
         """Load metadata from agent class attribute."""

@@ -19,7 +19,7 @@ from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.modules.agents.models.sessions import Session
-from yuxi.modules.agents.models.messages import Message, ToolCall
+from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.workspace.models import Project
 from yuxi.modules.identity.models import User, UserConfig
 from yuxi.shared.datetime import utc_now
@@ -112,8 +112,6 @@ async def memory_database(tmp_path, monkeypatch: pytest.MonkeyPatch):
             await db.execute(delete(AgentRun).where(AgentRun.id == run_id))
             await db.execute(delete(AgentTurn).where(AgentTurn.id == turn_id))
 
-            owned_message_ids = select(Message.id).join(Session).where(Session.uid == uid)
-            await db.execute(delete(ToolCall).where(ToolCall.message_id.in_(owned_message_ids)))
             await db.execute(delete(Message).where(Message.session_record_id.in_(select(Session.id).where(Session.uid == uid))))
             await db.execute(delete(Session).where(Session.uid == uid))
             await db.execute(delete(Project).where(Project.uid == uid))
@@ -155,7 +153,7 @@ async def test_write_rechecks_switch_and_current_lease_owner(memory_database):
 
 
 async def test_history_query_uses_postgres_visibility_and_field_allowlists(memory_database):
-    """真实 PostgreSQL 查询必须排除子线程和消息旁路，只按显式开关返回 ToolCall。"""
+    """真实 PostgreSQL 按用户可见性与消息类型筛选，只按显式开关返回工具执行。"""
     session_factory, identity = memory_database
     uid = identity["uid"]
     project_id = str(uuid.uuid4())
@@ -222,13 +220,21 @@ async def test_history_query_uses_postgres_visibility_and_field_allowlists(memor
         )
         await db.flush()
         db.add(
-            ToolCall(
-                message_id=visible_message.id,
-                langgraph_tool_call_id="memory-history-call",
-                tool_name="history_fixture",
-                tool_input={"secret": "TOOLCALL-INPUT"},
-                tool_output="TOOLCALL-OUTPUT",
-                status="success",
+            Message(
+                session_record_id=visible_message.session_record_id,
+                turn_id=visible_message.turn_id,
+                run_id=visible_message.run_id,
+                role="tool",
+                message_type="tool_audit",
+                operation_id="memory-history-call",
+                content="TOOLCALL-OUTPUT",
+                execution_status="completed",
+                started_at=visible_message.created_at,
+                extra_metadata={
+                    "source_model_message_id": visible_message.id,
+                    "tool_name": "history_fixture",
+                    "input": {"secret": "TOOLCALL-INPUT"},
+                },
             )
         )
         await db.commit()
@@ -250,3 +256,77 @@ async def test_history_query_uses_postgres_visibility_and_field_allowlists(memor
     assert "IMAGE-SECRET" not in serialized_default
     assert tool_read["tool_calls"][0]["input"] == '{"secret":"TOOLCALL-INPUT"}'
     assert tool_read["tool_calls"][0]["output"] == "TOOLCALL-OUTPUT"
+
+
+async def test_memory_tools_reject_forged_source_from_other_session_or_turn(memory_database):
+    """伪造合法来源 ID 仍不能越过会话和 Turn 的执行事实边界。"""
+    session_factory, identity = memory_database
+    foreign_uid = f"pytest-memory-foreign-{uuid.uuid4().hex}"
+    foreign_project_id = str(uuid.uuid4())
+    message_ids = []
+    try:
+        async with session_factory() as db:
+            own_session = await db.scalar(select(Session).where(Session.thread_id == identity["thread_id"]))
+            own_run = await db.get(AgentRun, identity["run_id"])
+            db.add(User(username=foreign_uid, uid=foreign_uid, password_hash="test", role="user"))
+            await db.flush()
+            db.add(
+                Project(
+                    id=foreign_project_id,
+                    uid=foreign_uid,
+                    selection_status="implicit",
+                    workdir_path=f"projects/{foreign_project_id}",
+                    directory_mode="managed",
+                )
+            )
+            await db.flush()
+            foreign_session = Session(
+                thread_id=f"foreign-{uuid.uuid4().hex}",
+                uid=foreign_uid,
+                project_id=foreign_project_id,
+                agent_id="main",
+                status="active",
+            )
+            source = Message(
+                session_record_id=own_session.id,
+                role="assistant",
+                message_type="text",
+                content="authorized historical source",
+            )
+            db.add_all([foreign_session, source])
+            await db.flush()
+            facts = [
+                Message(
+                    session_record_id=session_id,
+                    run_id=run_id,
+                    turn_id=turn_id,
+                    role="tool",
+                    message_type="tool_audit",
+                    execution_status="completed",
+                    operation_id=output,
+                    content=output,
+                    extra_metadata={"source_model_message_id": source.id, "tool_name": "fixture", "input": {}},
+                )
+                for session_id, run_id, turn_id, output in [
+                    (own_session.id, None, None, "AUTHORIZED-OUTPUT"),
+                    (foreign_session.id, None, None, "FOREIGN-USER-SECRET"),
+                    (own_session.id, own_run.id, own_run.turn_id, "OTHER-TURN-SECRET"),
+                ]
+            ]
+            db.add_all(facts)
+            await db.flush()
+            message_ids = [source.id, *(fact.id for fact in facts)]
+            await db.commit()
+
+        async with session_factory() as db:
+            result = await MemoryHistoryService(db).read_memory_messages(
+                uid=identity["uid"], thread_id=identity["thread_id"], include_tools=True
+            )
+        assert [tool["output"] for tool in result["tool_calls"]] == ["AUTHORIZED-OUTPUT"]
+    finally:
+        async with session_factory() as db:
+            await db.execute(delete(Message).where(Message.id.in_(message_ids)))
+            await db.execute(delete(Session).where(Session.uid == foreign_uid))
+            await db.execute(delete(Project).where(Project.uid == foreign_uid))
+            await db.execute(delete(User).where(User.uid == foreign_uid))
+            await db.commit()

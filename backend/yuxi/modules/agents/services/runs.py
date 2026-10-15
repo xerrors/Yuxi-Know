@@ -174,7 +174,6 @@ async def get_run_snapshot(*, db: AsyncSession, scope: ActorScope, thread_id: st
         message = await db.get(Message, run.output_message_id)
         if message is None or message.run_id != run.id or message.turn_id != run.turn_id:
             raise ValueError("Run 输出消息归属不一致")
-        await db.refresh(message, attribute_names=["tool_calls"])
         from yuxi.modules.agents.services.public_items import serialize_public_items
 
         result["output"] = serialize_public_items(message, run, turn.result_run_id)

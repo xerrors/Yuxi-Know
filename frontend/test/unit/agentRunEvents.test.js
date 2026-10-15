@@ -151,7 +151,7 @@ test('Run settled 不结束 Turn；只有 Turn 终态收尾', async (t) => {
 test('FIFO 领取后用真实 item 替换乐观输入并订阅所属 Turn', async (t) => {
   const state = {
     queuedInputs: [],
-    inputMonitors: {},
+    inputQueueMonitor: null,
     ongoingRunGroup: {
       ...createItemState(),
       optimisticMessages: { input: { id: 'local' } }

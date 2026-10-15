@@ -121,7 +121,7 @@ class YuxiMemoryMiddleware(AgentMiddleware[Any, ContextT, ResponseT]):
             runtime: ToolRuntime,
             message_id: Annotated[int | None, "可选的历史消息锚点 ID"] = None,
             limit: Annotated[int, "返回消息数，范围 1 到 20"] = 20,
-            include_tools: Annotated[bool, "是否显式包含有界 ToolCall 详情"] = False,
+            include_tools: Annotated[bool, "是否显式包含有界工具执行详情"] = False,
         ) -> dict:
             try:
                 return await read_thread_messages(

@@ -161,9 +161,7 @@ class _FakeConvRepo:
         self.db = _db
         _db.message_repository = self
         self.saved_messages: list[dict] = []
-        self.tool_calls: list[dict] = []
         self.sessions: dict[str, SimpleNamespace] = {}
-        self.source_ids: set[str] = set()
         self.published_message_ids: list[int] = []
 
     def _session(self, thread_id: str) -> SimpleNamespace:
@@ -222,32 +220,9 @@ class _FakeConvRepo:
     async def get_messages_by_thread_id(self, _thread_id: str):
         return []
 
-    async def get_message_source_ids_by_thread_id(self, _thread_id: str):
-        return set(self.source_ids)
-
     async def publish_assistant_output(self, message) -> None:
         message.message_type = "text"
         self.published_message_ids.append(message.id)
-
-    async def add_tool_call(
-        self,
-        *,
-        message_id: int,
-        tool_name: str,
-        tool_input: dict | None = None,
-        status: str = "pending",
-        langgraph_tool_call_id: str | None = None,
-    ):
-        self.tool_calls.append(
-            {
-                "message_id": message_id,
-                "tool_name": tool_name,
-                "tool_input": tool_input,
-                "status": status,
-                "langgraph_tool_call_id": langgraph_tool_call_id,
-            }
-        )
-        return SimpleNamespace(id=len(self.tool_calls))
 
     async def create_session(self, *, uid: str, agent_id: str, thread_id: str, metadata: dict | None = None):
         agent_session = SimpleNamespace(
@@ -339,7 +314,7 @@ async def test_empty_final_checkpoint_cannot_complete_prior_error_output(monkeyp
     monkeypatch.setattr(message_svc, "ToolMessageAuditRepository", _EmptyToolAuditRepo)
     monkeypatch.setattr(message_svc, "settle_checkpoint", forbidden_settlement)
     db = FakeDB()
-    with pytest.raises(ValueError, match="缺少当前 Run 的 AI 输出"):
+    with pytest.raises(ValueError, match="最终 State AIMessage"):
         await message_svc.save_messages_from_langgraph_state(
             state=SimpleNamespace(values={"messages": []}),
             thread_id="thread-1",
@@ -407,7 +382,7 @@ async def test_steer_before_first_model_yields_without_ai_output(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_save_messages_from_langgraph_state_backfills_run_output_message(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_checkpoint_without_lifecycle_does_not_create_output(monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeDB(_FakeDBBase):
         def __init__(self):
             self.commit_count = 0
@@ -458,21 +433,13 @@ async def test_save_messages_from_langgraph_state_backfills_run_output_message(m
         worker_id="worker-1",
     )
 
-    assert session_repo.saved_messages[0]["content"] == "answer"
-    assert session_repo.saved_messages[0]["run_id"] == "run-1"
-    assert session_repo.saved_messages[0]["turn_id"] == "req-1"
-    assert session_repo.saved_messages[0]["extra_metadata"]["langfuse_trace_id"] == "trace-1"
-    assert captured == {
-        "locked": ("run-1", "worker-1", "thread-1"),
-        "run_id": "run-1",
-        "message_id": 1,
-        "worker_id": "worker-1",
-    }
+    assert session_repo.saved_messages == []
+    assert captured == {"locked": ("run-1", "worker-1", "thread-1")}
     assert fake_db.commit_count == 1
 
 
 @pytest.mark.asyncio
-async def test_state_fallback_does_not_rebind_hidden_message_from_previous_run(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_checkpoint_cannot_create_missing_current_or_previous_run_audits(monkeypatch: pytest.MonkeyPatch) -> None:
     FakeDB = _FakeDBBase
 
     class FakeGraph:
@@ -497,7 +464,6 @@ async def test_state_fallback_does_not_rebind_hidden_message_from_previous_run(m
 
     fake_db = FakeDB()
     session_repo = _FakeConvRepo(fake_db)
-    session_repo.source_ids.add("old-model-audit")
     monkeypatch.setattr(message_svc, "AgentRunRepository", FakeRunRepo)
     monkeypatch.setattr(lifecycle_runs, "AgentRunRepository", FakeRunRepo)
     monkeypatch.setattr(message_svc, "ModelMessageAuditRepository", _EmptyModelAuditRepo)
@@ -512,8 +478,8 @@ async def test_state_fallback_does_not_rebind_hidden_message_from_previous_run(m
         worker_id="worker-current",
     )
 
-    assert [message["content"] for message in session_repo.saved_messages] == ["current answer"]
-    assert captured == {"worker-current": 1}
+    assert session_repo.saved_messages == []
+    assert captured == {}
 
 
 def test_tool_state_only_enriches_running_error_awaiting_terminal() -> None:
@@ -541,7 +507,7 @@ async def test_state_reconcile_uses_latest_error_unless_run_is_interrupted(
     interrupt_run: bool,
     expected: list[str],
 ) -> None:
-    """只用最后一条错误补全审计，中断则保留 pending ToolCall 供恢复。"""
+    """只用最后一条错误补全审计，中断保留声明与独立执行事实。"""
 
     FakeDB = _FakeDBBase
 
@@ -608,7 +574,7 @@ async def test_state_reconcile_uses_latest_error_unless_run_is_interrupted(
 async def test_model_state_reconcile_uses_latest_message_when_operation_id_is_reused(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """跨 Run 复用 Model operation_id 时不得投影同线程历史 ToolCall。"""
+    """跨 Run 复用 Model operation_id 时不得补建同线程历史工具事实。"""
 
     audit = SimpleNamespace(
         id=11,
@@ -668,7 +634,7 @@ async def test_model_state_reconcile_uses_latest_message_when_operation_id_is_re
 
     assert audit.content == "current"
     assert audit.extra_metadata["tool_calls"] == []
-    assert session_repo.tool_calls == []
+    assert session_repo.saved_messages == []
 
 
 @pytest.mark.asyncio
@@ -884,7 +850,7 @@ async def test_tool_call_interrupt_ignores_historical_same_id_tool_message(monke
 
 
 @pytest.mark.asyncio
-async def test_interrupt_persists_message_and_terminal_status_in_one_commit(
+async def test_interrupt_without_model_does_not_invent_message(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     events: list[tuple] = []
@@ -935,7 +901,7 @@ async def test_interrupt_persists_message_and_terminal_status_in_one_commit(
     )
 
     assert terminal_committed == "interrupted"
-    assert [event[0] for event in events] == ["lock", "message", "terminal", "commit"]
+    assert [event[0] for event in events] == ["lock", "terminal", "commit"]
     assert events[-2][2] == {
         "status": "interrupted",
         "error_type": "ask_user_question_required",

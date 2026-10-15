@@ -10,7 +10,7 @@ Tool lifecycle 审计先锁定 `AgentRun`，再插入引用 `Conversation` 的 `
 
 ## 决策
 
-Tool 审计在获取 Run lease 行锁前，先锁定其 `thread_id` 对应的 Conversation，再复用 `lock_output_persistence` 校验当前 owner 并锁定 Run。Thread 行锁由 ConversationRepository 持有到审计事务提交，与 Langfuse 的 Thread→Turn→Run 顺序一致；审计仍由短事务写入，Run 所有权检查和 ToolMessage/ToolCall 单向投影不变。
+Tool 审计在获取 Run lease 行锁前，先锁定其 `thread_id` 对应的 Conversation，再复用 `lock_output_persistence` 校验当前 owner 并锁定 Run。Thread 行锁由 ConversationRepository 持有到审计事务提交，与 Langfuse 的 Thread→Turn→Run 顺序一致；审计由短事务写入，Run 所有权检查保持；工具双投影由[工具执行收敛](./2026-10-15-tool-execution-convergence.md)取代。
 
 ### 实现方案
 

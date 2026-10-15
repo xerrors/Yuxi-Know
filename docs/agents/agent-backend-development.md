@@ -61,6 +61,8 @@ AGENT_BACKENDS = {
 ```python
 from langchain.agents import create_agent
 from yuxi.modules.agents.runtime import BaseAgent, BaseContext, load_chat_model
+from yuxi.infrastructure.postgres.checkpointer import get_langgraph_checkpointer
+from yuxi.infrastructure.postgres.manager import pg_manager
 
 
 class MyAgent(BaseAgent):
@@ -74,7 +76,7 @@ class MyAgent(BaseAgent):
         return create_agent(
             model=load_chat_model(fully_specified_name=context.model),
             system_prompt=context.system_prompt,
-            checkpointer=await self._get_checkpointer(),
+            checkpointer=get_langgraph_checkpointer(pg_manager),
         )
 ```
 

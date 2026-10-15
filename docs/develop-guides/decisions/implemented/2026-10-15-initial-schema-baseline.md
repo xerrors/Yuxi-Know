@@ -12,7 +12,7 @@ Owner：backend/yuxi/migrations/main.py
 
 ### 实现方案
 
-业务域与知识域的版本由 `infrastructure/postgres/schema.py` 拥有，当前 ORM、索引及触发器直接定义完整基线。工作区清理删除旧回收列后，业务域使用版本 2，知识域保留版本 1；具体不兼容边界见[工作区路径清理](./2026-10-15-workspace-path-cleanup.md)。删除全部 Yuxi 历史升级函数和入口分支，保留 `migrations` 包作为唯一 DDL 入口、版本记录、advisory lock、失败重试与 API/worker 只读校验。LangGraph 自有的 checkpoint setup 仍负责其初始表结构。本决定取代[沙盒环境](2026-10-15-sandbox-environment.md)、[模块审计修复](2026-10-12-module-audit-defects.md)和[远程 MCP](2026-10-03-remote-mcp-manifest.md)中的历史 Schema 升级或版本编号约定。
+业务域与知识域的版本由 `infrastructure/postgres/schema.py` 拥有，当前 ORM、索引及触发器直接定义完整基线。工作区清理与工具执行收敛删除旧回收列和独立工具表，业务域使用版本 3，知识域保留版本 1；工作区与工具事实的不兼容边界分别见[工作区路径清理](./2026-10-15-workspace-path-cleanup.md)和[工具执行收敛](./2026-10-15-tool-execution-convergence.md)。删除全部 Yuxi 历史升级函数和入口分支，保留 `migrations` 包作为唯一 DDL 入口、版本记录、advisory lock、失败重试与 API/worker 只读校验。LangGraph 自有的 checkpoint setup 仍负责其初始表结构。本决定取代[沙盒环境](2026-10-15-sandbox-environment.md)、[模块审计修复](2026-10-12-module-audit-defects.md)和[远程 MCP](2026-10-03-remote-mcp-manifest.md)中的历史 Schema 升级或版本编号约定。
 
 应用不修改已有运行数据库，不新增迁移框架。非当前版本明确拒绝初始化。部署者使用独立空库启动首个基线。
 

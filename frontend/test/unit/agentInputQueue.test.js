@@ -40,7 +40,7 @@ after(async () => {
 test('转引导重试复用幂等键，成功和冲突都回读队列且不写正式历史', async () => {
   const state = {
     queuedInputs: [{ input_id: 'F1', kind: 'follow_up', status: 'pending' }],
-    inputMonitors: {}, ongoingRunGroup: { items: {}, optimisticMessages: {} }
+    inputQueueMonitor: null, ongoingRunGroup: { items: {}, optimisticMessages: {} }
   }
   const original = { ...agentApi }
   const { ErrorHandler } = await server.ssrLoadModule('/src/shared/lib/errorHandler.js')
@@ -77,7 +77,7 @@ test('转引导重试复用幂等键，成功和冲突都回读队列且不写�
 })
 
 test('较早队列快照不能覆盖新快照，取消一条不移除其他引导', async () => {
-  const state = { queuedInputs: [], inputMonitors: {}, ongoingRunGroup: { items: {}, optimisticMessages: {} } }
+  const state = { queuedInputs: [], inputQueueMonitor: null, ongoingRunGroup: { items: {}, optimisticMessages: {} } }
   const original = { ...agentApi }
   let resolveOld
   agentApi.getThreadQueue = () => new Promise((resolve) => { resolveOld = resolve })
@@ -243,7 +243,7 @@ test('完整队列快照保留独立 steer 节点并遵循服务器优先顺序'
       { input_id: 'S1', kind: 'steer', status: 'pending', content: '重复投影' },
       { input_id: 'local', status: 'sending' }
     ],
-    inputMonitors: {},
+    inputQueueMonitor: null,
     ongoingRunGroup: { items: {}, optimisticMessages: {} }
   }
   const originalQueue = agentApi.getThreadQueue
@@ -261,7 +261,7 @@ test('完整队列快照保留独立 steer 节点并遵循服务器优先顺序'
     assert.equal(state.queuedInputs[0].content, 'S1')
     assert.deepEqual(state.ongoingRunGroup.items, {})
     assert.ok(state.inputQueueMonitor)
-    assert.strictEqual(state.inputMonitors.S1.controller, state.inputMonitors.F1.controller)
+    assert.deepEqual([...state.inputQueueMonitor.inputIds], ['S1', 'S2', 'F1'])
     agentApi.getThreadQueue = async () => ({ inputs: [
       { input_id: 'F1', kind: 'follow_up', status: 'pending', content: '普通消息' }
     ] })
@@ -277,7 +277,7 @@ test('完整队列快照保留独立 steer 节点并遵循服务器优先顺序'
 test('尚未接收的本地输入不能被取消或订阅', async () => {
   const state = {
     queuedInputs: [{ input_id: 'local-key', status: 'sending' }],
-    inputMonitors: {},
+    inputQueueMonitor: null,
     ongoingRunGroup: { items: {}, optimisticMessages: {} }
   }
   const originalQueue = agentApi.getThreadQueue

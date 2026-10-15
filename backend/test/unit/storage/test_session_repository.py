@@ -18,7 +18,7 @@ from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.infrastructure.postgres.base import Base
 from yuxi.modules.agents.models.sessions import Session
-from yuxi.modules.agents.models.messages import Message, ToolCall
+from yuxi.modules.agents.models.messages import Message
 from yuxi.shared.datetime import utc_now
 from yuxi.modules.agents.services.memory_history import MEMORY_HISTORY_READ_RESPONSE_MAX_BYTES
 from test.support.sqlite import create_utc_sqlite_engine
@@ -631,13 +631,17 @@ async def test_memory_read_uses_allowlist_and_only_explicit_toolcall_table(sessi
     )
     await session.flush()
     session.add(
-        ToolCall(
-            message_id=assistant.id,
-            langgraph_tool_call_id="call-1",
-            tool_name="secret_tool",
-            tool_input={"secret": "TOOLCALL-INPUT"},
-            tool_output="TOOLCALL-OUTPUT",
-            status="success",
+        Message(
+            session_record_id=assistant.session_record_id,
+            turn_id=assistant.turn_id,
+            run_id=assistant.run_id,
+            role="tool",
+            message_type="tool_audit",
+            operation_id="call-1",
+            content="TOOLCALL-OUTPUT",
+            execution_status="completed",
+            started_at=assistant.created_at,
+            extra_metadata={"source_model_message_id": assistant.id, "tool_name": "secret_tool", "input": {"secret": "TOOLCALL-INPUT"}},
         )
     )
     await session.commit()
@@ -752,7 +756,7 @@ async def test_memory_tools_exclude_unproven_or_active_model_audits(session):
             role="assistant",
             content=label,
             message_type="model_audit",
-            extra_metadata={"state_reconciled": proven},
+            extra_metadata={"state_reconciled": proven, "tool_calls": [{"id": f"call-{label}", "name": "search", "args": {}}]},
             run_id=run_id,
             turn_id=turn_id,
             operation_id=f"model-{label}",
@@ -768,12 +772,17 @@ async def test_memory_tools_exclude_unproven_or_active_model_audits(session):
     await session.flush()
     session.add_all(
         [
-            ToolCall(
-                message_id=message.id,
-                langgraph_tool_call_id=f"call-{message.content}",
-                tool_name="search",
-                tool_output=f"output-{message.content}",
-                status="success",
+            Message(
+                session_record_id=message.session_record_id,
+                turn_id=message.turn_id,
+                run_id=message.run_id,
+                role="tool",
+                message_type="tool_audit",
+                operation_id=f"call-{message.content}",
+                content=f"output-{message.content}",
+                execution_status="completed",
+                started_at=message.created_at,
+                extra_metadata={"source_model_message_id": message.id, "tool_name": "search", "input": {}},
             )
             for message in messages
         ]
@@ -783,7 +792,8 @@ async def test_memory_tools_exclude_unproven_or_active_model_audits(session):
     history = await MessageRepository(session).get_messages(agent_session.id)
 
     assert [message.content for message in history] == ["proven"]
-    assert history[0].tool_calls[0].langgraph_tool_call_id == "call-proven"
+    executions = await MessageRepository(session).list_tool_executions([history[0].id])
+    assert executions[0].operation_id == "call-proven"
 
     result = await MemoryHistoryService(session).read_memory_messages(
         uid="user-1",

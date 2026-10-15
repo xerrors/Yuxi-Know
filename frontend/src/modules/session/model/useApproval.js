@@ -108,7 +108,7 @@ export function useApproval({ getThreadState, fetchThreadMessages, getVisibleThr
     approvalState.waitpointId = null
   }
 
-  const processApprovalInStream = (event, threadId, currentAgentId) => {
+  const processApprovalInStream = (event, threadId) => {
     if (event.type !== 'yuxi.session.turn.waiting') return false
     const threadState = getThreadState(threadId)
     if (!threadState) return false
@@ -120,7 +120,7 @@ export function useApproval({ getThreadState, fetchThreadMessages, getVisibleThr
       applyInterruptToApprovalState(pendingInterrupt, threadId)
     }
 
-    fetchThreadMessages({ agentId: currentAgentId, threadId })
+    fetchThreadMessages({ threadId })
 
     return true
   }

@@ -268,7 +268,7 @@ async def test_cancelling_member_releases_its_run_cleanup_responsibility(monkeyp
         return runner.TerminalTransition(status="cancelled", changed=True)
 
     monkeypatch.setattr(runner, "flush_writer_best_effort", fake_noop)
-    monkeypatch.setattr(runner, "_release_runtime_before_terminal_event", release_runtime)
+    monkeypatch.setattr(runner, "_require_runtime_cleanup", release_runtime)
     monkeypatch.setattr(runner, "mark_run_terminal", fake_mark_terminal)
     monkeypatch.setattr(runner, "append_run_event_best_effort", fake_noop)
     monkeypatch.setattr(runner, "publish_run_settlement", fake_noop)
@@ -283,7 +283,8 @@ async def test_cancelling_member_releases_its_run_cleanup_responsibility(monkeyp
     )
 
     assert transition == runner.TerminalTransition(status="cancelled", changed=True)
-    release_runtime.assert_awaited_once_with(run)
+    release_runtime.assert_awaited_once()
+    assert release_runtime.call_args.args[0] is run
 
 
 def _patch_common(monkeypatch: pytest.MonkeyPatch, run_obj: SimpleNamespace):
@@ -367,7 +368,7 @@ def _patch_common(monkeypatch: pytest.MonkeyPatch, run_obj: SimpleNamespace):
             )
         ),
     )
-    monkeypatch.setattr(runner, "_release_runtime_before_terminal_event", fake_cleanup)
+    monkeypatch.setattr(runner, "complete_run_command_cleanup", fake_cleanup)
     monkeypatch.setattr(runner, "clear_cancel_signal", fake_noop)
     monkeypatch.setattr(runner, "publish_run_settlement", fake_noop)
     monkeypatch.setattr(runner, "stream_agent_execution", lambda **kwargs: object())
@@ -529,10 +530,10 @@ async def test_terminal_cleanup_failure_keeps_end_event_unpublished(monkeypatch:
     _patch_common(monkeypatch, run_obj)
     end_event = AsyncMock()
 
-    async def fail_cleanup(_run):
+    async def fail_cleanup(_run, _message):
         raise runner.RuntimeCleanupPendingError("runtime cleanup pending")
 
-    monkeypatch.setattr(runner, "_release_runtime_before_terminal_event", fail_cleanup)
+    monkeypatch.setattr(runner, "_require_runtime_cleanup", fail_cleanup)
     monkeypatch.setattr(runner, "publish_run_settlement", end_event)
 
     def committed_stream(**_kwargs):
@@ -802,11 +803,11 @@ async def test_durable_cancel_without_redis_signal_never_enters_agent_stream(mon
     monkeypatch.setattr(runner, "mark_run_terminal", fake_mark_terminal)
     monkeypatch.setattr(runner, "stream_agent_execution", forbidden_stream)
 
-    async def fake_release_sandbox(_run):
+    async def fake_release_sandbox(_run, _message):
         lifecycle.append("release")
         return True
 
-    monkeypatch.setattr(runner, "_release_runtime_before_terminal_event", fake_release_sandbox)
+    monkeypatch.setattr(runner, "_require_runtime_cleanup", fake_release_sandbox)
 
     await runner.process_agent_run({"worker_id": "worker-cancel", "job_try": 1}, "run-1")
 
@@ -1292,7 +1293,7 @@ async def test_committed_execution_releases_own_runtime_before_settlement(monkey
         run.status = status
         yield _terminal_result(status)
 
-    async def release(actual):
+    async def release(actual, _message):
         assert actual is run
         order.append("release")
 
@@ -1301,7 +1302,7 @@ async def test_committed_execution_releases_own_runtime_before_settlement(monkey
         order.append("published")
 
     monkeypatch.setattr(runner, "stream_agent_execution", lambda **kw: stream())
-    monkeypatch.setattr(runner, "_release_runtime_before_terminal_event", release)
+    monkeypatch.setattr(runner, "_require_runtime_cleanup", release)
     monkeypatch.setattr(runner, "publish_run_settlement", publish)
     monkeypatch.setattr(runner, "mark_run_terminal", AsyncMock(side_effect=AssertionError("already committed")))
     await runner.process_agent_run({"job_try": 1}, run.id)

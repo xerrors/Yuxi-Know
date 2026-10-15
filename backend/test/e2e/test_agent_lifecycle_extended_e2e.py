@@ -139,29 +139,28 @@ async def test_public_run_persists_preloaded_tool_and_model_audit(e2e_client, e2
             tool_row = await conn.fetchrow(
                 """
                 SELECT audit.execution_status, audit.content, audit.usage, audit.duration_ms,
-                       call.langgraph_tool_call_id, call.tool_name, call.status, call.tool_output
+                       audit.operation_id, audit.extra_metadata->>'tool_name' AS tool_name
                 FROM messages audit
-                JOIN tool_calls call
-                  ON call.id = (audit.extra_metadata->>'compatibility_tool_call_id')::integer
                 WHERE audit.run_id = $1 AND audit.message_type = 'tool_audit'
                 """,
                 run_id,
             )
             assert tool_row and tool_row["execution_status"] == "completed"
             assert tool_row["usage"] is None and tool_row["duration_ms"] >= 0
-            assert (tool_row["langgraph_tool_call_id"], tool_row["tool_name"], tool_row["status"]) == (
+            assert (tool_row["operation_id"], tool_row["tool_name"], tool_row["execution_status"]) == (
                 TOOL_CALL_ID,
                 TOOL,
-                "success",
+                "completed",
             )
-            assert TOOL_RESULT in tool_row["content"] and tool_row["tool_output"]
+            assert TOOL_RESULT in tool_row["content"]
+            assert await conn.fetchval("SELECT to_regclass('tool_calls')") is None
 
             manifest = binding["manifest"]
             if isinstance(manifest, str):
                 manifest = json.loads(manifest)
             assert manifest["agent"] == {"slug": slug, "backend_id": "ChatbotAgent"}
             assert manifest["model"] == {"spec": MODEL}
-            assert [skill["slug"] for skill in manifest["resources"]["skills"]] == ["image-gen"]
+            assert [skill["slug"] for skill in manifest["resources"]["skills"]] == ["image-gen", "chat-widgets"]
             assert (
                 binding["manifest_fingerprint"]
                 == hashlib.sha256(json.dumps(manifest, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
@@ -366,7 +365,7 @@ async def test_scheduled_task_run_now_reaches_exact_thread_and_turn(e2e_client, 
 
 
 async def test_tool_error_is_persisted_by_tool_message(e2e_client, e2e_headers):
-    """ToolNode 受控错误进入 ToolMessage 审计和原始 ToolCall 错误。"""
+    """ToolNode 受控错误由唯一工具执行消息记录。"""
     me = await e2e_client.get("/api/auth/me", headers=e2e_headers)
     assert me.status_code == 200, me.text
     provider_created = await _provider(e2e_client, e2e_headers)
@@ -401,10 +400,8 @@ async def test_tool_error_is_persisted_by_tool_message(e2e_client, e2e_headers):
             row = await conn.fetchrow(
                 """
                 SELECT audit.execution_status, audit.content, audit.duration_ms,
-                       audit.turn_id, audit.run_id, call.status AS call_status, call.error_message
+                       audit.turn_id, audit.run_id, audit.extra_metadata->>'error_message' AS error_message
                 FROM messages audit
-                JOIN tool_calls call
-                  ON call.id = (audit.extra_metadata->>'compatibility_tool_call_id')::integer
                 WHERE audit.run_id = $1 AND audit.message_type = 'tool_audit'
                 """,
                 run_id,
@@ -412,7 +409,7 @@ async def test_tool_error_is_persisted_by_tool_message(e2e_client, e2e_headers):
             assert row and row["execution_status"] == "failed"
             assert row["run_id"] == run_id and row["turn_id"] == turn_id
             assert row["duration_ms"] is not None and row["duration_ms"] >= 0
-            assert row["content"] and row["call_status"] == "error" and row["error_message"]
+            assert row["content"] and row["error_message"]
         finally:
             await conn.close()
     finally:

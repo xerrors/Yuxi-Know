@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from test.support.sqlite import create_utc_sqlite_engine
 from yuxi.infrastructure.postgres.base import Base
 from yuxi.modules.agents.models.inputs import AgentInput
-from yuxi.modules.agents.models.messages import Message, ToolCall
+from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.models.turns import AgentTurn
@@ -193,13 +193,17 @@ async def test_history_exposes_tool_result_without_internal_model_metadata(sessi
     session.add(answer)
     await session.flush()
     session.add(
-        ToolCall(
-            message_id=answer.id,
-            langgraph_tool_call_id="call-a",
-            tool_name="search",
-            tool_input={"q": "Yuxi"},
-            tool_output="safe result",
-            status="success",
+        Message(
+            session_record_id=answer.session_record_id,
+            turn_id=answer.turn_id,
+            run_id=answer.run_id,
+            role="tool",
+            message_type="tool_audit",
+            operation_id="call-a",
+            content="safe result",
+            execution_status="completed",
+            started_at=answer.created_at,
+            extra_metadata={"source_model_message_id": answer.id, "tool_name": "search", "input": {"q": "Yuxi"}},
         )
     )
     await _register_visible(session)

@@ -1,5 +1,4 @@
 import asyncio
-import os
 import time
 from abc import ABC, abstractmethod
 
@@ -19,35 +18,27 @@ EMBEDDING_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 class BaseEmbeddingModel(ABC):
     def __init__(
         self,
-        model=None,
-        name=None,
+        *,
+        model,
         dimension=None,
-        url=None,
         base_url=None,
         api_key=None,
-        model_id=None,
         batch_size=40,
     ):
-        base_url = base_url or url
-        self.model = model or name or model_id
+        """接收供应商已解析的执行配置。"""
+        self.model = model
         self.dimension = dimension
         self.base_url = get_docker_safe_url(base_url)
-        self.api_key = os.getenv(api_key, api_key)
+        self.api_key = api_key
         self.batch_size = int(batch_size or 40)
 
     @abstractmethod
     def encode(self, message: list[str] | str) -> list[list[float]]:
         raise NotImplementedError("Subclasses must implement this method")
 
-    def encode_queries(self, queries: list[str] | str) -> list[list[float]]:
-        return self.encode(queries)
-
     @abstractmethod
     async def aencode(self, message: list[str] | str) -> list[list[float]]:
         raise NotImplementedError("Subclasses must implement this method")
-
-    async def aencode_queries(self, queries: list[str] | str) -> list[list[float]]:
-        return await self.aencode(queries)
 
     def batch_encode(self, messages: list[str], batch_size: int | None = None) -> list[list[float]]:
         batch_size = batch_size or self.batch_size
@@ -217,25 +208,6 @@ class OtherEmbedding(BaseEmbeddingModel):
         for idx, text in enumerate(messages):
             if text and len(text) > threshold:
                 logger.warning(f"超长 embedding 输入 index={idx}, len={len(text)}")
-
-
-def get_embedding_model_info_by_id(model_id: str) -> dict:
-    info = model_cache.get_model_info(model_id)
-    if not info:
-        raise ValueError(f"Unknown embedding model spec: {model_id}")
-    if info.model_type != "embedding":
-        raise ValueError(f"Model {model_id} is not an embedding model (type={info.model_type})")
-
-    logger.info(f"Loaded embedding model info for {model_id}")
-    return {
-        "name": info.model_id,
-        "display_name": info.display_name,
-        "dimension": info.dimension,
-        "base_url": info.base_url,
-        "api_key": info.api_key,
-        "model_id": info.spec,
-        "batch_size": info.batch_size,
-    }
 
 
 def select_embedding_model(model_id: str):

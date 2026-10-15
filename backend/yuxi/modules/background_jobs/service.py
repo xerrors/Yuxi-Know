@@ -4,45 +4,11 @@ import hashlib
 import json
 import math
 import uuid
-from dataclasses import dataclass, field
 from typing import Any
 
 from yuxi.modules.background_jobs.repository import BackgroundJobRepository
-from yuxi.shared.datetime import utc_isoformat, utc_now
-
-
-@dataclass
-class BackgroundJob:
-    """可持久查询的任务登记快照。"""
-
-    id: str
-    name: str
-    type: str
-    status: str = "pending"
-    progress: float = 0.0
-    message: str = ""
-    created_at: str = field(default_factory=utc_isoformat)
-    updated_at: str = field(default_factory=utc_isoformat)
-    started_at: str | None = None
-    completed_at: str | None = None
-    payload: dict[str, Any] = field(default_factory=dict)
-    result: Any | None = None
-    error: str | None = None
-    cancel_requested: bool = False
-    handler_version: int = 1
-    dedupe_key: str | None = None
-    attempt_count: int = 0
-    worker_id: str | None = None
-    heartbeat_at: str | None = None
-    lease_expires_at: str | None = None
-    timeout_seconds: float = 21600.0
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> BackgroundJob:
-        fields = cls.__dataclass_fields__
-        values = {key: value for key, value in data.items() if key in fields}
-        values["cancel_requested"] = bool(values.get("cancel_requested", False))
-        return cls(**values)
+from yuxi.shared.datetime import utc_now
+from yuxi.modules.background_jobs.models import BackgroundJobRecord
 
 
 class JobTracker:
@@ -60,7 +26,7 @@ class JobTracker:
         payload_match: dict[str, Any] | None = None,
         handler_version: int = 1,
         timeout_seconds: float = 21600.0,
-    ) -> tuple[BackgroundJob, bool]:
+    ) -> tuple[BackgroundJobRecord, bool]:
         """登记持久记录；执行方自行决定何时投递。"""
         record, created = await self._repo.create(
             uuid.uuid4().hex,
@@ -73,7 +39,7 @@ class JobTracker:
                 timeout_seconds=timeout_seconds,
             ),
         )
-        return BackgroundJob.from_dict(record.to_dict()), created
+        return record, created
 
     async def register_in_session(
         self,
@@ -85,7 +51,7 @@ class JobTracker:
         payload_match: dict[str, Any] | None = None,
         handler_version: int = 1,
         timeout_seconds: float = 21600.0,
-    ) -> tuple[BackgroundJob, bool]:
+    ) -> tuple[BackgroundJobRecord, bool]:
         """在业务方拥有的事务中登记，事务提交由业务方负责。"""
         record, created = await self._repo.create_or_get_in_session(
             session,
@@ -99,7 +65,7 @@ class JobTracker:
                 timeout_seconds=timeout_seconds,
             ),
         )
-        return BackgroundJob.from_dict(record.to_dict()), created
+        return record, created
 
     async def report(
         self,
@@ -125,13 +91,13 @@ class JobTracker:
 
     async def find_job_by_payload(
         self, *, job_type: str, payload_match: dict[str, Any], statuses: set[str] | None = None
-    ) -> BackgroundJob | None:
+    ) -> BackgroundJobRecord | None:
         record = await self._repo.find_latest_by_payload(
             job_type=job_type,
             payload_match=payload_match,
             statuses=statuses,
         )
-        return BackgroundJob.from_dict(record.to_dict()) if record else None
+        return record
 
     async def list_jobs(self, status: str | None = None, limit: int = 100) -> dict[str, Any]:
         records = await self._repo.list(status=status, limit=limit)
@@ -144,10 +110,10 @@ class JobTracker:
         record = await self._repo.get_by_id(job_id)
         return record.to_observation_dict() if record else None
 
-    async def cancel_job(self, job_id: str) -> BackgroundJob | None:
+    async def cancel_job(self, job_id: str) -> BackgroundJobRecord | None:
         """只登记取消意图，执行方确认停止后再上报终态。"""
         record = await self._repo.request_cancel(job_id)
-        return BackgroundJob.from_dict(record.to_dict()) if record else None
+        return record
 
     async def delete_job(self, job_id: str) -> bool:
         return await self._repo.delete_terminal(job_id)

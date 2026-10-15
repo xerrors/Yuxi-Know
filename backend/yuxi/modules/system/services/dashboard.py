@@ -7,6 +7,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from yuxi.modules.agents.repositories.messages import MessageRepository
+from yuxi.modules.agents.services.message_audits import serialize_tool_audit
 from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.system.repositories.dashboard import DashboardRepository
 from yuxi.shared.datetime import format_utc_datetime
@@ -86,6 +87,11 @@ class DashboardService:
             return None
 
         messages = await MessageRepository(self.db).get_messages(agent_session.id)
+        executions = await MessageRepository(self.db).list_tool_executions([message.id for message in messages])
+        tools_by_source = {}
+        for execution in executions:
+            source_id = execution.extra_metadata["source_model_message_id"]
+            tools_by_source.setdefault(source_id, []).append(serialize_tool_audit(execution))
         audit_metadata = await self.repo.get_session_audit_metadata(agent_session)
         message_list = []
         for message in messages:
@@ -96,18 +102,7 @@ class DashboardService:
                 "message_type": message.message_type,
                 "created_at": format_utc_datetime(message.created_at) or "",
             }
-            if message.tool_calls:
-                message_data["tool_calls"] = [
-                    {
-                        "id": tool_call.id,
-                        "tool_name": tool_call.tool_name,
-                        "tool_input": tool_call.tool_input,
-                        "tool_output": tool_call.tool_output,
-                        "status": tool_call.status,
-                        "error_message": tool_call.error_message,
-                    }
-                    for tool_call in message.tool_calls
-                ]
+            message_data["tool_executions"] = tools_by_source.get(message.id, [])
             message_list.append(message_data)
 
         return {

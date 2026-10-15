@@ -13,7 +13,6 @@ import pytest
 import pytest_asyncio
 from langchain_core.messages import ToolMessage
 from langgraph.types import Command
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from agent_run_test_helpers import cleanup_agent_run_threads, create_agent_run
@@ -28,7 +27,7 @@ from yuxi.modules.agents.services.openai_events import OpenAIEventAdapter
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.modules.agents.models.sessions import Session
-from yuxi.modules.agents.models.messages import Message, ToolCall
+from yuxi.modules.agents.models.messages import Message
 from yuxi.shared.datetime import utc_now
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
@@ -243,8 +242,8 @@ async def test_model_audit_is_idempotent_and_keeps_turn_run_owner(lease_database
         await cleanup_agent_run_threads(sessions, [thread_id])
 
 
-async def test_tool_audit_projects_only_declared_model_call(lease_database):
-    """工具审计须由同 Run 模型调用声明，并同步唯一兼容 ToolCall。"""
+async def test_tool_execution_is_one_message_bound_to_model_declaration(lease_database):
+    """工具执行须由同 Run 模型声明，并仅拥有一条持久消息。"""
     sessions = lease_database
     run_id, thread_id, _ = await _create_run(sessions)
     now = utc_now()
@@ -322,17 +321,10 @@ async def test_tool_audit_projects_only_declared_model_call(lease_database):
             await db.commit()
         async with sessions() as db:
             [audit] = await ToolMessageAuditRepository(db).list_for_run(run_id)
-            calls = list(
-                (
-                    await db.scalars(
-                        select(ToolCall)
-                        .join(Message, Message.id == ToolCall.message_id)
-                        .where(ToolCall.langgraph_tool_call_id == "call-1", Message.run_id == run_id)
-                    )
-                ).all()
-            )
+            assert "compatibility_tool_call_id" not in audit.extra_metadata
             assert audit.turn_id == (await db.get(AgentRun, run_id)).turn_id
-            assert len(calls) == 1 and calls[0].status == "success" and calls[0].tool_output == "done"
+            assert audit.execution_status == "completed" and audit.content == "done"
+            assert audit.extra_metadata["input"] == {"x": 1}
     finally:
         await cleanup_agent_run_threads(sessions, [thread_id])
 
@@ -416,8 +408,9 @@ async def test_message_recorder_commits_facts_before_public_projection(lease_dat
             assert tool.extra_metadata["source_model_message_id"] == model.id
             assert tool.extra_metadata["public_items"]["output"]["status"] == "in_progress"
             assert tool.duration_ms is not None and tool.duration_ms >= 0
-            calls = list((await db.scalars(select(ToolCall).where(ToolCall.message_id == model.id))).all())
-            assert len(calls) == 1 and calls[0].status == "success" and calls[0].tool_output == "result"
+            assert "compatibility_tool_call_id" not in tool.extra_metadata
+            assert tool.operation_id == "call"
+
 
         wrong_owner = RunMessageRecorder(run_id=run_id, thread_id=thread_id, worker_id="other-owner")
         with pytest.raises(ValueError):

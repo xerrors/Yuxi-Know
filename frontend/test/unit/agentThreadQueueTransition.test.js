@@ -6,21 +6,20 @@ import { useAgentThreadState } from '../../src/modules/session/model/useAgentThr
 test('重置当前 Turn 投影时保留已排队 Input 的监视', () => {
   const chatState = { threadStates: {} }
   const { getThreadState, resetOngoingRunGroup } = useAgentThreadState({
-    chatState,
-    getCurrentThreadId: () => 'thread-1'
+    chatState
   })
   const state = getThreadState('thread-1')
   const controller = new AbortController()
   let runAborted = false
   state.runStreamAbortController = { abort: () => (runAborted = true) }
-  state.inputMonitors['input-2'] = { controller, timer: null }
+  state.inputQueueMonitor = { controller, timer: null, inputIds: new Set(['input-2']) }
   state.ongoingRunGroup.items['input-1'] = { type: 'message', content: [{ type: 'output_text', text: '第一轮回复' }] }
 
   resetOngoingRunGroup('thread-1', { preserveInputMonitors: true })
 
   assert.equal(runAborted, true)
   assert.equal(controller.signal.aborted, false)
-  assert.deepEqual(Object.keys(state.inputMonitors), ['input-2'])
+  assert.deepEqual([...state.inputQueueMonitor.inputIds], ['input-2'])
   assert.deepEqual(state.ongoingRunGroup.items, {})
 })
 
@@ -28,13 +27,13 @@ for (const action of ['reset', 'cleanup']) {
   test(`${action} 停止 Input 监视与重连计时器`, async () => {
     const chatState = { threadStates: {} }
     const { getThreadState, resetOngoingRunGroup, cleanupThreadState } = useAgentThreadState({
-      chatState,
-      getCurrentThreadId: () => 'thread-1'
+      chatState
     })
     const state = getThreadState('thread-1')
     const controller = new AbortController()
     let retried = false
-    state.inputMonitors['input-1'] = {
+    state.inputQueueMonitor = {
+      inputIds: new Set(['input-1']),
       controller,
       timer: setTimeout(() => { retried = true }, 20)
     }
@@ -45,6 +44,6 @@ for (const action of ['reset', 'cleanup']) {
     await new Promise((resolve) => setTimeout(resolve, 40))
     assert.equal(controller.signal.aborted, true)
     assert.equal(retried, false)
-    assert.deepEqual(state.inputMonitors, {})
+    assert.equal(state.inputQueueMonitor, null)
   })
 }

@@ -497,9 +497,11 @@ async def test_worker_rejects_third_cooperation_depth_and_commits_only_allowed_m
         statuses = await conn.fetch("SELECT status FROM agent_turns WHERE thread_id=ANY($1::text[])", [row["thread_id"] for row in rows])
         assert {row["status"] for row in statuses} == {"completed"}
         denied = await conn.fetchval(
-            "SELECT count(*) FROM tool_calls t JOIN messages m ON m.id=t.message_id "
-            "JOIN sessions s ON s.id=m.session_record_id WHERE s.tree_root_thread_id=$1 AND t.tool_name='create_session' "
-            "AND t.status='error' AND coalesce(t.error_message,t.tool_output,'') LIKE '%协作深度 3%'",
+            "SELECT count(*) FROM messages m "
+            "JOIN sessions s ON s.id=m.session_record_id WHERE s.tree_root_thread_id=$1 "
+            "AND m.message_type='tool_audit' AND m.extra_metadata->>'tool_name'='create_session' "
+            "AND m.execution_status='failed' "
+            "AND coalesce(m.extra_metadata->>'error_message',m.content,'') LIKE '%协作深度 3%'",
             thread_id,
         )
         assert denied == 1

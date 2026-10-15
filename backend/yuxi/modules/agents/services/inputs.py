@@ -276,8 +276,6 @@ async def get_input_snapshot(*, db: AsyncSession, scope: ActorScope, thread_id: 
     attachments = await AttachmentRepository(db).for_messages([message.id for message in messages])
     input_attachments = await AttachmentRepository(db).list_for_input(input_id)
     preparation = await AttachmentRepository(db).statuses_for_inputs([input_id])
-    for message in messages:
-        await db.refresh(message, attribute_names=["tool_calls"])
     return {
         "input_id": input_item.id,
         "thread_id": thread_id,

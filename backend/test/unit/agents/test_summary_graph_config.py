@@ -116,7 +116,7 @@ async def test_graph_passes_session_session_to_model(monkeypatch, graph_module, 
     monkeypatch.setattr(graph_module, "create_agent_composite_backend", lambda _context: object())
     monkeypatch.setattr(graph_module, "build_prompt_with_context", lambda _context: "test")
     monkeypatch.setattr(graph_module, "_build_middlewares", AsyncMock(return_value=[]))
-    monkeypatch.setattr(agent_class, "_get_checkpointer", AsyncMock(return_value=None))
+    monkeypatch.setattr(graph_module, "get_langgraph_checkpointer", lambda _manager: None)
     captured = {}
 
     def load_model(fully_specified_name, *, session_id, uid, max_retries):
@@ -158,7 +158,7 @@ async def test_checkpoint_cleanup_preserves_original_tasks_and_state(monkeypatch
     context._runtime_prepared = True
     context.tool_approval_mode = "default"
     saver = InMemorySaver()
-    monkeypatch.setattr(agent_class, "_get_checkpointer", AsyncMock(return_value=saver))
+    monkeypatch.setattr(graph_module, "get_langgraph_checkpointer", lambda _manager: saver)
     monkeypatch.setattr(graph_module, "sync_agent_context_skills", AsyncMock())
     monkeypatch.setattr(graph_module, "resolve_configured_runtime_tools", AsyncMock(return_value=[]))
     monkeypatch.setattr(graph_module, "create_agent_composite_backend", lambda _context: None)

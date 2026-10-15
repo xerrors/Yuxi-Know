@@ -107,22 +107,3 @@ class Message(Base):
 
     # Relationships
     agent_session = relationship("Session", back_populates="messages")
-    tool_calls = relationship("ToolCall", back_populates="message", cascade="all, delete-orphan")
-
-class ToolCall(Base):
-    """ToolCall table - 工具调用表"""
-
-    __tablename__ = "tool_calls"
-
-    id = Column(Integer, primary_key=True, autoincrement=True, comment="Primary key")
-    message_id = Column(Integer, ForeignKey("messages.id"), nullable=False, index=True, comment="Message ID")
-    langgraph_tool_call_id = Column(String(100), nullable=True, index=True, comment="LangGraph tool_call_id")
-    tool_name = Column(String(100), nullable=False, comment="Tool name")
-    tool_input = Column(JSON, nullable=True, comment="Tool input parameters")
-    tool_output = Column(Text, nullable=True, comment="Tool execution result")
-    status = Column(String(20), default="pending", comment="Status: pending/success/error")
-    error_message = Column(Text, nullable=True, comment="Error message if failed")
-    created_at = Column(DateTime(timezone=True), default=utc_now, comment="Creation time")
-
-    # Relationships
-    message = relationship("Message", back_populates="tool_calls")

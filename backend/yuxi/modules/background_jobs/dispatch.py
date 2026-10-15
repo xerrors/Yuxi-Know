@@ -7,7 +7,8 @@ from typing import Any
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.redis.queue import get_arq_pool
 from yuxi.modules.background_jobs.registry import get_job_definition
-from yuxi.modules.background_jobs.service import BackgroundJob, job_tracker
+from yuxi.modules.background_jobs.models import BackgroundJobRecord
+from yuxi.modules.background_jobs.service import job_tracker
 
 BACKGROUND_JOB_DEFAULT_TIMEOUT_SECONDS = float(os.getenv("BACKGROUND_JOB_DEFAULT_TIMEOUT_SECONDS", 6 * 60 * 60))
 if not math.isfinite(BACKGROUND_JOB_DEFAULT_TIMEOUT_SECONDS) or BACKGROUND_JOB_DEFAULT_TIMEOUT_SECONDS <= 0:
@@ -21,7 +22,7 @@ async def submit_job(
     payload: dict[str, Any] | None = None,
     payload_match: dict[str, Any] | None = None,
     timeout_seconds: float | None = None,
-) -> tuple[BackgroundJob, bool]:
+) -> tuple[BackgroundJobRecord, bool]:
     """登记 worker 动作，并在数据库提交后投递新建任务。"""
     definition = get_job_definition(job_type)
     job, created = await job_tracker.register(
@@ -45,7 +46,7 @@ async def register_job_in_session(
     payload: dict[str, Any],
     payload_match: dict[str, Any] | None = None,
     timeout_seconds: float | None = None,
-) -> tuple[BackgroundJob, bool]:
+) -> tuple[BackgroundJobRecord, bool]:
     """在领域事务中登记 worker 动作；调用方提交后显式投递。"""
     definition = get_job_definition(job_type)
     return await job_tracker.register_in_session(

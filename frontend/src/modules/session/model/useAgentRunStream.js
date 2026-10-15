@@ -1,4 +1,3 @@
-import { unref } from 'vue'
 import { agentApi } from '@/apis'
 import { handleChatError } from '@/shared/lib/errorHandler'
 import { getReconnectDelay } from './reconnectBackoff.js'
@@ -68,7 +67,6 @@ export const processRunSseResponse = async (response, onEvent) => {
 export function useAgentRunStream({
   getThreadState,
   isThreadActive = () => true,
-  currentAgentId,
   handlePublicEvent,
   fetchThreadMessages,
   fetchAgentState,
@@ -115,7 +113,7 @@ export function useAgentRunStream({
     void (async () => {
       let refreshed = false
       try {
-        await fetchThreadMessages({ agentId: unref(currentAgentId), threadId, turnId, fresh: true })
+        await fetchThreadMessages({ threadId, turnId, fresh: true })
         refreshed = true
       } catch (error) {
         console.warn('Failed to refresh terminal history; retaining streamed output:', error)
@@ -128,7 +126,7 @@ export function useAgentRunStream({
         return
       if (status !== 'requires_action' && refreshed)
         resetOngoingRunGroup(threadId, { preserveInputMonitors: true })
-      void fetchAgentState(unref(currentAgentId), threadId)
+      void fetchAgentState(threadId)
       if (status === 'requires_action') onInterruptDetected?.({ threadId, runId })
       else onTerminalDetected?.({ threadId, runId, touchedThreadIds: [...touchedThreadIds] })
       if (status === 'completed') onScrollToBottom?.(threadId)
@@ -206,7 +204,7 @@ export function useAgentRunStream({
         if (data.session_id !== threadId) return
         if (data.type === 'yuxi.session.resync') {
           // 暂停消费，让 ReadableStream 缓冲新事件，快照应用后再继续合并。
-          await fetchThreadMessages({ agentId: unref(currentAgentId), threadId, turnId, fresh: true })
+          await fetchThreadMessages({ threadId, turnId, fresh: true })
           sawTurnEnd = await reconcileTurn(threadId, turnId, ts.activeRunId)
           if (eventId) ts.threadCursor = String(eventId)
           return

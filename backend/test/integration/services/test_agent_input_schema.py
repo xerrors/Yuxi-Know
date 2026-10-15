@@ -454,38 +454,3 @@ async def test_parent_and_child_usage_stays_in_its_own_turn() -> None:
             assert [(message.operation_id, message.usage["total_tokens"]) for message in other_audits] == [("other-final-model", 1800)]
     finally:
         await _drop_schema(schema, admin_engine, engine)
-
-
-async def test_reused_tool_call_id_never_reuses_another_message_declaration():
-    """供应商重复 call_id 时，每条声明仍拥有独立 ToolCall 投影。"""
-    from yuxi.modules.agents.repositories.messages import MessageRepository
-
-    schema, admin_engine, engine = await _create_schema()
-    try:
-        sessions = async_sessionmaker(engine, expire_on_commit=False)
-        async with sessions() as db:
-            agent_session = await db.scalar(select(Session).where(Session.thread_id == "input-thread"))
-            messages = [Message(session_record_id=agent_session.id, role="assistant", content="", extra_metadata={}) for _ in range(2)]
-            db.add_all(messages)
-            await db.flush()
-            repository = MessageRepository(db)
-            first, second = [
-                await repository.add_tool_call(
-                    message_id=message.id,
-                    tool_name="execute",
-                    tool_input={"command": str(message.id)},
-                    langgraph_tool_call_id="provider-reused-id",
-                )
-                for message in messages
-            ]
-            assert first.id != second.id and second.message_id == messages[1].id
-            repeated = await repository.add_tool_call(
-                message_id=messages[0].id,
-                tool_name="execute",
-                tool_input={"command": str(messages[0].id)},
-                langgraph_tool_call_id="provider-reused-id",
-            )
-            assert repeated.id == first.id
-            await db.commit()
-    finally:
-        await _drop_schema(schema, admin_engine, engine)

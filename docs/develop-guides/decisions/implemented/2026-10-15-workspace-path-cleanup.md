@@ -14,7 +14,7 @@ Cube 用户环境仍以历史根挂载工作区，再把普通用户的 workspac
 
 Workspace runtime 路径固定为 `/home/user/workspace`，共享 Skill 投影固定为只读 `/home/user/skills`，个人 Skill 位于工作区 `agents/skills`。provider 直接挂载固定根；模板、文件路由、附件与产物、模型提示和客户端使用同一契约，删除前缀环境配置与路径别名。旧路径不转换、不回退。宿主文件布局保持由 Workspace Owner 管理。
 
-用户 VM 只按 uid 标识，文件工具不再接收沙盒 Thread 身份或回退到 checkpoint Thread。协作树仍拥有执行名额和停止状态，删除其已无消费者的空闲及释放字段，business Schema 提升为版本 2，knowledge 保持版本 1，API、worker 和初始化器在产生业务写入前明确拒绝旧版本；不回填或自动迁移。产物 state 与 wire 只传字符串路径，前端明确构建展示模型。删除 Docker 沙盒采样与废弃部署文档；ToolCall 双投影保留。
+用户 VM 只按 uid 标识，文件工具不再接收沙盒 Thread 身份或回退到 checkpoint Thread。协作树仍拥有执行名额和停止状态，删除其已无消费者的空闲及释放字段，business Schema 提升为版本 2，knowledge 保持版本 1，API、worker 和初始化器在产生业务写入前明确拒绝旧版本；不回填或自动迁移。产物 state 与 wire 只传字符串路径，前端明确构建展示模型。删除 Docker 沙盒采样与废弃部署文档；工具双投影的后续决定见[工具执行收敛](./2026-10-15-tool-execution-convergence.md)。
 
 本记录取代[协作维护](./2026-10-06-cooperation-runtime-lifecycle.md)和[任务观察](./2026-10-07-cooperation-task-observation.md)中的线程沙盒身份、空闲回收与销毁重建部分；原记录的 Session 锁序、任务观察与成员可见性决定继续适用。
 

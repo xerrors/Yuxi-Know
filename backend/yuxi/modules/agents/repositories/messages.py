@@ -1,21 +1,21 @@
-"""Message 与兼容 ToolCall 的持久写入、可见性和读取。"""
+"""正式消息的持久写入、可见性和读取。"""
 
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import aliased
 
 from yuxi.infrastructure.observability.logging import logger
-from yuxi.modules.agents.models.messages import AUDIT_MESSAGE_TYPES, MODEL_AUDIT_MESSAGE_TYPE, TOOL_AUDIT_MESSAGE_TYPE, Message, ToolCall
+from yuxi.modules.agents.models.messages import AUDIT_MESSAGE_TYPES, MODEL_AUDIT_MESSAGE_TYPE, TOOL_AUDIT_MESSAGE_TYPE, Message
 from yuxi.modules.agents.models.runs import AGENT_RUN_TERMINAL_STATUSES, AgentRun
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.shared.datetime import utc_now
 
 
 def state_proven_model_tool_call_condition():
-    """只允许终态 State 已证明的 Model 兼容行进入普通读模型。"""
+    """只允许终态 State 已证明的模型调用声明进入工具历史。"""
     return and_(
         Message.message_type == MODEL_AUDIT_MESSAGE_TYPE,
-        Message.tool_calls.any(),
+        func.json_array_length(Message.extra_metadata["tool_calls"]) > 0,
         Message.extra_metadata["state_reconciled"].as_boolean().is_(True),
         Message.run_id.in_(select(AgentRun.id).where(AgentRun.status.in_(AGENT_RUN_TERMINAL_STATUSES))),
     )
@@ -37,7 +37,7 @@ def message_search_conditions(query: str):
 
 
 class MessageRepository:
-    """在调用方事务内维护正式消息与兼容工具记录。"""
+    """在调用方事务内维护正式消息。"""
 
     def __init__(self, db_session: AsyncSession):
         """绑定调用者的持久事务。"""
@@ -109,49 +109,6 @@ class MessageRepository:
             delivery_status=delivery_status,
         )
 
-    async def add_tool_call(
-        self,
-        message_id: int,
-        tool_name: str,
-        tool_input: dict | None = None,
-        tool_output: str | None = None,
-        status: str = "pending",
-        error_message: str | None = None,
-        langgraph_tool_call_id: str | None = None,
-    ) -> ToolCall:
-        """在调用方事务写入相应消息的兼容工具记录。"""
-        if langgraph_tool_call_id:
-            result = await self.db.execute(
-                select(ToolCall)
-                .where(ToolCall.message_id == message_id, ToolCall.langgraph_tool_call_id == langgraph_tool_call_id)
-                .order_by(ToolCall.created_at.desc())
-                .limit(1)
-            )
-            existing = result.scalar_one_or_none()
-            if existing:
-                logger.debug(
-                    "Tool call already exists for langgraph_tool_call_id=%s, skip insert",
-                    langgraph_tool_call_id,
-                )
-                return existing
-
-        tool_call = ToolCall(
-            message_id=message_id,
-            tool_name=tool_name,
-            tool_input=tool_input or {},
-            tool_output=tool_output,
-            status=status,
-            error_message=error_message,
-            langgraph_tool_call_id=langgraph_tool_call_id,
-        )
-
-        self.db.add(tool_call)
-        await self.db.flush()
-        await self.db.refresh(tool_call)
-
-        logger.debug(f"Added tool call {tool_name} to message {message_id}")
-        return tool_call
-
     async def publish_assistant_output(self, message: Message) -> None:
         """把最终 AIMessage 发布到普通历史并刷新 Session 读模型。"""
         if message.role != "assistant":
@@ -165,12 +122,9 @@ class MessageRepository:
         await self.db.flush()
 
     async def get_messages(self, session_record_id: int, limit: int | None = None, offset: int = 0) -> list[Message]:
-        """读取消息与兼容工具关联，按可见性排除未证明的审计。"""
+        """按可见性读取正式消息与已证明的模型声明。"""
         query = (
             select(Message)
-            .options(
-                selectinload(Message.tool_calls),
-            )
             .where(
                 Message.session_record_id == session_record_id,
                 or_(
@@ -188,22 +142,30 @@ class MessageRepository:
         result = await self.db.execute(query)
         return list(result.scalars().unique().all())
 
-    async def get_message_source_ids_by_thread_id(self, thread_id: str) -> set[str]:
-        """读取全部持久 Message 来源 ID，包括普通历史隐藏的审计行。"""
-        agent_session = await self.db.scalar(select(Session).where(Session.thread_id == thread_id))
-        if agent_session is None:
-            return set()
-        result = await self.db.execute(select(Message.extra_metadata).where(Message.session_record_id == agent_session.id))
-        return {
-            str(metadata["id"]) for metadata in result.scalars().all() if isinstance(metadata, dict) and isinstance(metadata.get("id"), str)
-        }
+    async def list_tool_executions(self, source_message_ids: list[int], *, limit: int | None = None) -> list[Message]:
+        """按已授权的模型消息读取同会话、同 Turn 的唯一工具执行事实。"""
+        source = aliased(Message)
+        statement = (
+            select(Message)
+            .join(source, Message.extra_metadata["source_model_message_id"].as_integer() == source.id)
+            .where(
+                source.id.in_(source_message_ids),
+                Message.session_record_id == source.session_record_id,
+                Message.turn_id.is_not_distinct_from(source.turn_id),
+                Message.role == "tool",
+                Message.message_type == TOOL_AUDIT_MESSAGE_TYPE,
+            )
+            .order_by(Message.created_at, Message.id)
+        )
+        if limit is not None:
+            statement = statement.limit(limit)
+        return list((await self.db.scalars(statement)).all())
 
     async def list_message_audits(self, session_record_id: int, *, limit: int) -> tuple[list[Message], bool]:
         """按持久顺序读取有界调试消息，保留未关联 Run 的输入。"""
         result = await self.db.execute(
             select(Message)
             .outerjoin(AgentRun, AgentRun.id == Message.run_id)
-            .options(selectinload(Message.tool_calls))
             .where(Message.session_record_id == session_record_id)
             .order_by(
                 func.coalesce(AgentRun.created_at, Message.created_at).desc(),

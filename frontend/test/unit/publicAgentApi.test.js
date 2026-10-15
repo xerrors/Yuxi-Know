@@ -134,6 +134,17 @@ test('产品创建、消息、等待恢复和队列控制仅使用 Public Thread
     })
     assert.equal(calls.at(-1).options.headers['Idempotency-Key'], 'promote-key')
 
+    const controller = new AbortController()
+    globalThis.fetch = async (_url, options) => {
+      if (!options.signal) return new Response('{}', { status: 200 })
+      return new Promise((_resolve, reject) => {
+        options.signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true })
+      })
+    }
+    const pendingInput = agentApi.getThreadInput('thread-1', 'pending', { signal: controller.signal })
+    controller.abort()
+    await assert.rejects(pendingInput, { name: 'AbortError' })
+
   } finally {
     await server.close()
     delete globalThis.fetch

@@ -25,7 +25,7 @@ worker 在取得 lease 并校验输入后，从 Input 冻结的可配置 Context
 
 API/worker 不信任浏览器内存中的完整配置。请求可以提供受限的单次覆盖值，例如模型或工具审批模式；配置快照也不能替代实时授权。
 
-状态查询在 Session 与 Workdir 授权后直接读取 PostgreSQL checkpointer 的根 namespace，返回最近完整快照及同批 pending writes 中的中断，仅在最新 Run 为 interrupted 时展示审批。读取不创建 Context 或模型；业务 pending writes 的合并仍由执行图拥有。HTTP 状态查询返回待办、产物、协作树和用量；Turn SSE 提供执行增量与状态，前端通过 `/api/v1/agents/sessions/{thread_id}/cooperation` 轮询完整协作摘要；该入口只读取持久关系，不读取 checkpoint 或结果正文。批量读取全部成员、最新 Turn、执行状态和待处理输入。同一 Thread 在页面与侧栏共享 session runtime 的历史、运行状态、流订阅和恢复请求；最后一个观察视图卸载才释放订阅，视图可见性与浏览器标签可见性共同约束已读和滚动。终态与 resync 请求读取新历史，不复用较早发出的快照。文件由 Workdir/Sandbox 边界持久化，前端文件面板通过文件系统接口读取当前 Workdir。
+状态查询在 Session 与 Workdir 授权后直接读取 PostgreSQL checkpointer 的根 namespace，返回最近完整快照及同批 pending writes 中的中断，仅在最新 Run 为 interrupted 时展示审批。读取不创建 Context 或模型；业务 pending writes 的合并仍由执行图拥有。HTTP 状态查询返回待办、产物、协作树和用量；Turn SSE 提供执行增量与状态，前端通过 `/api/v1/agents/sessions/{thread_id}/cooperation` 轮询完整协作摘要；该入口只读取持久关系，不读取 checkpoint 或结果正文。批量读取全部成员、最新 Turn、执行状态和待处理输入。同一 Thread 在页面与侧栏共享 session runtime 的历史、运行状态、流订阅和恢复请求。Input 队列由一个 Thread 轮询器持有待观察 ID 集合、计时器和请求取消信号；状态、历史和审批恢复只使用 Thread 身份读取；最后一个观察视图卸载才释放订阅，视图可见性与浏览器标签可见性共同约束已读和滚动。终态与 resync 请求读取新历史，不复用较早发出的快照。文件由 Workdir/Sandbox 边界持久化，前端文件面板通过文件系统接口读取当前 Workdir。
 
 普通来源调用 `modules/agents/services/inputs.py` 接收用例：作用域校验后保存 Input 原始消息、提交级文件引用与幂等 Receipt，附件只绑定 Input；附件准备就绪后，调度器在同一事务消费优先队头并创建 Turn/Run 与正式 Message，每个 Input 的附件挂到自己的最后一条 Message，提交后投递 Run。Input 永久保存来源、优先级、正文、原始文件 ID 和接收时冻结的完整可配置 Context；Message 拥有执行投影及其时间，保留原 Input、消息位置和接收时间。Receipt 的命令目标不会随消费变化，执行归属通过 Input 查询。worker 为冻结配置装配当前身份、Workdir 与授权资源。调度、引导和控制的完整契约见 [Agent 输入队列与调度](./agent-request-queue.md)。
 

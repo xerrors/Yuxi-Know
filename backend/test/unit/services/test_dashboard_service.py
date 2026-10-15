@@ -6,12 +6,12 @@ from datetime import datetime, timedelta
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import event
+from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from test.support.sqlite import create_utc_sqlite_engine
 from yuxi.infrastructure.postgres.base import Base
 from yuxi.modules.agents.models.definitions import Agent
-from yuxi.modules.agents.models.messages import Message, ToolCall
+from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.identity.models import Department, User
 from yuxi.modules.system.services.dashboard import DashboardService
@@ -170,30 +170,10 @@ async def dashboard_db():
             created_at=now,
             extra_metadata={"usage_metadata": {"input_tokens": 100, "output_tokens": 100}},
         )
-        hidden_tool_audit = Message(
-            agent_session=conv2,
-            role="tool",
-            content="Intermediate tool output",
-            message_type="tool_audit",
-            operation_id="tool-audit-1",
-            started_at=now,
-            sequence=2,
-            execution_status="completed",
-            created_at=now,
-            extra_metadata={"usage_metadata": {"input_tokens": 100, "output_tokens": 100}},
-        )
         removed_agent_message = Message(
             agent_session=missing_agent_session,
             role="assistant",
             content="Historical removed agent output",
-            created_at=now,
-        )
-
-        tool1 = ToolCall(message=msg4, tool_name="bash", status="success", created_at=now)
-        removed_agent_tool = ToolCall(
-            message=removed_agent_message,
-            tool_name="legacy_tool",
-            status="success",
             created_at=now,
         )
 
@@ -218,12 +198,37 @@ async def dashboard_db():
                 msg3,
                 msg4,
                 hidden_model_audit,
-                hidden_tool_audit,
                 removed_agent_message,
-                tool1,
-                removed_agent_tool,
             ]
         )
+        await db.flush()
+        tool1 = Message(
+            session_record_id=msg4.session_record_id,
+            turn_id=msg4.turn_id,
+            run_id=msg4.run_id,
+            role="tool",
+            message_type="tool_audit",
+            operation_id="bash",
+            content="",
+            execution_status="completed",
+            started_at=now,
+            extra_metadata={"source_model_message_id": msg4.id, "tool_name": "bash", "input": {}},
+            created_at=now,
+        )
+        removed_agent_tool = Message(
+            session_record_id=removed_agent_message.session_record_id,
+            turn_id=removed_agent_message.turn_id,
+            run_id=removed_agent_message.run_id,
+            role="tool",
+            message_type="tool_audit",
+            operation_id="legacy_tool",
+            content="",
+            execution_status="completed",
+            started_at=now,
+            extra_metadata={"source_model_message_id": removed_agent_message.id, "tool_name": "legacy_tool", "input": {}},
+            created_at=now,
+        )
+        db.add_all([tool1, removed_agent_tool])
         await db.commit()
         yield db
     await engine.dispose()
@@ -262,6 +267,40 @@ async def test_agent_analytics_omits_removed_top_performers_contract(dashboard_d
         "agent-helper": "Helper Agent",
         "agent-coder": "Coder Agent",
     }
+
+
+async def test_tool_statistics_count_started_execution_statuses(dashboard_db):
+    """审批拒绝不计执行，运行中与中断不冒充失败。"""
+    session = await dashboard_db.scalar(select(Session).where(Session.thread_id == "thread-102"))
+    assert session is not None
+    now = utc_now()
+    for status, started, source in [
+        ("running", now, None),
+        ("failed", now, None),
+        ("interrupted", now, None),
+        ("failed", None, "approval_rejection"),
+    ]:
+        dashboard_db.add(
+            Message(
+                session_record_id=session.id,
+                role="tool",
+                message_type="tool_audit",
+                content="",
+                execution_status=status,
+                started_at=started,
+                created_at=now,
+                extra_metadata={"tool_name": source or status, "source": source},
+            )
+        )
+    await dashboard_db.commit()
+
+    stats = await DashboardService(dashboard_db).get_tool_call_stats()
+    assert stats["total_calls"] == 4
+    assert stats["successful_calls"] == 1
+    assert stats["failed_calls"] == 1
+    assert stats["success_rate"] == 25
+    assert stats["tool_error_distribution"] == {"failed": 1}
+    assert {tool["tool_name"] for tool in stats["most_used_tools"]} == {"bash", "running", "failed", "interrupted"}
 
 
 async def test_dashboard_service_thread_analytics(dashboard_db):
@@ -424,8 +463,8 @@ async def test_dashboard_service_session_detail(dashboard_db):
     assert detail["agent_deleted"] is False
     assert len(detail["messages"]) == 2
     assistant_msg = next(m for m in detail["messages"] if m["role"] == "assistant")
-    assert "tool_calls" in assistant_msg
-    assert assistant_msg["tool_calls"][0]["tool_name"] == "bash"
+    assert "tool_executions" in assistant_msg
+    assert assistant_msg["tool_executions"][0]["tool_name"] == "bash"
 
 
 async def test_session_tokens_use_runs_and_expose_missing_usage(dashboard_db):

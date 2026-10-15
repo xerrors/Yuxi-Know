@@ -78,7 +78,7 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
 docker compose --env-file .env.prod -f docker-compose.prod.yml --profile all up -d --build
 ```
 
-`schema-init` 为空库直接建立 business 版本 2 与 knowledge 版本 1 基线，包含当前表、索引、约束和 LangGraph checkpoint 表。当前版本直接结束，初始化成功后进程以退出码 0 结束，API 与 worker 才会启动。
+`schema-init` 为空库直接建立 business 版本 3 与 knowledge 版本 1 基线，包含当前表、索引、约束和 LangGraph checkpoint 表。当前版本直接结束，初始化成功后进程以退出码 0 结束，API 与 worker 才会启动。
 
 ## 3. 数据库与文件目录
 

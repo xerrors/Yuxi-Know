@@ -50,56 +50,30 @@ class BackgroundJobRecord(Base):
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
 
-    def to_dict(self) -> dict[str, Any]:
-        return {
+    def to_observation_dict(self, *, include_result: bool = True) -> dict[str, Any]:
+        """只序列化公开观察字段，结果详情按需生成。"""
+        error = "任务已取消" if self.status == "cancelled" else "任务执行失败，请查看业务资源状态或日志"
+        data = {
             "id": self.id,
             "name": self.name,
             "type": self.type,
             "status": self.status,
             "progress": self.progress,
-            "message": self.message,
+            "message": error if self.error else self.message,
             "created_at": format_utc_datetime(self.created_at),
             "updated_at": format_utc_datetime(self.updated_at),
             "started_at": format_utc_datetime(self.started_at),
             "completed_at": format_utc_datetime(self.completed_at),
-            "payload": self.payload or {},
-            "result": self.result,
-            "error": self.error,
+            "error": error if self.error else None,
             "cancel_requested": bool(self.cancel_requested),
-            "handler_version": int(self.handler_version),
-            "dedupe_key": self.dedupe_key,
-            "attempt_count": int(self.attempt_count or 0),
-            "worker_id": self.worker_id,
-            "heartbeat_at": format_utc_datetime(self.heartbeat_at),
-            "lease_expires_at": format_utc_datetime(self.lease_expires_at),
-            "timeout_seconds": float(self.timeout_seconds or 0),
         }
-
-    def to_observation_dict(self) -> dict[str, Any]:
-        """提供任务展示快照，隐藏执行参数和内部所有权。"""
-        data = self.to_dict()
-        for field in (
-            "payload",
-            "handler_version",
-            "dedupe_key",
-            "attempt_count",
-            "worker_id",
-            "heartbeat_at",
-            "lease_expires_at",
-            "timeout_seconds",
-        ):
-            data.pop(field, None)
-        if self.error:
-            data["error"] = "任务已取消" if self.status == "cancelled" else "任务执行失败，请查看业务资源状态或日志"
-            data["message"] = data["error"]
-        data["result"] = self._result_summary()
+        if include_result:
+            data["result"] = self._result_summary()
         return data
 
     def to_summary_dict(self) -> dict[str, Any]:
-        """列表只携带展示摘要，完整结果由详情按需读取。"""
-        data = self.to_observation_dict()
-        data.pop("result", None)
-        return data
+        """列表省略结果，不执行详情投影。"""
+        return self.to_observation_dict(include_result=False)
 
     def _result_summary(self) -> dict[str, Any] | None:
         """对历史和新结果统一投影资源引用与计数，内部结果仍供领域 Hook 使用。"""
