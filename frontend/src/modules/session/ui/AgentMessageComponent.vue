@@ -27,7 +27,11 @@
       <Copy v-else size="14" />
     </div>
     <p v-if="message.type === 'human'" class="message-text">
-      <MentionTextRenderer :content="message.content" :display-labels="mentionDisplayLabels" />
+      <MentionTextRenderer
+        :content="message.content"
+        :display-labels="mentionDisplayLabels"
+        :agents="mention?.agents || []"
+      />
     </p>
 
     <p v-else-if="message.type === 'system'" class="message-text-system">{{ message.content }}</p>

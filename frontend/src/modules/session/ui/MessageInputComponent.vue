@@ -278,7 +278,8 @@ import {
   onBeforeUnmount,
   useSlots,
   h,
-  render
+  render,
+  getCurrentInstance
 } from 'vue'
 import {
   ArrowUp as ArrowUpOutlined,
@@ -290,13 +291,8 @@ import { searchMentionFiles } from '@/apis/mention_api'
 import FileTypeIcon from '@/shared/ui/FileTypeIcon.vue'
 import ActionDropdown from '@/shared/ui/ActionDropdown.vue'
 import ActionTrigger from '@/shared/ui/ActionTrigger.vue'
+import MentionToken from '@/modules/session/ui/MentionToken.vue'
 import { buildMentionResourceItems } from '@/modules/session/model/mention_resource_items'
-import {
-  getMentionIconComponent,
-  getMentionIconStyle,
-  MENTION_ICON_SIZE,
-  MENTION_ICON_STROKE_WIDTH
-} from '@/modules/session/model/mention_icon_utils'
 import {
   buildMentionDisplayLabels,
   expandMentionDeletionRange,
@@ -316,6 +312,7 @@ const closeMentionPopup = (e) => {
   mentionPopupVisible.value = false
 }
 
+const appContext = getCurrentInstance().appContext
 const inputRef = ref(null)
 const optionsExpanded = ref(false)
 // 用于防抖的定时器
@@ -521,54 +518,47 @@ const getDomMentionDeletionRange = () => {
   return { start, end: start + getRawNodeLength(mentionNode) }
 }
 
-const unmountEditorMentionIcons = () => {
-  inputRef.value
-    ?.querySelectorAll('.mention-ref-icon[data-vue-icon]')
-    .forEach((container) => render(null, container))
+const editorMentions = new Set()
+
+const unmountEditorMentions = () => {
+  editorMentions.forEach((container) => render(null, container))
+  editorMentions.clear()
+}
+
+/** 原生剪切或替换会先移除 DOM，仍须卸载其 Vue 实例。 */
+const cleanupDetachedEditorMentions = () => {
+  editorMentions.forEach((container) => {
+    if (inputRef.value?.contains(container)) return
+    render(null, container)
+    editorMentions.delete(container)
+  })
+}
+
+/** 编辑器只拥有原始 token 与光标边界，外观交给共用组件。 */
+const renderEditorMention = (container) => {
+  const { mentionType: type, mentionValue: value } = container.dataset
+  const vnode = h(MentionToken, {
+    type,
+    value,
+    class: 'mention-ref-editable',
+    label: getMentionDisplayLabel(type, value, mentionDisplayLabels.value),
+    agent: props.mention?.agents?.find((agent) => agent.agent_id === value)
+  })
+  vnode.appContext = appContext
+  render(vnode, container)
 }
 
 const createEditorMentionElement = (segment) => {
   const token = document.createElement('span')
-  token.className = `mention-ref-token mention-ref-${segment.type} mention-ref-editable`
+  token.className = 'mention-ref-editable'
   token.contentEditable = 'false'
   token.dataset.mentionRaw = segment.raw
   token.dataset.mentionType = segment.type
   token.dataset.mentionValue = segment.value
+  token.dataset.vueMention = 'true'
   token.title = segment.raw
-
-  const icon = document.createElement('span')
-  icon.className = 'mention-ref-icon'
-  icon.dataset.vueIcon = 'true'
-  if (segment.type === 'file') {
-    render(
-      h(FileTypeIcon, {
-        name: segment.value,
-        isDir: segment.value.endsWith('/'),
-        size: MENTION_ICON_SIZE
-      }),
-      icon
-    )
-  } else {
-    Object.assign(icon.style, getMentionIconStyle(segment.type, segment.value) || {})
-    render(
-      h(getMentionIconComponent(segment.type, segment.value), {
-        size: MENTION_ICON_SIZE,
-        strokeWidth: MENTION_ICON_STROKE_WIDTH
-      }),
-      icon
-    )
-  }
-  token.appendChild(icon)
-
-  const label = document.createElement('span')
-  label.className = 'mention-ref-label'
-  label.textContent = getMentionDisplayLabel(
-    segment.type,
-    segment.value,
-    mentionDisplayLabels.value
-  )
-  token.appendChild(label)
-
+  renderEditorMention(token)
+  editorMentions.add(token)
   return token
 }
 
@@ -576,7 +566,7 @@ const renderEditorContent = (raw = '') => {
   const editor = inputRef.value
   if (!editor) return
 
-  unmountEditorMentionIcons()
+  unmountEditorMentions()
   editor.replaceChildren()
   parseMentionText(raw).forEach((segment) => {
     editor.appendChild(
@@ -1133,6 +1123,7 @@ const handleKeyUp = (e) => {
 // 处理输入事件
 const handleInput = () => {
   if (isComposing.value) return
+  cleanupDetachedEditorMentions()
 
   if (inputRef.value && !inputRef.value.querySelector('.mention-ref-token')) {
     const text = inputRef.value.textContent || ''
@@ -1273,6 +1264,12 @@ const handleEditorClick = () => {
   }
 }
 
+watch(
+  () => props.mention,
+  () => inputRef.value?.querySelectorAll('[data-vue-mention]').forEach(renderEditorMention),
+  { deep: true }
+)
+
 // 监听输入值变化
 watch(inputValue, (value) => {
   if (value !== lastSyncedEditorValue) {
@@ -1302,7 +1299,7 @@ onMounted(() => {
 
 // 组件卸载时清除定时器和事件监听器
 onBeforeUnmount(() => {
-  unmountEditorMentionIcons()
+  unmountEditorMentions()
   if (debounceTimer.value) {
     clearTimeout(debounceTimer.value)
   }
@@ -1455,41 +1452,6 @@ defineExpose({
 
   &[contenteditable='false'] {
     cursor: not-allowed;
-  }
-
-  :deep(.mention-ref-token) {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 6px;
-    max-width: min(100%, 360px);
-    color: var(--main-700);
-    line-height: normal;
-    vertical-align: baseline;
-    white-space: nowrap;
-    user-select: all;
-  }
-
-  :deep(.mention-ref-icon) {
-    position: relative;
-    top: 2px;
-    display: inline-flex;
-    align-items: center;
-    flex-shrink: 0;
-    font-size: 13px;
-    line-height: 1;
-    margin-left: 4px;
-  }
-
-  :deep(.mention-ref-icon svg) {
-    display: block;
-  }
-
-  :deep(.mention-ref-label) {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    line-height: normal;
-    font-weight: 500;
   }
 }
 

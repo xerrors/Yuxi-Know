@@ -16,4 +16,4 @@ docker compose exec frontend pnpm run test:unit
 docker compose exec frontend pnpm run build
 ```
 
-UI 改动必须在真实页面验证，并提供最终截图或录屏；适用时覆盖浅/深色、响应式、loading、empty 和 error 状态。
+UI 改动必须在真实页面验证，并提供最终截图或录屏；适用时覆盖浅/深色、响应式、loading、empty 和 error 状态。适配与验收宽度遵循[设计规范的响应式范围](../docs/develop-guides/design.md#_8-响应式行为)。

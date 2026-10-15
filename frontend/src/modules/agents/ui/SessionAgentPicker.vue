@@ -13,7 +13,7 @@
         :label="currentAgentLabel"
         :open="agentDropdownOpen"
         :disabled="isCreatingThread"
-        collapse-label
+        :collapse-label="currentAgentOption?.isDefault"
       >
         <template #icon>
           <FallbackAvatar
@@ -115,7 +115,8 @@ const agentQuickSwitchOptions = computed(() =>
       label: agent.name || agent.agent_id,
       value: agent.agent_id,
       icon: agent.icon || '',
-      isBuiltin: isBuiltinAgent(agent)
+      isBuiltin: isBuiltinAgent(agent),
+      isDefault: agent.is_default
     }))
 )
 

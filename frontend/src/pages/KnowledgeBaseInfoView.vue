@@ -1024,7 +1024,8 @@ onUnmounted(() => {
   position: relative;
 
   .extension-panel-action {
-    font-size: 12px;
+    min-height: 32px;
+    font-size: 14px;
   }
 }
 

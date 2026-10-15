@@ -7,7 +7,7 @@
       'is-error': failed,
       'is-previewable': previewable && loaded && !failed
     }"
-    :style="{ aspectRatio: thumbnail ? 5 / 4 : node.aspectRatio }"
+    :style="{ aspectRatio: thumbnail ? 5 / 4 : node.aspectRatio, '--widget-image-ratio': naturalAspectRatio }"
     :role="previewable ? 'button' : undefined"
     :tabindex="previewable && loaded && !failed ? 0 : undefined"
     :aria-label="previewable ? `查看图片：${node.alt}` : undefined"
@@ -24,7 +24,7 @@
       :style="{ objectFit: thumbnail ? 'cover' : node.fit || 'contain' }"
       :loading="thumbnail ? 'eager' : 'lazy'"
       referrerpolicy="no-referrer"
-      @load="loaded = true; failed = false"
+      @load="naturalAspectRatio = $event.target.naturalWidth / $event.target.naturalHeight; loaded = true; failed = false"
       @error="failed = true"
     />
     <figcaption v-if="loaded && !failed && node.caption" class="widget-image-caption">{{ node.caption }}</figcaption>
@@ -45,6 +45,7 @@ const imageLoader = inject('widgetImageLoader', ref(null))
 const sourceImageLoader = inject('widgetSourceImageLoader', ref(null))
 const src = ref('')
 const loaded = ref(false)
+const naturalAspectRatio = ref(null)
 const failed = ref(false)
 
 /** 只有已加载图片可以打开预览，键盘与指针共用入口。 */
@@ -78,6 +79,7 @@ watch(
     })
     src.value = ''
     loaded.value = false
+    naturalAspectRatio.value = null
     failed.value = false
     try {
       let response
@@ -177,6 +179,15 @@ watch(
     inset: 0;
     padding: 16px;
   }
+}
+
+.yuxi-widget:not(.widget-image-preview) .widget-image:not(.has-aspect-ratio) {
+  max-width: min(100%, calc(400px * var(--widget-image-ratio)));
+}
+
+.yuxi-widget:not(.widget-image-preview) .widget-image,
+.yuxi-widget:not(.widget-image-preview) .widget-image img {
+  max-height: 400px;
 }
 
 .yuxi-widget .widget-imagegroup {

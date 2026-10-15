@@ -8,7 +8,7 @@ import { useAgentRunStream } from './useAgentRunStream'
 import { useAgentInputQueue } from './useAgentInputQueue'
 import { useAgentStreamHandler } from './useAgentStreamHandler'
 import { useStreamSmoother } from './useStreamSmoother'
-import { createItemState, itemsToMessages, mergeItemSnapshot } from './agentItems'
+import { createItemState, itemsToMessages, mergeItemSnapshot, syncHistoricalItemEvent } from './agentItems'
 import { bindMessageInputRun } from './messageDebug'
 import { extractPendingInterrupt, pendingInterruptFromWaitpoint } from './useApproval'
 import { useSessionFeedbackStore } from './sessionFeedback'
@@ -175,6 +175,10 @@ export const useSessionRuntimeStore = defineStore('sessionRuntime', () => {
     isThreadActive: (threadId) => observers.has(threadId),
     handlePublicEvent: (event, threadId) => {
       const result = handlePublicEvent(event, threadId)
+      const history = historyItems.get(threadId)
+      if (history && syncHistoricalItemEvent(history, event)) {
+        threadMessages.value[threadId] = itemsToMessages(Object.values(history.items))
+      }
       if (event.turn && event.session_id === threadId) {
         chatThreads.upsertThread({ id: threadId, status: event.turn.status === 'queued' ? 'in_progress' : event.turn.status })
       }

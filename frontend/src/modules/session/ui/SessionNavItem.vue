@@ -17,7 +17,15 @@
     >
       <span class="session-title">{{ chat.yuxi.title || '新的对话' }}</span>
       <span
-        v-if="activityLabel"
+        v-if="chat.status === 'failed'"
+        class="thread-status thread-status-failed"
+        role="img"
+        aria-label="执行失败"
+      >
+        <CircleAlert :size="14" aria-hidden="true" />
+      </span>
+      <span
+        v-else-if="activityLabel"
         class="activity-badge"
         :class="`activity-${chat.status}`"
         role="status"
@@ -80,7 +88,7 @@
 import { computed, h } from 'vue'
 import { SESSION_ACTIVITY_LABELS } from '@/modules/session/model/sessionActivity'
 import { message, Modal } from 'ant-design-vue'
-import { Archive, MoreVertical, Pin, PinOff, SquarePen } from '@lucide/vue'
+import { Archive, CircleAlert, MoreVertical, Pin, PinOff, SquarePen } from '@lucide/vue'
 
 const props = defineProps({
   chat: { type: Object, required: true },
@@ -319,6 +327,10 @@ const renameChat = () => {
   color: var(--main-color);
   pointer-events: none;
   transform: translateY(-50%) translateX(50%);
+}
+
+.thread-status-failed {
+  color: var(--gray-500);
 }
 
 .status-spinner {

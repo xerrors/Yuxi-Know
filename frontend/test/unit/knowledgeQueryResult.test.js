@@ -53,13 +53,33 @@ test('高亮和完整正文中的 HTML 保持文字，只有命中段生成 mark
   })
   assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/)
   assert.match(html, /<mark[^>]*>Milvus<\/mark>/)
-  assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;完整正文/)
-  assert.match(html, /查看完整片段/)
+  const fullText = await render({ content: '<script>alert(1)</script>完整正文' })
+  assert.match(fullText, /&lt;script&gt;alert\(1\)&lt;\/script&gt;完整正文/)
+  assert.doesNotMatch(fullText, /<script/)
+  assert.match(html, /展开完整片段/)
   assert.doesNotMatch(html, /<script|<img/)
 })
 
-test('关闭高亮后完整正文直接展示', async () => {
+test('普通片段正文保留完整文本并默认限制展示行数', async () => {
   const html = await render({ content: '完整正文', score: 0.2, score_type: 'cosine' })
   assert.match(html, /完整正文/)
   assert.doesNotMatch(html, /<mark|<details/)
+  assert.match(html, /class="[^"]*is-collapsed/)
+})
+
+
+test('长文件名使用独立文件按钮，完整名称保留在 title 中', async () => {
+  const name = 'Supplementary Information-very-long-file-name.docx'
+  const html = await render({ content: '正文', metadata: { file_id: 'file-1', source: name, start_line: 91, end_line: 135 } })
+  assert.match(html, /class="result-open"/)
+  assert.match(html, new RegExp(`title="${name}"`))
+  assert.match(html, /class="result-filename"/)
+  assert.match(html, /行 91–135/)
+})
+
+
+test('缺少文件ID时保留来源名称，不提供无法打开的文件按钮', async () => {
+  const html = await render({ content: '正文', metadata: { source: '外部来源.md' } })
+  assert.match(html, /外部来源.md/)
+  assert.doesNotMatch(html, /class="result-open"/)
 })

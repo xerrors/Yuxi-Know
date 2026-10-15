@@ -1,7 +1,7 @@
 ---
 name: chat-widgets
 description: "普通聊天的分类数值比较、单图和图片组展示、推荐选项续聊使用本 Skill：用户给出各类数值并想直观比较时绘制柱状图；给出图片地址或沙盒图片文件时直接在对话中展示图片，多张图合为一个横向图片组；要从几个推荐或方案中选一个继续时展示可点击列表。这三类请求应主动读取并使用本 Skill，无需用户说组件、Skill 或 JSON。也支持时间趋势折线图；明确要求纯文字、源码或概念解释时使用 Markdown。"
-version: "2026.10.12"
+version: "2026.10.15"
 ---
 
 # 对话组件
@@ -36,22 +36,22 @@ version: "2026.10.12"
     {
       "type": "Chart",
       "label": "四类阅读时长",
-      "xAxis": "category",
+      "xAxis": "activity",
       "data": [
         {
-          "category": "论文",
+          "activity": "论文",
           "minutes": 120
         },
         {
-          "category": "技术文档",
+          "activity": "技术文档",
           "minutes": 80
         },
         {
-          "category": "笔记",
+          "activity": "笔记",
           "minutes": 45
         },
         {
-          "category": "网页",
+          "activity": "网页",
           "minutes": 60
         }
       ],
@@ -67,7 +67,7 @@ version: "2026.10.12"
 }
 ```
 
-分类和数值逐项对应用户数据。时间趋势沿用结构，将 series.type 改为 line，横轴使用日期。
+分类和数值逐项对应用户数据。模板中的 activity、minutes 都是示例数据列名；数据列改名时，同步修改 xAxis 和 series[].dataKey。时间趋势使用 line，xAxis 引用实际日期列名。字段对应关系按下文“图表与图片组合”校验。
 
 ### 单张图片与图片组模板
 
@@ -220,7 +220,15 @@ version: "2026.10.12"
 
 组件用于呈现内容。比较分类用柱状图，观察时间趋势用折线图；Card 内放 Title、Caption、Chart。图片直接使用 Image 或 ImageGroup；需要短语时用 caption 放在图片左下角，详细说明和来源放围栏外。
 
-Chart.data 为 0–60 个对象，每行只包含 xAxis 指定的类别列和 series 指定的数值列。类别为非空字符串，数值为有限数字（绝对值不超过 1e12），可以为 0 或负数。series 为 1–3 个 `{type:"bar"或"line",dataKey:"列名",label:"图例文字"}`；dataKey 唯一且不同于 xAxis。列名使用字母开头的字母/数字/下划线，最多 40 字符，禁用 constructor、prototype、__proto__。height 是 180–400 的整数像素值，默认 240；showLegend 默认 true。不要输出 ECharts option、formatter、函数或任意系列属性；单位放 Caption。未给出数据时不要编造结果，使用空 data 或明确标记示例数据。
+Chart 的字段引用规则适用于所有业务数据。xAxis 是 data 中字符串列的**字段名引用**，不是坐标轴类型；series[].dataKey 是 data 中数值列的字段名引用。先确定实际数据列名，再从这些列名填写 xAxis 和 dataKey；列名改变时同步修改引用，保留列值中的用户数据。
+
+输出前逐条核对 data：
+
+- 每条记录都包含 xAxis 指定的字段，值为非空字符串，最多 4000 字符。
+- 每条记录都包含所有 series[].dataKey 指定的字段，值为有限数字，绝对值不超过 1e12；0 和负数有效。
+- data 只包含上述字段。series 为 1–3 个 `{type:"bar"或"line",dataKey:"列名",label:"图例文字"}`，dataKey 互不重复，且不同于 xAxis。
+
+Chart.data 为 0–60 条记录，按数组元素数量计数，与 JSON 文本行数无关。列名使用字母开头的字母/数字/下划线，最多 40 字符，禁用 constructor、prototype、__proto__。height 是 180–400 的整数像素值，默认 240；showLegend 默认 true。不要输出 ECharts option、formatter、函数或任意系列属性；单位放 Caption。未给出数据时不要编造结果，使用空 data 或明确标记示例数据。
 
 天气预报、价格等时效请求使用实际查询结果绘图。优先使用已提供的联网查询或对应领域工具，例如可用的 `web_search`。搜索配额耗尽或查询失败时更换公开来源；若现有沙盒允许只读网络查询，可以直接读取公开逐日预报 API，按原工具审批处理。[Open-Meteo](https://open-meteo.com/en/docs) 的 `https://api.open-meteo.com/v1/forecast` 提供 `daily=temperature_2m_max,temperature_2m_min`，设置当地时区和 `forecast_days=7`，按返回的 daily.time 及温度列绘图；坐标对应实际城市。来源不覆盖所需日期时继续查询其他来源。
 
@@ -230,7 +238,7 @@ Chart.data 为 0–60 个对象，每行只包含 xAxis 指定的类别列和 se
 
 绘制每日最高/最低温时优先使用逐日预报字段。小时预报采样的最大/最小值只标为“采样最高/最低温”，缺少全天时段时在图卡中注明；未来的预报值不能称为实测值。
 
-Image 使用 src 或 path 之一，alt 描述图片内容。src 接受无凭据的 HTTPS URL 或同源 `/...` 路径；不能用协议相对 URL、data/file/javascript URL。path 使用已存在的沙盒虚拟绝对路径，例如 `{"type":"Image","path":"/home/gem/user-data/projects/<project-dir>/generated-image.png","alt":"生成的图片"}`，自定义虚拟根时沿用工具返回的真实路径。沙盒图片由当前会话鉴权读取，无需调用 present_artifacts；支持 user-data 和已授权 Skills 中的普通图片文件，临时目录图片先保存到 Workdir。直接填真实文件路径，不拼接 API URL 或 Token，不使用路径跳转或宿主机路径。只使用已知存在的图片地址，不猜测路径；图片来源和详细说明放围栏外，简短说明可用 caption。尚未实际读取图片时，alt 和说明沿用用户描述，保留已知内容。单张图片默认铺满正文宽度并保留原始宽高比；只有用户需要特定比例时才显式设置 aspectRatio，并按需要选择 cover 或 contain（默认）。ImageGroup 的缩略图统一使用 5:4 和 cover；点击后以完整比例预览，支持前后切换、方向键和 Esc 关闭。
+Image 使用 src 或 path 之一，alt 描述图片内容。src 接受无凭据的 HTTPS URL 或同源 `/...` 路径；不能用协议相对 URL、data/file/javascript URL。path 使用已存在的沙盒虚拟绝对路径，例如 `{"type":"Image","path":"/home/gem/user-data/projects/<project-dir>/generated-image.png","alt":"生成的图片"}`，自定义虚拟根时沿用工具返回的真实路径。沙盒图片由当前会话鉴权读取，无需调用 present_artifacts；支持 user-data 和已授权 Skills 中的普通图片文件，临时目录图片先保存到 Workdir。直接填真实文件路径，不拼接 API URL 或 Token，不使用路径跳转或宿主机路径。只使用已知存在的图片地址，不猜测路径；图片来源和详细说明放围栏外，简短说明可用 caption。尚未实际读取图片时，alt 和说明沿用用户描述，保留已知内容。单张图片默认保留原始宽高比，展示范围不超过正文宽度和 400px 高度；只有用户需要特定比例时才显式设置 aspectRatio，并按需要选择 cover 或 contain（默认）。ImageGroup 的缩略图统一使用 5:4 和 cover；点击后以完整比例预览，支持前后切换、方向键和 Esc 关闭。
 
 ## 推荐列表草稿动作
 

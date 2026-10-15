@@ -21,7 +21,7 @@ export const buildMentionResourceItems = (mention = {}) => {
         toResourceItem('agent', {
           value: agent.agent_id,
           label: agent.name || agent.agent_id,
-          extra: { description: agent.description || '' }
+          extra: { description: agent.description || '', icon: agent.icon || '' }
         })
       )
       .filter(Boolean),

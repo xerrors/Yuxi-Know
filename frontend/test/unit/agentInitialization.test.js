@@ -3,6 +3,54 @@ import test from 'node:test'
 import { createPinia, disposePinia, setActivePinia } from 'pinia'
 import { createServer } from 'vite'
 
+test('默认选择使用默认标记，不把其他内置角色当作默认助手', async (t) => {
+  globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} }
+  const server = await createServer({ server: { middlewareMode: true, hmr: false } })
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  try {
+    const { useAgentStore } = await server.ssrLoadModule('/src/modules/agents/model/agent.js')
+    const { agentApi, knowledgeBaseApi, toolApi } = await server.ssrLoadModule('/src/apis/index.js')
+    const agents = [
+      { agent_id: 'deep-research', name: '深度研究', is_builtin: true, is_default: false, can_run: true },
+      { agent_id: 'default-chatbot', name: '智能助手', is_builtin: true, is_default: true, can_run: true }
+    ]
+    t.mock.method(agentApi, 'getAgents', async () => ({ agents }))
+    t.mock.method(agentApi, 'getAgentDetail', async (id) => ({ agent: agents.find((agent) => agent.agent_id === id) }))
+    t.mock.method(knowledgeBaseApi, 'getAccessibleKnowledgeBases', async () => ({ knowledge_bases: [] }))
+    t.mock.method(toolApi, 'getTools', async () => ({ data: [] }))
+    const store = useAgentStore()
+    await store.initialize()
+    assert.equal(store.selectedAgentId, 'default-chatbot')
+    assert.equal(store.agents[0].agent_id, 'default-chatbot')
+
+    store.reset()
+    store.selectedAgentId = 'deep-research'
+    await store.initialize()
+    assert.equal(store.selectedAgentId, 'deep-research', '保留仍可运行的已有选择')
+
+    store.reset()
+    store.selectedAgentId = 'deleted-agent'
+    await store.initialize()
+    assert.equal(store.selectedAgentId, 'default-chatbot', '失效的选择回到默认助手')
+
+    store.reset()
+    agents[1].can_run = false
+    store.selectedAgentId = 'default-chatbot'
+    await store.initialize()
+    assert.equal(store.selectedAgentId, 'deep-research', '默认助手不可运行时只选择可运行角色')
+
+    store.reset()
+    agents[0].can_run = false
+    await store.initialize()
+    assert.equal(store.selectedAgentId, null)
+  } finally {
+    disposePinia(pinia)
+    await server.close()
+    delete globalThis.localStorage
+  }
+})
+
 test('并发入口等待目录准备后再继续，重置后可以重新初始化', async (t) => {
   globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} }
   const server = await createServer({ server: { middlewareMode: true, hmr: false } })

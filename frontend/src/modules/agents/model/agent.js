@@ -12,6 +12,7 @@ export function isBuiltinAgent(agent) {
 
 function sortAgents(agents) {
   return [...agents].sort((a, b) => {
+    if (!!a.is_default !== !!b.is_default) return a.is_default ? -1 : 1
     if (isBuiltinAgent(a) !== isBuiltinAgent(b)) return isBuiltinAgent(a) ? -1 : 1
     return String(a.name || a.agent_id).localeCompare(String(b.name || b.agent_id), 'zh-CN')
   })
@@ -20,7 +21,7 @@ function sortAgents(agents) {
 function getPreferredAgentId(agents, persistedId) {
   const chatAgents = agents.filter((agent) => agent.can_run)
   if (persistedId && chatAgents.some((agent) => agent.agent_id === persistedId)) return persistedId
-  return chatAgents.find(isBuiltinAgent)?.agent_id || chatAgents[0]?.agent_id || null
+  return chatAgents.find((agent) => agent.is_default)?.agent_id || chatAgents[0]?.agent_id || null
 }
 
 function extractContext(agent) {

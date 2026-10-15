@@ -11,6 +11,7 @@
     :root-label="rootLabel"
     :pagination="pagination"
     :selection="tableSelection"
+    :scroll="{ x: 520 }"
     empty-text="当前文件夹为空"
     @open-row="(entry) => $emit('select-entry', entry)"
     @breadcrumb-click="handleBreadcrumbClick"
@@ -207,6 +208,49 @@ const handleBreadcrumbClick = ({ item, index }) => {
   min-height: 0;
 }
 
+.workspace-file-list :deep(.file-browser-header) {
+  min-height: 48px;
+  padding: 0 16px;
+}
+
+.workspace-file-list :deep(.ant-table-thead > tr > th) {
+  padding: 9px 12px;
+  background: var(--gray-10);
+  color: var(--gray-600);
+  font-weight: 500;
+}
+
+.workspace-file-list :deep(.ant-table-tbody > tr > td) {
+  padding: 9px 12px;
+  border-bottom-color: var(--gray-100);
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.workspace-file-list :deep(.ant-table-tbody > tr:not(.ant-table-placeholder):hover > td) {
+  background: var(--gray-50);
+  color: var(--gray-1000);
+}
+
+.workspace-file-list :deep(.ant-table-tbody > tr.file-browser-row-selected > td),
+.workspace-file-list :deep(.ant-table-tbody > tr.ant-table-row-selected > td) {
+  background: var(--gray-100);
+  color: var(--gray-1000);
+}
+
+.workspace-file-list :deep(.file-browser-row-clickable:focus-visible) {
+  outline: 2px solid var(--gray-600);
+  outline-offset: -2px;
+}
+
+.workspace-file-list :deep(.file-browser-breadcrumb-item) {
+  color: var(--gray-600);
+
+  &:hover:not(:disabled),
+  &.active {
+    color: var(--gray-1000);
+  }
+}
+
 .entry-count {
   flex: 0 0 auto;
   color: var(--gray-500);
@@ -238,17 +282,35 @@ const handleBreadcrumbClick = ({ item, index }) => {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--gray-500);
+  color: var(--gray-400);
   cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
 
   &:hover:not(:disabled) {
-    background: var(--gray-100);
-    color: var(--gray-900);
+    background: var(--gray-150);
+    color: var(--gray-1000);
   }
 
   &:disabled {
     color: var(--gray-300);
     cursor: not-allowed;
+  }
+}
+
+.workspace-file-list :deep(tr:hover) .more-action,
+.workspace-file-list :deep(tr:focus-within) .more-action {
+  color: var(--gray-700);
+}
+
+.more-action:focus-visible {
+  outline: 2px solid var(--gray-700);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .more-action,
+  .workspace-file-list :deep(.ant-table-tbody > tr > td) {
+    transition: none;
   }
 }
 

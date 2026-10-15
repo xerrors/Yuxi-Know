@@ -49,7 +49,13 @@ docker compose ps
 docker compose logs --tail=100 api
 ```
 
-`api` 和 `frontend` 服务默认支持热重载。容器名由 Compose project 生成；使用 `docker compose logs api frontend` 查看当前槽位日志。修改本地代码后通常不需要手动重启。
+`frontend` 使用 Vite 热更新。`api` 与 `worker` 保留源码挂载，源码修改通过显式重启生效。重启前检查活动任务，避免中断正在执行的 Run；按改动范围选择服务，例如后端公共代码修改后运行：
+
+```bash
+docker compose restart api worker
+```
+
+修改 Compose 启动命令后，运行 `docker compose up -d --no-deps api worker` 重新创建受影响的容器；`restart` 沿用已有容器的命令。容器名由 Compose project 生成；使用 `docker compose logs api worker frontend` 查看当前槽位日志。
 
 ## 3. 实现原则
 
@@ -88,7 +94,7 @@ if not await repo.try_lock(turn_id):
 - API 封装放在 `frontend/src/apis`；
 - 图标优先使用 `@lucide/vue`；
 - 颜色优先使用 `base.css` 和 `base.dark.css` 的变量；
-- 浅色、暗色、loading、empty、error、focus 和响应式状态都要检查；
+- 浅色、暗色、loading、empty、error、focus 和响应式状态都要检查，适配与验收宽度遵循[设计规范的响应式范围](./design.md#_8-响应式行为)；
 - UI 改动遵循[产品体验与界面设计规范](./design.md)。
 
 不要为单次需求引入新的依赖、样式体系或抽象。确需新增依赖时，在 PR 中说明用途、替代方案和许可证影响。

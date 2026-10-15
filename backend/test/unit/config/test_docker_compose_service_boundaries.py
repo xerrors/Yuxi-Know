@@ -1,5 +1,6 @@
 from copy import deepcopy
 import re
+import shlex
 
 import pytest
 from test.unit.config._shared import load_compose, project_root
@@ -107,6 +108,33 @@ def _forbidden_direct_docker_access(source: str) -> set[str]:
 def _legacy_workspace_permission_markers(source: str) -> set[str]:
     """识别已由统一运行身份取代的权限补丁。"""
     return {marker for marker in LEGACY_WORKSPACE_PERMISSION_MARKERS if marker in source}
+
+
+def _backend_reload_services(compose: dict) -> set[str]:
+    """识别会因源码编辑而重启进程的后端启动命令。"""
+    return {name for name in ("api", "worker") if {"--reload", "watchfiles"} & set(shlex.split(compose["services"][name]["command"]))}
+
+
+def test_development_backends_do_not_reload_on_source_changes() -> None:
+    """源码编辑必须由显式重启决定生效时点。"""
+    assert _backend_reload_services(load_compose()) == set()
+
+
+@pytest.mark.parametrize(
+    ("service_name", "command"),
+    [
+        ("api", "uvicorn yuxi.api.main:app --reload --reload-dir /app/yuxi"),
+        ("worker", 'watchfiles --filter python "python -m yuxi.workers.main" /app/yuxi'),
+    ],
+)
+def test_reload_guard_detects_reintroduced_backend_watchers(service_name: str, command: str) -> None:
+    """恢复旧启动命令时，guard 必须报告被重载的服务。"""
+    compose = deepcopy(load_compose())
+    for name in ("api", "worker"):
+        compose["services"][name]["command"] = "python -m yuxi.workers.main" if name == "worker" else "uvicorn yuxi.api.main:app"
+    compose["services"][service_name]["command"] = command
+
+    assert _backend_reload_services(compose) == {service_name}
 
 
 @pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])

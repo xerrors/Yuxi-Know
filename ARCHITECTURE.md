@@ -14,8 +14,8 @@ Yuxi 是一个面向 RAG、知识图谱和多智能体工作流的知识库平�
 
 API 在 `/api/mcp` 提供只读知识库 MCP，与 HTTP API 共用进程和端口。`api/routers/public_v1/knowledge_mcp.py` 与 Knowledge Public HTTP 入口并列，适配协议并复用 Key 认证、Knowledge Schema 与查询服务，MCP manager 随 API lifespan 启停；资源可见性仍由知识库服务拥有。
 
-- `frontend`：Vue 3 / Vite 前端，挂载 `frontend/src` 并热重载。
-- `api`：FastAPI API 服务，挂载 `backend/yuxi` 和测试目录并热重载。
+- `frontend`：Vue 3 / Vite 前端，挂载 `frontend/src` 并热更新。
+- `api`：FastAPI API 服务，挂载 `backend/yuxi` 和测试目录；API 与 worker 的源码修改通过显式重启生效。
 - `worker`：ARQ worker，执行已经派发的 AgentRun 与注册的 后台作业，并周期触发用户自建 Agent 定时任务；三者分别使用 PostgreSQL 中的运行租约、任务租约和调度锁闭合并发与恢复。
 - `schema-init`：Compose 中唯一初始化 Yuxi 数据库 Schema 的一次性进程，为全新部署建立 business Schema 12 与 knowledge Schema 4；已有数据库必须具备当前业务结构，其他业务版本明确拒绝启动，不清库。knowledge 3→4 保留活动知识库名称约束的增量升级。API 与 worker 等待其成功后只校验 Schema 版本。
 - `sandbox-provisioner`：为智能体工具执行提供隔离沙盒。
@@ -95,7 +95,7 @@ Yuxi 始终交付完整知识能力。API 注册知识库、图谱、评估、Da
 
 ## 架构不变量
 
-- Docker Compose 是开发环境的事实来源。开发时先检查容器、日志和热重载，不默认要求本地裸跑服务。
+- Docker Compose 是开发环境的事实来源。开发时先检查容器、日志和源码生效时点；后端使用显式重启，前端保留热更新，不默认要求本地裸跑服务。
 - HTTP 路由保持薄；用例流程放在各业务域 `services`，持久化查询放在同域 `repositories`。
 - 接收事务保存 Input 原始内容和 Receipt；消费事务原子生成正式 Message、执行与附件归属，提交后投递 ARQ。未消费取消不生成消息；数据库唯一来源约束防止重复投影。
 - 同一用户、APP、智能体和 Thread 的 follow-up Input 按 FIFO 单条领取，steer 优先并在消费时合并连续就绪前缀；未就绪队头阻止越过领取。每次提交身份独立，运行中在安全边界消费 steer；多个 Input 通过 consumed_run_id 归属于同一 Run。

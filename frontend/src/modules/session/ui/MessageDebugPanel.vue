@@ -199,7 +199,12 @@
         <div class="record-table-header" aria-hidden="true">
           <span>类型</span>
           <span>记录</span>
-          <span class="column-time">时间</span>
+          <span
+            class="column-time"
+            title="统一按上海时区显示。Run 行显示发送时间（缺失时取 Run 创建时间）；消息和工具行依次取结束、开始、记录时间。"
+          >
+            时间（上海）
+          </span>
           <span class="column-duration">耗时</span>
           <span class="column-tokens">Tokens</span>
           <span></span>
@@ -1873,7 +1878,13 @@ const copyAllTimelineJson = async () => {
 }
 
 .inspector-field-content {
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
+
+  dt,
+  dd {
+    grid-column: 1 / -1;
+  }
 
   dd {
     line-height: 1.55;

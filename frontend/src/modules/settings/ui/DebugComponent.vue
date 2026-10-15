@@ -1683,7 +1683,12 @@ const reloadAllStores = async () => {
     .line-msg {
       flex: 1;
       overflow-x: auto;
+      scrollbar-width: none;
       color: var(--gray-1000);
+
+      &::-webkit-scrollbar {
+        display: none;
+      }
     }
 
     .line-copy-btn {

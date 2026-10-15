@@ -72,54 +72,68 @@
   --gray-10: #fbfcfc;
   --gray-0: #ffffff;
 
-  /* Standard Color System - 标准5档色阶系统 */
-  --color-primary-50: var(--main-50); /* 主色调-最浅 */
-  --color-primary-100: var(--main-200); /* 主色调-浅 */
-  --color-primary-500: var(--main-500); /* 主色调-标准 */
-  --color-primary-700: var(--main-700); /* 主色调-深 */
-  --color-primary-900: var(--main-900); /* 主色调-最深 */
+  /* Semantic Color Scale - 语义色阶系统：背景 → 标准色 → 前景，深色模式保持用途。 */
+  --color-primary-25: var(--main-30); /* 柔和背景 */
+  --color-primary-50: var(--main-50); /* 状态背景 */
+  --color-primary-100: var(--main-200); /* 强调背景 */
+  --color-primary-500: var(--main-500); /* 标准色 */
+  --color-primary-700: var(--main-700); /* 强调前景 */
+  --color-primary-900: var(--main-900); /* 强前景 */
+  --color-primary-1000: var(--main-1000); /* 最强前景 */
 
-  --color-secondary-10: var(--gray-10); /* 次要色-最浅 */
-  --color-secondary-50: var(--gray-50); /* 次要色-最浅 */
-  --color-secondary-100: var(--gray-100); /* 次要色-浅 */
-  --color-secondary-500: var(--gray-700); /* 次要色-标准 */
-  --color-secondary-700: var(--gray-800); /* 次要色-深 */
-  --color-secondary-900: var(--gray-900); /* 次要色-最深 */
+  --color-secondary-10: var(--gray-10); /* 微弱背景 */
+  --color-secondary-25: var(--gray-25); /* 柔和背景 */
+  --color-secondary-50: var(--gray-50); /* 状态背景 */
+  --color-secondary-100: var(--gray-100); /* 强调背景 */
+  --color-secondary-500: var(--gray-700); /* 标准色 */
+  --color-secondary-700: var(--gray-800); /* 强调前景 */
+  --color-secondary-900: var(--gray-900); /* 强前景 */
+  --color-secondary-1000: var(--gray-1000); /* 最强前景 */
 
-  --color-success-10: #fafff2; /* 成功色-极浅 */
-  --color-success-50: #e6f7e6; /* 成功色-最浅 */
-  --color-success-100: #b7eb8f; /* 成功色-浅 */
-  --color-success-500: #52c41a; /* 成功色-标准 */
-  --color-success-700: #389e0d; /* 成功色-深 */
-  --color-success-900: #135200; /* 成功色-最深 */
+  --color-success-10: #fafff2; /* 微弱背景 */
+  --color-success-25: #f2fced; /* 柔和背景 */
+  --color-success-50: #e6f7e6; /* 状态背景 */
+  --color-success-100: #b7eb8f; /* 强调背景 */
+  --color-success-500: #52c41a; /* 标准色 */
+  --color-success-700: #389e0d; /* 强调前景 */
+  --color-success-900: #135200; /* 强前景 */
+  --color-success-1000: #092b00; /* 最强前景 */
 
-  --color-error-10: #fffaf9; /* 错误色-极浅 */
-  --color-error-50: #fff2f0; /* 错误色-最浅 */
-  --color-error-100: #ffccc7; /* 错误色-浅 */
-  --color-error-500: #ff4d4f; /* 错误色-标准 */
-  --color-error-700: #cf1322; /* 错误色-深 */
-  --color-error-900: #820014; /* 错误色-最深 */
+  --color-error-10: #fffaf9; /* 微弱背景 */
+  --color-error-25: #fff7f6; /* 柔和背景 */
+  --color-error-50: #fff2f0; /* 状态背景 */
+  --color-error-100: #ffccc7; /* 强调背景 */
+  --color-error-500: #ff4d4f; /* 标准色 */
+  --color-error-700: #cf1322; /* 强调前景 */
+  --color-error-900: #820014; /* 强前景 */
+  --color-error-1000: #45000a; /* 最强前景 */
 
-  --color-warning-10: #fffef5; /* 警告色-极浅 */
-  --color-warning-50: #fffbe6; /* 警告色-最浅 */
-  --color-warning-100: #ffe58f; /* 警告色-浅 */
-  --color-warning-500: #faad14; /* 警告色-标准 */
-  --color-warning-700: #d48806; /* 警告色-深 */
-  --color-warning-900: #ad6800; /* 警告色-最深 */
+  --color-warning-10: #fffef5; /* 微弱背景 */
+  --color-warning-25: #fffdef; /* 柔和背景 */
+  --color-warning-50: #fffbe6; /* 状态背景 */
+  --color-warning-100: #ffe58f; /* 强调背景 */
+  --color-warning-500: #faad14; /* 标准色 */
+  --color-warning-700: #d48806; /* 强调前景 */
+  --color-warning-900: #ad6800; /* 强前景 */
+  --color-warning-1000: #663c00; /* 最强前景 */
 
-  --color-info-10: #f5fbff; /* 信息色-极浅 */
-  --color-info-50: #e6f7ff; /* 信息色-最浅 */
-  --color-info-100: #bae7ff; /* 信息色-浅 */
-  --color-info-500: #1890ff; /* 信息色-标准 */
-  --color-info-700: #096dd9; /* 信息色-深 */
-  --color-info-900: #0050b3; /* 信息色-最深 */
+  --color-info-10: #f5fbff; /* 微弱背景 */
+  --color-info-25: #effaff; /* 柔和背景 */
+  --color-info-50: #e6f7ff; /* 状态背景 */
+  --color-info-100: #bae7ff; /* 强调背景 */
+  --color-info-500: #1890ff; /* 标准色 */
+  --color-info-700: #096dd9; /* 强调前景 */
+  --color-info-900: #0050b3; /* 强前景 */
+  --color-info-1000: #002c66; /* 最强前景 */
 
-  --color-accent-10: #f5fffe; /* 强调色-极浅 */
-  --color-accent-50: #e6fffb; /* 强调色-最浅 */
-  --color-accent-100: #87e8de; /* 强调色-浅 */
-  --color-accent-500: #13c2c2; /* 强调色-标准 */
-  --color-accent-700: #08979c; /* 强调色-深 */
-  --color-accent-900: #006d75; /* 强调色-最深 */
+  --color-accent-10: #f5fffe; /* 微弱背景 */
+  --color-accent-25: #effffd; /* 柔和背景 */
+  --color-accent-50: #e6fffb; /* 状态背景 */
+  --color-accent-100: #87e8de; /* 强调背景 */
+  --color-accent-500: #13c2c2; /* 标准色 */
+  --color-accent-700: #08979c; /* 强调前景 */
+  --color-accent-900: #006d75; /* 强前景 */
+  --color-accent-1000: #003b40; /* 最强前景 */
 
   /* Chart Palette - 图表调色板 */
   --chart-palette-1: var(--main-500);

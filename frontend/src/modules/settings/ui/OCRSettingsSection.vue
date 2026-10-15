@@ -1,13 +1,18 @@
 <template>
   <div class="ocr-settings-section">
     <div class="section-title">默认 OCR 方法</div>
-    <div class="settings-panel">
-      <div class="setting-label">{{ items?.default_ocr_engine?.des || '默认 OCR 方法' }}</div>
-      <OCRSelector
-        :model-value="configStore.config?.default_ocr_engine"
-        @update:model-value="configStore.setConfigValue('default_ocr_engine', $event)"
-      />
-    </div>
+    <section class="settings-panel">
+      <div class="default-ocr-copy">
+        <div class="setting-label">{{ items?.default_ocr_engine?.des || '默认 OCR 解析引擎' }}</div>
+        <p>未单独指定解析方式时，使用此引擎识别文档内容与版面。</p>
+      </div>
+      <div class="default-ocr-selector">
+        <OCRSelector
+          :model-value="configStore.config?.default_ocr_engine"
+          @update:model-value="configStore.setConfigValue('default_ocr_engine', $event)"
+        />
+      </div>
+    </section>
 
     <div class="section-title">OCR 服务配置</div>
     <p class="section-description">
@@ -156,6 +161,10 @@ onMounted(loadConfigOptions)
 </script>
 
 <style lang="less" scoped>
+.ocr-settings-section {
+  container: ocr-settings / inline-size;
+}
+
 .settings-panel,
 .option-card {
   padding: 16px;
@@ -166,8 +175,47 @@ onMounted(loadConfigOptions)
 
 .settings-panel {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+}
+
+.default-ocr-copy {
+  flex: 1;
+  min-width: 0;
+
+  .setting-label {
+    color: var(--gray-900);
+  }
+
+  p {
+    margin: 4px 0 0;
+    color: var(--color-text-secondary);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+}
+
+.default-ocr-selector {
+  flex: 0 0 260px;
+  width: 260px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+@container ocr-settings (max-width: 520px) {
+  .settings-panel {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .default-ocr-selector {
+    flex: none;
+    width: 100%;
+    max-width: 260px;
+  }
 }
 
 .section-title {

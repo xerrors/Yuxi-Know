@@ -673,9 +673,9 @@ const showCopiedFeedback = (btn) => {
   .yk-markdown-preview .reference-citation { transition: none; }
 }
 .yk-markdown-preview .source-line-highlight {
-  background-color: var(--color-warning-50);
-  outline: 1px solid var(--color-warning-100);
-  border-radius: 4px;
+  background-color: var(--color-warning-25);
+  outline: 1px solid var(--color-warning-50);
+  border-radius: 2px;
 }
 
 .yk-markdown-preview,

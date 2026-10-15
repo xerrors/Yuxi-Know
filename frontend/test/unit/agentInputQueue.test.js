@@ -299,3 +299,50 @@ test('尚未接收的本地输入不能被取消或订阅', async () => {
     agentApi.cancelThreadInput = originalCancel
   }
 })
+
+
+test('交付物展示不把最后可见工具后的正文收入过程区', () => {
+  for (const artifactTool of [
+    { name: 'present_artifacts', args: { filepaths: ['/dog.png'] }, status: 'success' },
+    { function: { name: 'present_artifacts', arguments: '{"filepaths":["/dog.png"]}' }, status: 'success' }
+  ]) {
+    const messages = [
+      { id: 'human', type: 'human', content: '生成小狗图片' },
+      { id: 'prepare', type: 'ai', content: '检查图片文件', tool_calls: [{ name: 'ls', args: {} }] },
+      { id: 'answer', type: 'ai', content: '图片已生成，这是图片说明。', tool_calls: [artifactTool] },
+      { id: 'confirm', type: 'ai', content: '图片已展示，可下载。' }
+    ]
+    const original = structuredClone(messages)
+    const items = getMessageGroupDisplayItems({ messages }, { collapseIntermediate: true })
+    assert.deepEqual(items.map(item => item.type), ['message', 'process-group', 'message', 'message'])
+    assert.deepEqual(items[1].items.map(item => item.key), ['prepare', 'tool-group-prepare-tools'])
+    assert.equal(items[1].toolCallCount, 1)
+    assert.deepEqual(items.slice(2).map(item => item.message.id), ['answer', 'confirm'])
+    assert.deepEqual(MessageProcessor.extractArtifactsFromMessageGroup({ messages }), [{ path: '/dog.png' }])
+    assert.deepEqual(messages, original)
+  }
+})
+
+test('只有交付物展示时正文全部保留，混合调用或后续执行工具仍参与过程折叠', () => {
+  const present = { name: 'present_artifacts', args: { filepaths: ['/dog.png'] }, status: 'success' }
+  const execute = { name: 'bash', args: { command: 'check' } }
+  const answer = { id: 'answer', type: 'ai', content: '图片说明', tool_calls: [present] }
+  const confirm = { id: 'confirm', type: 'ai', content: '展示完成' }
+  const human = { id: 'human', type: 'human', content: '生成图片' }
+  for (const messages of [[human, answer], [human, answer, confirm]]) {
+    const items = getMessageGroupDisplayItems({ messages }, { collapseIntermediate: true })
+    assert.deepEqual(items.map(item => item.message.id), messages.map(message => message.id))
+  }
+  for (const messages of [
+    [{ ...answer, tool_calls: [present, execute] }, confirm],
+    [answer, { id: 'check', type: 'ai', content: '继续检查', tool_calls: [execute] }, confirm]
+  ]) {
+    const items = getMessageGroupDisplayItems({ messages }, { collapseIntermediate: true })
+    assert.deepEqual(items.map(item => item.type), ['process-group', 'message'])
+    assert.equal(items[0].toolCallCount, 1)
+    assert.equal(items[0].items.at(-1).toolCalls[0].name, 'bash')
+    assert.equal(items[1].message.id, 'confirm')
+    const live = getMessageGroupDisplayItems({ messages })
+    assert.equal(live.some(item => item.type === 'process-group'), false)
+  }
+})

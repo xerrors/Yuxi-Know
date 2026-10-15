@@ -645,7 +645,10 @@ div.header,
     height: 100%;
     min-height: 0;
     overflow: hidden;
-    padding: 0 @sidebar-padding-x;
+
+    :deep(.session-list) {
+      padding: 0 @sidebar-padding-x;
+    }
   }
 
   .sidebar-brand,

@@ -94,8 +94,8 @@ async (originalPage) => {
         await page.setViewportSize({ width, height: 900 })
         await image.waitFor()
         await page.waitForFunction(() => { const img = document.querySelector('#widget-sandbox-probe .widget-image img'); return img?.complete && img.naturalWidth === 640 && img.getBoundingClientRect().height > 0 })
-        const dimensions = await image.evaluate(img => { const rect = img.getBoundingClientRect(); return { natural: [img.naturalWidth, img.naturalHeight], width: rect.width, height: rect.height, pageWidth: innerWidth, overflow: document.querySelector('#widget-sandbox-probe').scrollWidth > innerWidth } })
-        check(!dimensions.overflow && dimensions.width <= width && Math.abs(dimensions.width / dimensions.height - 640 / 360) < 0.01, `图片溢出：${JSON.stringify(dimensions)}`)
+        const dimensions = await image.evaluate(img => { const rect = img.getBoundingClientRect(); return { natural: [img.naturalWidth, img.naturalHeight], width: rect.width, height: rect.height, fit: getComputedStyle(img).objectFit, pageWidth: innerWidth, overflow: document.querySelector('#widget-sandbox-probe').scrollWidth > innerWidth } })
+        check(!dimensions.overflow && dimensions.width <= width && dimensions.fit === 'contain' && Math.abs(dimensions.height - Math.min(dimensions.width * 360 / 640, 400)) < 1, `图片溢出：${JSON.stringify(dimensions)}`)
         measurements.push({ dark, width, ...dimensions })
       }
       await image.waitFor()

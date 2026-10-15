@@ -66,40 +66,51 @@
   --gray-10: #080808;
   --gray-0: #030303;
 
-  --color-success-10: #0f1810; /* 成功色-极深 */
-  --color-success-50: #162312; /* 成功色-最深 */
-  --color-success-100: #273921; /* 成功色-深 */
-  --color-success-500: #52c41a; /* 成功色-标准 */
-  --color-success-700: #73d13d; /* 成功色-浅 */
-  --color-success-900: #95de64; /* 成功色-最浅 */
+  /* 语义色阶：主色与次要色继承基础别名，状态色在此适配深色模式。 */
+  --color-success-10: #0f1810; /* 微弱背景 */
+  --color-success-25: #121c11; /* 柔和背景 */
+  --color-success-50: #162312; /* 状态背景 */
+  --color-success-100: #273921; /* 强调背景 */
+  --color-success-500: #52c41a; /* 标准色 */
+  --color-success-700: #73d13d; /* 强调前景 */
+  --color-success-900: #95de64; /* 强前景 */
+  --color-success-1000: #d9f7be; /* 最强前景 */
 
-  --color-error-10: #1a0a0b; /* 错误色-极深 */
-  --color-error-50: #2a1215; /* 错误色-最深 */
-  --color-error-100: #58181c; /* 错误色-深 */
-  --color-error-500: #ff4d4f; /* 错误色-标准 */
-  --color-error-700: #ff7875; /* 错误色-浅 */
-  --color-error-900: #ffa39e; /* 错误色-最浅 */
+  --color-error-10: #1a0a0b; /* 微弱背景 */
+  --color-error-25: #200d0f; /* 柔和背景 */
+  --color-error-50: #2a1215; /* 状态背景 */
+  --color-error-100: #58181c; /* 强调背景 */
+  --color-error-500: #ff4d4f; /* 标准色 */
+  --color-error-700: #ff7875; /* 强调前景 */
+  --color-error-900: #ffa39e; /* 强前景 */
+  --color-error-1000: #ffccc7; /* 最强前景 */
 
-  --color-warning-10: #1a1408; /* 警告色-极深 */
-  --color-warning-50: #2b2111; /* 警告色-最深 */
-  --color-warning-100: #614700; /* 警告色-深 */
-  --color-warning-500: #faad14; /* 警告色-标准 */
-  --color-warning-700: #ffc53d; /* 警告色-浅 */
-  --color-warning-900: #ffd666; /* 警告色-最浅 */
+  --color-warning-10: #1a1408; /* 微弱背景 */
+  --color-warning-25: #20190b; /* 柔和背景 */
+  --color-warning-50: #2b2111; /* 状态背景 */
+  --color-warning-100: #614700; /* 强调背景 */
+  --color-warning-500: #faad14; /* 标准色 */
+  --color-warning-700: #ffc53d; /* 强调前景 */
+  --color-warning-900: #ffd666; /* 强前景 */
+  --color-warning-1000: #ffe58f; /* 最强前景 */
 
-  --color-info-10: #0c0d0d; /* 信息色-极深 */
-  --color-info-50: #111b26; /* 信息色-最深 */
-  --color-info-100: #111d2c; /* 信息色-深 */
-  --color-info-500: #3d8fff; /* 信息色-标准 */
-  --color-info-700: #40a9ff; /* 信息色-浅 */
-  --color-info-900: #69c0ff; /* 信息色-最浅 */
+  --color-info-10: #0c0d0d; /* 微弱背景 */
+  --color-info-25: #0e1216; /* 柔和背景 */
+  --color-info-50: #111b26; /* 状态背景 */
+  --color-info-100: #111d2c; /* 强调背景 */
+  --color-info-500: #3d8fff; /* 标准色 */
+  --color-info-700: #40a9ff; /* 强调前景 */
+  --color-info-900: #69c0ff; /* 强前景 */
+  --color-info-1000: #bae7ff; /* 最强前景 */
 
-  --color-accent-10: #081919; /* 强调色-极深 */
-  --color-accent-50: #0f2e2e; /* 强调色-最深 */
-  --color-accent-100: #164e63; /* 强调色-深 */
-  --color-accent-500: #13c2c2; /* 强调色-标准 */
-  --color-accent-700: #36cfc9; /* 强调色-浅 */
-  --color-accent-900: #5cdbd3; /* 强调色-最浅 */
+  --color-accent-10: #081919; /* 微弱背景 */
+  --color-accent-25: #0b2121; /* 柔和背景 */
+  --color-accent-50: #0f2e2e; /* 状态背景 */
+  --color-accent-100: #164e63; /* 强调背景 */
+  --color-accent-500: #13c2c2; /* 标准色 */
+  --color-accent-700: #36cfc9; /* 强调前景 */
+  --color-accent-900: #5cdbd3; /* 强前景 */
+  --color-accent-1000: #87e8de; /* 最强前景 */
 
   --chart-palette-1: var(--main-300);
   --chart-palette-2: #3ea896;

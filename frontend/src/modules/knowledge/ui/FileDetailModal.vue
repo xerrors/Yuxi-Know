@@ -9,21 +9,21 @@
       <!-- 左侧：文件名和图标 -->
       <div class="file-title">
         <FileTypeIcon :name="file?.filename" :size="18" />
-        <span class="file-name">{{ file?.filename || '文件详情' }}</span>
+        <span class="file-name" :title="file?.filename || '文件详情'">{{ file?.filename || '文件详情' }}</span>
       </div>
 
       <div class="header-controls">
         <!-- 字符数/片段数显示在 segment 左边 -->
-        <span v-if="viewInfoText" class="view-info">{{ viewInfoText }}</span>
+        <span v-if="viewInfoText" class="view-info expanded-controls">{{ viewInfoText }}</span>
 
         <!-- 视图模式切换 -->
-        <div class="view-controls" v-if="file && viewModeOptions.length > 1">
+        <div class="view-controls expanded-controls" v-if="file && viewModeOptions.length > 1">
           <a-segmented v-model:value="viewMode" :options="viewModeOptions" />
         </div>
 
         <!-- 下载按钮下拉菜单 -->
-        <a-dropdown trigger="click" v-if="file">
-          <a-button type="default" class="download-btn" title="下载" aria-label="下载">
+        <a-dropdown trigger="click" v-if="file" overlay-class-name="knowledge-file-actions">
+          <a-button type="default" class="download-btn expanded-controls" title="下载" aria-label="下载">
             <Download :size="16" />
             <ChevronDown :size="14" />
           </a-button>
@@ -35,6 +35,43 @@
               </a-menu-item>
               <a-menu-item key="markdown" :disabled="contentState.loading || !mergedContent">
                 <template #icon><FileText :size="16" /></template>
+                下载 Markdown
+              </a-menu-item>
+            </a-menu>
+          </template>
+        </a-dropdown>
+
+        <a-dropdown v-if="file" :trigger="['click']" overlay-class-name="knowledge-file-actions">
+          <a-button
+            type="text"
+            class="compact-controls"
+            title="更多文件操作"
+            aria-label="更多文件操作"
+          >
+            <MoreHorizontal :size="18" />
+          </a-button>
+          <template #overlay>
+            <a-menu :selected-keys="[viewMode]">
+              <a-menu-item
+                v-for="option in viewModeOptions"
+                :key="option.value"
+                @click="viewMode = option.value"
+              >
+                {{ option.title }}
+              </a-menu-item>
+              <a-menu-divider v-if="viewModeOptions.length" />
+              <a-menu-item
+                key="download-original"
+                :disabled="!file.file_id"
+                @click="handleDownloadMenuClick({ key: 'original' })"
+              >
+                下载原文
+              </a-menu-item>
+              <a-menu-item
+                key="download-markdown"
+                :disabled="contentState.loading || !mergedContent"
+                @click="handleDownloadMenuClick({ key: 'markdown' })"
+              >
                 下载 Markdown
               </a-menu-item>
             </a-menu>
@@ -154,7 +191,7 @@ import {
 import MarkdownDocumentPreview from '@/modules/workspace/ui/MarkdownDocumentPreview.vue'
 import FileTypeIcon from '@/shared/ui/FileTypeIcon.vue'
 import AgentFilePreview from '@/modules/session/ui/workspace/AgentFilePreview.vue'
-import { Download, ChevronDown, FileSearch, FileText, Rows3, Code2, X } from '@lucide/vue'
+import { Download, ChevronDown, FileSearch, FileText, Rows3, Code2, X, MoreHorizontal } from '@lucide/vue'
 
 const props = defineProps({
   referenceSource: { type: Object, default: null },
@@ -379,7 +416,8 @@ const makeViewModeOption = (label, value, icon) => ({
     },
     [h(icon, { size: 15 })]
   ),
-  value
+  value,
+  title: label
 })
 
 const viewModeOptions = computed(() => {
@@ -709,6 +747,7 @@ onBeforeUnmount(resetLocalState)
   font-size: 12px;
 }
 .file-detail-embedded {
+  container: knowledge-file-preview / inline-size;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -720,7 +759,7 @@ onBeforeUnmount(resetLocalState)
   overflow: hidden;
 }
 .file-detail-embedded .modal-title-wrapper {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 .modal-title-wrapper {
   flex-shrink: 0;
@@ -742,6 +781,10 @@ onBeforeUnmount(resetLocalState)
   overflow-y: auto;
   padding: 0;
   min-height: 0;
+}
+
+.chunks-panel {
+  padding: 12px 16px;
 }
 
 .source-panel {
@@ -893,6 +936,30 @@ onBeforeUnmount(resetLocalState)
   min-width: 0;
 }
 
+.header-controls .compact-controls {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 32px;
+  height: 28px;
+  padding: 0;
+}
+
+.file-detail .ant-modal-body {
+  container: knowledge-file-preview / inline-size;
+}
+
+@container knowledge-file-preview (max-width: 640px) {
+  .header-controls .expanded-controls {
+    display: none;
+  }
+
+  .header-controls .compact-controls {
+    display: inline-flex;
+  }
+}
+
 /* 下载按钮样式 */
 .download-btn {
   display: inline-flex;
@@ -971,6 +1038,35 @@ onBeforeUnmount(resetLocalState)
   font-size: 12px;
   color: var(--gray-500);
   white-space: nowrap;
+}
+
+/* 文件操作使用中性色区分当前视图与悬停，避免组件库推导出偏灰绿的主色底。 */
+.ant-dropdown.knowledge-file-actions .ant-dropdown-menu {
+  border: 1px solid var(--gray-150);
+  background: var(--gray-0);
+  box-shadow: var(--shadow-popover);
+
+  .ant-dropdown-menu-item {
+    color: var(--gray-800);
+  }
+
+  .ant-dropdown-menu-item:hover,
+  .ant-dropdown-menu-item-active {
+    background: var(--gray-50);
+  }
+
+  .ant-dropdown-menu-item-selected,
+  .ant-dropdown-menu-item-selected:hover {
+    background: var(--gray-100);
+    color: var(--gray-900);
+    font-weight: 500;
+  }
+
+  .ant-dropdown-menu-item-disabled,
+  .ant-dropdown-menu-item-disabled:hover {
+    background: transparent;
+    color: var(--gray-400);
+  }
 }
 
 /* 下拉菜单样式 */

@@ -37,6 +37,19 @@ export function mergeItemSnapshot(state, items) {
   }
 }
 
+/** 将已存在历史中的终态事件同步到历史投影，恢复 Run 可更新旧 Run 的工具调用。 */
+export function syncHistoricalItemEvent(state, event) {
+  if (event?.type !== 'agent.session.turn.item.done' || !event.item) return false
+  const item = event.item
+  const existing = state.items[item.id]
+  const linkedCall = item.type === 'function_call_output' && item.yuxi?.call_item_id
+    ? state.items[item.yuxi.call_item_id]
+    : null
+  if (!existing && !linkedCall) return false
+  mergeItemSnapshot(state, [item])
+  return true
+}
+
 export function applyAgentEvent(state, event) {
   if (!event?.event_id || state.seenEvents.has(event.event_id)) return false
   state.seenEvents.add(event.event_id)

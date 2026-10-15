@@ -1774,7 +1774,7 @@ import FallbackAvatar from '@/shared/ui/FallbackAvatar.vue'
 .file-action-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
 
   .ant-btn {
     text-align: left;

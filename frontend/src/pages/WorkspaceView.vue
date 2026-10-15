@@ -2,6 +2,16 @@
   <div class="workspace-view layout-container">
     <PageHeader title="个人空间" :loading="loadingTree || loadingPreview" :show-border="true">
       <template #actions>
+        <a-button
+          class="lucide-icon-btn"
+          :aria-label="sidebarCollapsed ? '展开个人空间侧边栏' : '收起个人空间侧边栏'"
+          :aria-expanded="!sidebarCollapsed"
+          aria-controls="workspace-navigation"
+          @click="sidebarCollapsed = !sidebarCollapsed"
+        >
+          <template #icon><PanelLeft :size="16" /></template>
+          {{ sidebarCollapsed ? '展开导航' : '收起导航' }}
+        </a-button>
         <a-button class="lucide-icon-btn" @click="fileSearchOpen = true">
           <template #icon><Search :size="16" /></template>
           搜索
@@ -46,15 +56,12 @@
     />
 
     <div class="workspace-shell" :class="{ 'is-sidebar-collapsed': sidebarCollapsed }">
-      <div v-if="!sidebarCollapsed" class="workspace-sidebar-slot">
-        <button
-          type="button"
-          class="sidebar-collapse-action"
-          aria-label="收起个人空间侧边栏"
-          @click="sidebarCollapsed = true"
-        >
-          <ChevronLeft :size="16" />
-        </button>
+      <div
+        id="workspace-navigation"
+        class="workspace-sidebar-slot"
+        :inert="sidebarCollapsed"
+        :aria-hidden="sidebarCollapsed"
+      >
         <WorkspaceSidebar
           :active-key="activeSourceKey"
           :current-path="currentPath"
@@ -70,16 +77,6 @@
           @create-directory="openCreateDirectoryModal"
         />
       </div>
-      <button
-        v-else
-        type="button"
-        class="sidebar-expand-action"
-        aria-label="展开个人空间侧边栏"
-        @click="sidebarCollapsed = false"
-      >
-        <ChevronRight :size="16" />
-      </button>
-
       <main
         ref="workspaceMainRef"
         class="workspace-main"
@@ -224,7 +221,7 @@
 import { computed, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
-import { ChevronLeft, ChevronRight, CircleHelp, LibraryBig, Search } from '@lucide/vue'
+import { CircleHelp, LibraryBig, PanelLeft, Search } from '@lucide/vue'
 import PageHeader from '@/shared/ui/PageHeader.vue'
 import AgentFilePreview from '@/modules/session/ui/workspace/AgentFilePreview.vue'
 import WorkspaceFileList from '@/modules/workspace/ui/WorkspaceFileList.vue'
@@ -1031,14 +1028,16 @@ watch([useInlinePreview, workspaceActive], ([isInline, isActive]) => {
 .workspace-shell {
   position: relative;
   display: grid;
-  grid-template-columns: 168px minmax(0, 1fr);
+  --workspace-sidebar-width: clamp(240px, 20vw, 280px);
+  grid-template-columns: var(--workspace-sidebar-width) minmax(0, 1fr);
+  transition: grid-template-columns 220ms ease;
   flex: 1 1 auto;
   min-height: 0;
   background: var(--gray-0);
   overflow: hidden;
 
   &.is-sidebar-collapsed {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: 0px minmax(0, 1fr);
   }
 }
 
@@ -1046,47 +1045,35 @@ watch([useInlinePreview, workspaceActive], ([isInline, isActive]) => {
   position: relative;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 180ms ease, visibility 0s;
+}
+
+.is-sidebar-collapsed .workspace-sidebar-slot {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 180ms ease, visibility 0s 220ms;
 }
 
 .workspace-sidebar-slot :deep(.workspace-sidebar) {
+  width: var(--workspace-sidebar-width);
   height: 100%;
 }
 
-.sidebar-collapse-action,
-.sidebar-expand-action {
-  width: 26px;
-  height: 26px;
-  position: absolute;
-  top: 50%;
-  z-index: 4;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--gray-150);
-  background: var(--gray-0);
-  color: var(--gray-600);
-  cursor: pointer;
-  transform: translateY(-50%);
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
-
-  &:hover {
-    background: var(--main-20);
-    color: var(--main-color);
+@media (max-width: 1023px) {
+  .workspace-shell {
+    --workspace-sidebar-width: 216px;
   }
 }
 
-.sidebar-collapse-action {
-  right: -13px;
-  width: 26px;
-  border-radius: 50%;
-}
-
-.sidebar-expand-action {
-  left: 0;
-  width: 22px;
-  border-left: 0;
-  border-radius: 0 12px 12px 0;
+@media (prefers-reduced-motion: reduce) {
+  .workspace-shell,
+  .workspace-sidebar-slot,
+  .is-sidebar-collapsed .workspace-sidebar-slot {
+    transition: none;
+  }
 }
 
 .workspace-main {

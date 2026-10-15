@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { createItemState, applyAgentEvent, mergeItemSnapshot, itemsToMessages } from '../../src/modules/session/model/agentItems.js'
+import { createItemState, applyAgentEvent, mergeItemSnapshot, syncHistoricalItemEvent, itemsToMessages } from '../../src/modules/session/model/agentItems.js'
 
 test('内部恢复输入不显示用户气泡，普通 JSON 输入和协作工具结果保留', () => {
   const content = '{"results":[{"output":"子任务完成"}]}'
@@ -136,6 +136,39 @@ test('恢复 Run 的工具结果只通过明确 call_item_id 关联原调用', (
   const [view] = itemsToMessages([call, output])
   assert.equal(view.tool_calls[0].tool_call_result.content, 'yes')
   assert.equal(view.tool_calls[0].status, 'success')
+})
+
+test('恢复 Run 的终态事件即时更新历史提问调用和结果', () => {
+  const history = createItemState()
+  const call = { id: 'old-call', type: 'function_call', name: 'ask_user_question', arguments: {},
+    call_id: 'ask-1', status: 'incomplete', turn_id: 'turn', yuxi: { run_id: 'old-run', message_id: 1 } }
+  mergeItemSnapshot(history, [call])
+  const completedCall = { ...call, status: 'completed' }
+  assert.equal(syncHistoricalItemEvent(history, {
+    type: 'agent.session.turn.item.done', item: completedCall
+  }), true)
+  const output = { id: 'resume-output', type: 'function_call_output', call_id: 'ask-1',
+    output: '{"answer":"北京"}', status: 'completed', turn_id: 'turn',
+    yuxi: { run_id: 'resume-run', message_id: 2, call_item_id: call.id } }
+  assert.equal(syncHistoricalItemEvent(history, {
+    type: 'agent.session.turn.item.done', item: output
+  }), true)
+  const [message] = itemsToMessages(Object.values(history.items))
+  assert.equal(message.tool_calls[0].status, 'success')
+  assert.equal(message.tool_calls[0].tool_call_result.content, output.output)
+})
+
+test('历史投影不接收无法明确关联的恢复输出', () => {
+  const history = createItemState()
+  const call = { id: 'old-call', type: 'function_call', name: 'ask_user_question', arguments: {},
+    call_id: 'same', status: 'incomplete', turn_id: 'turn', yuxi: { run_id: 'old-run' } }
+  mergeItemSnapshot(history, [call])
+  const unrelated = { id: 'unrelated-output', type: 'function_call_output', call_id: 'same',
+    output: 'wrong', status: 'completed', turn_id: 'turn', yuxi: { run_id: 'other-run' } }
+  assert.equal(syncHistoricalItemEvent(history, {
+    type: 'agent.session.turn.item.done', item: unrelated
+  }), false)
+  assert.equal(itemsToMessages(Object.values(history.items))[0].tool_calls[0].status, 'incomplete')
 })
 
 test('恢复完成的工具拒绝迟到 incomplete，最终回答不被旧 commentary 降级', () => {

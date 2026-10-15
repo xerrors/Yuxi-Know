@@ -336,4 +336,4 @@ Write-Host ""
 Write-Host "🎉 Initialization complete!" -ForegroundColor Green
 Write-Host "==========================" -ForegroundColor Green
 Write-Host "You can now run: docker compose up -d --build" -ForegroundColor Cyan
-Write-Host "This will start all services in development mode with hot-reload enabled." -ForegroundColor Cyan
+Write-Host "Backend code changes require an explicit service restart; frontend hot-reload remains enabled." -ForegroundColor Cyan

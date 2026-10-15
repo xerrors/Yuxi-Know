@@ -1,5 +1,5 @@
 <template>
-  <aside class="workspace-sidebar">
+  <aside class="workspace-sidebar" aria-label="空间导航">
     <div class="sidebar-actions">
       <div ref="uploadActionMenuRef" class="file-action-dropdown">
         <button
@@ -53,7 +53,7 @@
         @click="$emit('select-personal')"
       >
         <FileTypeIcon is-dir folder-variant="personal" :size="16" />
-        <span>个人空间</span>
+        <span>全部文件</span>
       </button>
     </section>
 
@@ -92,7 +92,7 @@
         @click="$emit('select-knowledge-base', knowledgeBase)"
       >
         <FileTypeIcon is-dir :size="16" />
-        <span>{{ knowledgeBase.name }}</span>
+        <span :title="knowledgeBase.name">{{ knowledgeBase.name }}</span>
       </button>
     </section>
 
@@ -107,7 +107,7 @@
         @click="$emit('select-knowledge-base', knowledgeBase)"
       >
         <FileTypeIcon is-dir :size="16" />
-        <span>{{ knowledgeBase.name }}</span>
+        <span :title="knowledgeBase.name">{{ knowledgeBase.name }}</span>
       </button>
     </section>
 
@@ -191,11 +191,11 @@ const sharedKnowledgeBases = computed(() =>
 .workspace-sidebar {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 16px;
   min-width: 0;
-  padding: 8px 8px 12px;
+  padding: 16px 12px;
   border-right: 1px solid var(--gray-100);
-  background: var(--gray-0);
+  background: var(--gray-10);
   overflow-y: auto;
 }
 
@@ -214,10 +214,10 @@ const sharedKnowledgeBases = computed(() =>
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 7px;
+  gap: 10px;
   width: 100%;
-  height: 30px;
-  padding: 0 8px;
+  height: 36px;
+  padding: 0 10px;
   border-radius: 6px;
   background: var(--gray-0);
   border: 1px solid var(--gray-150);
@@ -297,10 +297,6 @@ const sharedKnowledgeBases = computed(() =>
     color: var(--gray-900);
     outline: none;
   }
-
-  &:active {
-    transform: scale(0.97);
-  }
 }
 
 .file-action-menu-enter-active {
@@ -340,9 +336,9 @@ const sharedKnowledgeBases = computed(() =>
 }
 
 .section-title {
-  padding: 3px 6px;
+  padding: 0 10px 6px;
   color: var(--gray-500);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 18px;
 }
@@ -350,10 +346,10 @@ const sharedKnowledgeBases = computed(() =>
 .workspace-nav-item {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 10px;
   width: 100%;
-  min-height: 32px;
-  padding: 0 8px;
+  min-height: 36px;
+  padding: 0 10px;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
@@ -367,7 +363,7 @@ const sharedKnowledgeBases = computed(() =>
     color 0.2s ease,
     border-color 0.2s ease;
 
-  span:first-of-type {
+  > span {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -382,15 +378,29 @@ const sharedKnowledgeBases = computed(() =>
 
   &.active {
     border-color: transparent;
-    color: var(--gray-2000);
-    background-color: color-mix(in srgb, var(--gray-800) 6%, var(--gray-0));
+    color: var(--gray-1000);
+    background-color: var(--gray-100);
     font-weight: 600;
   }
 
   &.secondary {
-    min-height: 28px;
-    font-size: 12.5px;
+    font-weight: 400;
+
+    &.active {
+      font-weight: 600;
+    }
   }
+}
+
+.workspace-nav-item :deep(svg),
+.workspace-nav-item :deep(.file-type-icon) {
+  flex-shrink: 0;
+}
+
+.workspace-nav-item:focus-visible,
+.sidebar-action-btn:focus-visible {
+  outline: 2px solid var(--gray-700);
+  outline-offset: 2px;
 }
 
 .sidebar-muted {

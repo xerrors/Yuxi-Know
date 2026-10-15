@@ -108,7 +108,8 @@ test('消息调试条目保持后端数组顺序并保留独立工具消息', ()
     entries.map((entry) => entry.role),
     ['human', 'ai', 'tool', 'system']
   )
-  assert.equal(entries[1].summary, '开始查询 | 工具: search_kb、read_file')
+  assert.equal(entries[1].summary, '开始查询')
+  assert.deepEqual(entries[1].raw.tool_calls, history[1].tool_calls)
   assert.equal(entries[2].summary, '工具: search_kb | 查询结果')
 })
 

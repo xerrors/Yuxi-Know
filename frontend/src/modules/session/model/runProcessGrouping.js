@@ -51,6 +51,7 @@ export const formatProcessDuration = (durationMs) => {
   return formattedDuration ? `耗时 ${formattedDuration}` : '处理过程'
 }
 
+/** 将最后一个可见处理分组之前的内容折叠，后续正文连续展示。 */
 export const collapseRunProcess = (items, enabled = false, runTiming = null) => {
   if (!enabled) return items
 
@@ -59,14 +60,18 @@ export const collapseRunProcess = (items, enabled = false, runTiming = null) => 
   )
   if (finalIndex <= 1 || finalIndex !== items.length - 1) return items
 
+  // 隐藏的交付物调用已在展示投影中过滤，不再以最后一条正文作为截止。
+  const processEnd = items.findLastIndex((item) => item.type === 'tool-group') + 1
+  if (processEnd === 0) return items
+
   const processStart = items.findIndex(
     (item, index) =>
-      index < finalIndex &&
+      index < processEnd &&
       (item.type === 'tool-group' || (item.type === 'message' && item.message?.type === 'ai'))
   )
   if (processStart < 0) return items
 
-  const processItems = items.slice(processStart, finalIndex)
+  const processItems = items.slice(processStart, processEnd)
   if (processItems.some((item) => item.type !== 'tool-group' && item.message?.type !== 'ai')) {
     return items
   }
@@ -90,7 +95,7 @@ export const collapseRunProcess = (items, enabled = false, runTiming = null) => 
       toolCallCount,
       durationMs
     },
-    items[finalIndex]
+    ...items.slice(processEnd)
   ]
 }
 

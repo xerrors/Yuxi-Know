@@ -101,46 +101,50 @@ export function parseWidget(source) {
         /^[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(value) &&
         !['constructor', 'prototype', '__proto__'].includes(value)
       if (!isColumnKey(node.xAxis)) throw new Error('Chart xAxis 必须是合法数据列名')
-      if (
-        !Array.isArray(node.series) ||
-        !node.series.length ||
-        node.series.length > 3 ||
-        node.series.some(
-          (series) =>
-            !series ||
-            !['bar', 'line'].includes(series.type) ||
-            !isColumnKey(series.dataKey) ||
-            series.dataKey === node.xAxis ||
-            (series.label !== undefined && (!isTextValue(series.label) || !series.label.trim())) ||
-            Object.keys(series).some((key) => !['type', 'dataKey', 'label'].includes(key))
-        ) ||
-        new Set(node.series.map((series) => series.dataKey)).size !== node.series.length
-      )
-        throw new Error('Chart 需要 1–3 个 bar/line 系列，dataKey 合法且唯一')
-      const columns = [node.xAxis, ...node.series.map((series) => series.dataKey)]
-      if (
-        !Array.isArray(node.data) ||
-        node.data.length > 60 ||
-        node.data.some(
-          (row) =>
-            !row ||
-            typeof row !== 'object' ||
-            Array.isArray(row) ||
-            Object.keys(row).some((key) => !columns.includes(key)) ||
-            !Object.hasOwn(row, node.xAxis) ||
-            !isTextValue(row[node.xAxis]) ||
-            !row[node.xAxis].trim() ||
-            node.series.some(
-              (series) =>
-                !Object.hasOwn(row, series.dataKey) ||
-                !Number.isFinite(row[series.dataKey]) ||
-                Math.abs(row[series.dataKey]) > 1e12
-            )
-        )
-      )
-        throw new Error(
-          'Chart data 最多 60 行，类别为非空字符串，系列值为有限数字（绝对值 ≤ 1e12）'
-        )
+      if (!Array.isArray(node.series) || !node.series.length || node.series.length > 3)
+        throw new Error('Chart series 必须是包含 1–3 项的数组')
+      const seriesKeys = new Set()
+      for (const [index, series] of node.series.entries()) {
+        const location = `Chart series 第 ${index + 1} 项`
+        if (!series || typeof series !== 'object' || Array.isArray(series))
+          throw new Error(`${location}必须是对象`)
+        if (!['bar', 'line'].includes(series.type))
+          throw new Error(`${location}字段 "type" 只支持 bar/line`)
+        if (!isColumnKey(series.dataKey))
+          throw new Error(`${location}字段 "dataKey" 必须是合法数据列名`)
+        if (series.dataKey === node.xAxis)
+          throw new Error(`${location}字段 "dataKey" 不能与 xAxis 字段 "${node.xAxis}" 相同`)
+        if (seriesKeys.has(series.dataKey))
+          throw new Error(`${location}字段 "dataKey" 重复："${series.dataKey}"`)
+        seriesKeys.add(series.dataKey)
+        if (series.label !== undefined && (!isTextValue(series.label) || !series.label.trim()))
+          throw new Error(`${location}字段 "label" 必须是非空字符串，且不超过 4000 字符`)
+        const extraKey = Object.keys(series).find((key) => !['type', 'dataKey', 'label'].includes(key))
+        if (extraKey !== undefined) throw new Error(`${location}包含不支持的字段 "${extraKey}"`)
+      }
+      if (!Array.isArray(node.data)) throw new Error('Chart data 必须是数组')
+      if (node.data.length > 60)
+        throw new Error(`Chart data 最多 60 条记录，当前为 ${node.data.length} 条`)
+      const columns = [node.xAxis, ...seriesKeys]
+      for (const [index, row] of node.data.entries()) {
+        const location = `Chart data 第 ${index + 1} 条`
+        if (!row || typeof row !== 'object' || Array.isArray(row))
+          throw new Error(`${location}必须是对象`)
+        if (!Object.hasOwn(row, node.xAxis))
+          throw new Error(`${location}缺少横轴字段 "${node.xAxis}"（由 xAxis 指定）`)
+        if (!isTextValue(row[node.xAxis]) || !row[node.xAxis].trim())
+          throw new Error(`${location}字段 "${node.xAxis}" 必须是非空字符串，且不超过 4000 字符`)
+        for (const { dataKey } of node.series) {
+          if (!Object.hasOwn(row, dataKey))
+            throw new Error(`${location}缺少系列字段 "${dataKey}"（由 series.dataKey 指定）`)
+          if (!Number.isFinite(row[dataKey]))
+            throw new Error(`${location}字段 "${dataKey}" 必须是有限数字`)
+          if (Math.abs(row[dataKey]) > 1e12)
+            throw new Error(`${location}字段 "${dataKey}" 的绝对值不能超过 1e12`)
+        }
+        const extraKey = Object.keys(row).find((key) => !columns.includes(key))
+        if (extraKey !== undefined) throw new Error(`${location}包含未声明的字段 "${extraKey}"`)
+      }
       if (
         node.height !== undefined &&
         (!Number.isInteger(node.height) || node.height < 180 || node.height > 400)

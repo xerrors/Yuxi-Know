@@ -111,6 +111,7 @@ test('只有旧 Run 时间戳时不推算过程耗时', () => {
     [
       { key: 'h1', type: 'message', message: { type: 'human' } },
       { key: 'a1', type: 'message', message: { type: 'ai' } },
+      { key: 'thinking', type: 'tool-group', toolCalls: [], entries: [{ type: 'reasoning', content: '检查结果' }] },
       {
         key: 'a2',
         type: 'message',

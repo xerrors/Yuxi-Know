@@ -92,64 +92,73 @@
                     {{ getHiddenSelection(key).length }} 项当前不在可选范围，修改可见选择时会保留。
                     <template v-if="!isReadOnlyConfig"> 清空全部会移除这些选择。 </template>
                   </div>
-                  <!-- Case 1: <= 5 options, inline list -->
+                  <div class="selection-toolbar">
+                    <span class="selection-count" role="status">
+                      <template v-if="isAllSelected(key)">已选择全部（含新增）</template>
+                      <template v-else>
+                        已选择 {{ getSelectedCount(key) }} 项｜共
+                        {{ getSelectionOptions(key, value).length }} 项
+                      </template>
+                    </span>
+                    <div v-if="!isReadOnlyConfig" class="selection-actions">
+                      <a-button
+                        v-if="supportsAllAgentResources(value) && !isAllSelected(key)"
+                        type="link"
+                        size="small"
+                        class="select-all-btn"
+                        @click="setAllSelection(key)"
+                      >
+                        选择全部
+                      </a-button>
+                      <a-button
+                        v-if="getSelectionOptions(key, value).length > 5"
+                        size="small"
+                        class="selection-trigger-btn"
+                        @click="openSelectionModal(key)"
+                      >
+                        选择...
+                      </a-button>
+                      <a-tooltip v-if="canResetSelection(key)" title="清空全部">
+                        <a-button
+                          type="text"
+                          size="small"
+                          class="clear-btn lucide-icon-btn"
+                          aria-label="清空全部"
+                          @click="clearSelection(key)"
+                        >
+                          <X :size="14" aria-hidden="true" />
+                        </a-button>
+                      </a-tooltip>
+                      <template
+                        v-if="getSelectionOptions(key, value).length <= 5 && isResourceConfigKind(value.kind)"
+                      >
+                        <a-button
+                          type="link"
+                          size="small"
+                          @click="refreshConfigOptions(key, value.kind)"
+                          class="inline-action-btn lucide-icon-btn"
+                        >
+                          <RotateCw :size="14" aria-hidden="true" />
+                          刷新
+                        </a-button>
+                        <a-button
+                          type="link"
+                          size="small"
+                          @click="navigateToConfigPage(value.kind)"
+                          class="inline-action-btn lucide-icon-btn"
+                        >
+                          <Settings :size="14" aria-hidden="true" />
+                          配置
+                        </a-button>
+                      </template>
+                      <slot name="resource-actions" :field="key" :kind="value.kind" />
+                    </div>
+                  </div>
+
                   <div
                     v-if="getSelectionOptions(key, value).length <= 5"
                     class="multi-select-cards"
                   >
-                    <div class="multi-select-label">
-                      <span
-                        >已选择 {{ getSelectedCount(key) }} 项 | 共
-                        {{ getSelectionOptions(key, value).length }} 项</span
-                      >
-                      <div v-if="!isReadOnlyConfig || supportsAllAgentResources(value)" class="label-actions">
-                        <a-button
-                          v-if="supportsAllAgentResources(value)"
-                          type="link"
-                          size="small"
-                          class="select-all-btn lucide-icon-btn"
-                          :class="{ selected: isAllSelected(key) }"
-                          :aria-pressed="isAllSelected(key)"
-                          :disabled="isReadOnlyConfig"
-                          @click="setAllSelection(key, !isAllSelected(key))"
-                        >
-                          <Check v-if="isAllSelected(key)" :size="12" aria-hidden="true" />
-                          选择全部
-                        </a-button>
-                        <a-button
-                          type="link"
-                          size="small"
-                          class="clear-btn"
-                          @click="clearSelection(key)"
-                          v-if="!isReadOnlyConfig && canResetSelection(key)"
-                        >
-                          清空全部
-                        </a-button>
-                        <template v-if="!isReadOnlyConfig && isResourceConfigKind(value.kind)">
-                          <a-divider type="vertical" />
-                          <a-button
-                            type="link"
-                            size="small"
-                            @click="refreshConfigOptions(key, value.kind)"
-                            class="inline-action-btn lucide-icon-btn"
-                          >
-                            <RotateCw :size="12" />
-                            刷新
-                          </a-button>
-                          <a-button
-                            type="link"
-                            size="small"
-                            @click="navigateToConfigPage(value.kind)"
-                            class="inline-action-btn lucide-icon-btn"
-                          >
-                            <Settings :size="12" />
-                            配置
-                          </a-button>
-                          <slot name="resource-actions" :field="key" :kind="value.kind" />
-                        </template>
-                      </div>
-                    </div>
-
                     <div class="options-grid">
                       <div
                         v-for="option in isReadOnlyConfig
@@ -183,51 +192,6 @@
                   <!-- Case 2: > 5 options, Modal trigger -->
 
                   <div v-else class="selection-container">
-                    <div class="selection-summary">
-                      <div class="selection-summary-info">
-                        <span class="selection-count"
-                          >已选择 {{ getSelectedCount(key) }} 项 | 共
-                          {{ getSelectionOptions(key, value).length }} 项</span
-                        >
-
-                        <div v-if="!isReadOnlyConfig || supportsAllAgentResources(value)" class="selection-range-actions">
-                          <a-button
-                            v-if="supportsAllAgentResources(value)"
-                            type="link"
-                            size="small"
-                            class="select-all-btn lucide-icon-btn"
-                            :class="{ selected: isAllSelected(key) }"
-                            :aria-pressed="isAllSelected(key)"
-                            :disabled="isReadOnlyConfig"
-                            @click="setAllSelection(key, !isAllSelected(key))"
-                          >
-                            <Check v-if="isAllSelected(key)" :size="12" aria-hidden="true" />
-                            选择全部
-                          </a-button>
-                          <a-button
-                            v-if="!isReadOnlyConfig && canResetSelection(key)"
-                            type="link"
-                            size="small"
-                            class="clear-btn"
-                            @click="clearSelection(key)"
-                          >
-                            清空全部
-                          </a-button>
-                        </div>
-                      </div>
-
-                      <a-button
-                        v-if="!isReadOnlyConfig"
-                        type="primary"
-                        size="small"
-                        class="selection-trigger-btn"
-                        @click="openSelectionModal(key)"
-                      >
-                        选择...
-                      </a-button>
-                      <slot name="resource-actions" :field="key" :kind="value.kind" />
-                    </div>
-
                     <!-- Selected Preview Tags -->
 
                     <div v-if="getSelectedCount(key) > 0" class="selection-preview">
@@ -428,8 +392,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { message } from 'ant-design-vue'
-import { AlertTriangle, Check, Plus, Search, RotateCw, RotateCcw, Settings } from '@lucide/vue'
+import { AlertTriangle, Check, Plus, Search, RotateCw, RotateCcw, Settings, X } from '@lucide/vue'
 import ModelSelectorComponent from '@/modules/agents/ui/ModelSelectorComponent.vue'
 import {
   getAgentConfigOptionDescription as getOptionDescription,
@@ -785,14 +748,10 @@ const canResetSelection = (key) =>
   getSelectedCount(key) > 0 ||
   getHiddenSelection(key).length > 0
 
-/** 关闭全部模式时固定当前可见范围，后续新增资源不自动加入。 */
-const setAllSelection = (key, checked) => {
+/** 全选保存动态全部意图，状态区说明包含新增资源。 */
+const setAllSelection = (key) => {
   if (isReadOnlyConfig.value) return
-  updateConfig({ [key]: checked ? 'all' : [...ensureArray(key)] })
-  if (checked) message.info({
-    content: '已选择全部，后续新增的资源也会自动加入。',
-    key: 'agent-resource-select-all'
-  })
+  updateConfig({ [key]: 'all' })
 }
 defineExpose({ closeSelectionModal })
 </script>
@@ -997,38 +956,6 @@ defineExpose({ closeSelectionModal })
 
 // 选择器样式
 .selection-container {
-  .selection-summary {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 4px 10px;
-    background: var(--gray-0);
-    border-radius: 8px;
-    border: 1px solid var(--gray-150);
-    margin-bottom: 8px;
-
-    .selection-summary-info {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 8px;
-      font-size: 13px;
-      color: var(--gray-900);
-
-      .selection-count {
-        color: var(--gray-900);
-        font-weight: 500;
-      }
-    }
-
-    .selection-trigger-btn {
-      border-radius: 4px;
-      height: 28px;
-      font-size: 12px;
-      font-weight: 500;
-    }
-  }
-
   .selection-preview {
     display: flex;
     flex-wrap: wrap;
@@ -1057,21 +984,6 @@ defineExpose({ closeSelectionModal })
 
 // 多选卡片样式
 .multi-select-cards {
-  .multi-select-label {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 12px;
-    font-size: 12px;
-    color: var(--gray-600);
-
-    .label-actions {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-  }
-
   .options-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
@@ -1336,30 +1248,51 @@ defineExpose({ closeSelectionModal })
   }
 }
 
-.selection-range-actions {
+.selection-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 8px 16px;
+  min-height: 28px;
+  margin-bottom: 10px;
+}
+
+.selection-count {
+  flex: 1 1 auto;
+  color: var(--gray-600);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.selection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
 }
 
 .select-all-btn {
-  gap: 4px;
-  min-height: 24px;
-  padding: 2px 6px;
-  border-radius: 4px;
+  height: 28px;
+  padding: 0 6px;
   font-size: 12px;
   color: var(--main-700);
+}
 
-  &.selected {
-    border-color: var(--main-200);
-    background: var(--main-10);
-    font-weight: 600;
+.selection-trigger-btn {
+  height: 28px;
+  border-radius: var(--radius-control);
+  font-size: 12px;
+}
 
-    &:hover {
-      border-color: var(--main-300);
-      background: var(--main-30);
-      color: var(--main-800);
-    }
+.clear-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--gray-500);
+
+  &:hover {
+    color: var(--gray-900);
   }
 }
 
@@ -1381,20 +1314,6 @@ defineExpose({ closeSelectionModal })
 }
 
 @media (max-width: 600px) {
-  .multi-select-cards .multi-select-label {
-    flex-wrap: wrap;
-    gap: 8px;
-    > span { flex: 0 0 100%; white-space: nowrap; }
-    .label-actions { flex-wrap: wrap; gap: 8px; }
-    :deep(.ant-btn) { min-height: 40px; }
-  }
-  .selection-container .selection-summary {
-    flex-wrap: wrap;
-    gap: 8px;
-    .selection-summary-info { flex: 0 0 100%; justify-content: space-between; margin-right: 0; }
-    .selection-count { white-space: nowrap; }
-    :deep(.ant-btn) { min-height: 40px; }
-  }
   .selection-modal .selection-modal-content .selection-search {
     flex-wrap: wrap;
     .search-input { flex: 0 0 100%; min-width: 0; }
