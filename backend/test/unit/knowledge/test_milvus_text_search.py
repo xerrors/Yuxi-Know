@@ -1,13 +1,13 @@
-from test.unit.support.milvus import fake_milvus_embedding as fake_milvus_embedding
 import json
 from unittest.mock import AsyncMock
 
 import pytest
 
-import yuxi.modules.knowledge.implementations.milvus as milvus_module
 import yuxi.modules.knowledge.graphs.milvus_graph_vector_store as graph_module
-from yuxi.modules.knowledge.implementations.milvus import MilvusKB
+import yuxi.modules.knowledge.implementations.milvus as milvus_module
 from test.unit.support.milvus import FakeCollection, FakeHit, make_kb, make_query_config
+from test.unit.support.milvus import fake_milvus_embedding as fake_milvus_embedding
+from yuxi.modules.knowledge.implementations.milvus import MilvusKB
 
 
 @pytest.mark.parametrize("search_mode", ["vector", "keyword", "hybrid"])
@@ -121,10 +121,11 @@ def test_database_operations_use_own_connection_and_fail_closed(monkeypatch, mod
     assert selected == {"own": "target"}
 
 
-async def test_legacy_empty_options_use_panel_defaults_and_preserve_saved_overrides():
+async def test_legacy_empty_options_use_panel_defaults_and_preserve_saved_overrides(monkeypatch):
     """存量空配置与面板一致，显式保存值继续覆盖默认值。"""
     collection = FakeCollection(distance=0.1)
     kb = make_kb(collection)
+    monkeypatch.setattr(milvus_module.model_cache, "get_all_specs", lambda kind: [])
     panel = {item["key"]: item["default"] for item in kb.get_query_params_config("db")["options"]}
     assert panel["similarity_threshold"] == 0.0
     assert panel["bm25_top_k"] == 50

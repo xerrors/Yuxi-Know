@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 import textwrap
+from pathlib import Path
 
 import pytest
 
@@ -37,6 +38,7 @@ def test_probe_assembles_shipping_worker_without_losing_registration(fine_timing
     )
     result = subprocess.run(
         [sys.executable, "-c", script],
+        cwd=Path(__file__).resolve().parents[3],
         env=os.environ | {"MATRIX_FINE_TIMING": fine_timing},
         text=True,
         capture_output=True,
