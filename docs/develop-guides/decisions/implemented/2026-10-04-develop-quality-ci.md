@@ -6,13 +6,13 @@ Owner：.github/workflows/system-tests.yml
 
 ## 问题
 
-`develop/1.0` 交付需要同一提交的 GitHub 检查证据。既有质量 workflow 的 push 仅接受 main，develop 推送只自动构建文档，不能证明后端、前端和真实运行链路。
+`develop/0-8-0` 交付需要同一提交的 GitHub 检查证据。既有质量 workflow 的 push 仅接受 main，develop 推送只自动构建文档，不能证明后端、前端和真实运行链路。
 
 ## 决策
 
 ### 实现方案
 
-Ruff、后端 unit、前端质量、工程信任、依赖审计和 Runtime System Tests 的 push 分支列表增加 `develop/1.0`。复用原有 job、依赖、命令、权限、路径过滤及失败行为。结果由 GitHub run 的 head SHA 与 conclusion 拥有，检查失败仍产生拒绝后果。
+Ruff、后端 unit、前端质量、工程信任、依赖审计和 Runtime System Tests 的 push 分支列表匹配 `develop/0-8-0`。复用原有 job、依赖、命令、权限、路径过滤及失败行为。结果由 GitHub run 的 head SHA 与 conclusion 拥有，检查失败仍产生拒绝后果。
 
 ## 替代方案
 

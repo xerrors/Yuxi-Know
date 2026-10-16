@@ -54,7 +54,7 @@ services:
     build:
       context: .
       dockerfile: docker/api.Dockerfile
-    image: ${COMPOSE_PROJECT_NAME:-yuxi}-api:${YUXI_VERSION:-0.8.0.dev0}
+    image: ${COMPOSE_PROJECT_NAME:-yuxi}-api:${YUXI_VERSION:-0.8.0.beta1}
     working_dir: /app
     user: "1000:1000"
     volumes:
@@ -112,7 +112,7 @@ services:
     build:
       context: .
       dockerfile: docker/api.Dockerfile
-    image: ${COMPOSE_PROJECT_NAME:-yuxi}-api:${YUXI_VERSION:-0.8.0.dev0}
+    image: ${COMPOSE_PROJECT_NAME:-yuxi}-api:${YUXI_VERSION:-0.8.0.beta1}
     working_dir: /app
     user: "1000:1000"
     volumes:
@@ -169,7 +169,7 @@ services:
     build:
       context: .
       dockerfile: docker/api.Dockerfile
-    image: ${COMPOSE_PROJECT_NAME:-yuxi}-api:${YUXI_VERSION:-0.8.0.dev0}
+    image: ${COMPOSE_PROJECT_NAME:-yuxi}-api:${YUXI_VERSION:-0.8.0.beta1}
     working_dir: /app
     volumes:
       - ./backend/yuxi:/app/yuxi:ro
@@ -191,7 +191,7 @@ services:
       context: .
       dockerfile: docker/frontend.Dockerfile
       target: development
-    image: ${COMPOSE_PROJECT_NAME:-yuxi}-frontend:${YUXI_VERSION:-0.8.0.dev0}
+    image: ${COMPOSE_PROJECT_NAME:-yuxi}-frontend:${YUXI_VERSION:-0.8.0.beta1}
     volumes:
       - ./frontend/src:/app/src
       - ./frontend/test:/app/test

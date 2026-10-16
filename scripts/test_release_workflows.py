@@ -38,6 +38,13 @@ class ReleaseWorkflowTests(unittest.TestCase):
             self.assertRegex(
                 push, r"(?m)^    tags: \['v\[0-9\]\*'\]$", f"{name}: 缺少版本 tag 触发"
             )
+            if name != "deploy":
+                self.assertRegex(
+                    push,
+                    r"(?m)^(?:    branches: \[main, develop/0-8-0\]|      - develop/0-8-0)$",
+                    f"{name}: 缺少当前开发分支触发",
+                )
+                self.assertNotIn("develop/1.0", push, f"{name}: 保留退役开发分支触发")
         cli_events = (
             workflows["publish-yuxi-cli"].split("\non:\n", 1)[1].split("\n\n", 1)[0]
         )
@@ -121,6 +128,28 @@ class ReleaseWorkflowTests(unittest.TestCase):
                     workflows
                     | {name: workflows[name].replace("    tags: ['v[0-9]*']\n", "")}
                 )
+
+    def test_retired_development_branch_is_rejected(self) -> None:
+        """恢复旧开发分支或漏掉当前分支时拒绝交付。"""
+        workflows = {path.stem: path.read_text() for path in WORKFLOWS.glob("*.yml")}
+        for name in ("trust", "test", "frontend", "ruff", "system-tests", "dependency-audit"):
+            for replacement in ("develop/1.0", "develop/other"):
+                with (
+                    self.subTest(workflow=name, replacement=replacement),
+                    self.assertRaisesRegex(AssertionError, f"{name}: 缺少当前开发分支触发"),
+                ):
+                    self.assert_release_events(
+                        workflows | {name: workflows[name].replace("develop/0-8-0", replacement)}
+                    )
+
+    def test_retired_branch_cannot_remain_alongside_current_branch(self) -> None:
+        """保留当前分支时也必须拒绝继续触发退役分支。"""
+        workflows = {path.stem: path.read_text() for path in WORKFLOWS.glob("*.yml")}
+        ruff = workflows["ruff"].replace(
+            "      - develop/0-8-0\n", "      - develop/0-8-0\n      - develop/1.0\n"
+        )
+        with self.assertRaisesRegex(AssertionError, "ruff: 保留退役开发分支触发"):
+            self.assert_release_events(workflows | {"ruff": ruff})
 
     def test_application_release_cannot_publish_cli(self) -> None:
         """恢复应用 Release 触发时禁止重复上传独立 CLI 包。"""
