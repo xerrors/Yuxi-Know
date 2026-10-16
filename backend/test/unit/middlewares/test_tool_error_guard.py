@@ -11,6 +11,7 @@ ToolMessage，同时放行 GraphBubbleUp（interrupt 门禁）与取消/进程�
 import asyncio
 import inspect
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 from langchain.agents import create_agent
@@ -21,8 +22,11 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.tools import tool
 from langgraph.errors import GraphBubbleUp
 from langgraph.types import interrupt
+
 from yuxi.modules.agents.runtime.agent_backends.chatbot import graph as chatbot_graph
 from yuxi.modules.agents.runtime.middlewares import ToolErrorGuardMiddleware
+from yuxi.modules.agents.tool_results import normalize_tool_result
+from yuxi.modules.extensions.tools.knowledge import tools as kb_tools
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
 
@@ -52,6 +56,7 @@ _TOOL_ARGS = {
     "parse_sandbox_file": {"path": "/etc/passwd"},
     "ask_human": {"reason": "需要审批"},
     "cancel_now": {"reason": "取消"},
+    "query_kb": {"kb_id": "review-kb", "query_text": "needle"},
 }
 
 
@@ -104,7 +109,7 @@ async def _run_agent(middleware, tool_name: str) -> dict:
     model = _ScriptedToolModel(tool_name=tool_name)
     agent = create_agent(
         model=model,
-        tools=[parse_sandbox_file, ask_human, cancel_now],
+        tools=[parse_sandbox_file, ask_human, cancel_now, kb_tools.query_kb],
         middleware=list(middleware),
     )
     config = {"configurable": {"thread_id": f"thread-{tool_name}"}, "recursion_limit": 6}
@@ -319,3 +324,33 @@ async def test_cancel_waits_for_tool_effect_before_releasing_execution():
     with pytest.raises(asyncio.CancelledError):
         await task
     assert effects == ["finished"]
+
+
+@pytest.mark.parametrize("failure_type", [RuntimeError, kb_tools.knowledge_tools.KnowledgeToolError])
+async def test_knowledge_query_failure_uses_error_message_and_public_projection(monkeypatch, caplog, failure_type):
+    """真实工具和中间件装配保留失败状态，并隐藏底层错误内容。"""
+    private_detail = "private-provider-credential"
+    monkeypatch.setattr(kb_tools, "_resolve_visible_knowledge_bases_for_query", AsyncMock(return_value=[]))
+    monkeypatch.setattr(kb_tools, "_get_knowledge_base", lambda: object())
+    monkeypatch.setattr(kb_tools.knowledge_tools, "query_kb", AsyncMock(side_effect=failure_type(private_detail)))
+
+    state = await _run_agent([ToolErrorGuardMiddleware()], "query_kb")
+
+    [result] = [message for message in state["messages"] if isinstance(message, ToolMessage)]
+    assert result.status == "error"
+    assert result.tool_call_id == "call-1"
+    assert normalize_tool_result(result.model_dump()).error
+    assert private_detail not in result.content
+    assert private_detail not in caplog.text
+    assert state["messages"][-1].content == "已根据工具结果继续回答"
+
+
+async def test_knowledge_empty_query_remains_success(monkeypatch):
+    """空检索结果与执行失败保持不同状态。"""
+    monkeypatch.setattr(kb_tools, "_resolve_visible_knowledge_bases_for_query", AsyncMock(return_value=[]))
+    monkeypatch.setattr(kb_tools, "_get_knowledge_base", lambda: object())
+    monkeypatch.setattr(kb_tools.knowledge_tools, "query_kb", AsyncMock(return_value={"results": []}))
+    state = await _run_agent([ToolErrorGuardMiddleware()], "query_kb")
+    [result] = [message for message in state["messages"] if isinstance(message, ToolMessage)]
+    assert result.status == "success"
+    assert normalize_tool_result(result.model_dump()).error is None

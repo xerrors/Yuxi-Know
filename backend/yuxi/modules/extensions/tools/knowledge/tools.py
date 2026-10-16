@@ -82,19 +82,13 @@ async def query_kb(kb_id: str, query_text: str, file_name: str | None = None, ru
     file_id 可继续用于 find_kb_document 或 open_kb_document。
     """
     visible_kbs = await _resolve_visible_knowledge_bases_for_query(runtime)
-    try:
-        return await knowledge_tools.query_kb(
-            kb_id,
-            query_text,
-            visible_kbs,
-            file_name=file_name,
-            kb_service=_get_knowledge_base(),
-        )
-    except knowledge_tools.KnowledgeToolError as e:
-        return str(e)
-    except Exception as e:
-        logger.error(f"检索失败: {e}")
-        return f"检索失败: {str(e)}"
+    return await knowledge_tools.query_kb(
+        kb_id,
+        query_text,
+        visible_kbs,
+        file_name=file_name,
+        kb_service=_get_knowledge_base(),
+    )
 
 
 OpenKBDocumentInput = OpenInputSchema

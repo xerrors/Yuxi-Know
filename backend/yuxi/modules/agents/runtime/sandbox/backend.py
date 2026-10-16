@@ -154,6 +154,9 @@ class UserSandboxBackend(BaseSandbox):
     def grep(self, pattern: str, path: str | None = None, glob: str | None = None, *, max_count: int | None = None) -> GrepResult:
         """搜索普通文本文件，保留结构化行号与字面匹配语义。"""
         try:
+            max_count = 1000 if max_count is None else max_count
+            if max_count <= 0:
+                return GrepResult(error="max_count must be positive")
             path = normalize_runtime_path(path or WORKSPACE_PATH)
             if self._files.route(path):
                 try:
@@ -173,9 +176,9 @@ class UserSandboxBackend(BaseSandbox):
                         continue
                     for number, line in enumerate(text.splitlines(), 1):
                         if pattern in line:
-                            matches.append(GrepMatch(path=entry["path"], line=number, text=line))
-                            if max_count is not None and len(matches) >= max_count:
+                            if len(matches) == max_count:
                                 return GrepResult(matches=matches, truncated=True)
+                            matches.append(GrepMatch(path=entry["path"], line=number, text=line))
                 return GrepResult(matches=matches)
             return GrepResult(**self._guest_search(path, pattern=glob or "*", text=pattern, max_count=max_count))
         except Exception as exc:
@@ -412,7 +415,12 @@ for p in paths:
     if len(result)>limit: break
 print(json.dumps({"matches":result[:limit],"truncated":len(result)>limit}))
 """
-        envs = {"SEARCH_ROOT": path, "SEARCH_PATTERN": pattern, "SEARCH_TEXT": json.dumps(text), "SEARCH_LIMIT": str(max_count or 1000)}
+        envs = {
+            "SEARCH_ROOT": path,
+            "SEARCH_PATTERN": pattern,
+            "SEARCH_TEXT": json.dumps(text),
+            "SEARCH_LIMIT": str(1000 if max_count is None else max_count),
+        }
         prefix = " ".join(f"{key}={shlex.quote(value)}" for key, value in envs.items())
         response = self.execute(prefix + " python3 -c " + shlex.quote(script))
         if response.exit_code != 0 or response.truncated:

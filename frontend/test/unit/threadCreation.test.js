@@ -68,33 +68,37 @@ test('延迟创建响应遇到上下文切换时不被接受', async () => {
 })
 
 
-test('普通会话不指定标题，创建响应丢失后仍重放原审批模式', async () => {
-  const calls = []
-  const currentChatId = { value: null }
-  const approval = { value: 'default' }
-  const request = { value: null }
-  const dependencies = {
-    currentChatId, currentAgentId: { value: 'agent' }, selectedProjectId: { value: 'auto' },
-    threadCreationRequest: request, currentToolApprovalMode: approval, AUTO_PROJECT_ID: 'auto',
-    createInputRequestId: () => 'stable-key', createThreadForContext,
-    chatThreadsStore: { setThreadCreationInFlight() {}, async createThread(...args) {
-      calls.push(structuredClone(args))
-      if (calls.length === 1) throw new Error('response lost')
-      return { id: 'same-session' }
-    } },
-    threadMessages: { value: {} },
-    getThreadState: () => ({}), threadAttachmentsMap: { value: {} }, draftFilesByThread: { value: {} },
-    promoteDraftSelection() {}, setCurrentThreadId: (id) => { currentChatId.value = id }
-  }
-  const create = workspaceLogic('const createActiveThread =', 'const ensureActiveThread =', dependencies, 'createActiveThread')
-  await assert.rejects(create(), /response lost/)
-  approval.value = 'always_trust'
-  assert.equal(await create(), 'same-session')
-  assert.deepEqual(calls[1], calls[0])
-  assert.equal(calls[1][1], null)
-  assert.equal(calls[1][2].tool_approval_mode, 'default')
-  assert.equal(request.value, null)
-})
+for (const uploadTarget of ['__draft__', 'thread-a']) {
+  test(`创建响应丢失后重放审批模式，附件目标 ${uploadTarget} 按归属迁移`, async () => {
+    const calls = []
+    const currentChatId = { value: null }
+    const approval = { value: 'default' }
+    const request = { value: null }
+    const dependencies = {
+      currentChatId, currentAgentId: { value: 'agent' }, selectedProjectId: { value: 'auto' },
+      threadCreationRequest: request, currentToolApprovalMode: approval, AUTO_PROJECT_ID: 'auto',
+      createInputRequestId: () => 'stable-key', createThreadForContext,
+      chatThreadsStore: { setThreadCreationInFlight() {}, async createThread(...args) {
+        calls.push(structuredClone(args))
+        if (calls.length === 1) throw new Error('response lost')
+        return { id: 'same-session' }
+      } },
+      threadMessages: { value: {} },
+      getThreadState: () => ({}), threadAttachmentsMap: { value: {} }, draftFilesByThread: { value: {} },
+      attachmentUploadThreadKey: ref(uploadTarget), DRAFT_MODEL_KEY: '__draft__',
+      promoteDraftSelection() {}, setCurrentThreadId: (id) => { currentChatId.value = id }
+    }
+    const create = workspaceLogic('const createActiveThread =', 'const ensureActiveThread =', dependencies, 'createActiveThread')
+    await assert.rejects(create(), /response lost/)
+    approval.value = 'always_trust'
+    assert.equal(await create(), 'same-session')
+    assert.deepEqual(calls[1], calls[0])
+    assert.equal(calls[1][1], null)
+    assert.equal(calls[1][2].tool_approval_mode, 'default')
+    assert.equal(request.value, null)
+    assert.equal(dependencies.attachmentUploadThreadKey.value, uploadTarget === '__draft__' ? 'same-session' : uploadTarget)
+  })
+}
 
 
 test('新建会话按稳定 agent_id 找到当前智能体，详情到达后替换列表摘要', () => {
@@ -138,4 +142,28 @@ test('预写 Thread 身份也须加载历史，已有历史的视图只恢复订
     assert.equal(await select('thread'), true)
     assert.deepEqual(actions, [historyLoaded ? 'resume' : 'thread'])
   }
+})
+
+
+test('附件上传固定打开时的目标，切换会话和再次打开分别保留各自归属', async () => {
+  const currentChatId = ref('thread-a')
+  const attachmentUploadModalOpen = ref(false)
+  const draftFilesByThread = ref({})
+  const actions = workspaceLogic('const handleAttachmentUpload =', 'const handleAttachmentRemove =', {
+    currentChatId, attachmentUploadModalOpen, draftFilesByThread,
+    attachmentUploadThreadKey: ref(null), DRAFT_MODEL_KEY: '__draft__',
+    currentAgentId: ref('agent'), AgentValidator: { validateAgentIdWithError: () => true },
+    handleValidationError() {}, attachmentInitialFiles: ref([]), attachmentInitialFilesKey: ref(0),
+    File: class File {}
+  }, '{ open: handleAttachmentUpload, confirm: handleTmpAttachmentsAdded }')
+  await actions.open()
+  currentChatId.value = 'thread-b'
+  await actions.open()
+  actions.confirm([{ id: 'file-a' }])
+  assert.deepEqual(draftFilesByThread.value, { 'thread-a': [{ id: 'file-a' }] })
+  attachmentUploadModalOpen.value = false
+  await actions.open()
+  actions.confirm([{ id: 'file-b' }])
+  assert.deepEqual(draftFilesByThread.value['thread-b'], [{ id: 'file-b' }])
+  assert.deepEqual(draftFilesByThread.value['thread-a'], [{ id: 'file-a' }])
 })

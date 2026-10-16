@@ -3,10 +3,11 @@
 from types import SimpleNamespace
 
 import pytest
+
 from yuxi.modules.agents.runtime.sandbox.backend import UserSandboxBackend, create_agent_composite_backend
-from yuxi.modules.workspace.paths import ensure_user_workspace, user_workspace_dir
 from yuxi.modules.extensions.skills.projection import get_user_skills_root_dir
-from yuxi.modules.workspace.runtime_paths import WORKSPACE_PATH, SHARED_SKILLS_PATH
+from yuxi.modules.workspace.paths import ensure_user_workspace, user_workspace_dir
+from yuxi.modules.workspace.runtime_paths import SHARED_SKILLS_PATH, WORKSPACE_PATH
 
 
 @pytest.fixture
@@ -100,9 +101,10 @@ def test_invalid_path_has_no_filesystem_side_effect(backend, path):
     assert backend.write(path, "invalid").error
 
 
-@pytest.mark.parametrize("count, limit", [(3, 2), (1001, None), (2, 2)])
-def test_guest_search_reports_truncation_from_actual_file(backend, tmp_path, monkeypatch, count, limit):
-    """Guest 搜索执行真实脚本，超限与完整结果必须可区分。"""
+@pytest.mark.parametrize("local", [False, True], ids=["guest", "workspace"])
+@pytest.mark.parametrize("count, limit", [(0, 2), (1, 2), (3, 2), (1001, None), (2, 2), (1000, None)])
+def test_search_reports_truncation_from_actual_file(backend, tmp_path, monkeypatch, count, limit, local):
+    """挂载文件与 Guest 脚本的超限、完整结果保持一致。"""
     import subprocess
 
     source = tmp_path / "guest.txt"
@@ -114,7 +116,21 @@ def test_guest_search_reports_truncation_from_actual_file(backend, tmp_path, mon
         return SimpleNamespace(exit_code=result.returncode, output=result.stdout, truncated=False)
 
     monkeypatch.setattr(backend, "execute", execute)
-    result = backend.grep("needle", str(source), max_count=limit)
+    path = str(source)
+    if local:
+        (user_workspace_dir("one") / "search.txt").write_bytes(source.read_bytes())
+        path = f"{WORKSPACE_PATH}/search.txt"
+    result = backend.grep("needle", path, max_count=limit)
     assert result.error is None
     assert len(result.matches) == min(count, limit or 1000)
     assert result.truncated is (count > (limit or 1000))
+    assert [match["line"] for match in result.matches] == list(range(1, min(count, limit or 1000) + 1))
+    assert all(match["text"] == "needle" for match in result.matches)
+
+
+@pytest.mark.parametrize("path", ["/home/user/workspace/search.txt", "/tmp/search.txt"])
+@pytest.mark.parametrize("limit", [0, -1])
+def test_search_rejects_nonpositive_limit_before_io(backend, path, limit):
+    """非法搜索上限在两条路径均明确失败。"""
+    result = backend.grep("needle", path, max_count=limit)
+    assert result.error and "max_count" in result.error

@@ -16,6 +16,7 @@ let ToolCallsGroup
 let parseToolCallResult
 let ReadFileTool
 let ImageTool
+let QueryKbTool
 
 before(async () => {
   globalThis.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} }
@@ -36,6 +37,9 @@ before(async () => {
   ))
   ;({ default: ImageTool } = await server.ssrLoadModule(
     '/src/modules/session/ui/tools/renderers/ImageTool.vue'
+  ))
+  ;({ default: QueryKbTool } = await server.ssrLoadModule(
+    '/src/modules/session/ui/tools/renderers/QueryKbTool.vue'
   ))
   ;({ default: ToolCallRenderer } = await server.ssrLoadModule(
     '/src/modules/session/ui/tools/ToolCallRenderer.vue'
@@ -325,4 +329,21 @@ test('incomplete 工具显示中断终态而非加载图标', async () => {
   })
   assert.match(question, /已中断/)
   assert.doesNotMatch(question, /tool-loading/)
+})
+
+
+test('知识库检索失败显示错误结果，正常空检索仍显示空状态', async () => {
+  const failure = await render(QueryKbTool, {
+    toolCall: { name: 'query_kb', tool_call_result: { status: 'error', content: '工具 query_kb 执行失败：RuntimeError' } },
+    defaultExpanded: true
+  })
+  assert.match(failure, /tool-error/)
+  assert.match(failure, /query_kb 执行失败/)
+  assert.doesNotMatch(failure, /未找到相关知识库内容/)
+  const empty = await render(QueryKbTool, {
+    toolCall: { name: 'query_kb', tool_call_result: { status: 'success', content: '{"results":[]}' } },
+    defaultExpanded: true
+  })
+  assert.match(empty, /未找到相关知识库内容/)
+  assert.doesNotMatch(empty, /tool-error/)
 })

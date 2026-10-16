@@ -81,4 +81,6 @@ VM 直接挂载 `/home/user/workspace` 和只读 `/home/user/skills`，模板在
 
 文件工具、HTTP 预览、下载和保存对同一持久路径读取同一用户挂载：Workspace 读取用户工作区，Skills 读取用户投影。HTTP 请求先校验当前 Thread、APP、用户和 Skill 授权；投影缺失返回不存在，不读取平台来源代替。持久文件预览不唤醒 VM；Home 或临时目录中的图片先保存到当前 Project 工作目录再展示。
 
+`grep` 在 Workspace 挂载与 VM 目录中默认最多返回 1000 条匹配，显式 `max_count` 必须为正数。只有发现超出上限的额外匹配才标记截断；恰好达到上限的完整结果保持未截断。
+
 部署使用符合当前 Schema 基线的数据与新建用户环境。已有旧挂载 VM、旧附件引用和旧 checkpoint 不会被自动转换或重建；保留资料时先备份，由部署者离线处理路径和结构后核对文件字节及引用。应用不提供双路径读取或旧对象恢复。重建会清除 VM Home 中的软件和配置，保留 Workspace 和 Skills。

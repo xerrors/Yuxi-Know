@@ -84,6 +84,8 @@ manifest v2 的配置摘要来自准备后的可配置字段，包含模型覆�
 
 Viewer、正式附件和 artifact API 通过持久化 Workspace/Workdir 读取文件，不连接 Agent execution runtime。附件表拥有文件信息、用户/APP、Input 与最终 Message 归属、准备状态和存储位置。上传建立隔离的 draft；接收事务通过附件行锁绑定 Input；统一准备函数写入 Workdir 并提交 ready 后清理临时来源。恢复循环调用同一准备与调度流程，回执读取或重放只读事实。Message 通过归属关系读取附件，不复制记录；取消排队保留正式文件。OCR 预解析与图片辅助处理只在产品 JWT 私有入口开放，Agent 的 OCR 工具继续按需读取 Workdir。图片与文件提交契约见[公开 API](../advanced/agents-public-api.md#图片与文件附件)。沙盒虚拟路径、Viewer scope、对象 URL 和宿主机路径在各自边界中转换，不能互相替代。
 
+Web 附件上传框在打开时固定目标会话草稿；上传期间切换会话，确认后附件仍归原草稿。首次创建正式 Thread 时，未发送附件与仍打开的上传流程一起迁移到该 Thread。
+
 ## 用户定时 Agent
 
 用户定时 Agent 由 `scheduled_agent_jobs` 保存 Project、Agent、提示词、审批模式和计划，worker 在 PostgreSQL 行锁下为到期任务创建唯一 occurrence。每次 occurrence 通过统一接收用例创建绑定原 Project 的独立 Thread、首个 Input 和 Turn/Run；触发记录保存输入关联，排队与执行状态分别从 Input、Turn 和 Run 读取。明确的领域错误终结 occurrence，未知瞬时错误在下一轮用确定的幂等键重查已接收输入；单条失败不阻断同批任务。Redis/ARQ 只负责唤醒。

@@ -908,6 +908,7 @@ const setCurrentThreadId = (threadId, options) => {
 const threadAttachmentsMap = ref({})
 const draftFilesByThread = ref({})
 const attachmentUploadModalOpen = ref(false)
+const attachmentUploadThreadKey = ref(null)
 const attachmentInitialFiles = ref([])
 const attachmentInitialFilesKey = ref(0)
 const selectedProjectId = ref(AUTO_PROJECT_ID)
@@ -2334,6 +2335,9 @@ const createActiveThread = async () => {
     threadAttachmentsMap.value[thread.id] = []
     threadCreationRequest.value = null
     promoteDraftSelection(draftFilesByThread.value, thread.id)
+    if (attachmentUploadThreadKey.value === DRAFT_MODEL_KEY) {
+      attachmentUploadThreadKey.value = thread.id
+    }
     setCurrentThreadId(thread.id, { force: true })
     return thread.id
   } catch (error) {
@@ -2356,6 +2360,9 @@ const handleAttachmentUpload = async (files = []) => {
   )
     return
 
+  if (!attachmentUploadModalOpen.value) {
+    attachmentUploadThreadKey.value = currentChatId.value || DRAFT_MODEL_KEY
+  }
   const droppedFiles = Array.from(files || []).filter((file) => file instanceof File)
   if (droppedFiles.length) {
     attachmentInitialFiles.value = droppedFiles
@@ -2366,7 +2373,7 @@ const handleAttachmentUpload = async (files = []) => {
 }
 
 const handleTmpAttachmentsAdded = (files) => {
-  const key = currentChatId.value || DRAFT_MODEL_KEY
+  const key = attachmentUploadThreadKey.value
   draftFilesByThread.value[key] = [...(draftFilesByThread.value[key] || []), ...files]
 }
 
