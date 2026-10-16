@@ -128,6 +128,7 @@ export default defineConfig({
               { text: '文档编写与维护', link: '/develop-guides/documentation-guidelines' },
               { text: '界面设计规范', link: '/develop-guides/design' },
               { text: '版本变更记录', link: '/develop-guides/changelog' },
+              { text: '0.8.0 更新说明', link: '/develop-guides/releases/0.8.0' },
               { text: '开发路线图', link: '/develop-guides/roadmap' }
             ]
           },

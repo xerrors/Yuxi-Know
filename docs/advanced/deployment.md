@@ -2,6 +2,8 @@
 
 本页说明如何用 Docker Compose 全新部署 Yuxi 并验证服务状态。重要数据上线前请先在备份环境演练恢复。
 
+当前候选为 `0.8.0.beta1`，功能与不兼容范围见[0.8.0 更新说明](../develop-guides/releases/0.8.0.md)。试用环境使用独立 PostgreSQL、对象存储、向量索引和用户文件目录，保留旧部署及其成套备份。
+
 ## 前置条件
 
 - Docker Engine 28.0 或更高版本；
@@ -39,7 +41,7 @@ CUBE_NODE_SKILL_PROJECTION_DIR=/absolute/yuxi/skill-projections
 YUXI_INSTANCE_ID=<stable-instance-name>
 ```
 
-三个安全密钥必须彼此不同、没有首尾空白，并在重建或升级时保留原值。可以用下面的命令生成随机值，再把结果安全地写入 `.env.prod`：
+JWT 与 API Key 派生这两个应用安全密钥必须彼此不同、没有首尾空白，并在重建时保留原值。可以用下面的命令生成随机值，再把结果安全地写入 `.env.prod`；Cube 控制凭据由执行节点提供：
 
 ```bash
 openssl rand -hex 32
@@ -78,7 +80,7 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
 docker compose --env-file .env.prod -f docker-compose.prod.yml --profile all up -d --build
 ```
 
-`schema-init` 只为确认空库建立 business 版本 4 与 knowledge 版本 1 基线，包含当前表、索引、约束和 LangGraph checkpoint 表；当前版本直接结束，其他版本不匹配会明确失败。本部署现有数据库已由部署侧直接调整到 v4，旧 `tool_calls` 保留为 `tool_calls_v1_archive`，工具审计正文仅在结构化 output 已存在时清空，退役协作回收列已移除。应用代码不包含 business v1 到 v4 的历史迁移脚本；需要保留数据的版本调整由部署侧单独操作，并在改动前备份 PostgreSQL。数据处置和回读证据见[Schema v1 到 v4 数据库调整记录](../develop-guides/decisions/implemented/2026-10-16-business-schema-v1-to-v4-migration.md)。
+`schema-init` 只为确认空库建立 business 版本 4 与 knowledge 版本 1 基线，包含当前表、索引、约束和 LangGraph checkpoint 表；当前版本直接结束，其他版本不匹配会明确失败。应用不提供历史迁移脚本。[单个部署的数据库调整记录](../develop-guides/decisions/implemented/2026-10-16-business-schema-v1-to-v4-migration.md)只描述该实例的离线操作与回读证据，不构成通用升级流程。
 
 ## 3. 数据库与文件目录
 

@@ -36,12 +36,14 @@ Yuxi is built for teams that need control over their data, models, and permissio
 
 ### Prerequisites
 
-Install [Docker Engine](https://docs.docker.com/get-docker/) and Docker Compose, and have a working LLM API available. The repository's default configuration targets `v0.7.3`.
+Install [Docker Engine](https://docs.docker.com/get-docker/) and Docker Compose, prepare a working LLM API, and configure a dedicated Linux/KVM Cube node, user template, and shared Workspace/Skills directories as described in [sandbox operations](docs/advanced/sandbox-operations.md). Applications running on macOS or Windows also need access to this Linux/KVM node.
+
+The candidate source version is `v0.8.0.beta1`, available from the fork's `develop/0-8-0` branch; the tag is created after validation. Version 0.8 requires a fresh deployment with separate data directories and provides no automatic upgrade of older databases, indexes, or file layouts. See the [0.8.0 release notes](docs/develop-guides/releases/0.8.0.md).
 
 ### 1. Get the Code and Initialize
 
 ```bash
-git clone --branch v0.7.3 --depth 1 https://github.com/xerrors/Yuxi.git
+git clone --branch develop/0-8-0 --depth 1 https://github.com/Yuchuan925/Yuxi.git
 cd Yuxi
 
 # Linux/macOS
@@ -51,7 +53,7 @@ cd Yuxi
 .\scripts\init.ps1
 ```
 
-The initialization script creates `.env`, prompts for a SiliconFlow API Key, and generates separate security keys for JWT, API Key derivation, and the Sandbox provisioner. You can also copy `.env.template` and fill in these values manually.
+The initialization script creates `.env`, prompts for a SiliconFlow API Key, and generates separate JWT and API Key derivation secrets. You can also copy `.env.template` manually. It does not provision Cube: configure `CUBE_API_URL`, `CUBE_PROXY_NODE_IP`, `CUBE_NODE_USER_DATA_DIR`, and `CUBE_NODE_SKILL_PROJECTION_DIR`, plus `CUBE_API_KEY` when the node requires authentication. Run `docker compose config --quiet` before starting. See the [quick start](docs/intro/quick-start.md) for the complete steps.
 
 ### 2. Start the Development Environment
 
@@ -68,7 +70,7 @@ curl --fail http://localhost:5050/api/system/ready
 
 Once the returned `status` is `ready`, open [http://localhost:5173](http://localhost:5173), follow the page instructions to initialize the superadmin account, and sign in. API documentation is available at [http://localhost:5050/docs](http://localhost:5050/docs).
 
-When upgrading from v0.7.1 or v0.7.2 to the current version, do not run `docker compose up` directly. Read the [production deployment and upgrade guide](docs/advanced/deployment.md) first, and complete the backup and migration during a maintenance window.
+Keep the existing deployment and a consistent backup of PostgreSQL, MinIO, and user files before trying 0.8 in a separate environment. Read the [production deployment guide](docs/advanced/deployment.md) for the current schema and storage requirements.
 
 ## Documentation
 
