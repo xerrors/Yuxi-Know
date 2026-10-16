@@ -11,6 +11,7 @@ class ReadOnlyConnectors(KnowledgeExecutor):
 
     requires_embedding_model = False
     supports_documents = False
+    supports_document_read = False
     apply_chunk_defaults = False
 
     @staticmethod

@@ -34,7 +34,7 @@ def serialize_knowledge_base(
     """转换单个知识库读取模型为 HTTP 响应。"""
     stats = _knowledge_base_stats(knowledge_base)
     additional_params = dict(knowledge_base.additional_params)
-    if redact_secrets:
+    if redact_secrets or knowledge_base.kb_type == "feishu":
         additional_params = redact_sensitive_params(additional_params)
 
     response = {

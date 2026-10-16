@@ -1,5 +1,6 @@
 import {
   apiGet,
+  apiPost,
   apiAdminGet,
   apiAdminPost,
   apiAdminPut,
@@ -339,6 +340,15 @@ export const graphBuildApi = {
 // =============================================================================
 
 export const queryApi = {
+  openDocument: async (kbId, fileId, offset = 0) => {
+    return apiPost('/api/v1/knowledge/tools/open_kb_document', {
+      kb_id: kbId,
+      file_id: fileId,
+      offset,
+      window_size: 200
+    })
+  },
+
   /**
    * 查询知识库
    * @param {string} kbId - 知识库ID

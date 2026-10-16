@@ -7,7 +7,7 @@ import {
   selectKnowledgeBaseType,
   validateKnowledgeBaseConfig
 } from '../../src/modules/knowledge/model/knowledgeBaseCreateForm.js'
-import { getKbTypeLabel } from '../../src/modules/knowledge/model/kb_utils.js'
+import { getKbTypeLabel, isReadOnlyKnowledgeBase } from '../../src/modules/knowledge/model/kb_utils.js'
 
 const difyType = {
   create_params: {
@@ -65,4 +65,22 @@ test('知识库类型标签映射将 milvus 解析为 Yuxi', () => {
   assert.equal(getKbTypeLabel('dify'), 'Dify')
   assert.equal(getKbTypeLabel('notion'), 'Notion')
   assert.equal(getKbTypeLabel('unknown'), 'unknown')
+})
+
+
+test('飞书连接只提交用户凭证和空间配置，不要求嵌入模型或分块', () => {
+  const type = { requires_embedding_model: false, create_params: { options: [
+    { key: 'feishu_user_token', label: '用户 Token', type: 'password', required: true },
+    { key: 'feishu_space_id', label: '知识空间', required: true }
+  ] } }
+  const form = selectKnowledgeBaseType(createEmptyKnowledgeBaseForm(), 'feishu', type)
+  form.name = '飞书资料'
+  assert.equal(validateKnowledgeBaseConfig(form, type), '请填写用户 Token')
+  form.additional_params = { feishu_user_token: 'fixture-only', feishu_space_id: '123' }
+  assert.equal(validateKnowledgeBaseConfig(form, type), '')
+  const request = buildKnowledgeBaseRequest(form, type, { version: 2 })
+  assert.deepEqual(request.additional_params, form.additional_params)
+  assert.equal('embedding_model_spec' in request, false)
+  assert.equal(isReadOnlyKnowledgeBase('feishu'), true)
+  assert.equal(getKbTypeLabel('feishu'), '飞书')
 })

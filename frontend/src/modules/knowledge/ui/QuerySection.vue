@@ -60,7 +60,7 @@
               </div>
               <div v-else>
                 <div class="result-summary">
-                  <span>{{ queryResult.length }} 个相关片段</span>
+                  <span>{{ queryResult.length }} 个{{ store.knowledgeBase?.kb_type === 'feishu' ? '相关文档' : '相关片段' }}</span>
                   <a-button
                     type="text"
                     size="small"
@@ -130,7 +130,15 @@
         </div>
       </div>
       <aside v-if="selectedChunk" class="query-document-preview" aria-label="命中片段原文">
+        <ExternalDocumentReader
+          v-if="store.knowledgeBase?.kb_type === 'feishu'"
+          :kb-id="store.knowledgeBase.kb_id"
+          :file-id="selectedChunk.metadata.file_id"
+          :title="selectedChunk.metadata.source"
+          @close="selectedChunk = null"
+        />
         <FileDetailModal
+          v-else
           :key="`${store.knowledgeBase.kb_id}:${selectedChunk.metadata.file_id}`"
           embedded
           :open="true"
@@ -154,6 +162,7 @@ import { queryApi } from '@/apis/knowledge_api'
 import { Braces, RefreshCw, Search as SearchOutlined } from '@lucide/vue'
 import QueryResultChunk from '@/modules/knowledge/ui/QueryResultChunk.vue'
 import FileDetailModal from '@/modules/knowledge/ui/FileDetailModal.vue'
+import ExternalDocumentReader from '@/modules/knowledge/ui/ExternalDocumentReader.vue'
 
 const store = useKnowledgeBaseStore()
 const MAX_VISIBLE_EXAMPLES = 10
@@ -185,7 +194,9 @@ const showRawData = ref(false)
 const showQuerySuggestions = computed(() => !searchLoading.value && !queryResult.value)
 
 // 示例问题生成属于写操作，仅对拥有管理权限（非只读权限）的知识库开放
-const canGenerateQuestions = computed(() => store.knowledgeBase?.can_manage === true)
+const canGenerateQuestions = computed(
+  () => store.knowledgeBase?.can_manage === true && store.knowledgeBase?.kb_type !== 'feishu'
+)
 
 // 查询测试
 const queryText = ref('')
@@ -514,7 +525,6 @@ defineExpose({
 .query-results {
   flex: 1;
   overflow-y: auto;
-  background-color: var(--gray-25);
   min-height: 0;
 
   .result-raw {

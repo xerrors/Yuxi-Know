@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
+import { isReadOnlyKnowledgeBase, supportsKnowledgeBaseDetail } from '../../src/modules/knowledge/model/kb_utils.js'
 
 function readSource(relativePath) {
   return readFileSync(new URL(relativePath, import.meta.url), 'utf8')
@@ -23,28 +24,20 @@ test('知识库详情提供面板插槽并校验深链接 Tab', () => {
   )
 })
 
-test('只读连接器没有知识库详情入口并拒绝直接详情 URL', () => {
+test('详情按在线阅读能力开放，配置入口仍要求管理权限', () => {
+  const feishu = { kb_type: 'feishu', supports_documents: false }
+  assert.equal(supportsKnowledgeBaseDetail(feishu), true)
+  assert.equal(isReadOnlyKnowledgeBase(feishu), true)
+  assert.equal(supportsKnowledgeBaseDetail({ kb_type: 'milvus' }), true)
+  assert.equal(supportsKnowledgeBaseDetail({ kb_type: 'dify' }), false)
+  assert.equal(supportsKnowledgeBaseDetail({ kb_type: 'notion' }), false)
+
   const listSource = readSource('../../src/modules/knowledge/ui/KnowledgeCatalog.vue')
   const detailSource = readSource('../../src/pages/KnowledgeBaseInfoView.vue')
-
-  assert.match(listSource, /:disabled="kbUtils\.isReadOnlyKnowledgeBase\(knowledgeBase\)"/)
-  assert.match(
-    listSource,
-    /const navigateToKnowledgeBase = \(knowledgeBase\) => \{\s*if \(kbUtils\.isReadOnlyKnowledgeBase\(knowledgeBase\)\) return/
-  )
   assert.match(listSource, /<a-menu-item v-if="knowledgeBase\.can_manage" key="edit">/)
   assert.match(
     detailSource,
-    /store\.knowledgeBase\?\.kb_id === nextKbId &&[\s\S]*?kbUtils\.isReadOnlyKnowledgeBase\(store\.knowledgeBase\)[\s\S]*?route\.query\.action === 'edit' && canManageKnowledgeBase\.value[\s\S]*?showEditModal\(\)[\s\S]*?router\.replace\(\{ path: '\/extensions', query: \{ tab: 'knowledge' \} \}\)/
-  )
-  assert.match(
-    detailSource,
     /action !== 'edit' \|\| loading \|\| !loaded \|\| !canManageKnowledgeBase\.value/
-  )
-  assert.match(detailSource, /@after-close="handleEditModalAfterClose"/)
-  assert.match(
-    detailSource,
-    /const handleEditModalAfterClose = \(\) => \{\s*if \(isConnector\.value\) backToKnowledgeBase\(\)/
   )
 })
 

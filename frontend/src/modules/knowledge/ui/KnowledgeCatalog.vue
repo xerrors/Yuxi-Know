@@ -79,7 +79,7 @@
         :subtitle="cardSubtitle(knowledgeBase)"
         :description="knowledgeBase.description || '暂无描述'"
         :tags="cardTags(knowledgeBase)"
-        :disabled="kbUtils.isReadOnlyKnowledgeBase(knowledgeBase)"
+        :disabled="!kbUtils.supportsKnowledgeBaseDetail(knowledgeBase)"
         @click="navigateToKnowledgeBase(knowledgeBase)"
       >
         <template #icon>
@@ -252,7 +252,7 @@ const cardTags = (knowledgeBase) => {
 }
 
 const navigateToKnowledgeBase = (knowledgeBase) => {
-  if (kbUtils.isReadOnlyKnowledgeBase(knowledgeBase)) return
+  if (!kbUtils.supportsKnowledgeBaseDetail(knowledgeBase)) return
   router.push({ path: `/extensions/knowledge-bases/${knowledgeBase.kb_id}` })
 }
 

@@ -20,7 +20,8 @@ export const getKbTypeLabel = (type) => {
   const labels = {
     milvus: 'Yuxi',
     dify: 'Dify',
-    notion: 'Notion'
+    notion: 'Notion',
+    feishu: '飞书'
   }
   return labels[normalized] || type
 }
@@ -43,7 +44,7 @@ export const getKbTypeColor = (type) => {
   return colors[type] || 'blue'
 }
 
-const READ_ONLY_KB_TYPES = new Set(['dify', 'notion'])
+const READ_ONLY_KB_TYPES = new Set(['dify', 'notion', 'feishu'])
 
 export const isReadOnlyKnowledgeBase = (knowledgeBase, kbTypes = {}) => {
   const kbType = (
@@ -59,9 +60,14 @@ export const isReadOnlyKnowledgeBase = (knowledgeBase, kbTypes = {}) => {
   return READ_ONLY_KB_TYPES.has(kbType)
 }
 
+/** 在线阅读连接器可进入详情，文档管理能力保持独立。 */
+export const supportsKnowledgeBaseDetail = (knowledgeBase) =>
+  !isReadOnlyKnowledgeBase(knowledgeBase) || knowledgeBase?.kb_type === 'feishu'
+
 export const kbUtils = {
   getKbTypeLabel,
   getKbTypeIcon,
   getKbTypeColor,
-  isReadOnlyKnowledgeBase
+  isReadOnlyKnowledgeBase,
+  supportsKnowledgeBaseDetail
 }

@@ -85,6 +85,21 @@ def _patch_retrievers(monkeypatch, *, kb_type: str = "milvus", retriever=None):
             raise ValueError(f"知识库资源 '{kb_id}' 不存在")
         return await (retriever or object())(query, **options)
 
+    async def _get_config(kb_id):
+        """提供工具用例的类型配置。"""
+        return SimpleNamespace(kb_type=kb_type)
+
+    async def _get_executor(_kb_type):
+        """让真实 Manager 的阅读入口调用受控文档源。"""
+
+        async def _open(kb_id, file_id, *, config, offset, limit):
+            """复用当前测试装配的窗口读取。"""
+            return await manager.open_file_content(kb_id, file_id, offset=offset, limit=limit)
+
+        return SimpleNamespace(supports_document_read=kb_type != "dify", open_document=_open)
+
+    manager.get_kb_config = _get_config
+    manager._get_or_create_kb_instance = _get_executor
     manager.retrieve = _retrieve
     # 复用真实 manager 的文档操作方法，使其内部走上面的 mock。
     for name in (

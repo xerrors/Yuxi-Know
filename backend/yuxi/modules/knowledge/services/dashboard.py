@@ -35,6 +35,7 @@ KNOWLEDGE_BASE_TYPE_MAPPING = {
     "faiss": "FAISS",
     "milvus": "Milvus",
     "dify": "Dify",
+    "feishu": "飞书",
     "qdrant": "Qdrant",
     "elasticsearch": "Elasticsearch",
     "unknown": "未知类型",

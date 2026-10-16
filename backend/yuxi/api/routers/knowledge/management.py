@@ -228,7 +228,7 @@ async def create_knowledge_base(
     """创建知识库"""
     logger.debug(
         f"Create knowledge_base {name} with kb_type {kb_type}, "
-        f"additional_params {additional_params}, llm_model_spec {llm_model_spec}, "
+        f"llm_model_spec {llm_model_spec}, "
         f"embedding_model_spec {embedding_model_spec}, share_config {share_config}"
     )
     try:
@@ -309,7 +309,7 @@ async def update_knowledge_base_info(
     """更新知识库信息"""
     logger.debug(
         f"[update_knowledge_base_info] 接收到的参数: name={data.name}, "
-        f"llm_model_spec={data.llm_model_spec}, additional_params={data.additional_params}, "
+        f"llm_model_spec={data.llm_model_spec}, "
         f"share_config={data.share_config}"
     )
     try:
@@ -1160,7 +1160,7 @@ async def query_knowledge_base(
     try:
         result = await knowledge_base_manager.aquery(query, kb_id=kb_id, **meta)
         return {"result": result, "status": "success"}
-    except HTTPException:
+    except (HTTPException, DomainError):
         raise
     except Exception as e:
         logger.error(f"知识库查询失败 {e}, {traceback.format_exc()}")
@@ -1179,7 +1179,7 @@ async def query_test(
     try:
         result = await knowledge_base_manager.aquery(query, kb_id=kb_id, **meta)
         return result
-    except HTTPException:
+    except (HTTPException, DomainError):
         raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

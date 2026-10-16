@@ -5,7 +5,7 @@
       :tabs="visibleTabs"
       @update:active-key="handleActiveTabChange"
       :loading="detailLoading"
-      :ready="isCurrentKnowledgeBaseLoaded && !isConnector"
+      :ready="isCurrentKnowledgeBaseLoaded && supportsDetail"
       empty-description="未找到知识库"
       class="knowledge-detail-layout"
     >
@@ -169,7 +169,7 @@
 
       <template #panel-query>
         <div
-          v-if="!isConnector"
+          v-if="supportsDetail"
           v-show="activeTab === 'query'"
           class="tab-panel query-config-panel"
         >
@@ -294,6 +294,14 @@
                 </a-form-item>
               </template>
 
+              <template v-if="knowledgeBase.kb_type === 'feishu'">
+                <a-form-item label="User Access Token">
+                  <a-input-password v-model:value="editForm.feishu_user_token" placeholder="留空保持现有凭证；过期时填入新的用户 Token" />
+                </a-form-item>
+                <a-form-item label="知识空间 ID">
+                  <a-input v-model:value="editForm.feishu_space_id" placeholder="知识库设置 URL 中的数字 ID" />
+                </a-form-item>
+              </template>
               <template v-if="isNotionKb">
                 <a-form-item label="Notion Token" name="notion_token">
                   <a-input-password
@@ -410,6 +418,7 @@ const isCurrentKnowledgeBaseLoaded = computed(() => knowledgeBase.value?.kb_id =
 const kbType = computed(() =>
   isCurrentKnowledgeBaseLoaded.value ? knowledgeBase.value.kb_type?.toLowerCase() || 'milvus' : ''
 )
+const supportsDetail = computed(() => kbUtils.supportsKnowledgeBaseDetail(knowledgeBase.value))
 const isMilvus = computed(() => kbType.value === 'milvus')
 const isDifyKb = computed(() => kbType.value === 'dify')
 const isNotionKb = computed(() => kbType.value === 'notion')
@@ -630,7 +639,7 @@ watch(
     store.stopAutoRefresh()
     try {
       await store.getKnowledgeBaseInfo(nextKbId, false)
-      if (store.knowledgeBase?.kb_id === nextKbId && kbUtils.isReadOnlyKnowledgeBase(store.knowledgeBase)) {
+      if (store.knowledgeBase?.kb_id === nextKbId && !kbUtils.supportsKnowledgeBaseDetail(store.knowledgeBase)) {
         if (route.query.action === 'edit' && canManageKnowledgeBase.value) {
           showEditModal()
           return
@@ -733,6 +742,8 @@ const editForm = reactive({
   dify_api_url: '',
   dify_token: '',
   dify_dataset_id: '',
+  feishu_user_token: '',
+  feishu_space_id: '',
   notion_token: '',
   notion_data_source_id: '',
   notion_version: '2026-03-11'
@@ -806,7 +817,7 @@ const loadUsers = async () => {
 }
 
 const handleEditModalAfterClose = () => {
-  if (isConnector.value) backToKnowledgeBase()
+  if (!supportsDetail.value) backToKnowledgeBase()
 }
 
 const showEditModal = () => {
@@ -818,6 +829,8 @@ const showEditModal = () => {
   editForm.dify_api_url = knowledgeBase.value.additional_params?.dify_api_url || ''
   editForm.dify_token = knowledgeBase.value.additional_params?.dify_token || ''
   editForm.dify_dataset_id = knowledgeBase.value.additional_params?.dify_dataset_id || ''
+  editForm.feishu_user_token = ''
+  editForm.feishu_space_id = knowledgeBase.value.additional_params?.feishu_space_id || ''
   editForm.notion_token = ''
   editForm.notion_data_source_id = knowledgeBase.value.additional_params?.notion_data_source_id || ''
   editForm.notion_version = knowledgeBase.value.additional_params?.notion_version || '2026-03-11'
@@ -879,6 +892,16 @@ const handleEditSubmit = async () => {
         dify_api_url: editForm.dify_api_url.trim(),
         dify_token: editForm.dify_token.trim(),
         dify_dataset_id: editForm.dify_dataset_id.trim()
+      }
+    } else if (knowledgeBase.value.kb_type === 'feishu') {
+      if (!/^[0-9]+$/.test(editForm.feishu_space_id.trim())) {
+        editModalTab.value = 'basic'
+        message.error('请填写数字知识空间 ID')
+        return
+      }
+      updateData.additional_params = { feishu_space_id: editForm.feishu_space_id.trim() }
+      if (editForm.feishu_user_token.trim()) {
+        updateData.additional_params.feishu_user_token = editForm.feishu_user_token.trim()
       }
     } else if (isNotionKb.value) {
       if (!editForm.notion_data_source_id?.trim()) {

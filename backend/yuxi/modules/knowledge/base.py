@@ -43,6 +43,7 @@ class KnowledgeExecutor(ABC):
     description = ""
     requires_embedding_model = True
     supports_documents = True
+    supports_document_read = True
     apply_chunk_defaults = True
 
     def __init__(self, work_dir: str):
@@ -629,6 +630,19 @@ class KnowledgeExecutor(ABC):
             total_matches=len(matched_indexes),
             windows=windows,
         ).model_dump(exclude={"kb_id", "file_id"})
+
+    async def open_document(
+        self,
+        kb_id: str,
+        file_id: str,
+        *,
+        config: KnowledgeBaseConfig,
+        offset: int = 0,
+        limit: int = 800,
+    ) -> dict:
+        """按本次连接配置打开正文；本地文档复用既有窗口读取。"""
+        del config
+        return await self.open_file_content(kb_id, file_id, offset=offset, limit=limit)
 
     async def open_file_content(self, kb_id: str, file_id: str, offset: int = 0, limit: int = 800) -> dict:
         """按行窗口打开文件解析后的 Markdown 内容"""

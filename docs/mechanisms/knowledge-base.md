@@ -7,7 +7,12 @@
 Yuxi 通过 `KnowledgeBaseManager` 读取知识库配置、解析权限并选择 executor：
 
 - `milvus` 是文档型知识库，支持上传、解析、分块、向量索引、预览和检索，也可以构建知识图谱；
-- `dify` 和 `notion` 是只读连接器，只保存外部连接信息并执行 Query，不承载 Yuxi 的上传、解析、索引、文件树和全文预览。
+- `dify` 和 `notion` 是只读连接器，只保存外部连接信息并执行 Query，不承载 Yuxi 的上传、解析、索引、文件树和全文预览；
+- `feishu` 在线搜索配置的知识空间，只返回新版普通文档（Docx）候选；Web 阅读面板和 `open_kb_document` 每次请求实时读取正文文本，不同步入库。表格、旧版文档、附件和快捷方式不属于当前阅读范围。
+
+`supports_documents` 表示本地文档管理能力，`supports_document_read` 独立表示正文阅读能力。飞书连接器保留只读写入门禁；读取前在 executor 重新解析节点并核验空间归属和类型，飞书再按配置的用户凭证检查资源权限。它不提供本地文件树、原件下载或 `find_kb_document`。
+
+飞书连接凭证由管理员配置，获授权的 Yuxi 知识库用户共享该凭证可读范围，使用者不自动映射到自己的飞书身份。Yuxi 权限检查限制谁可以调用此连接，`space_id` 限制连接读取哪个空间；token 在配置响应与日志中不回显。凭证过期或飞书撤权时调用明确失败，管理员可以在配置中更换 token；当前连接不提供用户登录和自动刷新。具体配置见[飞书连接参数](../advanced/knowledge-base-api.md#飞书只读连接配置)。
 
 前端按钮只反映 executor 的能力，最终判断由后端完成。只读连接器收到不支持的操作时会明确报错。
 
@@ -24,12 +29,12 @@ flowchart LR
     Worker --> Handler["knowledge services：领域作业流程"]
     Handler --> Manager["KnowledgeBaseManager"]
     Manager --> MilvusKB["Milvus executor"]
-    Manager --> Connector["Dify / Notion 只读 executor"]
+    Manager --> Connector["Dify / Notion / 飞书只读 executor"]
     MilvusKB --> PG[("PostgreSQL")]
     MilvusKB --> Object[("MinIO")]
     MilvusKB --> Vector[("Milvus")]
     MilvusKB --> Graph[("Neo4j，可选")]
-    Connector --> External["外部检索 API"]
+    Connector --> External["外部检索与阅读 API"]
 
     Context["Agent Context.knowledges"] --> Visible["用户权限 ∩ Agent 选择"]
     Visible --> Skill["knowledge-base Skill"]

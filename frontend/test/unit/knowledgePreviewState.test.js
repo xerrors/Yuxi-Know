@@ -21,7 +21,7 @@ async function createQueryPanel() {
       queryTest: () => new Promise((resolve) => requests.push(resolve)),
       getSampleQuestions: async () => ({ questions: [] })
     },
-    Braces: {}, RefreshCw: {}, SearchOutlined: {}, QueryResultChunk: {}, FileDetailModal: {}
+    Braces: {}, RefreshCw: {}, SearchOutlined: {}, QueryResultChunk: {}, FileDetailModal: {}, ExternalDocumentReader: {}
   }
   const component = new Function(...Object.keys(deps), executable)(...Object.values(deps))
   const panel = component.setup({}, { expose() {}, emit() {} })

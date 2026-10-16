@@ -541,7 +541,7 @@ class KnowledgeBaseManager:
         )
         os.makedirs(os.path.join(kb_instance.work_dir, kb_id), exist_ok=True)
 
-        logger.info(f"Created {kb_type} knowledge_base: {name} ({kb_id}) with {additional_params}")
+        logger.info(f"Created {kb_type} knowledge_base: {name} ({kb_id})")
         knowledge_base = await self.get_knowledge_base_info(kb_id)
         if knowledge_base is None:
             raise KBNotFoundError(f"Knowledge base {kb_id} not found after creation")
@@ -1155,8 +1155,11 @@ class KnowledgeBaseManager:
 
         不支持文档全文操作的知识库（如 dify 只读源）抛 ValueError。
         """
-        await self._require_kb_supports_documents(kb_id, "open")
-        window = await self.open_file_content(kb_id, file_id, offset=offset, limit=limit)
+        config = await self.get_kb_config(kb_id)
+        executor = await self._get_or_create_kb_instance(config.kb_type)
+        if not executor.supports_document_read:
+            raise ValueError("该知识库只支持检索，不支持文档查看")
+        window = await executor.open_document(kb_id, file_id, config=config, offset=offset, limit=limit)
         return OpenOutputSchema(kb_id=kb_id, file_id=file_id, **window).model_dump()
 
     async def find_in_document(

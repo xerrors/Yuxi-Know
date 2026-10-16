@@ -70,6 +70,7 @@ class KnowledgeBaseFactory:
                 "description": kb_class.description,
                 "requires_embedding_model": kb_class.requires_embedding_model,
                 "supports_documents": kb_class.supports_documents,
+                "supports_document_read": kb_class.supports_document_read,
                 "create_params": kb_class.get_create_params_config(),
             }
         return result

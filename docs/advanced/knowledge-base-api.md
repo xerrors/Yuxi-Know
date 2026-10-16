@@ -64,6 +64,16 @@ URL 导入需要管理员身份和目标知识库的管理权限。先调用 `PO
 
 Durable Task 的 `success` 只代表 worker 已完成编排，任务状态不拥有文件事实；最终结论要按[知识库机制](../mechanisms/knowledge-base.md#文档状态机)回读文件状态，并在需要时核对 MinIO、chunk 和向量索引。完整请求 Schema 和错误响应以部署实例的 Swagger 页面为准：`<base-url>/docs`。
 
+## 飞书只读连接配置
+
+管理员在新建知识库时选择“飞书”，填写 `feishu_user_token` 与 `feishu_space_id`。空间 ID 是飞书知识库设置页面 URL 中的数字标识。用户 token 需要具备 `wiki:wiki:readonly`、`docx:document:readonly` 权限，且其代表的用户可阅读目标知识库和文档。获取测试 token 可使用飞书开放平台 API 调试台；生产使用者需自行管理凭证有效期。知识库链接和 App Secret 均不能代替搜索所需的用户 token。[飞书 Wiki 搜索](https://open.feishu.cn/document/server-docs/docs/wiki-v2/search_wiki)、[新版文档正文接口](https://open.feishu.cn/document/server-docs/docs/docs/docx-v1/document/raw_content)
+
+创建请求的 `kb_type` 为 `feishu`，`additional_params` 只需上述两个连接参数，不需要嵌入模型。共享权限决定哪些 Yuxi 用户可以使用此连接。配置响应省略 token；更新时不提交 token 则保留原值，过期后在知识库“配置”中填入新的 token。
+
+搜索关键词长度为 1–50 个字符，查询配置 `final_top_k` 限制返回 1–50 篇文档。结果 `content` 是文档标题，`metadata.result_type` 为 `document`，不含伪造的向量分数。结果 `file_id` 是 Wiki 节点标识，可交给 `open_kb_document` 分页读取实时正文；读取按行返回纯文本，不包含图片和附件。用户可通过 Web 检索结果的文档标题打开正文。
+
+连接器使用飞书中国版固定 API 地址；跨空间、快捷方式和非 Docx 类型读取明确拒绝。搜索候选出现后资源被删除、撤权或 token 失效时，阅读会报错，已有搜索结果不构成访问授权。在线连接的能力与边界见[知识库机制](../mechanisms/knowledge-base.md#能力边界)。
+
 ## 外部查询接口
 
 普通登录用户 JWT、`full` Key 或 `knowledge` 级 API Key 通过 `/api/v1/knowledge/tools` 查询绑定用户有读取权限的知识库。Agent 工具、CLI 与这些 HTTP 入口共用 `yuxi.modules.knowledge.services.tools`；API 根据 JWT 或 Key 绑定的用户重新解析知识库读取权限，调用方不能指定别人的用户身份。管理、上传等接口使用 `/api/knowledge/*`。
