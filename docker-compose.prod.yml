@@ -51,7 +51,7 @@ x-logging: &default-logging
 services:
   api:
     ports:
-      - "${YUXI_API_PORT:-6050}:5050"
+      - "127.0.0.1:${YUXI_API_PORT:-6050}:5050"
     build:
       context: .
       dockerfile: docker/api.Dockerfile

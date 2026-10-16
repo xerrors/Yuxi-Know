@@ -141,3 +141,9 @@ def test_host_test_runner_probes_current_compose_slot(tmp_path, monkeypatch, bas
     assert commands[0] == ["compose", "exec", "-T", "api", "curl", "-fsS", f"{base_url or 'http://localhost:5050'}/api/system/ready"]
     assert len([command for command in commands if "pytest" in command]) == (2 if ready else 0)
     assert result.returncode == (0 if ready else 1)
+
+
+def test_production_api_only_publishes_on_loopback() -> None:
+    """生产 API 经 Web 代理接入，宿主默认只允许回环直连。"""
+    compose = load_compose("docker-compose.prod.yml")
+    assert compose["services"]["api"]["ports"] == ["127.0.0.1:${YUXI_API_PORT:-6050}:5050"]

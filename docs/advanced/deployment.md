@@ -68,10 +68,12 @@ MinIO 将同一宿主数据目录挂载到容器 `/data`，Neo4j 将日志目录
 
 ## 2. 首次启动
 
-新部署直接启动核心服务：
+先构建镜像并为生产进程准备三个可写目录。API 与 worker 固定使用 UID/GID `1000:1000`；Docker 自动创建的 bind mount 目录通常属于 root，直接启动会导致内置 Skills 初始化失败。以下命令只设置目录本身，不递归修改已有文件；已有部署恢复时保留文件的原数字属主。
 
 ```bash
-docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+docker compose --env-file .env.prod -f docker-compose.prod.yml build api frontend minio
+docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm --no-deps --user 0:0 --entrypoint sh api -c 'mkdir -p /app/user-data /app/skill-sources /app/skill-projections && chown 1000:1000 /app/user-data /app/skill-sources /app/skill-projections && chmod 0700 /app/user-data /app/skill-sources /app/skill-projections'
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --no-build
 ```
 
 需要本地 MinerU 或 PaddleX OCR 时，再启用 `all` profile：
@@ -108,7 +110,7 @@ curl --fail http://localhost/api/system/ready
 - `/api/system/health` 只表示 API 进程存活；
 - `/api/system/ready` 表示启动完成、PostgreSQL/Redis 可用，并且兼容 worker 正在提供健康租约。
 
-worker 的 Compose 健康检查通过 `python -m yuxi.services.worker_health` 轻量读取 `REDIS_URL` 中的 ARQ 心跳，不加载业务执行依赖。心跳缺失、过期、没有 TTL、TTL 超过约定上界或 Redis 连接失败时检查失败。该心跳表达共享队列的消费健康，多副本部署不能用它判断单个 worker 进程是否失活。
+worker 的 Compose 健康检查通过 `python -m yuxi.workers.health` 轻量读取 `REDIS_URL` 中的 ARQ 心跳，不加载业务执行依赖。心跳缺失、过期、没有 TTL、TTL 超过约定上界或 Redis 连接失败时检查失败。该心跳表达共享队列的消费健康，多副本部署不能用它判断单个 worker 进程是否失活。
 
 就绪接口返回 `ready` 后，再用浏览器完成登录和一次真实对话。健康或就绪状态不能证明知识库、模型、沙盒或外部服务的业务链路正确。
 
@@ -170,6 +172,36 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml restart worker
 ```
 
 再次检查 `/api/system/ready`，确认 worker 健康租约恢复。
+
+### 停机备份与恢复演练
+
+本节适用于同一候选版本、同一组组件版本的整套状态恢复。备份必须同时包含 PostgreSQL、MinIO、Milvus/etcd、Neo4j、Redis、用户 Workspace、Skills 来源及投影，并单独安全保存环境文件、两个应用安全密钥和镜像版本或 digest。应用目录不包含 Cube 节点磁盘和 VM Home；需要保留用户安装的软件与配置时，按[沙盒运维](./sandbox-operations.md#运维与验证)另行备份节点，保留实例身份与原挂载路径。
+
+1. 关闭外部入口，等待正在执行的 Run、待派发 Input、后台作业和沙盒命令收敛；暂停定时任务的触发来源。确认用户 VM 已空闲，按执行节点的停机规程保存节点状态。
+2. 停止 Web、API 和 worker，再停止全部本次部署的存储服务。不要复制仍在写入的 PostgreSQL、etcd、Neo4j 或对象目录。
+3. 对配置中的实际状态目录执行冷备份，保留数字属主、文件模式、符号链接和必要的扩展属性；外置共享目录或符号链接目标必须独立纳入同一批备份。保留原数据与原环境文件。
+4. 把备份解到新的空目录，核对文件摘要与数字属主。恢复环境使用同一组安全密钥；所有 bind mount、节点共享路径和实例身份必须与恢复方案一致，不能让新旧实例同时写同一目录。
+5. 用相同镜像启动存储、`schema-init`、API、worker 和 Web。核对 Schema、readiness、原用户登录、会话最终结果、反馈、知识文件正文与检索、原始对象字节、图谱及用户文件；再提交一条新对话，确认恢复后的写入链路可用。
+
+以下示例要求 `STATE_DIR` 是实际本地状态根，且其内部数据都已纳入备份。按现场环境设置绝对路径；环境文件含凭据，备份目录只允许运维身份读取。
+
+```bash
+STATE_DIR=/absolute/path/to/yuxi-state
+BACKUP_DIR=/absolute/path/to/backup
+RESTORE_DIR=/absolute/path/to/empty-restore-state
+
+docker compose --env-file .env.prod -f docker-compose.prod.yml stop frontend api worker
+docker compose --env-file .env.prod -f docker-compose.prod.yml stop
+sudo install -d -m 0700 "$BACKUP_DIR"
+sudo tar --numeric-owner --acls --xattrs -cpf "$BACKUP_DIR/state.tar" -C "$STATE_DIR" .
+sudo install -m 0600 .env.prod "$BACKUP_DIR/env.prod"
+sudo sha256sum "$BACKUP_DIR/state.tar"
+
+sudo install -d -m 0700 "$RESTORE_DIR"
+sudo tar --numeric-owner --acls --xattrs -xpf "$BACKUP_DIR/state.tar" -C "$RESTORE_DIR"
+```
+
+恢复前复制出独立环境文件并把 `YUXI_STATE_DIR` 指向 `RESTORE_DIR`，同步准备 Cube 侧共享路径；通过 `YUXI_ENV_FILE` 和 `--env-file` 使用该文件。已有 VM 的挂载引用不会随环境变量自动改变，换路径或换节点时必须先验证其映射与节点恢复，不用重建空 VM 冒充保留原环境。完成上述业务回读前，不切换真实入口。合成数据的小规模演练只证明该版本的恢复链路，生产数据量下的恢复时间仍需现场测量。
 
 ### 轮换历史默认凭据
 

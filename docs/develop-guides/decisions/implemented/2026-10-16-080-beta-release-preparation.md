@@ -57,6 +57,6 @@ Web 使用 markdown-it 15.0.2 修复[自动链接的二次复杂度问题](https
 
 远端 CI 的最终结果由 fork Actions 对应 SHA 的检查拥有，本记录只保存本地验收，不能证明远端通过。推送 fork 分支后没有产生检查；手动触发同一提交的 `trust.yml` 返回 `422: Actions has been disabled for this repository`，确认当前 fork 禁用 Actions。读取 runner/Actions 策略返回 403，runner 配置状态仍不可判定。需要 fork 管理者启用 Actions 并确认 Cube runner 后运行对应提交的完整检查；主仓库 runner 状态不作为 fork 结论。
 
-Not run：远端 CI、自托管 runner 上的系统检查、真实供应商/语料质量、生产成套备份恢复、节点重启恢复及完整产品浏览器验收。候选暂不创建发布 tag、Release 或上传 npm，等待这些发布条件收敛。
+生产镜像、浏览器主流程、应用成套冷备恢复、worker 崩溃恢复和一次真实 SiliconFlow 探针的补充证据由[本地生产验收](2026-10-16-production-release-acceptance.md)维护。Not run：远端 CI、自托管 runner 上的系统检查、真实语料质量、公网 TLS、真实数据规模灾备、Cube 节点重启及 VM 磁盘恢复和未覆盖的产品页面。候选暂不创建发布 tag、Release 或上传 npm，等待发布条件收敛。
 
 发布复查：fork 的 `trust.yml` 手动触发仍返回 Actions 禁用的 HTTP 422，runner API 返回 403，远端完整门禁未完成。`v0.8*` 远端 tag 查询为空。生产 Compose 从源码本地构建，无自动镜像上传步骤；文档构建可在分支/tag 触发，站点部署只匹配 main。公共 npm registry 查询 `@xerrors/yuxi` 返回 404，CLI 文档已提供源码打包安装；npm 上传属于单独交付，需发布身份与环境配置，不阻塞源码候选获取。
