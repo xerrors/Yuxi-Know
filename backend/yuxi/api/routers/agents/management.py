@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.api.dependencies.auth import get_db, get_required_user, get_superadmin_user
 from yuxi.api.uploads import read_upload_with_limit
-from yuxi.modules.agents.repositories.definitions import AgentRepository
 from yuxi.modules.agents.permissions import is_builtin_agent, user_can_access_agent, user_can_manage_agent
+from yuxi.modules.agents.repositories.definitions import AgentRepository
 from yuxi.modules.agents.runtime.agent_backends import (
     AgentBackendNotFoundError,
     get_agent_backend,
@@ -18,10 +18,10 @@ from yuxi.modules.agents.runtime.agent_backends import (
 from yuxi.modules.agents.services.definitions import (
     create_agent_definition,
     delete_agent_definition,
-    update_agent_definition,
-    serialize_agent_definition,
     ensure_default_agent_definition,
+    serialize_agent_definition,
     set_default_agent_definition,
+    update_agent_definition,
 )
 from yuxi.modules.extensions.skills.bound import (
     create_agent_bound_skill,

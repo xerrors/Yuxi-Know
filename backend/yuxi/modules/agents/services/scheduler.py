@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.manager import pg_manager
-from yuxi.modules.agents.services.run_creation import create_turn_run
 from yuxi.modules.agents.models.attachments import AgentAttachment
 from yuxi.modules.agents.models.inputs import AgentInput
 from yuxi.modules.agents.models.runs import AgentRun
@@ -20,6 +19,7 @@ from yuxi.modules.agents.repositories.input import AgentInputRepository
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
+from yuxi.modules.agents.services.run_creation import create_turn_run
 from yuxi.modules.workspace.paths import ensure_bound_user_workdir
 from yuxi.modules.workspace.services.bindings import WorkdirBinding, resolve_session_workdir_binding
 

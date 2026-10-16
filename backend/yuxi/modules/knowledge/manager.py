@@ -24,8 +24,8 @@ from yuxi.modules.knowledge.cache import (
     serialize_kb_config,
 )
 from yuxi.modules.knowledge.chunking.presets import ChunkConfigError, deep_merge
-from yuxi.modules.knowledge.file_status import status_filter_values
 from yuxi.modules.knowledge.factory import KnowledgeBaseFactory
+from yuxi.modules.knowledge.file_status import status_filter_values
 from yuxi.modules.knowledge.read_models import KnowledgeBaseConfig, KnowledgeBaseDetail, KnowledgeBaseSummary
 from yuxi.modules.knowledge.schemas import FindOutputSchema, OpenOutputSchema
 from yuxi.modules.knowledge.utils.security import redact_sensitive_params
@@ -730,7 +730,6 @@ class KnowledgeBaseManager:
     async def get_knowledge_base_info(self, kb_id: str, include_files: bool = False) -> KnowledgeBaseDetail | None:
         """获取知识库详情。"""
         from yuxi.modules.knowledge.repositories.bases import KnowledgeBaseRepository
-
         from yuxi.modules.knowledge.repositories.files import KnowledgeFileRepository
 
         kb_repo = KnowledgeBaseRepository()

@@ -2,11 +2,10 @@
 
 import json
 
-from yuxi.modules.agents.tool_results import normalize_tool_result
-
 from yuxi.modules.agents.message_preview import build_message_search_snippet
 from yuxi.modules.agents.repositories.memory_history import MemoryHistoryRepository
 from yuxi.modules.agents.repositories.messages import MessageRepository
+from yuxi.modules.agents.tool_results import normalize_tool_result
 from yuxi.shared.strings import truncate_utf8
 
 # ==== 历史对话检索参数 ====

@@ -6,6 +6,7 @@ from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from yuxi.modules.agents.models.inputs import AgentInput
 from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.modules.agents.repositories.definitions import AgentRepository

@@ -6,9 +6,9 @@ import math
 import uuid
 from typing import Any
 
+from yuxi.modules.background_jobs.models import BackgroundJobRecord
 from yuxi.modules.background_jobs.repository import BackgroundJobRepository
 from yuxi.shared.datetime import utc_now
-from yuxi.modules.background_jobs.models import BackgroundJobRecord
 
 
 class JobTracker:

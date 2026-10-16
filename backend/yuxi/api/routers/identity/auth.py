@@ -1,7 +1,7 @@
 import re
 from typing import Literal
 
-from fastapi import Response, Form, APIRouter, Body, Depends, File, HTTPException, Query, Request, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, ConfigDict, Field
@@ -19,11 +19,10 @@ from yuxi.api.routers.identity.oidc import (
 )
 from yuxi.api.uploads import read_upload_with_limit
 from yuxi.modules.identity.models import User
-from yuxi.modules.identity.services.login import login_result
-from yuxi.modules.identity.services import users as user_service
 from yuxi.modules.identity.repositories.departments import DepartmentRepository
 from yuxi.modules.identity.repositories.users import UserRepository
 from yuxi.modules.identity.security import AuthUtils
+from yuxi.modules.identity.services import users as user_service
 from yuxi.modules.identity.services.administration import (
     IdentityConflictError,
     SystemAlreadyInitializedError,
@@ -39,6 +38,7 @@ from yuxi.modules.identity.services.cli_auth import (
     exchange_cli_auth_token,
     get_cli_auth_session_for_user,
 )
+from yuxi.modules.identity.services.login import login_result
 from yuxi.modules.identity.services.login_limits import extract_client_ip
 from yuxi.modules.identity.services.password_login import PasswordLoginRejected, login_with_password
 from yuxi.modules.identity.services.usernames import generate_unique_uid, is_valid_phone_number, validate_username

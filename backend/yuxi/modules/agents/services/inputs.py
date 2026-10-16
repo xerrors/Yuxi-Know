@@ -10,11 +10,10 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from yuxi.modules.agents.services.thread_access import require_thread
-from yuxi.modules.agents.services.cooperation_notifications import notify_user_intervention
-from yuxi.modules.agents.receipts import input_intent_hash, require_idempotency_key, require_receipt_replay
+from yuxi.modules.agents.input_messages import AgentRunInputMessage, serialize_input_message
 from yuxi.modules.agents.models.inputs import AgentInputReceipt
 from yuxi.modules.agents.models.sessions import Session
+from yuxi.modules.agents.receipts import input_intent_hash, require_idempotency_key, require_receipt_replay
 from yuxi.modules.agents.repositories.attachments import AttachmentRepository
 from yuxi.modules.agents.repositories.definitions import AgentRepository
 from yuxi.modules.agents.repositories.input import AgentInputRepository
@@ -23,16 +22,17 @@ from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 from yuxi.modules.agents.runtime.agent_backends import AgentBackendNotFoundError, get_agent_backend
+from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.agents.services.attachments import serialize_attachment, stage_input_attachments
+from yuxi.modules.agents.services.cooperation_notifications import notify_user_intervention
 from yuxi.modules.agents.services.input_config import (
     resolve_agent_context_snapshot,
     resolve_agent_run_model_spec,
     resolve_agent_run_tool_approval_mode,
 )
-from yuxi.modules.agents.input_messages import AgentRunInputMessage, serialize_input_message
 from yuxi.modules.agents.services.public_items import serialize_public_items
 from yuxi.modules.agents.services.scheduler import dispatch_next_input
-from yuxi.modules.agents.scope import ActorScope
+from yuxi.modules.agents.services.thread_access import require_thread
 from yuxi.modules.identity.models import User
 from yuxi.modules.workspace.paths import ensure_bound_user_workdir
 from yuxi.modules.workspace.repositories.projects import ProjectRepository

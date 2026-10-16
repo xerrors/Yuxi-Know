@@ -14,8 +14,8 @@ from yuxi.modules.identity import oidc
 from yuxi.modules.identity.models import Department
 from yuxi.modules.identity.repositories.oidc import OIDCRepository
 from yuxi.modules.identity.security import AuthUtils
-from yuxi.shared.datetime import utc_now
 from yuxi.modules.identity.services.login import login_result
+from yuxi.shared.datetime import utc_now
 from yuxi.shared.errors import PermissionDeniedError, StateConflictError
 
 _MATCH = """

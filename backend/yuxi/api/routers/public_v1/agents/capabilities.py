@@ -21,9 +21,9 @@ from yuxi.modules.agents.services.attachments import (
     list_thread_attachments_view,
     upload_draft_file,
 )
+from yuxi.modules.agents.services.checkpoint_state import get_agent_state_view
 from yuxi.modules.agents.services.compression import compress_thread_context as compress_context
 from yuxi.modules.agents.services.cooperation import get_cooperation_summary
-from yuxi.modules.agents.services.checkpoint_state import get_agent_state_view
 from yuxi.modules.agents.services.thread_access import require_thread
 
 router = APIRouter(dependencies=[Depends(require_public_context)], responses=PUBLIC_ERRORS)

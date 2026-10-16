@@ -1,7 +1,5 @@
 """反馈的作用域查询与当前值写入。"""
 
-from yuxi.modules.agents.repositories.pagination import order_page
-
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,6 +7,7 @@ from yuxi.modules.agents.models.definitions import Agent
 from yuxi.modules.agents.models.feedback import AgentFeedbackRecord
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.sessions import Session
+from yuxi.modules.agents.repositories.pagination import order_page
 from yuxi.modules.agents.scope import ActorScope
 from yuxi.shared.datetime import utc_now
 

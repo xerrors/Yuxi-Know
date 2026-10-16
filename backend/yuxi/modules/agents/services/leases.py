@@ -8,7 +8,6 @@ from datetime import datetime
 
 from sqlalchemy import select
 
-from yuxi.modules.agents.services.cooperation_notifications import notify_turn_state
 from yuxi.infrastructure.filesystem import await_io
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.manager import pg_manager
@@ -18,6 +17,7 @@ from yuxi.modules.agents.repositories.runs import TERMINAL_RUN_STATUSES, AgentRu
 from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 from yuxi.modules.agents.runtime.sandbox.provider import get_sandbox_provider
+from yuxi.modules.agents.services.cooperation_notifications import notify_turn_state
 from yuxi.modules.agents.services.event_writer import publish_run_settlement
 from yuxi.modules.agents.services.scheduler import dispatch_next_input
 from yuxi.modules.agents.services.tracing import finish_turn_observation_if_terminal

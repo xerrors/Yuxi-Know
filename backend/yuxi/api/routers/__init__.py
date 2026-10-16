@@ -12,8 +12,8 @@ from yuxi.api.routers.extensions.skills import skills, user_skills
 from yuxi.api.routers.extensions.tools import tools
 from yuxi.api.routers.identity.auth import auth
 from yuxi.api.routers.identity.departments import department
-from yuxi.api.routers.identity.users import user_router
 from yuxi.api.routers.identity.sandbox import router as user_sandbox_router
+from yuxi.api.routers.identity.users import user_router
 from yuxi.api.routers.knowledge.dashboard import knowledge_dashboard
 from yuxi.api.routers.knowledge.evaluation import evaluation
 from yuxi.api.routers.knowledge.graphs import graph

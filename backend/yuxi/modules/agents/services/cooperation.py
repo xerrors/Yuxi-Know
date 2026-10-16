@@ -10,16 +10,13 @@ from datetime import timedelta
 
 from sqlalchemy import select
 
-from yuxi.modules.agents.services.thread_access import require_thread
-from yuxi.modules.agents.services.turns import cancel_turn
-from yuxi.modules.agents.runtime_locks import cooperation_lock_key
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.manager import pg_manager
-from yuxi.modules.agents.receipts import require_idempotency_key, control_intent_hash, require_receipt_replay
-from yuxi.modules.agents.services.run_creation import create_resume_run
+from yuxi.modules.agents.input_messages import build_chat_input_message
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.models.turns import AgentTurn
+from yuxi.modules.agents.receipts import control_intent_hash, require_idempotency_key, require_receipt_replay
 from yuxi.modules.agents.repositories.cooperation import CooperationRepository
 from yuxi.modules.agents.repositories.definitions import AgentRepository
 from yuxi.modules.agents.repositories.input import AgentInputRepository
@@ -27,12 +24,15 @@ from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 from yuxi.modules.agents.runtime.agent_backends import get_agent_backend
+from yuxi.modules.agents.runtime_locks import cooperation_lock_key
+from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.agents.services.directory import list_public_agents
 from yuxi.modules.agents.services.input_config import resolve_agent_context_snapshot
-from yuxi.modules.agents.input_messages import build_chat_input_message
 from yuxi.modules.agents.services.inputs import accept_locked
+from yuxi.modules.agents.services.run_creation import create_resume_run
 from yuxi.modules.agents.services.scheduler import Dispatch, deliver, dispatch_next_input
-from yuxi.modules.agents.scope import ActorScope
+from yuxi.modules.agents.services.thread_access import require_thread
+from yuxi.modules.agents.services.turns import cancel_turn
 from yuxi.modules.identity.models import User
 from yuxi.modules.system.options import system_options
 from yuxi.modules.workspace.repositories.projects import ProjectRepository

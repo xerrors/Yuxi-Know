@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Callable
 import time
 import uuid
+from collections.abc import Callable
 
 
 def hashstr(input_string: object, length: int | None = None, with_salt: bool = False, salt: str | None = None) -> str:

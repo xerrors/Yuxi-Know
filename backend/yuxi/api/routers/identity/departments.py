@@ -9,8 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.api.dependencies.auth import get_admin_user, get_db, get_superadmin_user
 from yuxi.modules.identity.models import User
-from yuxi.modules.identity.services import administration
 from yuxi.modules.identity.repositories.departments import DepartmentRepository
+from yuxi.modules.identity.services import administration
 from yuxi.modules.identity.services.administration import IdentityConflictError, create_department_with_admin
 
 # 创建路由器

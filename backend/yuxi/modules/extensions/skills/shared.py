@@ -7,6 +7,7 @@ import shutil
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from yuxi.infrastructure.runtime_settings import get_skill_data_dir
 from yuxi.modules.extensions.mcp.service import get_enabled_mcp_server_slugs
 from yuxi.modules.extensions.skills.access import (

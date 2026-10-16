@@ -21,7 +21,7 @@ from deepagents.backends.protocol import (
     ReadResult,
     WriteResult,
 )
-from deepagents.backends.sandbox import BaseSandbox, MAX_BINARY_BYTES
+from deepagents.backends.sandbox import MAX_BINARY_BYTES, BaseSandbox
 from deepagents.backends.utils import _get_file_type
 
 from yuxi.infrastructure.filesystem import await_io

@@ -21,8 +21,7 @@ from yuxi.infrastructure.filesystem import (
     write_all_fd,
 )
 from yuxi.modules.workspace.errors import FileTransferLimitError
-from yuxi.modules.workspace.paths import normalize_workspace_scope, validate_directory_name
-from yuxi.modules.workspace.paths import user_workspace_dir
+from yuxi.modules.workspace.paths import normalize_workspace_scope, user_workspace_dir, validate_directory_name
 
 
 class Workspace:

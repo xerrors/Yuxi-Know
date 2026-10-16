@@ -7,17 +7,15 @@ from __future__ import annotations
 import asyncio
 import os
 import uuid
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from types import SimpleNamespace
-
+from yuxi.modules.identity.models import APIKey, OIDCIdentity, User
 from yuxi.modules.identity.repositories.oidc import OIDCRepository
-from yuxi.modules.identity.models import OIDCIdentity
 from yuxi.shared.errors import PermissionDeniedError
-from yuxi.modules.identity.models import APIKey, User
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
@@ -303,9 +301,13 @@ async def test_api_key_auth_requires_bearer_prefix(test_client, admin_headers):
         await test_client.delete(f"{API_KEYS_PATH}{created['id']}", headers=admin_headers)
 
 
+@pytest.mark.self_managed_resources
 async def test_api_key_auto_binds_to_current_user(test_client, admin_headers):
-    """Test that API Key created without user_id is auto-bound to creator."""
-    # Create API key as admin
+    """通过 HTTP 回读创建者归属，并在 finally 清理本例创建的 Key。"""
+    current_user = await test_client.get("/api/auth/me", headers=admin_headers)
+    assert current_user.status_code == 200, current_user.text
+    creator_id = current_user.json()["id"]
+
     create_response = await test_client.post(
         API_KEYS_PATH,
         json=_create_payload("Auto Bind Test"),
@@ -315,8 +317,11 @@ async def test_api_key_auto_binds_to_current_user(test_client, admin_headers):
     created = create_response.json()["api_key"]
 
     try:
-        # Verify user_id is set (auto-bound to admin)
-        assert created["user_id"] is not None, "API Key should be auto-bound to creator"
+        assert created["user_id"] == creator_id
+        response = await test_client.get(API_KEYS_PATH, headers=admin_headers)
+        assert response.status_code == 200, response.text
+        saved = next(key for key in response.json()["api_keys"] if key["id"] == created["id"])
+        assert saved["user_id"] == creator_id
     finally:
-        # Cleanup: delete the test API key
-        await test_client.delete(f"{API_KEYS_PATH}{created['id']}", headers=admin_headers)
+        deleted = await test_client.delete(f"{API_KEYS_PATH}{created['id']}", headers=admin_headers)
+        assert deleted.status_code == 200, deleted.text

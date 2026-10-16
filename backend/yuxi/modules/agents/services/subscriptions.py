@@ -14,9 +14,9 @@ from yuxi.modules.agents.repositories.input import AgentInputRepository
 from yuxi.modules.agents.repositories.input_receipt import AgentInputReceiptRepository
 from yuxi.modules.agents.repositories.runs import TERMINAL_RUN_STATUSES, AgentRunRepository
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
+from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.agents.services.openai_events import OpenAIEventAdapter
 from yuxi.modules.agents.services.public_resources import turn_core
-from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.agents.services.thread_access import require_thread
 from yuxi.modules.agents.services.transport import list_recent_run_stream_events, list_run_stream_events
 from yuxi.shared.datetime import utc_now

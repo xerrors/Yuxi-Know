@@ -1,74 +1,9 @@
-"""测试分块 token 上限保护：general parser 对超长 chunk 的硬切分。
-
-nlp.py / general.py 只依赖 re 和标准库，用 sys.modules 占位绕过 yuxi 包的
-重依赖链（langchain / pydantic / .env 配置等），实现纯单元测试。
-跑完后清理 sys.modules，避免污染其他测试。
-"""
-
-import importlib.util
-import sys
-import types
-from pathlib import Path
+"""验证分块 token 上限、内容完整性及输入顺序。"""
 
 import pytest
 
-_PKG = Path(__file__).resolve().parents[3]
-
-_STUB_NAMES = [
-    "yuxi",
-    "yuxi.modules.knowledge",
-    "yuxi.modules.knowledge.chunking",
-    "yuxi.modules.knowledge.chunking.ragflow_like",
-    "yuxi.modules.knowledge.chunking.ragflow_like.parsers",
-    "yuxi.modules.knowledge.chunking.ragflow_like.nlp",
-    "yuxi.modules.knowledge.chunking.ragflow_like.parsers.general",
-]
-
-# 由 _isolated_modules fixture 在运行时注入
-nlp = None  # type: ignore[assignment]
-general = None  # type: ignore[assignment]
-
-
-@pytest.fixture(autouse=True, scope="module")
-def _isolated_modules():
-    """在模块级加载 nlp/general，跑完后清理 sys.modules 避免污染其他测试。"""
-    saved = {name: sys.modules.get(name) for name in _STUB_NAMES}
-
-    for name in _STUB_NAMES[:5]:
-        sys.modules.setdefault(name, types.ModuleType(name))
-
-    def _load(name: str, rel: str):
-        spec = importlib.util.spec_from_file_location(name, _PKG / rel)
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[name] = mod
-        spec.loader.exec_module(mod)  # type: ignore[union-attr]
-        return mod
-
-    _nlp = _load(
-        "yuxi.modules.knowledge.chunking.ragflow_like.nlp",
-        "yuxi/modules/knowledge/chunking/ragflow_like/nlp.py",
-    )
-    sys.modules["yuxi.modules.knowledge.chunking.ragflow_like"].nlp = _nlp  # type: ignore[attr-defined]
-
-    _general = _load(
-        "yuxi.modules.knowledge.chunking.ragflow_like.parsers.general",
-        "yuxi/modules/knowledge/chunking/ragflow_like/parsers/general.py",
-    )
-
-    # 注入模块级变量供测试用例访问
-    global nlp, general  # noqa: PLW0603
-    nlp = _nlp
-    general = _general
-
-    yield
-
-    # 清理：恢复原始状态
-    for name in _STUB_NAMES:
-        if saved[name] is None:
-            sys.modules.pop(name, None)
-        else:
-            sys.modules[name] = saved[name]
-
+from yuxi.modules.knowledge.chunking.ragflow_like import nlp
+from yuxi.modules.knowledge.chunking.ragflow_like.parsers import general
 
 # ── nlp.hard_split_by_token_limit ──────────────────────────────────
 
@@ -80,9 +15,10 @@ class TestHardSplitByTokenLimit:
         assert result == [text]
 
     def test_splits_long_chinese_text(self):
-        text = "测试内容" * 300  # ~600 CJK tokens
+        text = "甲乙丙丁戊己庚辛壬癸" * 120
         result = nlp.hard_split_by_token_limit(text, 512)
         assert len(result) > 1
+        assert "".join("".join(result).split()) == "".join(text.split())
         for chunk in result:
             assert nlp.count_tokens(chunk) <= 512
 
@@ -95,12 +31,14 @@ class TestHardSplitByTokenLimit:
         text = "内容" * 635  # 1270 CJK tokens -> 512 + 512 + 246
         result = nlp.hard_split_by_token_limit(text, 512, hard_limit_token_num=768)
         assert len(result) == 2
+        assert "".join(result) == text
         assert [nlp.count_tokens(chunk) for chunk in result] == [512, 758]
 
     def test_splits_long_english_text(self):
-        text = "hello world " * 1000  # ~2000 word tokens
+        text = "alpha beta gamma delta " * 500  # ~2000 word tokens
         result = nlp.hard_split_by_token_limit(text, 512)
         assert len(result) > 1
+        assert "".join("".join(result).split()) == "".join(text.split())
         for chunk in result:
             assert nlp.count_tokens(chunk) <= 512
 
@@ -138,6 +76,7 @@ class TestEnsureChunkTokenLimit:
         result = general._ensure_chunk_token_limit(chunks, 512)
         assert result[0] == "短文本"
         assert result[-1] == "短文本二"
+        assert "".join(result) == "".join(chunks)
         middle_chunks = result[1:-1]
         assert len(middle_chunks) == 2
         assert [nlp.count_tokens(chunk) for chunk in middle_chunks] == [512, 758]
@@ -161,14 +100,16 @@ class TestGeneralChunkMarkdown:
         doc = "# 标题\n\n第一段内容\n\n第二段内容\n\n第三段内容"
         chunks = general.chunk_markdown(doc, {"chunk_token_num": 512})
         assert len(chunks) > 0
+        assert "".join("".join(chunks).split()) == "".join(doc.split())
         for chunk in chunks:
             assert nlp.count_tokens(chunk) <= 512
 
     def test_oversized_single_line_gets_split(self):
-        long_line = "运维知识" * 800  # ~3200 CJK tokens
+        long_line = "甲乙丙丁戊己庚辛壬癸" * 320  # ~3200 CJK tokens
         doc = f"# 运维知识库\n\n{long_line}"
         chunks = general.chunk_markdown(doc, {"chunk_token_num": 512})
         assert len(chunks) > 1
+        assert "".join("".join(chunks).split()) == "".join(doc.split())
         for chunk in chunks:
             assert nlp.count_tokens(chunk) <= 768
 

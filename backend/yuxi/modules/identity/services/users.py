@@ -4,13 +4,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.modules.identity.models import User
-from yuxi.modules.identity.repositories.users import UserRepository
 from yuxi.modules.identity.repositories.departments import DepartmentRepository
+from yuxi.modules.identity.repositories.users import UserRepository
 from yuxi.modules.identity.security import AuthUtils
 from yuxi.modules.identity.services.usernames import generate_unique_uid, is_valid_phone_number, validate_username
-from yuxi.shared.errors import InvalidOperationError, PermissionDeniedError, ResourceNotFoundError, StateConflictError, InvalidInputError
-
 from yuxi.modules.schedules.repository import delete_user_schedules
+from yuxi.shared.errors import InvalidInputError, InvalidOperationError, PermissionDeniedError, ResourceNotFoundError, StateConflictError
 
 
 async def update_profile(db: AsyncSession, *, current_user: User, username: str | None = None, phone_number: str | None = None) -> dict:

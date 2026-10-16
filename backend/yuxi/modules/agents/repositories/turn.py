@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from yuxi.modules.agents.repositories.pagination import order_page
-
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
@@ -13,6 +11,7 @@ from yuxi.modules.agents.models.messages import MODEL_AUDIT_MESSAGE_TYPE, Messag
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.models.turns import AgentTurn
+from yuxi.modules.agents.repositories.pagination import order_page
 from yuxi.shared.datetime import utc_now
 
 

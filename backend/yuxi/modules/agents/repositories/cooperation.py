@@ -2,13 +2,13 @@
 
 from sqlalchemy import func, or_, select, text
 
-from yuxi.modules.agents.runtime_locks import cooperation_lock_key, user_environment_lock_key
 from yuxi.modules.agents.models.cooperation import CooperationEvent, CooperationRuntime
 from yuxi.modules.agents.models.inputs import AgentInput, AgentInputReceipt
 from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.models.turns import AgentTurn
+from yuxi.modules.agents.runtime_locks import cooperation_lock_key, user_environment_lock_key
 
 TREE_EXECUTION_LIMIT = 4
 

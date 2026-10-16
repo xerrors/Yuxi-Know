@@ -16,6 +16,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from yuxi.infrastructure.filesystem import open_directory_fd
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.runtime_settings import get_skill_data_dir
+from yuxi.modules.extensions.skills.access import (
+    get_manageable_skill_or_raise,
+    is_builtin_skill,
+    validate_skill_dependencies,
+)
 from yuxi.modules.extensions.skills.models import Skill, SkillVersion
 from yuxi.modules.extensions.skills.package import (
     TEXT_FILE_EXTENSIONS,
@@ -30,11 +35,6 @@ from yuxi.modules.extensions.skills.package import (
     validated_skill_file_parts,
 )
 from yuxi.modules.extensions.skills.repository import SkillRepository
-from yuxi.modules.extensions.skills.access import (
-    get_manageable_skill_or_raise,
-    is_builtin_skill,
-    validate_skill_dependencies,
-)
 from yuxi.modules.identity.models import User
 from yuxi.shared.datetime import utc_now
 

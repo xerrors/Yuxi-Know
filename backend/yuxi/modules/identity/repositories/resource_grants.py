@@ -1,6 +1,7 @@
 """共享范围写入的身份校验。"""
 
 from sqlalchemy import select
+
 from yuxi.modules.identity.models import User
 from yuxi.modules.identity.permissions import normalize_permission_config
 

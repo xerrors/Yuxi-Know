@@ -13,7 +13,7 @@ from yuxi.modules.extensions.skills.projection import get_user_skills_root_dir
 from yuxi.modules.workspace.errors import FileTransferLimitError
 from yuxi.modules.workspace.filesystem import Workspace
 from yuxi.modules.workspace.paths import user_workspace_dir
-from yuxi.modules.workspace.runtime_paths import WORKSPACE_PATH, SHARED_SKILLS_PATH, normalize_runtime_path
+from yuxi.modules.workspace.runtime_paths import SHARED_SKILLS_PATH, WORKSPACE_PATH, normalize_runtime_path
 
 MAX_FILE_BYTES = 100 * 1024 * 1024
 

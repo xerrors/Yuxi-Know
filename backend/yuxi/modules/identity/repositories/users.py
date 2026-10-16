@@ -11,7 +11,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.infrastructure.postgres.manager import pg_manager
-from yuxi.modules.identity.models import APIKey, User, IDENTITY_CHANGE_LOCK_KEY
+from yuxi.modules.identity.models import IDENTITY_CHANGE_LOCK_KEY, APIKey, User
 from yuxi.shared.datetime import utc_now
 from yuxi.shared.hashing import hash_id
 

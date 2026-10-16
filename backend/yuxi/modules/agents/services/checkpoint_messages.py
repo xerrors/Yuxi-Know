@@ -8,9 +8,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-
 from yuxi.infrastructure.observability.logging import logger
-from yuxi.modules.agents.tool_results import tool_result_text, TOOL_FAILURE_MESSAGE
 from yuxi.modules.agents.models.messages import MODEL_AUDIT_MESSAGE_TYPE, Message
 from yuxi.modules.agents.repositories.messages import MessageRepository
 from yuxi.modules.agents.repositories.model_audit import ModelMessageAuditRepository
@@ -20,6 +18,7 @@ from yuxi.modules.agents.repositories.tool_audit import ToolMessageAuditReposito
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 from yuxi.modules.agents.services.runs import lock_ready_steer, settle_checkpoint
 from yuxi.modules.agents.services.scheduler import Dispatch, deliver
+from yuxi.modules.agents.tool_results import TOOL_FAILURE_MESSAGE, tool_result_text
 from yuxi.shared.datetime import utc_now
 
 

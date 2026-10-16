@@ -4,6 +4,7 @@ import inspect
 from collections.abc import Callable
 
 from fastapi import FastAPI
+
 from yuxi import get_version
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.manager import pg_manager

@@ -8,8 +8,8 @@ from fastapi import HTTPException
 from fastapi.responses import RedirectResponse
 
 from yuxi.modules.identity import oidc
-from yuxi.modules.identity.services.oidc import OIDCService
 from yuxi.modules.identity.services.logout import logout_current_session
+from yuxi.modules.identity.services.oidc import OIDCService
 from yuxi.shared.errors import DomainError
 
 NO_STORE = {"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"}

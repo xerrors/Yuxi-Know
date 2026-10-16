@@ -8,13 +8,14 @@ from uuid import uuid4
 
 from langgraph.prebuilt.tool_node import ToolRuntime
 from pydantic import BaseModel, Field
+
 from yuxi.infrastructure.filesystem import await_io
 from yuxi.modules.agents.runtime.sandbox import UserSandboxBackend
 from yuxi.modules.extensions.tools.builtin.file_context import resolve_file_context, runtime_context_value
 from yuxi.modules.extensions.tools.registry import tool
 from yuxi.modules.system.options import system_options
 from yuxi.modules.workspace.filesystem import Workspace
-from yuxi.modules.workspace.runtime_paths import WORKSPACE_PATH, SHARED_SKILLS_PATH, runtime_workdir_path
+from yuxi.modules.workspace.runtime_paths import SHARED_SKILLS_PATH, WORKSPACE_PATH, runtime_workdir_path
 from yuxi.modules.workspace.workdir import Workdir
 
 _OCR_OUTPUT_DIR_NAME = "ocr"

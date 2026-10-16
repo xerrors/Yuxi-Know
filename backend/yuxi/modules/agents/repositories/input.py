@@ -5,13 +5,13 @@ from __future__ import annotations
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from yuxi.modules.agents.input_messages import deserialize_input_message
 from yuxi.modules.agents.models.attachments import AgentAttachment
 from yuxi.modules.agents.models.inputs import AgentInput
 from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.modules.agents.repositories.attachments import AttachmentRepository
-from yuxi.modules.agents.input_messages import deserialize_input_message
 from yuxi.shared.datetime import utc_now
 
 

@@ -9,7 +9,6 @@ from typing import Any, Protocol
 
 from yuxi.infrastructure.observability.logging import logger
 
-
 ADMIN_ROLES = frozenset({"admin", "superadmin"})
 
 

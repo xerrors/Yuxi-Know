@@ -1,6 +1,7 @@
 """Thread 用户、APP 与持久状态的共同授权边界。"""
 
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.agents.scope import ActorScope

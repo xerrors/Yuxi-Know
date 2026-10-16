@@ -3,10 +3,10 @@ from __future__ import annotations
 from typing import Any
 
 from sqlalchemy import delete, func, or_, select
-from yuxi.shared.datetime import utc_now
 
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.knowledge.models import EvaluationDataset, EvaluationDatasetItem, EvaluationRun, EvaluationRunItem
+from yuxi.shared.datetime import utc_now
 
 
 class EvaluationRepository:

@@ -6,6 +6,7 @@ import os
 
 from arq import cron
 from arq.worker import func
+
 from yuxi.bootstrap.worker import _worker_shutdown, _worker_startup
 from yuxi.infrastructure.redis import get_arq_redis_settings
 from yuxi.infrastructure.runtime_settings import get_int_env

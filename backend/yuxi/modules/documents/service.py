@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from yuxi.infrastructure.document_parsing import OCR_FILE_EXTENSIONS, ParseOptions, ParseResult
 from yuxi.infrastructure.document_parsing.engines import ENGINE_SPECS, get_engine, get_engine_spec
 from yuxi.modules.documents.options import (

@@ -8,9 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from yuxi.modules.identity.repositories.departments import DepartmentRepository
 from yuxi.modules.identity.repositories.users import UserRepository
 from yuxi.modules.identity.security import AuthUtils
+from yuxi.modules.identity.services.login import login_result
 from yuxi.modules.identity.services.login_limits import check_login_rate_limit, clear_login_failures, record_login_failure
 from yuxi.shared.datetime import utc_now
-from yuxi.modules.identity.services.login import login_result
 
 
 @dataclass

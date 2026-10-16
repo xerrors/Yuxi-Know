@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy import String, cast, func, literal, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
+
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.identity.repositories.resource_grants import validate_shared_grants
 from yuxi.modules.knowledge.base import KBNameConflictError

@@ -6,8 +6,8 @@ from typing import Any
 
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.redis.queue import get_arq_pool
-from yuxi.modules.background_jobs.registry import get_job_definition
 from yuxi.modules.background_jobs.models import BackgroundJobRecord
+from yuxi.modules.background_jobs.registry import get_job_definition
 from yuxi.modules.background_jobs.service import job_tracker
 
 BACKGROUND_JOB_DEFAULT_TIMEOUT_SECONDS = float(os.getenv("BACKGROUND_JOB_DEFAULT_TIMEOUT_SECONDS", 6 * 60 * 60))

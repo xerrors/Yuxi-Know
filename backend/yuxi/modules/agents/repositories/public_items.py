@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from yuxi.modules.agents.repositories.pagination import order_page
-
 from sqlalchemy import JSON, String, and_, case, cast, column, func, literal, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
 from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.agents.models.runs import AgentRun
+from yuxi.modules.agents.repositories.pagination import order_page
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository

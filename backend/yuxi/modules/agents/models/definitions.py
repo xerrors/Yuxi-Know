@@ -35,6 +35,7 @@ class AgentEnv(Base):
 
     user = relationship("User", back_populates="agent_env")
 
+
 class Agent(Base):
     """用户可管理、可授权、可切换的智能体。"""
 

@@ -4,19 +4,18 @@
 
 import uuid as uuid_lib
 
-from yuxi.modules.agents.repositories.pagination import order_page
-
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.infrastructure.observability.logging import logger
-from yuxi.modules.agents.repositories.messages import message_search_conditions
 from yuxi.modules.agents.message_preview import build_message_search_snippet
 from yuxi.modules.agents.models.messages import (
     Message,
 )
 from yuxi.modules.agents.models.runs import AGENT_RUN_TERMINAL_STATUSES, AgentRun
 from yuxi.modules.agents.models.sessions import UNVIEWED_RUN_MARKER, Session
+from yuxi.modules.agents.repositories.messages import message_search_conditions
+from yuxi.modules.agents.repositories.pagination import order_page
 
 MAX_SESSION_TITLE_LENGTH = 255
 MESSAGE_SEARCH_SNIPPETS_PER_THREAD = 2

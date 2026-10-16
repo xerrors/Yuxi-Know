@@ -14,7 +14,7 @@ from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.agents.repositories.model_audit import ModelMessageAuditRepository
 from yuxi.modules.agents.repositories.tool_audit import ToolMessageAuditRepository
 from yuxi.modules.agents.runtime.base import json_safe
-from yuxi.modules.agents.tool_results import normalize_tool_result, TOOL_FAILURE_MESSAGE
+from yuxi.modules.agents.tool_results import TOOL_FAILURE_MESSAGE, normalize_tool_result
 
 
 @dataclass(slots=True)

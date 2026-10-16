@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
+
 from yuxi.api.dependencies.auth import get_admin_user, get_db, get_required_user
 from yuxi.api.dependencies.knowledge import (
     ensure_knowledge_base_permission as _ensure_knowledge_base_permission,

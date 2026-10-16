@@ -19,8 +19,8 @@ from yuxi.modules.knowledge.graphs.graph_utils import graph_entity_collection_na
 from yuxi.modules.knowledge.storage.milvus import (
     VECTOR_METRIC_TYPE,
     content_fields,
-    embedding_field,
     create_collection,
+    embedding_field,
     get_embedding_function,
 )
 from yuxi.modules.knowledge.storage.offload import run_milvus_query_io

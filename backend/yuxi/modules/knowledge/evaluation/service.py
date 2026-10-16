@@ -8,7 +8,6 @@ import uuid
 from datetime import UTC, timedelta
 from typing import TYPE_CHECKING, Any
 
-
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.background_jobs.repository import BackgroundJobRepository
@@ -23,10 +22,18 @@ from yuxi.modules.knowledge.repositories.bases import KnowledgeBaseRepository
 from yuxi.modules.knowledge.repositories.chunks import KnowledgeChunkRepository
 from yuxi.modules.knowledge.repositories.evaluation import (
     EvaluationRepository,
-    finish_dataset_generation_job as finish_dataset_generation_job,
+)
+from yuxi.modules.knowledge.repositories.evaluation import (
     fail_dataset_generation_job as fail_dataset_generation_job,
-    finish_rag_evaluation_job as finish_rag_evaluation_job,
+)
+from yuxi.modules.knowledge.repositories.evaluation import (
     fail_rag_evaluation_job as fail_rag_evaluation_job,
+)
+from yuxi.modules.knowledge.repositories.evaluation import (
+    finish_dataset_generation_job as finish_dataset_generation_job,
+)
+from yuxi.modules.knowledge.repositories.evaluation import (
+    finish_rag_evaluation_job as finish_rag_evaluation_job,
 )
 from yuxi.modules.knowledge.runtime import knowledge_base as kb_manager
 from yuxi.modules.models import select_model

@@ -15,19 +15,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.manager import pg_manager
+from yuxi.modules.agents.input_messages import build_chat_input_message
 from yuxi.modules.agents.repositories.definitions import AgentRepository
 from yuxi.modules.agents.runtime.agent_backends import AgentBackendNotFoundError, get_agent_backend
 from yuxi.modules.agents.runtime.tool_approval import normalize_tool_approval_mode
-from yuxi.modules.agents.input_messages import build_chat_input_message
-from yuxi.modules.agents.services.inputs import create_thread
 from yuxi.modules.agents.scope import ActorScope
+from yuxi.modules.agents.services.inputs import create_thread
 from yuxi.modules.identity.models import User
 from yuxi.modules.schedules.models import ScheduledAgentJob, ScheduledAgentRun
 from yuxi.modules.schedules.repository import ScheduledAgentRepository
 from yuxi.modules.workspace.repositories.projects import ProjectRepository
-from yuxi.shared.hashing import json_intent_hash
 from yuxi.shared.datetime import format_utc_datetime, utc_now
 from yuxi.shared.errors import DomainError, InvalidInputError, ResourceNotFoundError, StateConflictError
+from yuxi.shared.hashing import json_intent_hash
 
 SCHEDULED_AGENT_SOURCE = "scheduled_agent"
 MAX_PROMPT_LENGTH = 32_000

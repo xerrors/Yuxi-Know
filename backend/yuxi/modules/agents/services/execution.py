@@ -13,6 +13,7 @@ from langgraph.types import Command
 from yuxi.infrastructure.observability.langfuse import flush_langfuse
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.manager import pg_manager
+from yuxi.modules.agents.input_messages import AgentRunInputMessage
 from yuxi.modules.agents.models.definitions import Agent
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.repositories.attachments import AttachmentRepository
@@ -26,9 +27,8 @@ from yuxi.modules.agents.runtime.callbacks.model_request_timing import FirstMode
 from yuxi.modules.agents.runtime.context import BaseContext
 from yuxi.modules.agents.runtime.state import AgentStatePayload
 from yuxi.modules.agents.services.attachments import serialize_attachment
-from yuxi.modules.agents.input_messages import AgentRunInputMessage
-from yuxi.modules.agents.services.message_recorder import RunMessageRecorder
 from yuxi.modules.agents.services.checkpoint_messages import save_messages_from_langgraph_state, save_partial_message
+from yuxi.modules.agents.services.message_recorder import RunMessageRecorder
 from yuxi.modules.agents.services.openai_events import OpenAIEventAdapter
 from yuxi.modules.agents.services.preparation import PreparedRunExecution
 from yuxi.modules.agents.services.tracing import (

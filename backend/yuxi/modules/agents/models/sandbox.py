@@ -1,6 +1,7 @@
 """用户环境及待清理命令的持久事实。"""
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+
 from yuxi.infrastructure.postgres.base import BusinessBase as Base
 from yuxi.shared.datetime import utc_now
 

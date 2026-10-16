@@ -7,16 +7,16 @@ from typing import Any
 
 import pytest
 
+from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.models.chat import select_model
 from yuxi.modules.models.embed import OtherEmbedding
-from yuxi.modules.models.rerank import DashscopeReranker, OpenAIReranker
 from yuxi.modules.models.providers.cache import ModelInfo
 from yuxi.modules.models.providers.service import (
-    resolve_api_key,
     ensure_builtin_model_providers_in_db,
     get_model_provider_by_id,
+    resolve_api_key,
 )
-from yuxi.infrastructure.postgres.manager import pg_manager
+from yuxi.modules.models.rerank import DashscopeReranker, OpenAIReranker
 from yuxi.modules.models.tables import ModelProvider
 
 pytestmark = [
@@ -137,7 +137,6 @@ async def test_provider_db_rerank_model_connectivity():
         base_url=spec["base_url"],
         parameters=spec["parameters"],
     )
-    scores = await reranker.acompute_score(("Yuxi knowledge base", ["Yuxi is a RAG platform.", "Unrelated text."]))
-    await reranker.aclose()
+    success, message = await reranker.test_connection()
 
-    assert len(scores) == 2
+    assert success, message

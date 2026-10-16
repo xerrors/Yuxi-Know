@@ -8,6 +8,7 @@ from pathlib import Path
 from urllib.parse import quote, unquote
 
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from yuxi.infrastructure.document_parsing import IMAGE_FILE_EXTENSIONS, PDF_FILE_EXTENSIONS
 from yuxi.infrastructure.document_parsing.artifacts import local_image_links, resource_path
 from yuxi.infrastructure.document_parsing.engines import get_ocr_engines_for_extension

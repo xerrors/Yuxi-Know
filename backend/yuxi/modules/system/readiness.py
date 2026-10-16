@@ -10,6 +10,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from sqlalchemy import text
+
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.infrastructure.redis import get_async_redis_client as get_redis_client
 from yuxi.infrastructure.worker_health import (

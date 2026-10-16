@@ -174,8 +174,8 @@ class _RemoteSkillRequest:
     @classmethod
     def create(cls, uid: str) -> _RemoteSkillRequest:
         """每个请求只创建自己的共享临时目录，VM 始终属于操作者。"""
-        from yuxi.modules.workspace.paths import ensure_user_workspace
         from yuxi.modules.workspace.filesystem import Workspace
+        from yuxi.modules.workspace.paths import ensure_user_workspace
 
         request_id = f"remote-skill-{uuid.uuid4().hex}"
         home = f"{WORKSPACE_PATH}/.remote-skills/{request_id}"

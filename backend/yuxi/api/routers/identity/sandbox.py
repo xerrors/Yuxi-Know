@@ -1,6 +1,7 @@
 """用户环境 Web 设置入口，不能由请求提供另一个 uid。"""
 
 from fastapi import APIRouter, Depends
+
 from yuxi.api.dependencies.auth import get_required_user
 from yuxi.modules.agents.services.sandbox import get_user_sandbox, get_user_sandbox_disk_usage, rebuild_user_sandbox
 from yuxi.modules.identity.models import User

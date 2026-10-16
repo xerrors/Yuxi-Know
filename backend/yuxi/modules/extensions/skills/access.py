@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.runtime_settings import get_skill_data_dir
 from yuxi.modules.extensions.skills.models import Skill

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from yuxi.infrastructure.filesystem import open_regular_file_fd
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.modules.extensions.skills.access import lock_accessible_shared_skills_for_runtime, resolved_shared_skill

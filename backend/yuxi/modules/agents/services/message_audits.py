@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from yuxi.modules.agents.tool_results import normalize_tool_result
-
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +11,7 @@ from yuxi.modules.agents.repositories.messages import MessageRepository
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.agents.services.thread_access import require_thread
+from yuxi.modules.agents.tool_results import normalize_tool_result
 from yuxi.modules.models.utils import parse_assistant_message_body
 from yuxi.shared.datetime import format_utc_datetime
 from yuxi.shared.errors import PermissionDeniedError

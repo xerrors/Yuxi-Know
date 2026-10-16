@@ -11,22 +11,22 @@ from copy import deepcopy
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from yuxi.modules.agents.receipts import control_intent_hash, require_idempotency_key, require_receipt_replay
 from yuxi.modules.agents.models.runs import AGENT_RUN_TERMINAL_STATUSES
+from yuxi.modules.agents.receipts import control_intent_hash, require_idempotency_key, require_receipt_replay
 from yuxi.modules.agents.repositories.attachments import AttachmentRepository
 from yuxi.modules.agents.repositories.input import AgentInputRepository
 from yuxi.modules.agents.repositories.input_receipt import AgentInputReceiptRepository
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
-from yuxi.modules.agents.services.thread_access import require_thread
 from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
+from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.agents.services.input_config import (
     resolve_agent_run_model_spec,
     resolve_agent_run_tool_approval_mode,
 )
 from yuxi.modules.agents.services.public_resources import session_resource
 from yuxi.modules.agents.services.scheduler import claim_next_input, deliver
-from yuxi.modules.agents.scope import ActorScope
+from yuxi.modules.agents.services.thread_access import require_thread
 from yuxi.shared.datetime import format_utc_datetime, utc_now
 from yuxi.shared.errors import InvalidInputError, InvalidOperationError, ResourceNotFoundError, StateConflictError
 

@@ -7,8 +7,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.api.dependencies.auth import get_db, get_required_user
-from yuxi.modules.agents.services.feedback import list_feedback, remove_user_feedback, save_user_feedback
 from yuxi.modules.agents.scope import ActorScope
+from yuxi.modules.agents.services.feedback import list_feedback, remove_user_feedback, save_user_feedback
 from yuxi.modules.identity.models import User
 
 router = APIRouter(prefix="/agent/threads", tags=["agent"], include_in_schema=False)

@@ -121,6 +121,16 @@ async def test_connection_reports_invalid_response(reranker):
     assert "Rerank response" in message
 
 
+async def test_connection_reports_transport_failure_without_fallback(reranker):
+    """连接探针不能把默认分数当成远端可用。"""
+    reranker.session.post.side_effect = ConnectionError("provider unavailable")
+
+    success, message = await reranker.test_connection()
+
+    assert success is False
+    assert "provider unavailable" in message
+
+
 async def test_empty_input_does_not_request_provider(reranker):
     assert await reranker._batch_rerank("query", [], max_length=128) == []
     assert await reranker.acompute_score(["query", []]) == []

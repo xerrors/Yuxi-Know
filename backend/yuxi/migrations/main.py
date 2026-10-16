@@ -10,6 +10,7 @@ from yuxi.bootstrap.environment import load_environment
 load_environment()
 
 from sqlalchemy import text
+
 from yuxi.bootstrap.models import load_models
 from yuxi.bootstrap.options import ensure_options_in_db
 from yuxi.infrastructure.postgres.base import BusinessBase, KnowledgeBase

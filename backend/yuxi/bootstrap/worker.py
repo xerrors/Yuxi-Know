@@ -19,9 +19,9 @@ from yuxi.infrastructure.worker_health import (
 from yuxi.modules.agents.services.cooperation import reconcile_stopped_trees, recover_cooperation_waits
 from yuxi.modules.agents.services.leases import (
     WORKER_ID,
+    maintain_user_sandboxes,
     reconcile_expired_run_leases,
     reconcile_pending_runtime_cleanups,
-    maintain_user_sandboxes,
 )
 from yuxi.modules.agents.services.scheduler import recover_pending_dispatches
 from yuxi.modules.extensions.mcp.service import ensure_builtin_mcp_servers_in_db

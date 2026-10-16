@@ -28,21 +28,20 @@ from yuxi.modules.knowledge.chunking.ragflow_like.nlp import count_tokens
 from yuxi.modules.knowledge.read_models import KnowledgeBaseConfig
 from yuxi.modules.knowledge.repositories.chunks import KnowledgeChunkRepository
 from yuxi.modules.knowledge.repositories.files import KnowledgeFileRepository
+from yuxi.modules.knowledge.storage.milvus import (
+    CONTENT_SPARSE_FIELD,
+    VECTOR_METRIC_TYPE,
+    content_fields,
+    create_collection,
+    embedding_field,
+    get_embedding_function,
+)
+from yuxi.modules.knowledge.storage.offload import run_milvus_query_io
 from yuxi.modules.knowledge.utils.kb_utils import resolve_processing_params
 from yuxi.modules.models.providers.cache import model_cache
 from yuxi.modules.system.options import system_options
 from yuxi.shared.datetime import utc_isoformat
 from yuxi.shared.hashing import hashstr
-
-from yuxi.modules.knowledge.storage.milvus import (
-    CONTENT_SPARSE_FIELD,
-    VECTOR_METRIC_TYPE,
-    content_fields,
-    embedding_field,
-    create_collection,
-    get_embedding_function,
-)
-from yuxi.modules.knowledge.storage.offload import run_milvus_query_io
 
 MILVUS_CHUNK_EMBED_BATCH_SIZE = 200
 # Milvus 为派生索引：PG 先行落库（权威源），Milvus upsert 失败有限次重试，

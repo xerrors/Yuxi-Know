@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any, NotRequired, TypedDict
 
-from yuxi.modules.knowledge.chunking.ragflow_like.parsers import book, general, laws, qa, semantic, separator
 from yuxi.modules.knowledge.chunking.presets import map_to_internal_parser_id, normalize_chunk_preset_id
+from yuxi.modules.knowledge.chunking.ragflow_like.parsers import book, general, laws, qa, semantic, separator
 from yuxi.modules.knowledge.chunking.source_spans import SourceSpanLocator
 
 

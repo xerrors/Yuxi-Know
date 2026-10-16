@@ -7,8 +7,8 @@ from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.repositories.definitions import AgentRepository
 from yuxi.modules.agents.repositories.feedback import AgentFeedbackRepository
-from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
+from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.agents.services.thread_access import require_thread
 from yuxi.modules.identity.models import User

@@ -9,6 +9,7 @@ from typing import Any
 
 from pydantic import HttpUrl, TypeAdapter
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.redis import get_async_redis_client
 from yuxi.modules.system.models import ConfigOption

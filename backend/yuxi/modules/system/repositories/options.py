@@ -2,6 +2,7 @@
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from yuxi.modules.system.models import ConfigOption
 
 # 与既有部署共用同一事务锁值，禁止仅为统一命名更换键。

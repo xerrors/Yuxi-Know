@@ -10,14 +10,13 @@ from contextvars import ContextVar
 from datetime import timedelta
 from pathlib import Path
 
-from yuxi.modules.agents.runtime.sandbox.cube import CubeAdapter, Environment
-
 from yuxi.infrastructure.runtime_settings import get_int_env
 from yuxi.modules.agents.repositories.environment import AgentEnvRepository
 from yuxi.modules.agents.repositories.sandbox import SandboxRepository
+from yuxi.modules.agents.runtime.sandbox.cube import CubeAdapter, Environment
 from yuxi.modules.extensions.skills.projection import get_user_skills_root_dir
 from yuxi.modules.workspace.paths import ensure_user_workspace, workspace_uid_dirname
-from yuxi.modules.workspace.runtime_paths import WORKSPACE_PATH, SHARED_SKILLS_PATH
+from yuxi.modules.workspace.runtime_paths import SHARED_SKILLS_PATH, WORKSPACE_PATH
 from yuxi.shared.datetime import format_utc_datetime, utc_now
 from yuxi.shared.errors import StateConflictError, UpstreamError
 

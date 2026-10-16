@@ -15,14 +15,16 @@ from sqlalchemy.exc import OperationalError
 
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.manager import pg_manager
+from yuxi.modules.agents.input_messages import restore_chat_input_message
 from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.agents.models.runs import AgentRun
-from yuxi.modules.agents.repositories.input import AgentInputRepository
 from yuxi.modules.agents.repositories.environment import AgentEnvRepository
+from yuxi.modules.agents.repositories.input import AgentInputRepository
 from yuxi.modules.agents.repositories.runs import TERMINAL_RUN_STATUSES, AgentRunRepository
 from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 from yuxi.modules.agents.runtime.callbacks.model_request_timing import FirstModelRequestRecorder
+from yuxi.modules.agents.services.checkpoint_state import get_agent_state_view
 from yuxi.modules.agents.services.event_writer import (
     LOADING_FLUSH_INTERVAL_MS,
     LOADING_FLUSH_MAX_CHARS,
@@ -33,12 +35,11 @@ from yuxi.modules.agents.services.event_writer import (
     publish_run_settlement,
 )
 from yuxi.modules.agents.services.execution import RunExecutionResult, stream_agent_execution
-from yuxi.modules.agents.input_messages import restore_chat_input_message
 from yuxi.modules.agents.services.leases import (
     WORKER_ID,
+    complete_run_command_cleanup,
     mark_run_running,
     release_run_lease_for_retry,
-    complete_run_command_cleanup,
     renew_run_lease,
     run_attempt_finished,
 )
@@ -50,7 +51,6 @@ from yuxi.modules.agents.services.preparation import (
 )
 from yuxi.modules.agents.services.runs import lock_ready_steer, settle_checkpoint
 from yuxi.modules.agents.services.scheduler import dispatch_next_input
-from yuxi.modules.agents.services.checkpoint_state import get_agent_state_view
 from yuxi.modules.agents.services.titles import start_session_title
 from yuxi.modules.agents.services.tracing import finish_turn_observation_if_terminal
 from yuxi.modules.agents.services.transport import (

@@ -1,6 +1,7 @@
 """启动时汇总各域配置并同步持久定义。"""
 
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from yuxi.modules.system.options import get_option_definitions
 from yuxi.modules.system.repositories.options import sync_option_definitions
 

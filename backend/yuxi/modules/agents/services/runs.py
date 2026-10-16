@@ -6,10 +6,8 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from yuxi.modules.agents.services.cooperation_notifications import notify_turn_state
-from yuxi.modules.agents.services.run_creation import create_turn_run
-from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.inputs import AgentInput
+from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.modules.agents.repositories.attachments import AttachmentRepository
@@ -18,6 +16,8 @@ from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 from yuxi.modules.agents.scope import ActorScope
+from yuxi.modules.agents.services.cooperation_notifications import notify_turn_state
+from yuxi.modules.agents.services.run_creation import create_turn_run
 from yuxi.modules.agents.services.scheduler import Dispatch
 from yuxi.modules.workspace.services.bindings import resolve_session_workdir_binding
 from yuxi.shared.errors import ResourceNotFoundError
