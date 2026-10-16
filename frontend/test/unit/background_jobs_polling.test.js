@@ -20,7 +20,9 @@ test('任务请求时序与轮询生命周期', async (t) => {
     appType: 'custom'
   })
   const { useUserStore } = await server.ssrLoadModule('/src/modules/identity/model/user.js')
-  const { useBackgroundJobsStore } = await server.ssrLoadModule('/src/modules/background-jobs/model/jobs.js')
+  const { useBackgroundJobsStore } = await server.ssrLoadModule(
+    '/src/modules/background-jobs/model/jobs.js'
+  )
   const { backgroundJobsApi } = await server.ssrLoadModule('/src/apis/background_jobs.js')
   const stores = []
   const makeStore = () => {
@@ -298,6 +300,65 @@ test('任务请求时序与轮询生命周期', async (t) => {
     })
   } finally {
     stores.forEach((store) => store.$dispose())
+    await server.close()
+  }
+})
+
+test('已登记作业的终态通知覆盖分页遗漏、重复快照和账号失效', async (t) => {
+  globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} }
+  const server = await createServer({
+    server: { middlewareMode: true, hmr: false },
+    appType: 'custom'
+  })
+  const { useUserStore } = await server.ssrLoadModule('/src/modules/identity/model/user.js')
+  const { useBackgroundJobsStore } = await server.ssrLoadModule(
+    '/src/modules/background-jobs/model/jobs.js'
+  )
+  const { backgroundJobsApi } = await server.ssrLoadModule('/src/apis/background_jobs.js')
+  setActivePinia(createPinia())
+  const user = useUserStore()
+  user.token = 'completion-session'
+  user.userRole = 'admin'
+  const store = useBackgroundJobsStore()
+  let status = 'running'
+  backgroundJobsApi.fetchJobDetail = async (id) => ({ job: { id, status } })
+  backgroundJobsApi.fetchJobs = async () => ({ jobs: [] })
+  try {
+    for (const terminal of ['success', 'failed', 'cancelled']) {
+      await t.test(terminal, async () => {
+        status = 'running'
+        let completed = 0
+        await store.createJobRegistration(() => {
+          completed++
+        })({ job_id: terminal })
+        assert.equal(completed, 0)
+        status = terminal
+        await store.loadJobs()
+        assert.equal(completed, 1)
+        await store.refreshJob(terminal)
+        await store.loadJobs()
+        assert.equal(completed, 1)
+        store.reset()
+      })
+    }
+    let completed = 0
+    status = 'success'
+    await store.createJobRegistration(() => {
+      completed++
+    })({ job_id: 'already-finished' })
+    assert.equal(completed, 1)
+    status = 'running'
+    await store.createJobRegistration(() => {
+      completed++
+    })({ job_id: 'old-account' })
+    user.logout()
+    user.token = 'another-account'
+    user.userRole = 'admin'
+    status = 'success'
+    await store.refreshJob('old-account')
+    assert.equal(completed, 1)
+  } finally {
+    store.$dispose()
     await server.close()
   }
 })

@@ -149,13 +149,13 @@ watch(
     display: block;
     max-width: calc(100% - 20px);
     box-sizing: border-box;
-    padding: 5px 10px;
-    border: 1px solid rgba(255, 255, 255, 0.22);
+    padding: 3px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 999px;
     color: var(--color-text-inverse);
-    background: rgba(40, 40, 40, 0.64);
-    backdrop-filter: blur(8px);
-    font-size: 12px;
+    background: rgba(40, 40, 40, 0.4);
+    backdrop-filter: blur(4px);
+    font-size: 11px;
     line-height: 1.4;
     pointer-events: none;
     text-align: left;

@@ -31,7 +31,9 @@ test('从二级目录点击全部文件会清空 parent_id 并返回根目录', 
     app.use(createRouter({ history: createMemoryHistory(), routes: [] }))
     setActivePinia(pinia)
     const { documentApi } = await server.ssrLoadModule('/src/apis/knowledge_api.js')
-    const { useKnowledgeBaseStore } = await server.ssrLoadModule('/src/modules/knowledge/model/knowledgeBase.js')
+    const { useKnowledgeBaseStore } = await server.ssrLoadModule(
+      '/src/modules/knowledge/model/knowledgeBase.js'
+    )
     const requests = []
 
     documentApi.listDocuments = async (kbId, params) => {
@@ -88,9 +90,13 @@ test('知识库提交跨账号返回时，不把旧入队任务登记给新账�
   app.use(createRouter({ history: createMemoryHistory(), routes: [] }))
   setActivePinia(pinia)
   const { documentApi, knowledgeBaseApi } = await server.ssrLoadModule('/src/apis/knowledge_api.js')
-  const { useKnowledgeBaseStore } = await server.ssrLoadModule('/src/modules/knowledge/model/knowledgeBase.js')
+  const { useKnowledgeBaseStore } = await server.ssrLoadModule(
+    '/src/modules/knowledge/model/knowledgeBase.js'
+  )
   const { useUserStore } = await server.ssrLoadModule('/src/modules/identity/model/user.js')
-  const { useBackgroundJobsStore } = await server.ssrLoadModule('/src/modules/background-jobs/model/jobs.js')
+  const { useBackgroundJobsStore } = await server.ssrLoadModule(
+    '/src/modules/background-jobs/model/jobs.js'
+  )
   const { backgroundJobsApi } = await server.ssrLoadModule('/src/apis/background_jobs.js')
   const knowledgeBase = app.runWithContext(() => useKnowledgeBaseStore())
   const user = useUserStore()
@@ -101,7 +107,9 @@ test('知识库提交跨账号返回时，不把旧入队任务登记给新账�
     return { job: { id, status: 'success', progress: 100 } }
   })
   t.mock.method(message, 'success', () => {})
-  t.mock.method(knowledgeBaseApi, 'getKnowledgeBaseInfo', async () => ({ stats: { processing_count: 0 } }))
+  t.mock.method(knowledgeBaseApi, 'getKnowledgeBaseInfo', async () => ({
+    stats: { processing_count: 0 }
+  }))
   t.mock.method(documentApi, 'listDocuments', async () => ({
     items: [],
     stats: { processing_count: 0 }
@@ -147,6 +155,198 @@ test('知识库提交跨账号返回时，不把旧入队任务登记给新账�
   } finally {
     knowledgeBase.stopAutoRefresh()
     job_tracker.$dispose()
+    await server.close()
+  }
+})
+
+test('自动入库中间状态停止轮询后，作业终态仍回读正确文件与统计', async (t) => {
+  const server = await createServer({
+    server: { middlewareMode: true, hmr: false },
+    appType: 'custom'
+  })
+  const pinia = createPinia(),
+    app = createApp({})
+  app.use(pinia)
+  app.use(createRouter({ history: createMemoryHistory(), routes: [] }))
+  setActivePinia(pinia)
+  const { documentApi, knowledgeBaseApi } = await server.ssrLoadModule('/src/apis/knowledge_api.js')
+  const { backgroundJobsApi } = await server.ssrLoadModule('/src/apis/background_jobs.js')
+  const { useKnowledgeBaseStore } = await server.ssrLoadModule(
+    '/src/modules/knowledge/model/knowledgeBase.js'
+  )
+  const { useUserStore } = await server.ssrLoadModule('/src/modules/identity/model/user.js')
+  const { useBackgroundJobsStore } = await server.ssrLoadModule(
+    '/src/modules/background-jobs/model/jobs.js'
+  )
+  const store = app.runWithContext(() => useKnowledgeBaseStore())
+  const user = useUserStore(),
+    jobs = useBackgroundJobsStore()
+  user.token = 'file-session'
+  user.userRole = 'admin'
+  store.kbId = 'auto-kb'
+  let status = 'parsed',
+    jobStatus = 'running'
+  let listReads = 0
+  knowledgeBaseApi.getKnowledgeBaseInfo = async () => ({
+    kb_id: 'auto-kb',
+    stats: { processing_count: 0, token_count: status === 'indexed' ? 70 : 0 }
+  })
+  documentApi.listDocuments = async () => {
+    listReads++
+    return {
+      items: [{ file_id: 'document', status, token_count: status === 'indexed' ? 70 : 0 }],
+      stats: { processing_count: 0, token_count: status === 'indexed' ? 70 : 0 }
+    }
+  }
+  documentApi.addDocuments = async () => ({ status: 'queued', job_id: 'auto-job' })
+  backgroundJobsApi.fetchJobDetail = async (id) => ({ job: { id, status: jobStatus } })
+  backgroundJobsApi.fetchJobs = async () => ({ jobs: [{ id: 'auto-job', status: jobStatus }] })
+  t.mock.method(message, 'success', () => {})
+  try {
+    await store.addFiles({
+      items: ['document.md'],
+      contentType: 'file',
+      params: { auto_index: true }
+    })
+    assert.equal(store.documentFiles[0].status, 'parsed')
+    assert.equal(store.state.autoRefresh, false)
+    status = 'indexed'
+    jobStatus = 'success'
+    await jobs.loadJobs()
+    await setImmediate()
+    assert.equal(store.documentFiles[0].status, 'indexed')
+    assert.equal(store.documentFiles[0].token_count, 70)
+    assert.equal(store.knowledgeBase.stats.token_count, 70)
+    const completedReads = listReads
+    await jobs.loadJobs()
+    await setImmediate()
+    assert.equal(listReads, completedReads)
+  } finally {
+    store.stopAutoRefresh()
+    store.$dispose()
+    jobs.$dispose()
+    await server.close()
+  }
+})
+
+test('切库或切账号后，旧文件与统计响应不能覆盖新页面', async (t) => {
+  const server = await createServer({
+    server: { middlewareMode: true, hmr: false },
+    appType: 'custom'
+  })
+  const pinia = createPinia(),
+    app = createApp({})
+  app.use(pinia)
+  app.use(createRouter({ history: createMemoryHistory(), routes: [] }))
+  setActivePinia(pinia)
+  const { documentApi, knowledgeBaseApi } = await server.ssrLoadModule('/src/apis/knowledge_api.js')
+  const { useKnowledgeBaseStore } = await server.ssrLoadModule(
+    '/src/modules/knowledge/model/knowledgeBase.js'
+  )
+  const { useUserStore } = await server.ssrLoadModule('/src/modules/identity/model/user.js')
+  const store = app.runWithContext(() => useKnowledgeBaseStore()),
+    user = useUserStore()
+  try {
+    for (const change of ['knowledge-base', 'account']) {
+      await t.test(change, async () => {
+        store.kbId = 'old-kb'
+        user.token = 'old-account'
+        let resolveInfo, resolveFiles
+        knowledgeBaseApi.getKnowledgeBaseInfo = () =>
+          new Promise((resolve) => {
+            resolveInfo = resolve
+          })
+        documentApi.listDocuments = () =>
+          new Promise((resolve) => {
+            resolveFiles = resolve
+          })
+        const pending = Promise.all([
+          store.getKnowledgeBaseInfo(undefined, true),
+          store.loadDocumentFiles()
+        ])
+        if (change === 'knowledge-base') store.kbId = 'new-kb'
+        else user.token = 'new-account'
+        store.knowledgeBase = { kb_id: 'current', stats: { token_count: 99 } }
+        store.documentFiles = [{ file_id: 'current' }]
+        resolveInfo({ kb_id: 'old-kb', stats: { token_count: 1 } })
+        resolveFiles({ items: [{ file_id: 'old-file' }] })
+        await pending
+        assert.equal(store.knowledgeBase.kb_id, 'current')
+        assert.equal(store.knowledgeBase.stats.token_count, 99)
+        assert.equal(store.documentFiles[0].file_id, 'current')
+      })
+    }
+  } finally {
+    store.stopAutoRefresh()
+    store.$dispose()
+    await server.close()
+  }
+})
+
+test('同库旧请求晚到不能回退入库状态，元信息不能覆盖更新的文件统计', async () => {
+  const server = await createServer({
+    server: { middlewareMode: true, hmr: false },
+    appType: 'custom'
+  })
+  const pinia = createPinia()
+  const app = createApp({})
+  app.use(pinia)
+  app.use(createRouter({ history: createMemoryHistory(), routes: [] }))
+  setActivePinia(pinia)
+  const { documentApi, knowledgeBaseApi } = await server.ssrLoadModule('/src/apis/knowledge_api.js')
+  const { useKnowledgeBaseStore } = await server.ssrLoadModule(
+    '/src/modules/knowledge/model/knowledgeBase.js'
+  )
+  const store = app.runWithContext(() => useKnowledgeBaseStore())
+  store.kbId = 'same-kb'
+  const snapshot = (status, count) => ({
+    kb_id: 'same-kb',
+    items: [{ file_id: 'document', status }],
+    stats: { processing_count: 0, token_count: count }
+  })
+  try {
+    let resolveInfo, resolveFiles
+    knowledgeBaseApi.getKnowledgeBaseInfo = () =>
+      new Promise((resolve) => {
+        resolveInfo = resolve
+      })
+    documentApi.listDocuments = () =>
+      new Promise((resolve) => {
+        resolveFiles = resolve
+      })
+    const older = Promise.all([
+      store.getKnowledgeBaseInfo(undefined, true),
+      store.loadDocumentFiles()
+    ])
+    knowledgeBaseApi.getKnowledgeBaseInfo = async () => snapshot('indexed', 70)
+    documentApi.listDocuments = async () => snapshot('indexed', 70)
+    await Promise.all([
+      store.getKnowledgeBaseInfo(undefined, true, true),
+      store.loadDocumentFiles({ isBackground: true })
+    ])
+    assert.equal(store.state.knowledgeBaseLoading, false)
+    assert.equal(store.state.lock, false)
+    assert.equal(store.fileBrowser.loading, false)
+    resolveInfo(snapshot('parsed', 0))
+    resolveFiles(snapshot('parsed', 0))
+    await older
+    assert.equal(store.documentFiles[0].status, 'indexed')
+    assert.equal(store.knowledgeBase.stats.token_count, 70)
+
+    knowledgeBaseApi.getKnowledgeBaseInfo = () =>
+      new Promise((resolve) => {
+        resolveInfo = resolve
+      })
+    const metadata = store.getKnowledgeBaseInfo(undefined, true)
+    await store.loadDocumentFiles()
+    resolveInfo(snapshot('parsed', 0))
+    await metadata
+    assert.equal(store.documentFiles[0].status, 'indexed')
+    assert.equal(store.knowledgeBase.stats.token_count, 70)
+    assert.equal(store.knowledgeBase.files.document.status, 'indexed')
+  } finally {
+    store.stopAutoRefresh()
+    store.$dispose()
     await server.close()
   }
 })

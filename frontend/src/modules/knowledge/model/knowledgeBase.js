@@ -51,7 +51,7 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
     batchDeleting: false,
     chunkLoading: false,
     autoRefresh: false,
-    queryParamsLoading: false,
+    queryParamsLoading: false
   })
 
   let autoRefreshSource = null // Tracks whether auto-refresh was user-triggered or automatic
@@ -63,6 +63,9 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
   let refreshIntervalMs = AUTO_REFRESH_POLL_INTERVAL_MS
   let refreshLastProcessingCount = null
   let fileBrowserContextId = 0
+  let infoRequestId = 0
+  let fileRequestId = 0
+  let fileSnapshotRevision = 0
 
   function setCurrentFileMap(items = []) {
     knowledgeBase.value = {
@@ -147,7 +150,10 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
 
   async function getKnowledgeBaseInfo(id, skipQueryParams = false, isBackground = false) {
     const kbIdValue = id || kbId.value
+    const token = userStore.token
     if (!kbIdValue) return
+    const requestId = ++infoRequestId
+    const filesRevision = fileSnapshotRevision
 
     if (!isBackground) {
       state.lock = true
@@ -155,9 +161,18 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
     }
     try {
       const data = await knowledgeBaseApi.getKnowledgeBaseInfo(kbIdValue)
+      if (requestId !== infoRequestId || kbIdValue !== kbId.value || token !== userStore.token)
+        return
       const currentFiles = knowledgeBase.value.files || {}
-      knowledgeBase.value = { ...data, files: data?.files || currentFiles }
-      ensureAutoRefreshForProcessing(data?.files, data?.stats)
+      // 文件分页快照更新后，较早的元信息不能覆盖它的文件与统计。
+      const current = knowledgeBase.value
+      const keepFileSnapshot = filesRevision !== fileSnapshotRevision
+      knowledgeBase.value = {
+        ...data,
+        files: keepFileSnapshot ? currentFiles : data?.files || currentFiles,
+        ...(keepFileSnapshot ? { stats: current.stats, row_count: current.row_count } : {})
+      }
+      ensureAutoRefreshForProcessing(knowledgeBase.value.files, knowledgeBase.value.stats)
 
       // Only load query parameters if explicitly requested or if not loaded yet
       if (!skipQueryParams && queryParams.value.length === 0) {
@@ -167,7 +182,7 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
       console.error(error)
       message.error(error.message || '获取知识库信息失败')
     } finally {
-      if (!isBackground) {
+      if (requestId === infoRequestId) {
         state.lock = false
         state.knowledgeBaseLoading = false
       }
@@ -347,7 +362,9 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
 
   async function loadDocumentFiles(options = {}) {
     const kbIdValue = options.kbId || kbId.value
+    const token = userStore.token
     if (!kbIdValue) return
+    const requestId = ++fileRequestId
 
     const nextStatus = options.status ?? fileBrowser.status
     const nextRecursive = options.recursive ?? nextStatus !== 'all'
@@ -397,9 +414,16 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
       }
 
       const data = await documentApi.listDocuments(kbIdValue, params)
-      if (contextId !== fileBrowserContextId) return
+      if (
+        requestId !== fileRequestId ||
+        contextId !== fileBrowserContextId ||
+        kbIdValue !== kbId.value ||
+        token !== userStore.token
+      )
+        return
 
       const items = data?.items || []
+      fileSnapshotRevision += 1
       documentFiles.value = items
       setCurrentFileMap(items)
       Object.assign(fileBrowser, {
@@ -427,7 +451,7 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
         message.error(error.message || '加载文件列表失败')
       }
     } finally {
-      if (!options.isBackground && contextId === fileBrowserContextId) {
+      if (contextId === fileBrowserContextId && requestId === fileRequestId) {
         fileBrowser.loading = false
       }
     }
@@ -472,8 +496,19 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
     })
   }
 
+  /** 绑定提交时的账号与知识库，在作业终态回读文件和统计。 */
+  function createFileJobRegistration() {
+    const submittedKbId = kbId.value
+    const token = userStore.token
+    return jobsStore.createJobRegistration(() => {
+      if (kbId.value !== submittedKbId || userStore.token !== token) return
+      void getKnowledgeBaseInfo(undefined, true, true)
+      void loadDocumentFiles({ isBackground: true })
+    })
+  }
+
   async function addFiles({ items, contentType, params, parentId }) {
-    const registerJob = jobsStore.createJobRegistration()
+    const registerJob = createFileJobRegistration()
     if (items.length === 0) {
       message.error(contentType === 'file' ? '请先上传文件' : '请输入有效的网页链接')
       return
@@ -509,7 +544,7 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
   }
 
   async function parseFiles(fileIds, params = {}) {
-    const registerJob = jobsStore.createJobRegistration()
+    const registerJob = createFileJobRegistration()
     if (fileIds.length === 0) return
     state.chunkLoading = true
     try {
@@ -536,7 +571,7 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
   }
 
   async function parsePendingFiles(params = {}) {
-    const registerJob = jobsStore.createJobRegistration()
+    const registerJob = createFileJobRegistration()
     state.chunkLoading = true
     try {
       const data = await documentApi.parsePendingDocuments(kbId.value, params)
@@ -562,7 +597,7 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
   }
 
   async function indexFiles(fileIds, params = {}) {
-    const registerJob = jobsStore.createJobRegistration()
+    const registerJob = createFileJobRegistration()
     if (fileIds.length === 0) return
     state.chunkLoading = true
     try {
@@ -589,7 +624,7 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
   }
 
   async function indexPendingFiles(params = {}) {
-    const registerJob = jobsStore.createJobRegistration()
+    const registerJob = createFileJobRegistration()
     state.chunkLoading = true
     try {
       const data = await documentApi.indexPendingDocuments(kbId.value, params)

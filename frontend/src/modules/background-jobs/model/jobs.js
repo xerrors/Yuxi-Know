@@ -7,6 +7,7 @@ import { parseToShanghai } from '@/shared/lib/time'
 
 const ACTIVE_STATUSES = new Set(['pending', 'running'])
 const FAILED_STATUSES = new Set(['failed', 'cancelled'])
+const TERMINAL_STATUSES = new Set(['success', 'failed', 'cancelled'])
 
 const createDefaultSummary = () => ({
   total: 0,
@@ -45,6 +46,7 @@ export const useBackgroundJobsStore = defineStore('backgroundJobs', () => {
   let pollingFailures = 0
   const detailRequests = new Map()
   const pendingReceipts = new Set()
+  const completionCallbacks = new Map()
 
   const sortedJobs = computed(() => {
     return [...jobs.value].sort((a, b) => {
@@ -79,6 +81,14 @@ export const useBackgroundJobsStore = defineStore('backgroundJobs', () => {
     () => activeCount.value > 0 || jobs.value.some((job) => ACTIVE_STATUSES.has(job.status))
   )
 
+  /** 作业终态只通知一次，页面重新读取自己的业务资源。 */
+  function notifyCompletion(job) {
+    if (!TERMINAL_STATUSES.has(job.status)) return
+    const callback = completionCallbacks.get(job.id)
+    completionCallbacks.delete(job.id)
+    callback?.()
+  }
+
   function upsertJob(rawJob) {
     if (!rawJob || !rawJob.id) return
     jobRevision += 1
@@ -89,6 +99,7 @@ export const useBackgroundJobsStore = defineStore('backgroundJobs', () => {
     } else {
       jobs.value.unshift(job)
     }
+    notifyCompletion(job)
   }
 
   async function loadJobs(params = {}) {
@@ -113,6 +124,12 @@ export const useBackgroundJobsStore = defineStore('backgroundJobs', () => {
       jobs.value = jobList.map(toJob)
       pendingReceipts.clear()
       pollingFailures = 0
+      jobs.value.forEach(notifyCompletion)
+      // 已登记作业可能被列表分页或筛选排除，详情读取仍由同一轮询拥有。
+      const listedIds = new Set(jobs.value.map((job) => job.id))
+      await Promise.all(
+        [...completionCallbacks.keys()].filter((id) => !listedIds.has(id)).map(refreshJob)
+      )
     } catch (error) {
       if (requestId !== listRequestId || revision !== jobRevision) return
       console.error('加载作业列表失败', error)
@@ -170,6 +187,7 @@ export const useBackgroundJobsStore = defineStore('backgroundJobs', () => {
       if (generation !== sessionGeneration) return
       jobRevision += 1
       detailRequests.delete(jobId)
+      completionCallbacks.delete(jobId)
       message.success('删除作业成功')
       // 从本地列表中移除
       const index = jobs.value.findIndex((item) => item.id === jobId)
@@ -191,10 +209,11 @@ export const useBackgroundJobsStore = defineStore('backgroundJobs', () => {
   }
 
   /** 在提交开始时绑定会话，拒绝切换账号后晚到的入队回执。 */
-  function createJobRegistration() {
+  function createJobRegistration(onSettled) {
     const generation = sessionGeneration
     return (job) => {
       if (generation !== sessionGeneration || !userStore.isAdmin) return
+      if (job?.job_id && onSettled) completionCallbacks.set(job.job_id, onSettled)
       return registerJobReceipt(job)
     }
   }
@@ -232,7 +251,13 @@ export const useBackgroundJobsStore = defineStore('backgroundJobs', () => {
   // 轮询所有权收敛到 store：抽屉打开或存在活跃作业时持续轮询，否则停止，
   // 修复抽屉关闭后作业角标（activeCount）不再更新的问题。
   function syncPolling() {
-    if (userStore.isAdmin && (isDrawerOpen.value || hasActiveJobs.value || pendingReceipts.size)) {
+    if (
+      userStore.isAdmin &&
+      (isDrawerOpen.value ||
+        hasActiveJobs.value ||
+        pendingReceipts.size ||
+        completionCallbacks.size)
+    ) {
       startPolling()
     } else {
       stopPolling()
@@ -244,6 +269,7 @@ export const useBackgroundJobsStore = defineStore('backgroundJobs', () => {
     listRequestId += 1
     detailRequests.clear()
     pendingReceipts.clear()
+    completionCallbacks.clear()
     pollingFailures = 0
     loading.value = false
     stopPolling()

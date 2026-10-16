@@ -146,7 +146,11 @@
                 @click="installTarget = 'shared'"
               >
                 <span class="install-target-title">共享 Skill</span>
-                <span>进入平台 Skill 库，并继续配置指定人、部门或全局范围。</span>
+                <span>{{
+                  allowedAccessLevels.includes('global')
+                    ? '进入平台 Skill 库，默认全局共享，也可选择部门或指定人。'
+                    : '进入平台 Skill 库，按允许范围配置部门或指定人。'
+                }}</span>
               </button>
             </div>
             <div v-if="installTarget === 'personal'" class="personal-install-note">
@@ -444,8 +448,11 @@ const openReview = (draftPayloads) => {
     }))
   ])
   const first = drafts.value[0] || {}
-  shareConfig.value = cloneShareConfig(first.default_share_config)
   allowedAccessLevels.value = first.allowed_access_levels || ['user']
+  shareConfig.value = cloneShareConfig(first.default_share_config)
+  if (allowedAccessLevels.value.includes('global')) {
+    shareConfig.value.read_scope = { access_level: 'global', department_ids: [], user_uids: [] }
+  }
   phase.value = 'reviewing'
 }
 
@@ -556,8 +563,7 @@ const retryFailedItems = async () => {
       item.retryable &&
       drafts.value.some(
         (draft) =>
-          draft.draft_id === item.draft_id &&
-          draft.items.some((entry) => entry.slug === item.slug)
+          draft.draft_id === item.draft_id && draft.items.some((entry) => entry.slug === item.slug)
       )
   )
   if (retryableItems.length) {

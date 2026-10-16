@@ -146,3 +146,48 @@ test('草稿仅剩用户移除条目时重新获取远程失败项，不重新�
   assert.deepEqual(Array.from(context.reviewItems.value, (item) => item.slug), ['failed'])
   assert.equal(context.reviewItems.value[0].success, true)
 })
+
+test('共享安装只在允许全局时默认全局，受限范围与草稿保持不变', () => {
+  const cloneSource = source.slice(
+    source.indexOf('const cloneShareConfig ='),
+    source.indexOf('const isInstalled =')
+  )
+  const reviewSource = source.slice(
+    source.indexOf('const openReview ='),
+    source.indexOf('const prepareSuite =')
+  )
+  for (const levels of [['global', 'department', 'user'], ['department', 'user'], ['user']]) {
+    const original = {
+      version: 2,
+      read_scope: { access_level: 'user', department_ids: [], user_uids: ['owner'] },
+      manage_scope: null
+    }
+    const context = {
+      drafts: { value: [] },
+      reviewItems: { value: [] },
+      shareConfig: { value: null },
+      allowedAccessLevels: { value: [] },
+      phase: { value: '' },
+      payloads: [
+        {
+          draft_id: 'draft',
+          items: [{ slug: 'release-skill' }],
+          default_share_config: original,
+          allowed_access_levels: levels
+        }
+      ]
+    }
+    runInNewContext(`${cloneSource}\n${reviewSource}\nopenReview(payloads)`, context)
+    assert.equal(
+      context.shareConfig.value.read_scope.access_level,
+      levels.includes('global') ? 'global' : 'user'
+    )
+    assert.deepEqual(
+      Array.from(context.shareConfig.value.read_scope.user_uids),
+      levels.includes('global') ? [] : ['owner']
+    )
+    assert.equal(original.read_scope.access_level, 'user')
+    assert.deepEqual(original.read_scope.user_uids, ['owner'])
+    assert.equal(context.phase.value, 'reviewing')
+  }
+})
