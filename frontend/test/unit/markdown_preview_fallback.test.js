@@ -63,3 +63,32 @@ test('relative document images resolve beside their artifact with the same autho
   assert.equal(resolveMarkdownImageUrl('//outside.example/x.png', base, origin), null)
   assert.equal(resolveMarkdownImageUrl('/api/knowledge/knowledge-bases/kb/images/kb-images/chart.png', '', origin), '/api/knowledge/knowledge-bases/kb/images/kb-images/chart.png')
 })
+
+test('公式插件保留行内、块级、源行定位与不可信命令限制', () => {
+  const renderer = createMarkdownRenderer({ themeName: 'github-light', highlighter: null })
+  const html = renderer.render('行内 $x^2$。\n\n$$\n\\frac{1}{2}\n$$', { sourceLines: true })
+  assert.match(html, /class="katex"/)
+  assert.match(html, /class="katex-display"/)
+  assert.match(html, /<mfrac>/)
+  assert.match(html, /data-source-start="3" data-source-end="5"/)
+  assert.doesNotMatch(renderer.render('$\\href{https://example.org}{link}$'), /href="https:/)
+  assert.doesNotMatch(renderer.render('$\\includegraphics{https://example.org/x.png}$'), /<img/)
+  assert.match(renderer.render('$\\invalidcommand$'), /color:#cc0000/)
+})
+
+test('公式插件不读取原型中注入的宏定义', () => {
+  const renderer = createMarkdownRenderer({ themeName: 'github-light', highlighter: null })
+  const source = '$\\yuxipolluted$'
+  Object.defineProperty(Object.prototype, '\\yuxipolluted', {
+    configurable: true,
+    value: 'POLLUTED'
+  })
+  try {
+    const html = renderer.render(source)
+    assert.doesNotMatch(html.replace(/<[^>]*>/g, ''), /POLLUTED/)
+    assert.match(html, /\\yuxipolluted/)
+    assert.match(html, /#cc0000/)
+  } finally {
+    delete Object.prototype['\\yuxipolluted']
+  }
+})
