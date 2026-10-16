@@ -1,7 +1,7 @@
 ---
 name: chat-widgets
-description: "普通聊天的分类数值比较、单图和图片组展示、推荐选项续聊使用本 Skill：用户给出各类数值并想直观比较时绘制柱状图；给出图片地址或沙盒图片文件时直接在对话中展示图片，多张图合为一个横向图片组；要从几个推荐或方案中选一个继续时展示可点击列表。这三类请求应主动读取并使用本 Skill，无需用户说组件、Skill 或 JSON。也支持时间趋势折线图；明确要求纯文字、源码或概念解释时使用 Markdown。"
-version: "2026.10.15"
+description: "普通聊天的分类数值比较、单图和图片组展示、推荐选项续聊使用本 Skill：用户给出各类数值并想直观比较时绘制柱状图；给出图片地址、网页/浏览器截图或沙盒图片文件时直接在对话中展示图片，多张图合为一个横向图片组；要从几个推荐或方案中选一个继续时展示可点击列表。这三类请求应主动读取并使用本 Skill，无需用户说组件、Skill 或 JSON。也支持时间趋势折线图；明确要求纯文字、源码或概念解释时使用 Markdown。"
+version: "2026.10.16"
 ---
 
 # 对话组件
@@ -238,7 +238,7 @@ Chart.data 为 0–60 条记录，按数组元素数量计数，与 JSON 文本�
 
 绘制每日最高/最低温时优先使用逐日预报字段。小时预报采样的最大/最小值只标为“采样最高/最低温”，缺少全天时段时在图卡中注明；未来的预报值不能称为实测值。
 
-Image 使用 src 或 path 之一，alt 描述图片内容。src 接受无凭据的 HTTPS URL 或同源 `/...` 路径；不能用协议相对 URL、data/file/javascript URL。path 使用已存在的沙盒虚拟绝对路径，例如 `{"type":"Image","path":"/home/user/workspace/projects/<project-dir>/generated-image.png","alt":"生成的图片"}`，沿用工具返回的真实路径。沙盒图片由当前会话鉴权读取，无需调用 present_artifacts；支持 user-data 和已授权 Skills 中的普通图片文件，临时目录图片先保存到 Workdir。直接填真实文件路径，不拼接 API URL 或 Token，不使用路径跳转或宿主机路径。只使用已知存在的图片地址，不猜测路径；图片来源和详细说明放围栏外，简短说明可用 caption。尚未实际读取图片时，alt 和说明沿用用户描述，保留已知内容。单张图片默认保留原始宽高比，展示范围不超过正文宽度和 400px 高度；只有用户需要特定比例时才显式设置 aspectRatio，并按需要选择 cover 或 contain（默认）。ImageGroup 的缩略图统一使用 5:4 和 cover；点击后以完整比例预览，支持前后切换、方向键和 Esc 关闭。
+Image 使用 src 或 path 之一，alt 描述图片内容。src 接受无凭据的 HTTPS URL 或同源 `/...` 路径；不能用协议相对 URL、data/file/javascript URL。path 使用实际图片文件的沙盒绝对路径，例如 `{"type":"Image","path":"/home/user/workspace/projects/<project-dir>/generated-image.png","alt":"生成的图片"}`，沿用工具返回的真实路径。生成图片保存在当前 Project 工作目录；Home 或临时目录中的图片先保存到当前工作目录再展示。前端通过当前会话鉴权读取，无需调用 present_artifacts。直接填文件路径，不拼接 API URL 或 Token，不使用路径跳转或宿主机路径。只使用已知存在的图片地址，不猜测路径；图片来源和详细说明放围栏外，简短说明可用 caption。尚未实际读取图片时，alt 和说明沿用用户描述，保留已知内容。单张图片默认保留原始宽高比，展示范围不超过正文宽度和 400px 高度；只有用户需要特定比例时才显式设置 aspectRatio，并按需要选择 cover 或 contain（默认）。ImageGroup 的缩略图统一使用 5:4 和 cover；点击后以完整比例预览，支持前后切换、方向键和 Esc 关闭。
 
 ## 推荐列表草稿动作
 

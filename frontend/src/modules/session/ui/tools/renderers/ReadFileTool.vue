@@ -1,9 +1,13 @@
 <template>
-  <BaseToolCall :tool-call="toolCall">
+  <BaseToolCall :tool-call="toolCall" :hide-params="imageResult">
+    <template v-if="imageResult" #icon>
+      <ImageIcon :size="15" aria-hidden="true" />
+    </template>
     <template #header>
       <div class="sep-header">
+        <span v-if="imageResult" class="note">查看图片</span>
         <!-- 特殊处理：SKILL.md 文件显示为 Skill | <父目录名> -->
-        <template v-if="skillName">
+        <template v-else-if="skillName">
           <span class="note skill-note">Skill</span>
           <span class="separator">|</span>
           <span class="description skill-name">{{ skillName }}</span>
@@ -23,8 +27,13 @@
 
 <script setup>
 import { computed } from 'vue'
+import { Image as ImageIcon } from '@lucide/vue'
 import BaseToolCall from '../BaseToolCall.vue'
-import { parseToolCallArgs } from '../toolRegistry'
+import { getToolCallStatus, parseToolCallArgs } from '../toolRegistry'
+import {
+  getToolCallResultContent,
+  getToolResultParts
+} from '@/modules/session/model/toolCallProjection'
 
 const props = defineProps({
   toolCall: {
@@ -34,6 +43,11 @@ const props = defineProps({
 })
 
 const parsedArgs = computed(() => parseToolCallArgs(props.toolCall))
+
+const imageResult = computed(() => {
+  if (getToolCallStatus(props.toolCall) === 'error') return false
+  return getToolResultParts(getToolCallResultContent(props.toolCall)).some((part) => part.image)
+})
 
 const filePath = computed(() => parsedArgs.value.file_path || '')
 

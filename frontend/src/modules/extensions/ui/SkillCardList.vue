@@ -569,6 +569,26 @@ const RECOMMENDED_SUITES = [
     ]
   },
   {
+    id: 'browser-automation-suite',
+    name: '浏览器与网页自动化',
+    provider: 'Vercel / Microsoft',
+    description: '使用开源浏览器 Skill 浏览网页、填写表单、截图和测试页面，支持复用登录状态。',
+    skills: [
+      {
+        slug: 'agent-browser',
+        name: 'agent-browser',
+        source: 'https://github.com/vercel-labs/agent-browser',
+        description: 'Vercel 的浏览器自动化 CLI，通过页面快照和元素引用浏览、交互与截图，支持持久配置。'
+      },
+      {
+        slug: 'playwright-cli',
+        name: 'playwright-cli',
+        source: 'https://github.com/microsoft/playwright-cli',
+        description: 'Microsoft 的 Playwright CLI Skill，用于网页交互、截图、表单操作与页面测试，支持持久会话。'
+      }
+    ]
+  },
+  {
     id: 'skill-builder-suite',
     name: 'Skill 能力与进化套件',
     provider: 'Community',

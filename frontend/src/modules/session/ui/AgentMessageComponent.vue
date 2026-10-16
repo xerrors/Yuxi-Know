@@ -116,24 +116,14 @@
     </div>
   </div>
 
-  <Teleport to="body">
-    <div
-      v-if="imagePreview.visible"
-      class="message-image-preview-overlay"
-      @click="closeImagePreview"
-    >
-      <button class="message-image-preview-close" title="关闭" @click.stop="closeImagePreview">
-        <X :size="20" />
-      </button>
-      <img :src="imagePreview.src" :alt="imagePreview.alt" class="message-image-preview-img" />
-    </div>
-  </Teleport>
+  <ChatImageViewer :src="imagePreview.src" :alt="imagePreview.alt" @close="closeImagePreview" />
 </template>
 
 <script setup>
-import { computed, ref, onUnmounted } from 'vue'
+import { computed, ref } from 'vue'
 import RefsComponent from '@/modules/session/ui/RefsComponent.vue'
-import { Check, Copy, X } from '@lucide/vue'
+import { Check, Copy } from '@lucide/vue'
+import ChatImageViewer from '@/shared/ui/ChatImageViewer.vue'
 import ToolCallsGroupComponent from '@/modules/session/ui/ToolCallsGroupComponent.vue'
 import ReferenceAnnotatedAnswer from '@/modules/session/ui/ReferenceAnnotatedAnswer.vue'
 import MentionTextRenderer from '@/modules/session/ui/MentionTextRenderer.vue'
@@ -187,28 +177,16 @@ const props = defineProps({
 const emit = defineEmits(['retry', 'retryStoppedMessage', 'openRefs'])
 
 // 图片全屏预览
-const imagePreview = ref({ visible: false, src: '', alt: '' })
-
-const handleImagePreviewKeydown = (e) => {
-  if (e.key === 'Escape') {
-    closeImagePreview()
-  }
-}
+const imagePreview = ref({ src: '', alt: '' })
 
 const openImagePreview = (src, alt = '') => {
   if (!src) return
-  imagePreview.value = { visible: true, src, alt }
-  window.addEventListener('keydown', handleImagePreviewKeydown)
+  imagePreview.value = { src, alt }
 }
 
 const closeImagePreview = () => {
-  imagePreview.value = { visible: false, src: '', alt: '' }
-  window.removeEventListener('keydown', handleImagePreviewKeydown)
+  imagePreview.value = { src: '', alt: '' }
 }
-
-onUnmounted(() => {
-  window.removeEventListener('keydown', handleImagePreviewKeydown)
-})
 
 // 复制状态
 const isCopied = ref(false)
@@ -602,46 +580,5 @@ const parsedData = computed(() => {
 
 .message-md {
   margin: 8px 0;
-}
-
-.message-image-preview-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 2000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem;
-  background: rgba(0, 0, 0, 0.75);
-  cursor: zoom-out;
-}
-
-.message-image-preview-img {
-  max-width: 90vw;
-  max-height: 90vh;
-  object-fit: contain;
-  border-radius: 4px;
-  cursor: zoom-out;
-}
-
-.message-image-preview-close {
-  position: fixed;
-  top: 1.5rem;
-  right: 1.5rem;
-  width: 2.5rem;
-  height: 2.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 50%;
-  color: var(--gray-0);
-  background: rgba(255, 255, 255, 0.15);
-  cursor: pointer;
-  transition: background-color 0.15s ease;
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.28);
-  }
 }
 </style>

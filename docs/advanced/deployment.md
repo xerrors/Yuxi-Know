@@ -78,7 +78,7 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
 docker compose --env-file .env.prod -f docker-compose.prod.yml --profile all up -d --build
 ```
 
-`schema-init` 为空库直接建立 business 版本 4 与 knowledge 版本 1 基线，包含当前表、索引、约束和 LangGraph checkpoint 表。当前版本直接结束，初始化成功后进程以退出码 0 结束，API 与 worker 才会启动。
+`schema-init` 只为确认空库建立 business 版本 4 与 knowledge 版本 1 基线，包含当前表、索引、约束和 LangGraph checkpoint 表；当前版本直接结束，其他版本不匹配会明确失败。本部署现有数据库已由部署侧直接调整到 v4，旧 `tool_calls` 保留为 `tool_calls_v1_archive`，工具审计正文仅在结构化 output 已存在时清空，退役协作回收列已移除。应用代码不包含 business v1 到 v4 的历史迁移脚本；需要保留数据的版本调整由部署侧单独操作，并在改动前备份 PostgreSQL。数据处置和回读证据见[Schema v1 到 v4 数据库调整记录](../develop-guides/decisions/implemented/2026-10-16-business-schema-v1-to-v4-migration.md)。
 
 ## 3. 数据库与文件目录
 

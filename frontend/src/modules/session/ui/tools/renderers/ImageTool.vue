@@ -6,12 +6,7 @@
       </div>
     </template>
     <template #result="{}">
-      <div v-if="imageUrl" class="image-result">
-        <img :src="imageUrl" />
-      </div>
-      <div v-else class="text-result">
-        {{ parsedContent }}
-      </div>
+      <ToolResultContent :content="resultContent" image-urls />
     </template>
   </BaseToolCall>
 </template>
@@ -19,6 +14,8 @@
 <script setup>
 import { computed } from 'vue'
 import BaseToolCall from '../BaseToolCall.vue'
+import ToolResultContent from '../ToolResultContent.vue'
+import { getToolCallResultContent } from '@/modules/session/model/toolCallProjection'
 
 const props = defineProps({
   toolCall: {
@@ -27,47 +24,5 @@ const props = defineProps({
   }
 })
 
-const parseData = (content) => {
-  if (typeof content === 'string') {
-    try {
-      return JSON.parse(content)
-    } catch {
-      return content
-    }
-  }
-  return content
-}
-
-const parsedContent = computed(() => {
-  return parseData(props.toolCall.tool_call_result?.content)
-})
-
-const imageUrl = computed(() => {
-  const content = parsedContent.value
-  // 图片类工具返回 URL 字符串时直接渲染图片
-  if (content && typeof content === 'string' && content.startsWith('http')) {
-    return content
-  }
-  return null
-})
+const resultContent = computed(() => getToolCallResultContent(props.toolCall))
 </script>
-
-<style lang="less" scoped>
-.image-result {
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 8px;
-
-  img {
-    max-width: 100%;
-    border-radius: 4px;
-  }
-}
-
-.text-result {
-  padding: 8px;
-  color: var(--color-text);
-}
-</style>

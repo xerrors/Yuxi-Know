@@ -9,23 +9,20 @@ import tempfile
 from pathlib import PurePosixPath
 
 from yuxi.infrastructure.file_preview import prepare_file_preview, preview_too_large
-from yuxi.infrastructure.filesystem import copy_file_fd, open_regular_file_fd
 from yuxi.infrastructure.office_conversion import (
     OfficeConversionError,
     convert_office_to_pdf,
     is_office_pdf_convertible,
 )
 from yuxi.modules.extensions.skills.access import lock_accessible_shared_skill_for_file
-from yuxi.modules.extensions.skills.edit import open_shared_skill_dir
-from yuxi.modules.extensions.skills.models import Skill
 from yuxi.modules.identity.repositories.users import UserRepository
 from yuxi.modules.workspace.errors import FileTransferLimitError
+from yuxi.modules.workspace.runtime_files import RuntimeFiles
 from yuxi.modules.workspace.runtime_paths import (
     SHARED_SKILLS_PATH,
     is_runtime_path,
     normalize_artifact_path,
     runtime_workspace_path,
-    workspace_scope_from_runtime_path,
 )
 from yuxi.modules.workspace.services.bindings import resolve_authorized_workdir
 from yuxi.shared.errors import (
@@ -43,77 +40,6 @@ MAX_SAVED_ARTIFACT_NAME_ATTEMPTS = 1000
 DEFAULT_ARTIFACT_DESTINATION = "/saved_artifacts"
 
 
-def _normalize_artifact_path(workdir_path: str, path: str) -> str:
-    """以共同 runtime 规则验证产物，领域层保留拒绝契约。"""
-    try:
-        return normalize_artifact_path(workdir_path, path)
-    except ValueError as exc:
-        raise PermissionDeniedError(str(exc)) from exc
-
-
-async def _require_skill_artifact_access(*, normalized_path: str, current_uid: str, db) -> tuple[Skill, str] | None:
-    skills_prefix = f"{SHARED_SKILLS_PATH}/"
-    if not normalized_path.startswith(skills_prefix):
-        return None
-    slug = normalized_path[len(skills_prefix) :].split("/", 1)[0]
-    user = await UserRepository(db).get_by_uid(str(current_uid))
-    if user is None or bool(user.is_deleted):
-        raise PermissionDeniedError("artifact access denied")
-    shared = await lock_accessible_shared_skill_for_file(db, user, slug)
-    if shared is None:
-        raise PermissionDeniedError("artifact access denied")
-    relative_path = normalized_path[len(skills_prefix) + len(slug) :].lstrip("/")
-    if not relative_path:
-        raise InvalidOperationError("artifact path is not a regular file")
-    return shared, relative_path
-
-
-def _copy_skill_file_to_path(skill: Skill, relative_path: str, target_path: str, max_bytes: int) -> int:
-    """从已授权 Skill 真实来源有界复制普通文件。"""
-    parts = tuple(PurePosixPath(relative_path).parts)
-    if not parts or ".." in parts:
-        raise ValueError("invalid skill artifact path")
-    skill_fd = open_shared_skill_dir(skill)
-    try:
-        return _copy_from_shared_skill_fd(skill_fd, parts, target_path, max_bytes)
-    finally:
-        os.close(skill_fd)
-
-
-async def _copy_artifact_to_path(
-    access,
-    normalized_path: str,
-    skill_source,
-    target_path: str,
-    max_bytes: int = MAX_ARTIFACT_DOWNLOAD_BYTES,
-) -> None:
-    """把已授权的 Workspace 或 Skill artifact 有界复制到临时文件。"""
-    try:
-        if skill_source is None:
-            await asyncio.to_thread(
-                access.workdir.workspace.download_authorized_file_to_path,
-                workspace_scope_from_runtime_path(normalized_path),
-                target_path,
-                max_bytes,
-            )
-            return
-        await asyncio.to_thread(
-            _copy_skill_file_to_path,
-            skill_source[0],
-            skill_source[1],
-            target_path,
-            max_bytes,
-        )
-    except PermissionError as exc:
-        raise PermissionDeniedError("artifact access denied") from exc
-    except IsADirectoryError as exc:
-        raise InvalidOperationError("artifact path is not a regular file") from exc
-    except FileTransferLimitError as exc:
-        raise ContentTooLargeError("artifact exceeds transfer limit") from exc
-    except (FileNotFoundError, ValueError) as exc:
-        raise ResourceNotFoundError("artifact not found") from exc
-
-
 async def resolve_thread_artifact_view(
     *,
     thread_id: str,
@@ -127,7 +53,7 @@ async def resolve_thread_artifact_view(
     """把实时授权文件导出为自动清理的 HTTP 文件响应。"""
     access = await resolve_authorized_workdir(thread_id=thread_id, uid=current_uid, db=db, app_id=app_id)
     normalized = _normalize_artifact_path(runtime_workspace_path(access.workdir.root_path), path)
-    skill_source = await _require_skill_artifact_access(normalized_path=normalized, current_uid=current_uid, db=db)
+    await _require_skill_artifact_access(normalized_path=normalized, current_uid=current_uid, db=db)
     is_preview = preview and not download
     descriptor, temp_path = tempfile.mkstemp(prefix="yuxi-artifact-", suffix=PurePosixPath(normalized).suffix)
     os.close(descriptor)
@@ -135,7 +61,6 @@ async def resolve_thread_artifact_view(
         await _copy_artifact_to_path(
             access,
             normalized,
-            skill_source,
             temp_path,
             MAX_FILE_PREVIEW_BYTES if is_preview else MAX_ARTIFACT_DOWNLOAD_BYTES,
         )
@@ -217,11 +142,11 @@ async def save_thread_artifact_to_workspace_view(
             raise PermissionDeniedError("artifact destination access denied") from exc
         if not destination_item["is_dir"]:
             raise InvalidOperationError("artifact destination is not a directory")
-    skill_source = await _require_skill_artifact_access(normalized_path=normalized, current_uid=current_uid, db=db)
+    await _require_skill_artifact_access(normalized_path=normalized, current_uid=current_uid, db=db)
     descriptor, temp_path = tempfile.mkstemp(prefix="yuxi-save-artifact-")
     os.close(descriptor)
     try:
-        await _copy_artifact_to_path(access, normalized, skill_source, temp_path)
+        await _copy_artifact_to_path(access, normalized, temp_path)
         file_name = PurePosixPath(normalized).name or "artifact"
         stem = PurePosixPath(file_name).stem
         suffix = PurePosixPath(file_name).suffix
@@ -259,15 +184,50 @@ async def save_thread_artifact_to_workspace_view(
     }
 
 
-def _copy_from_shared_skill_fd(skill_fd: int, parts: tuple[str, ...], target_path: str, max_bytes: int) -> int:
-    """从已打开的共享目录复制普通文件。"""
-    target_fd = None
-    with open_regular_file_fd(skill_fd, parts) as (source_fd, source_stat):
-        if source_stat.st_size > max_bytes:
-            raise FileTransferLimitError("file exceeds transfer limit")
-        try:
-            target_fd = os.open(target_path, os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW)
-            return copy_file_fd(source_fd, target_fd, max_bytes=max_bytes)
-        finally:
-            if target_fd is not None:
-                os.close(target_fd)
+def _normalize_artifact_path(workdir_path: str, path: str) -> str:
+    """以共同 runtime 规则验证产物，领域层保留拒绝契约。"""
+    try:
+        return normalize_artifact_path(workdir_path, path)
+    except ValueError as exc:
+        raise PermissionDeniedError(str(exc)) from exc
+
+
+async def _require_skill_artifact_access(*, normalized_path: str, current_uid: str, db) -> None:
+    """读取用户投影前锁定 Skill，并重新检查当前授权。"""
+    skills_prefix = f"{SHARED_SKILLS_PATH}/"
+    if not normalized_path.startswith(skills_prefix):
+        return
+    slug = normalized_path[len(skills_prefix) :].split("/", 1)[0]
+    user = await UserRepository(db).get_by_uid(str(current_uid))
+    if user is None or bool(user.is_deleted):
+        raise PermissionDeniedError("artifact access denied")
+    shared = await lock_accessible_shared_skill_for_file(db, user, slug)
+    if shared is None:
+        raise PermissionDeniedError("artifact access denied")
+    relative_path = normalized_path[len(skills_prefix) + len(slug) :].lstrip("/")
+    if not relative_path:
+        raise InvalidOperationError("artifact path is not a regular file")
+
+
+async def _copy_artifact_to_path(
+    access,
+    normalized_path: str,
+    target_path: str,
+    max_bytes: int = MAX_ARTIFACT_DOWNLOAD_BYTES,
+) -> None:
+    """把已授权的 Workspace 或 Skill artifact 有界复制到临时文件。"""
+    try:
+        await asyncio.to_thread(
+            RuntimeFiles(access.uid).download_to_path,
+            normalized_path,
+            target_path,
+            max_bytes,
+        )
+    except PermissionError as exc:
+        raise PermissionDeniedError("artifact access denied") from exc
+    except IsADirectoryError as exc:
+        raise InvalidOperationError("artifact path is not a regular file") from exc
+    except FileTransferLimitError as exc:
+        raise ContentTooLargeError("artifact exceeds transfer limit") from exc
+    except (FileNotFoundError, ValueError) as exc:
+        raise ResourceNotFoundError("artifact not found") from exc

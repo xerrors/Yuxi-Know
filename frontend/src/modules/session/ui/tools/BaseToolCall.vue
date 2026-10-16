@@ -37,7 +37,9 @@
         <template v-if="$slots.header">
           <slot name="header" :tool-call="toolCall" :tool-name="toolName"></slot>
           <span v-if="effectiveStatus === 'incomplete'" class="tool-incomplete-label">已中断</span>
-          <span v-else-if="effectiveStatus === 'waiting'" class="tool-incomplete-label">等待协作</span>
+          <span v-else-if="effectiveStatus === 'waiting'" class="tool-incomplete-label"
+            >等待协作</span
+          >
         </template>
 
         <!-- Specific State Slots (Fallback) -->
@@ -96,17 +98,11 @@
         </div>
 
         <!-- Result Slot -->
-        <div
-          class="tool-result"
-          style="opacity: 0.8"
-          v-if="hasResult || forceShowResult || hasToolError"
-        >
+        <div class="tool-result" v-if="hasResult || forceShowResult || hasToolError">
           <div v-if="hasToolError" class="tool-error-result">
-            <pre>{{
-              formatResultData(
-                hasResult ? parsedResultData : toolCall.error_message || '工具执行失败'
-              )
-            }}</pre>
+            <ToolResultContent
+              :content="hasResult ? resultContent : toolCall.error_message || '工具执行失败'"
+            />
           </div>
           <slot v-else name="result" :tool-call="toolCall" :result-content="resultContent">
             <div class="tool-result-content" :data-tool-call-id="toolCall.id">
@@ -114,7 +110,7 @@
               <div class="tool-result-renderer">
                 <div class="default-result">
                   <div class="default-content">
-                    <pre>{{ formatResultData(parsedResultData) }}</pre>
+                    <ToolResultContent :content="resultContent" />
                   </div>
                 </div>
               </div>
@@ -128,10 +124,19 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { ChevronRight, Clock, Loader, ChevronsUpDown, ChevronsDownUp, XCircle, CheckCircle } from '@lucide/vue'
+import {
+  ChevronRight,
+  Clock,
+  Loader,
+  ChevronsUpDown,
+  ChevronsDownUp,
+  XCircle,
+  CheckCircle
+} from '@lucide/vue'
 import { useAgentStore } from '@/modules/agents/model/agent'
 import { storeToRefs } from 'pinia'
 import CollapseTransition from '@/shared/ui/CollapseTransition.vue'
+import ToolResultContent from './ToolResultContent.vue'
 import {
   getToolCallId,
   getToolIcon,
@@ -139,6 +144,7 @@ import {
   findToolInList,
   getToolCallStatus
 } from './toolRegistry'
+import { getToolCallResultContent } from '@/modules/session/model/toolCallProjection'
 
 const props = defineProps({
   headerAction: { type: Function, default: null },
@@ -237,33 +243,11 @@ const hasParams = computed(() => {
 })
 
 // Result Logic
-const resultContent = computed(() => {
-  return props.toolCall.tool_call_result?.content ?? props.toolCall.result
-})
+const resultContent = computed(() => getToolCallResultContent(props.toolCall))
 
 const hasResult = computed(() => {
   return resultContent.value != null && resultContent.value !== ''
 })
-
-// Default Result Rendering Logic
-const parsedResultData = computed(() => {
-  const content = resultContent.value
-  if (typeof content === 'string') {
-    try {
-      return JSON.parse(content)
-    } catch {
-      return content
-    }
-  }
-  return content
-})
-
-const formatResultData = (data) => {
-  if (typeof data === 'object') {
-    return JSON.stringify(data, null, 2)
-  }
-  return String(data)
-}
 </script>
 
 <style lang="less" scoped>
@@ -498,14 +482,8 @@ const formatResultData = (data) => {
   }
 }
 
-.tool-error-result pre {
-  margin: 0;
-  padding: 8px 12px;
-  color: var(--color-error-700);
-  font-size: 12px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+.tool-error-result {
+  --tool-result-text-color: var(--color-error-700);
 }
 
 /* Default Renderer Styles */
@@ -520,20 +498,6 @@ const formatResultData = (data) => {
     .default-content {
       background: var(--gray-0);
       padding: 8px 0px;
-
-      pre {
-        margin: 0;
-        font-size: 12px;
-        line-height: 1.4;
-        color: var(--gray-700);
-        white-space: pre-wrap;
-        word-break: break-word;
-        max-height: 300px;
-        overflow-y: auto;
-        background: var(--gray-25);
-        padding: 10px;
-        border-radius: 4px;
-      }
     }
   }
 }

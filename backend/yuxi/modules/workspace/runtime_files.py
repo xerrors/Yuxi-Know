@@ -8,8 +8,9 @@ import os
 import stat
 from pathlib import PurePosixPath
 
-from yuxi.infrastructure.filesystem import open_directory_fd, open_regular_file_fd
+from yuxi.infrastructure.filesystem import copy_file_fd, open_directory_fd, open_regular_file_fd
 from yuxi.modules.extensions.skills.projection import get_user_skills_root_dir
+from yuxi.modules.workspace.errors import FileTransferLimitError
 from yuxi.modules.workspace.filesystem import Workspace
 from yuxi.modules.workspace.paths import user_workspace_dir
 from yuxi.modules.workspace.runtime_paths import WORKSPACE_PATH, SHARED_SKILLS_PATH, normalize_runtime_path
@@ -66,6 +67,23 @@ class RuntimeFiles:
             max_bytes=MAX_FILE_BYTES,
             overwrite=overwrite,
         )
+
+    def download_to_path(self, path: str, target_path: str, max_bytes: int) -> int:
+        """将当前用户挂载中的普通文件有界导出到服务临时文件。"""
+        route = self.route(path)
+        if route is None:
+            raise PermissionError("path is outside the user mounts")
+        normalized, root, parts, readonly = route
+        if not readonly:
+            return self.workspace.download_authorized_file_to_path(self.scope(normalized), target_path, max_bytes)
+        with open_regular_file_fd(root, parts) as (source_fd, info):
+            if info.st_size > max_bytes:
+                raise FileTransferLimitError("file exceeds transfer limit")
+            target_fd = os.open(target_path, os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW)
+            try:
+                return copy_file_fd(source_fd, target_fd, max_bytes=max_bytes)
+            finally:
+                os.close(target_fd)
 
     def list(self, path: str) -> list[dict]:
         """返回同一虚拟路径下的普通文件与目录。"""

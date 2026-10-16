@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pytest
 from yuxi.modules.extensions.tools import catalog as tool_service
-from yuxi.modules.agents.services import artifacts as artifact_service
 from yuxi.modules.extensions.skills import edit as edit_service
 from yuxi.modules.extensions.skills import content as content_service
 from yuxi.modules.extensions.skills import projection as projection_service
@@ -17,6 +16,8 @@ from yuxi.modules.extensions.skills import access as skill_access
 from yuxi.modules.extensions.skills.package import parse_skill_markdown
 from yuxi.modules.extensions.skills.models import Skill
 from yuxi.modules.identity.models import User
+from yuxi.modules.workspace.paths import user_workspace_dir
+from yuxi.modules.workspace.runtime_files import RuntimeFiles
 
 
 class _Session:
@@ -109,21 +110,25 @@ def _user(uid: str) -> User:
     return User(uid=uid, role="admin")
 
 
-def test_shared_artifact_source_ignores_personal_override_and_rejects_links(tmp_path, monkeypatch):
-    """同名个人源不改变共享 artifact 来源，链接不能逃离共享目录。"""
-    skill_dir, item, _old = _setup_shared_skill(tmp_path, monkeypatch)
-    personal_dir = tmp_path / "personal" / "demo"
+def test_shared_projection_ignores_personal_override_and_rejects_links(tmp_path, monkeypatch):
+    """共享 runtime 路径读取用户投影，同名个人 Skill 和来源变更均不替代它。"""
+    skill_dir, _item, _old = _setup_shared_skill(tmp_path, monkeypatch)
+    monkeypatch.setenv("YUXI_USER_DATA_DIR", str(tmp_path / "users"))
+    monkeypatch.setenv("YUXI_SKILL_PROJECTION_DIR", str(tmp_path / "projections"))
+    personal_dir = user_workspace_dir("owner") / "agents/skills/demo"
     personal_dir.mkdir(parents=True)
     (skill_dir / "notes.txt").write_text("shared", encoding="utf-8")
     (personal_dir / "notes.txt").write_text("personal", encoding="utf-8")
+    projection = projection_service.sync_user_accessible_skills("owner", {"demo": skill_dir}) / "demo"
+    (skill_dir / "notes.txt").write_text("new source", encoding="utf-8")
     target = tmp_path / "download.txt"
     target.write_bytes(b"")
 
-    artifact_service._copy_skill_file_to_path(item, "notes.txt", str(target), 1024)
+    RuntimeFiles("owner").download_to_path("/home/user/skills/demo/notes.txt", str(target), 1024)
     assert target.read_text(encoding="utf-8") == "shared"
-    (skill_dir / "link.txt").symlink_to(personal_dir / "notes.txt")
+    (projection / "link.txt").symlink_to(personal_dir / "notes.txt")
     with pytest.raises(PermissionError):
-        artifact_service._copy_skill_file_to_path(item, "link.txt", str(target), 1024)
+        RuntimeFiles("owner").download_to_path("/home/user/skills/demo/link.txt", str(target), 1024)
     assert target.read_text(encoding="utf-8") == "shared"
 
 

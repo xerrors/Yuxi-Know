@@ -17,7 +17,7 @@ API 在 `/api/mcp` 提供只读知识库 MCP，与 HTTP API 共用进程和端�
 - `frontend`：Vue 3 / Vite 前端，挂载 `frontend/src` 并热更新。
 - `api`：FastAPI API 服务，挂载 `backend/yuxi` 和测试目录；API 与 worker 的源码修改通过显式重启生效。
 - `worker`：ARQ worker，执行已经派发的 AgentRun 与注册的 后台作业，并周期触发用户自建 Agent 定时任务；三者分别使用 PostgreSQL 中的运行租约、任务租约和调度锁闭合并发与恢复。
-- `schema-init`：Compose 中唯一初始化 Yuxi 数据库 Schema 的一次性进程，为全新部署直接建立 business 版本 4 与 knowledge 版本 1 基线、约束和 checkpoint 表；精确当前版本直接结束，其他版本或未版本化旧表明确拒绝，不执行历史升级或清库。API 与 worker 等待其成功后只校验 Schema 版本。
+- `schema-init`：Compose 中唯一修改 Yuxi 数据库 Schema 的一次性进程，只为确认空库建立 business 版本 4 与 knowledge 版本 1 基线；当前版本直接结束，其他版本或未版本化旧表明确拒绝。API 与 worker 等待其成功后只校验 Schema 版本。已存在数据库的版本调整在部署侧直接完成，不由应用代码提供历史迁移入口。
 - Cube Linux/KVM 执行节点：每个用户拥有一个持久普通账号 VM，Workspace 与授权 Skills 共享宿主文件。
 - `postgres`：业务数据、知识库元数据、持久 Input 队列、Turn/Run 与 LangGraph checkpoint。
 - `redis`：ARQ 投递、运行事件、取消信号以及跨进程配置和模型缓存。

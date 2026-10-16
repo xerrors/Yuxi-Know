@@ -8,7 +8,9 @@ import pytest
 import yuxi.modules.agents.services.artifacts as svc
 from yuxi.api.responses.files import render_file_result
 from yuxi.modules.extensions.skills import edit as skill_edit
+from yuxi.modules.extensions.skills.projection import get_user_skills_root_dir
 from yuxi.modules.workspace.errors import FileTransferLimitError
+from yuxi.modules.workspace import runtime_files
 from yuxi.modules.workspace.runtime_paths import workspace_scope_from_runtime_path
 from yuxi.modules.workspace.services.bindings import AuthorizedWorkdir
 from yuxi.modules.workspace.workdir import Workdir
@@ -71,6 +73,11 @@ def live_files(monkeypatch, tmp_path):
     (tmp_path / "shared").mkdir()
     backend = _Workspace(tmp_path / "shared/reporter")
     monkeypatch.setattr(skill_edit, "get_skill_data_dir", lambda: tmp_path)
+    monkeypatch.setenv("YUXI_SKILL_PROJECTION_DIR", str(tmp_path / "projections"))
+    backend.skill_root = get_user_skills_root_dir("user-1") / "reporter"
+    backend.skill_root.mkdir(parents=True)
+    (backend.skill_root / "SKILL.md").write_bytes(b"projected skill")
+    monkeypatch.setattr(runtime_files, "Workspace", lambda _uid: backend)
     binding = AuthorizedWorkdir(
         session_record_id=1,
         thread_id="thread-1",
@@ -111,7 +118,8 @@ async def _async_value(value):
 
 
 @pytest.mark.asyncio
-async def test_artifact_allows_project_user_data_and_authorized_skills(live_files):
+async def test_artifact_reads_workspace_and_authorized_skill_projection(live_files):
+    """Workspace 与 Skills 展示使用用户挂载中的真实字节。"""
     for path in (
         "/home/user/workspace/projects/11111111-1111-4111-8111-111111111111/report.md",
         "/home/user/workspace/notes.txt",
@@ -121,6 +129,49 @@ async def test_artifact_allows_project_user_data_and_authorized_skills(live_file
         assert Path(response.path).read_bytes() == live_files.expected_bytes(path)
         response = render_file_result(response)
         await response.background()
+
+
+@pytest.mark.asyncio
+async def test_artifact_missing_projection_never_reads_skill_source(live_files):
+    """源文件仍存在时，缺失用户投影也必须返回不存在。"""
+    (live_files.skill_root / "SKILL.md").unlink()
+    with pytest.raises(ResourceNotFoundError):
+        await svc.resolve_thread_artifact_view(
+            thread_id="thread-1", current_uid="user-1", db=object(), path="/home/user/skills/reporter/SKILL.md"
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", ["link.md", "linked/SKILL.md"])
+async def test_artifact_projection_rejects_symlinks(live_files, tmp_path, path):
+    """文件和父目录链接均不能绕过用户投影边界。"""
+    if path == "link.md":
+        (live_files.skill_root / path).symlink_to(tmp_path / "shared/reporter/SKILL.md")
+    else:
+        (live_files.skill_root / "linked").symlink_to(tmp_path / "shared/reporter", target_is_directory=True)
+    with pytest.raises(PermissionDeniedError):
+        await svc.resolve_thread_artifact_view(
+            thread_id="thread-1", current_uid="user-1", db=object(), path=f"/home/user/skills/reporter/{path}"
+        )
+
+
+@pytest.mark.asyncio
+async def test_artifact_projection_preview_enforces_byte_budget(live_files, monkeypatch):
+    """投影文件超限返回预览预算结果，不改报缺失。"""
+    monkeypatch.setattr(svc, "MAX_FILE_PREVIEW_BYTES", 1)
+    result = await svc.resolve_thread_artifact_view(
+        thread_id="thread-1", current_uid="user-1", db=object(), path="/home/user/skills/reporter/SKILL.md", preview=True
+    )
+    assert result == svc.preview_too_large().payload()
+
+
+@pytest.mark.asyncio
+async def test_save_artifact_copies_skill_projection_bytes(live_files):
+    """保存 Skills 文件时同样使用用户已挂载的字节。"""
+    await svc.save_thread_artifact_to_workspace_view(
+        thread_id="thread-1", current_uid="user-1", db=object(), path="/home/user/skills/reporter/SKILL.md"
+    )
+    assert live_files.files["/saved_artifacts/SKILL.md"] == b"projected skill"
 
 
 @pytest.mark.asyncio

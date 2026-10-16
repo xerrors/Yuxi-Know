@@ -4,9 +4,8 @@ import os
 
 import pytest
 
-from yuxi.infrastructure.filesystem import open_directory_fd
-from yuxi.modules.agents.services import artifacts
 from yuxi.modules.workspace import filesystem
+from yuxi.modules.workspace import runtime_files
 from yuxi.modules.workspace.errors import FileTransferLimitError
 
 
@@ -16,18 +15,25 @@ def copy_file(request, tmp_path, monkeypatch):
     root = tmp_path / "root"
     root.mkdir()
     monkeypatch.setattr(filesystem, "user_workspace_dir", lambda _uid: root)
+    monkeypatch.setattr(runtime_files, "get_user_skills_root_dir", lambda _uid: root)
 
     def copy(name, target, limit):
         """保持入口各自的 no-follow 路径边界。"""
         if request.param == "workspace":
             return filesystem.Workspace("user-1").download_authorized_file_to_path(f"/{name}", str(target), limit)
-        root_fd = open_directory_fd(root, ())
-        try:
-            return artifacts._copy_from_shared_skill_fd(root_fd, (name,), str(target), limit)
-        finally:
-            os.close(root_fd)
+        return runtime_files.RuntimeFiles("user-1").download_to_path(f"/home/user/skills/{name}", str(target), limit)
 
     return root, copy
+
+
+@pytest.mark.parametrize("path", ["/tmp/image.png", "/home/user/private.png", "/app/user-data/image.png"])
+def test_runtime_export_rejects_paths_outside_user_mounts(tmp_path, path):
+    """未知 runtime 路径不能导出，也不能截断已有目标。"""
+    target = tmp_path / "target"
+    target.write_bytes(b"original")
+    with pytest.raises(PermissionError, match="outside the user mounts"):
+        runtime_files.RuntimeFiles("user-1").download_to_path(path, str(target), 100)
+    assert target.read_bytes() == b"original"
 
 
 def test_copy_consumer_preserves_bytes_and_handles_short_writes(copy_file, tmp_path, monkeypatch):

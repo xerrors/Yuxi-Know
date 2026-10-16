@@ -10,6 +10,10 @@ Yuxi 固定使用 CubeSandbox v0.7.3 的用户 VM。服务继续使用 Compose�
 
 模板预装 `curl wget jq ripgrep file zip unzip`、Noto CJK 和 Poppler PDF 工具。默认 Python 提供固定版本的 Playwright、httpx、BeautifulSoup、Pillow、openpyxl、PyMySQL；uv 新建的独立虚拟环境仍按项目声明依赖。Playwright 配套的 Chromium 和系统库在模板构建时安装，浏览器缓存位于 `/home/user/.cache/ms-playwright`，普通账号可直接通过 `python -m playwright` 或 `playwright` 使用。默认执行无头浏览器，不启动桌面、VNC 或常驻浏览器服务；包和浏览器需配套升级，实际能力由普通用户的截图、下载及 PDF 产物回读验证。
 
+Skills 页的推荐区提供“浏览器与网页自动化”分组，可按需安装 Vercel [agent-browser](https://github.com/vercel-labs/agent-browser) 或 Microsoft [playwright-cli](https://github.com/microsoft/playwright-cli) 官方 Skill。Skill 提供操作指南，所需 CLI 和浏览器依赖按上游指南安装在用户 VM；预装的 Python Playwright 不提供这两个 CLI。
+
+浏览器 profile、session 与登录状态的复用由所选 CLI 的实际配置管理，系统提示词只负责选择浏览器 Skill。agent-browser 跨浏览器重启保存状态需要显式配置持久 profile 或状态恢复，详见[上游会话文档](https://agent-browser.dev/sessions)。不同用户有各自的 VM Home；显式重建既有 VM 前需按下文确认 Home 数据保留，因为重建可能清除浏览器配置。
+
 配置 Yuxi 的 `.env` / `.env.prod`：
 
 ```dotenv
@@ -18,12 +22,14 @@ CUBE_API_KEY=<control-api-key-if-configured>
 CUBE_PROXY_NODE_IP=<private-node-address>
 CUBE_PROXY_PORT_HTTP=80
 CUBE_TEMPLATE_ID=yuxi-user
-CUBE_NODE_USER_DATA_DIR=/absolute/yuxi/threads
-CUBE_NODE_SKILL_PROJECTION_DIR=/absolute/yuxi/skill-projections
+CUBE_NODE_USER_DATA_DIR=/data/shared/yuxi/threads
+CUBE_NODE_SKILL_PROJECTION_DIR=/data/shared/yuxi/skill-projections
 SANDBOX_IDLE_SECONDS=300
 ```
 
-`CUBE_NODE_USER_DATA_DIR` 对应 Compose API/worker 的 `/app/user-data`，投影目录对应 `/app/skill-projections`。CubeMaster 默认只接受 `/data/shared/` 下的挂载；其他路径须在 `extra_conf.allowed_host_mount_prefixes` 中逐个配置窄前缀。只挂载用户的 Workspace 子目录和该用户授权投影，投影只读。不挂载平台来源目录、数据库目录、`.env` 或 Docker socket。控制面及数据代理必须通过私网供 API/worker 访问；不作为公网产品接口开放。VM 默认禁止私网出口，外网包安装可用。
+两个 `CUBE_NODE_*` 值都是执行节点上的目录，分别与 API/worker 的 `/app/user-data`、`/app/skill-projections` 指向同一份底层文件；容器路径不能直接当成节点路径。示例要求管理员先将这两份存储共享或绑定到执行节点的 `/data/shared/yuxi` 下，符合 CubeMaster 默认的 `/data/shared/` 挂载白名单；设置环境变量不会创建共享挂载。使用其他节点目录时，管理员在 `extra_conf.allowed_host_mount_prefixes` 中显式配置所需窄前缀。
+
+每个用户 VM 只挂载其 Workspace 子目录和授权 Skills 投影，投影只读；平台来源目录、数据库目录、`.env` 和 Docker socket 均不挂载。控制面及数据代理通过私网供 API/worker 访问，不作为公网产品接口开放。VM 默认禁止私网出口，外网包安装可用。
 
 ```bash
 docker compose build api
@@ -72,5 +78,7 @@ fuzz 使用测试用户、固定 seed、1/2/4/8 并发、4 KiB 至 1 MiB 文件�
 ## 路径与部署边界
 
 VM 直接挂载 `/home/user/workspace` 和只读 `/home/user/skills`，模板在构建时创建这两个目录。API、worker、模板和测试使用同一组固定路径。宿主的 `/app/user-data` 与节点共享目录是存储位置，由 Workspace 管理，不能当成 VM 的路径传给模型。
+
+文件工具、HTTP 预览、下载和保存对同一持久路径读取同一用户挂载：Workspace 读取用户工作区，Skills 读取用户投影。HTTP 请求先校验当前 Thread、APP、用户和 Skill 授权；投影缺失返回不存在，不读取平台来源代替。持久文件预览不唤醒 VM；Home 或临时目录中的图片先保存到当前 Project 工作目录再展示。
 
 部署使用符合当前 Schema 基线的数据与新建用户环境。已有旧挂载 VM、旧附件引用和旧 checkpoint 不会被自动转换或重建；保留资料时先备份，由部署者离线处理路径和结构后核对文件字节及引用。应用不提供双路径读取或旧对象恢复。重建会清除 VM Home 中的软件和配置，保留 Workspace 和 Skills。

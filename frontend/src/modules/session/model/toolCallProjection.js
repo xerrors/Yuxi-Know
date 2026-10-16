@@ -41,6 +41,9 @@ export const TOOL_NAME_MAP = {
 // Keep intentionally hidden tool calls centralized so group summaries and renderers stay consistent.
 export const HIDDEN_TOOL_CALL_IDS = ['present_artifacts']
 
+const IMAGE_RESULT_TYPES = new Set(['image', 'image_url', 'input_image'])
+const TEXT_RESULT_TYPES = new Set(['text', 'input_text'])
+
 export const getToolCallId = (toolCall) => toolCall?.name || toolCall?.function?.name || ''
 
 export const getToolName = (toolId) => TOOL_NAME_MAP[toolId] || toolId
@@ -72,15 +75,35 @@ export const parseToolCallArgs = (toolCall) => {
   }
 }
 
+/** 统一读取实时 ToolMessage 与历史结果的正文。 */
+export const getToolCallResultContent = (toolCall) =>
+  toolCall?.tool_call_result?.content ?? toolCall?.result
+
 export const parseToolCallResult = (toolCall) => {
-  const content = toolCall?.tool_call_result?.content ?? toolCall?.result
+  const content = getToolCallResultContent(toolCall)
   if (content == null || content === '') return null
-  if (typeof content === 'object') return content
-  try {
-    return JSON.parse(content)
-  } catch {
-    return null
+  return parseResultValue(content, null)
+}
+
+/** 保留普通 JSON，按顺序投影文本与图片；裸 URL 仅由图片生成工具启用。 */
+export function getToolResultParts(content, { imageUrls = false } = {}) {
+  const value = parseResultValue(content, content)
+  if (
+    typeof value === 'string' &&
+    (value.startsWith('data:image/') || (imageUrls && /^(https?:\/\/|\/(?!\/))/i.test(value)))
+  ) {
+    return [{ image: true, src: getImageSource({ url: value }) }]
   }
+  if (
+    !Array.isArray(value) ||
+    !value.some((part) => IMAGE_RESULT_TYPES.has(part?.type) || TEXT_RESULT_TYPES.has(part?.type))
+  ) {
+    return [{ text: formatResultText(value) }]
+  }
+  return value.map((part) => {
+    if (IMAGE_RESULT_TYPES.has(part?.type)) return { image: true, src: getImageSource(part) }
+    return { text: TEXT_RESULT_TYPES.has(part?.type) ? part.text : formatResultText(part) }
+  })
 }
 
 /** 以调用、ToolMessage 和结果顶层的错误状态优先决定工具展示状态。 */
@@ -114,4 +137,31 @@ export const normalizeToolCalls = (toolCalls, { includeHidden = false, mapToolCa
       return includeHidden || !isHiddenToolCall(toolCall)
     })
     .map((toolCall) => (mapToolCall ? mapToolCall(toolCall) : toolCall))
+}
+
+/** 保持既有解析失败契约，展示调用方可显式保留原始文本。 */
+function parseResultValue(content, fallback) {
+  if (typeof content !== 'string') return content
+  try {
+    return JSON.parse(content)
+  } catch {
+    return fallback
+  }
+}
+
+/** 图片只接受 HTTP(S)、图片编码或同源根相对地址。 */
+function getImageSource(block) {
+  const base64 = block.base64 ?? block.data
+  const mime = block.mime_type ?? block.mimeType
+  let source = block.url ?? block.image_url?.url ?? block.image_url
+  if (typeof base64 === 'string' && /^image\/[\w.+-]+$/.test(mime || '')) {
+    source = `data:${mime};base64,${base64}`
+  }
+  if (typeof source !== 'string') return ''
+  return /^(https?:\/\/|data:image\/[\w.+-]+;base64,|\/(?!\/))/i.test(source) ? source : ''
+}
+
+/** 普通对象保留完整 JSON，图片编码不进入文本分支。 */
+function formatResultText(value) {
+  return typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)
 }

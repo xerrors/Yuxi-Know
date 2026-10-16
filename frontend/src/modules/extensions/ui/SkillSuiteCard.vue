@@ -9,7 +9,7 @@
         }"
         :style="iconColor ? { '--suite-icon-color': iconColor } : undefined"
       >
-        <Boxes :size="18" />
+        <component :is="getSkillIcon(suite.id, Boxes)" :size="18" />
       </div>
       <div class="suite-card-title-group">
         <div class="suite-card-title">{{ suite.name }}</div>
@@ -32,6 +32,7 @@
 <script setup>
 import { computed } from 'vue'
 import { Boxes, ChevronRight } from '@lucide/vue'
+import { getSkillIcon } from '@/shared/lib/skill_icon_utils'
 
 const props = defineProps({
   suite: { type: Object, required: true },

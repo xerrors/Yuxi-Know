@@ -34,7 +34,9 @@ from test.integration.support.postgres_schema import (
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
 
-@pytest.mark.parametrize("domain, version", [("business", 1), ("business", 2), ("business", 3), ("business", 12), ("business", 13), ("knowledge", 3)])
+@pytest.mark.parametrize(
+    "domain, version", [("business", 1), ("business", 2), ("business", 3), ("business", 12), ("business", 13), ("knowledge", 3)]
+)
 async def test_incompatible_schema_is_rejected_without_modifying_data(monkeypatch, domain, version):
     """不兼容版本在 DDL 前失败，曾支持的升级入口也不得修改数据。"""
     schema, admin, engine, manager = await _create_isolated_manager("pytest_old_business")

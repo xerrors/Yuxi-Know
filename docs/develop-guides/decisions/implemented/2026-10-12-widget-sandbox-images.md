@@ -38,7 +38,7 @@ present_artifacts 恢复路径列表登记，删除 type 参数、图片分组�
 
 ## 后果
 
-沙盒临时根目录不属于持久 UserWorkspace，不能展示；Skill 与示例明确使用 user-data 或已授权 Skills 的真实文件。历史 tool 调用中的 type 被忽略，历史图片按文件卡片读取。真实模型选用组件受 Skill discovery 影响，确定性验证只证明渲染链路。
+VM Home 或临时目录中的图片先保存到当前 Project 工作目录再展示；模型使用工具返回的真实沙盒路径。持久文件读取与部署约定由[用户投影一致性决定](./2026-10-16-runtime-file-projection-consistency.md)维护。历史 tool 调用中的 type 被忽略，历史图片按文件卡片读取。真实模型选用组件受 Skill discovery 影响，确定性验证只证明渲染链路。
 
 执行验证：
 

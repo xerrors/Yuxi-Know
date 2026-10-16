@@ -14,6 +14,8 @@ let ToolCallRenderer
 let ReasoningBlock
 let ToolCallsGroup
 let parseToolCallResult
+let ReadFileTool
+let ImageTool
 
 before(async () => {
   globalThis.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} }
@@ -28,6 +30,12 @@ before(async () => {
   })
   ;({ default: BaseToolCall } = await server.ssrLoadModule(
     '/src/modules/session/ui/tools/BaseToolCall.vue'
+  ))
+  ;({ default: ReadFileTool } = await server.ssrLoadModule(
+    '/src/modules/session/ui/tools/renderers/ReadFileTool.vue'
+  ))
+  ;({ default: ImageTool } = await server.ssrLoadModule(
+    '/src/modules/session/ui/tools/renderers/ImageTool.vue'
   ))
   ;({ default: ToolCallRenderer } = await server.ssrLoadModule(
     '/src/modules/session/ui/tools/ToolCallRenderer.vue'
@@ -116,6 +124,97 @@ test('有效的 0 和 false 结果可见，普通结果文本中的 error 不冒
     assert.match(html, /tool-result-renderer/)
     assert.doesNotMatch(html, /tool-error/)
   }
+})
+
+test('工具结果中的图片块按顺序渲染，编码不会作为文本显示', async () => {
+  const image = { type: 'image', base64: 'cGljdHVyZQ==', mime_type: 'image/png' }
+  for (const content of [
+    [image],
+    'data:image/png;base64,cGljdHVyZQ==',
+    JSON.stringify([{ type: 'text', text: '读取完成' }, image, { type: 'text', text: '后续说明' }]),
+    [{ type: 'input_image', image_url: 'data:image/png;base64,cGljdHVyZQ==' }],
+    [{ type: 'image', data: 'cGljdHVyZQ==', mimeType: 'image/png' }]
+  ]) {
+    const html = await render(BaseToolCall, {
+      toolCall: { name: 'read_file', tool_call_result: { content } },
+      defaultExpanded: true
+    })
+    assert.match(html, /<img[^>]+src="data:image\/png;base64,cGljdHVyZQ=="/)
+    assert.match(html, /aria-label="放大查看工具结果图片/)
+    assert.doesNotMatch(html, /<pre[^>]*>[^<]*cGljdHVyZQ==/)
+    if (typeof content === 'string' && content.startsWith('[')) {
+      assert.ok(html.indexOf('读取完成') < html.indexOf('<img'))
+      assert.ok(html.indexOf('后续说明') > html.indexOf('<img'))
+    }
+  }
+})
+
+test('图片来源不可用时给出提示，普通对象仍显示 JSON', async () => {
+  for (const image of [
+    { type: 'image', base64: 'private-image-payload' },
+    { type: 'image_url', image_url: { url: 'javascript:alert(1)' } }
+  ]) {
+    const html = await render(BaseToolCall, {
+      toolCall: { name: 'read_file', result: [image] },
+      defaultExpanded: true
+    })
+    assert.match(html, /图片无法加载/)
+    assert.doesNotMatch(html, /private-image-payload|javascript:|<img/)
+  }
+  const html = await render(BaseToolCall, {
+    toolCall: { name: 'read_file', result: { rows: [1, 2] } },
+    defaultExpanded: true
+  })
+  assert.match(html, /rows/)
+  assert.doesNotMatch(html, /<img/)
+})
+
+test('实际图片结果显示查看图片和图片图标，隐藏文件名与路径参数', async () => {
+  const args = { file_path: '/workspace/private/screenshot.png' }
+  const html = await render(ReadFileTool, {
+    toolCall: {
+      name: 'read_file',
+      args,
+      result: JSON.stringify([{ type: 'image', base64: 'cGljdHVyZQ==', mime_type: 'image/png' }])
+    },
+    defaultExpanded: true
+  })
+  assert.match(html, /查看图片/)
+  assert.match(html, /lucide-image/)
+  assert.doesNotMatch(html, /读取文件|screenshot\.png|file_path|参数:/)
+
+  for (const result of ['普通文件内容', '图片读取失败']) {
+    const html = await render(ReadFileTool, {
+      toolCall: {
+        name: 'read_file',
+        args,
+        result,
+        status: result === '图片读取失败' ? 'error' : 'completed'
+      },
+      defaultExpanded: true
+    })
+    assert.match(html, /读取文件/)
+    assert.match(html, /screenshot\.png/)
+    assert.match(html, /file_path/)
+    assert.doesNotMatch(html, /查看图片/)
+  }
+})
+
+test('生成图片工具的普通 URL 和内联图片共用图片结果，普通文本不会丢失', async () => {
+  for (const content of ['https://example.com/image.png', 'data:image/png;base64,cGljdHVyZQ==']) {
+    const html = await render(ImageTool, {
+      toolCall: { name: 'image_gen', tool_call_result: { content } },
+      defaultExpanded: true
+    })
+    assert.match(html, /<img/)
+    assert.match(html, /放大查看工具结果图片/)
+  }
+  const html = await render(ImageTool, {
+    toolCall: { name: 'image_gen', result: '未生成图片' },
+    defaultExpanded: true
+  })
+  assert.match(html, /未生成图片/)
+  assert.doesNotMatch(html, /<img/)
 })
 
 test('协作工具保留 0 和 false 结果', async () => {
