@@ -53,4 +53,6 @@ Web 生产依赖仍有 [markdown-it 中等级性能告警](https://github.com/ad
 
 独立 Reviewer 不继承开发上下文，复读完整 diff、需求、源码及证据，指出的首页 Cube 前置和已取代 MCP 创建表述已修正；测试隔离与依赖修复增量复核通过。
 
-远端 CI 的最终结果由 fork Actions 对应 SHA 的检查拥有，本记录只保存本地验收，不能证明远端通过。Not run：自托管 runner 上的系统检查、真实供应商/语料质量、生产成套备份恢复、节点重启恢复及完整产品浏览器验收。fork 的 runner/Actions 策略查询返回 403，不能推断其配置状态；主仓库 runner 查询为空也不作为 fork 结论。候选暂不创建发布 tag、Release 或上传 npm，等待这些发布条件收敛。
+远端 CI 的最终结果由 fork Actions 对应 SHA 的检查拥有，本记录只保存本地验收，不能证明远端通过。推送 fork 分支后没有产生检查；手动触发同一提交的 `trust.yml` 返回 `422: Actions has been disabled for this repository`，确认当前 fork 禁用 Actions。读取 runner/Actions 策略返回 403，runner 配置状态仍不可判定。需要 fork 管理者启用 Actions 并确认 Cube runner 后运行对应提交的完整检查；主仓库 runner 状态不作为 fork 结论。
+
+Not run：远端 CI、自托管 runner 上的系统检查、真实供应商/语料质量、生产成套备份恢复、节点重启恢复及完整产品浏览器验收。候选暂不创建发布 tag、Release 或上传 npm，等待这些发布条件收敛。
