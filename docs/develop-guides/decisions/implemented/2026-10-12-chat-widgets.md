@@ -14,6 +14,8 @@ Owner：frontend/src/shared/lib/chatWidgets.js
 
 图文组合与 Form/Button 的当前协议、发送语义和验证由[图文组合与表单决定](./2026-10-17-widget-forms-and-composition.md)拥有；本文继续拥有按需发现、最终消息归属、图表与图片资源边界。
 
+内置智能助手的预加载选择由[智能助手预加载决定](./2026-10-17-default-chatbot-preloaded-skills.md)取代；通用 Chatbot 的空预加载默认值与按需激活机制继续保留。
+
 内置 `chat-widgets` 的描述覆盖分类比较、时间趋势、图片、图文组合和表单填写。正文维护有限协议、完整跨行示例和最终回复约束，模型通过既有 Skill discovery/read_file 按需读取。ChatBotContext 继承 BaseContext 的空预加载默认值，不增加组件特例、关键词路由或模型输出改写。显式 Skills 允许列表需要包含该 Skill；默认全部选择沿既有授权归一化发现能力。
 
 `chatWidgets.js` 在模型 JSON 边界校验有限节点、受限呈现属性和 compose 动作，展示根为 Card、ListView、Image 或 ImageGroup；Form 扩展由上述表单决定维护。`WidgetRenderer.vue`、`WidgetNode.vue` 使用 Vue 文本插值和固定样式映射；非法 JSON、未知属性和服务端动作显示诊断及原始内容，未闭合围栏显示生成状态。限制为24000字符、100节点、8层，整行列表禁止嵌套交互控件；不接收任意 HTML、CSS、脚本或图表配置。

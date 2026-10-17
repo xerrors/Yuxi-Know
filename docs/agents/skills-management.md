@@ -24,7 +24,7 @@ Skill 是一个可复用的能力包，通常包含一个 `SKILL.md`、提示词
 
 ## 对话组件 Skill
 
-内置 `chat-widgets` 用于图片、图文卡片、柱状图、折线图和简短表单。普通 Chatbot 通过 Skill 描述发现用途，并按需读取完整组件说明；用户无需指定 Skill 或编写 JSON。组件 Skill 遵循已选且可访问的资源范围，默认不预加载。Skill 的组件字段和完整 JSON 示例由 [SKILL.md](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/skills/builtin/chat-widgets/SKILL.md) 维护。
+内置 `chat-widgets` 用于图片、图文卡片、柱状图、折线图和简短表单。内置“智能助手”预设预加载 `chat-widgets` 和 `knowledge-base`，从首轮获得完整说明；用户无需指定 Skill 或编写 JSON。其他未配置预加载的 Chatbot 通过 Skill 描述发现用途并按需读取正文。组件 Skill 遵循已选且可访问的资源范围。Skill 的组件字段和完整 JSON 示例由 [SKILL.md](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/skills/builtin/chat-widgets/SKILL.md) 维护。
 
 普通会话可以直接说“帮我直观比较这几类阅读时间”“展示这几张图片”“把这张图与说明并排展示”或“让我填写出行日期和偏好，提交后再安排行程”。纯图片展示优先使用单图或横向图片组；需要配合说明、参数或比较时，图片可以与 Card、Row、Col 组合。图文卡片使用已提供或已查询的真实图片地址，尚未读取画面时沿用用户描述。
 
@@ -159,7 +159,7 @@ Agent 的 `skills` 配置语义（`"all"`、固定数组与默认值）由[资�
 
 Agent 配置可以用 `preload_skills` 指定少量需要从首轮就可用的 Skill。预加载选择器只列 `skills` 中当前用户可访问的共享和内置 Skill；系统会展开其依赖闭包，读取根级 `SKILL.md`，并从首轮模型请求开放本地工具和已启用的 MCP 依赖。
 
-预加载的根文件缺失或不可读时，Graph 创建会明确失败，不会静默退回渐进加载。默认预加载为空列表，正文按需读取；选择“选择全部”时，每次运行预加载当前 Agent 已选且可访问的共享 Skill 及其授权依赖。同名个人版本覆盖共享版本时读取个人内容；其他个人 Skill 始终可发现，正文按需读取。固定列表和全部模式均遵循[资源选择契约](./agents-config.md)。
+预加载的根文件缺失或不可读时，Graph 创建会明确失败，不会静默退回渐进加载。通用配置的预加载默认为空列表，内置角色可在预设中指定预加载项。预设默认值仅在角色首次初始化时写入，已有角色通过配置页修改；详见[智能助手预加载决定](../develop-guides/decisions/implemented/2026-10-17-default-chatbot-preloaded-skills.md)。选择“选择全部”时，每次运行预加载当前 Agent 已选且可访问的共享 Skill 及其授权依赖。同名个人版本覆盖共享版本时读取个人内容；其他个人 Skill 始终可发现，正文按需读取。固定列表和全部模式均遵循[资源选择契约](./agents-config.md)。
 
 ## 权限和选择
 
