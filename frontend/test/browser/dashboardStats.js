@@ -30,12 +30,7 @@ async (page) => {
     check(bounds.legendTop >= bounds.chartBottom, `图例与圆环重叠 ${width}`)
     check(!bounds.overflow, `文件类型溢出 ${width}`)
     check(await page.locator('.file-type-legend li').count() === 8, '文件明细缺失')
-    const row = page.locator('.error-analysis tbody tr').filter({hasText:'ask_user_question'})
-    check(await row.count() === 1, '长工具名缺失')
-    check(await row.evaluate((el) => {
-      const [name, count] = el.querySelectorAll('td')
-      return name.scrollWidth <= name.clientWidth && name.getBoundingClientRect().right <= count.getBoundingClientRect().left + 1
-    }), `工具名称覆盖次数 ${width}`)
+    check(await page.locator('.error-analysis').count() === 0, '工具错误分析仍存在')
   }
   await page.setViewportSize({width:1440,height:1000})
   await page.locator('.tool-stats').screenshot({path:'/tmp/dashboard-tools-final.png'})
@@ -50,8 +45,8 @@ async (page) => {
   check(await page.locator('.error-analysis').count() === 0, '空状态保留旧错误数据')
   await page.unrouteAll({behavior:'wait'})
   await page.goto('http://localhost:5173/dashboard?tab=threads')
-  await page.locator('.token-num').first().waitFor()
-  check(await page.locator('.explorer-card').getByText('进行中', {exact:true}).count() === 0, 'active 被误译成进行中')
-  check(await page.locator('.explorer-card').getByText('未归档', {exact:true}).count() > 0, '未显示真实会话状态')
-  return { widths: [1440,1024,768,375], fileTypes: 8, emptyState: true, sessionStatus: '未归档' }
+  await page.getByRole('button', {name:'会话',exact:true}).waitFor()
+  check(await page.locator('.explorer-card').count() === 0, '已删除的会话明细表格仍存在')
+  check(await page.getByRole('button', {name:'会话分析',exact:true}).count() === 0, '旧 Tab 仍存在')
+  return { widths: [1440,1024,768,375], fileTypes: 8, emptyState: true, sessionStatsInOverview: true }
 }

@@ -273,6 +273,7 @@ async def test_thread_message_audits_return_persisted_facts_without_leaking_into
     assert timeline_payload["runs"] == [
         {
             "run_id": run_id,
+            "turn_id": turn_id,
             "status": "completed",
             "timing": {
                 "created_at": "2026-08-30T01:00:00Z",
@@ -291,6 +292,7 @@ async def test_thread_message_audits_return_persisted_facts_without_leaking_into
         },
         {
             "run_id": failed_run_id,
+            "turn_id": failed_turn_id,
             "status": "failed",
             "timing": {
                 "created_at": "2026-08-30T01:00:04Z",
@@ -640,9 +642,7 @@ async def test_thread_list_exposes_work_status_and_unread(test_client, admin_hea
 
 
 @pytest.mark.parametrize("owner_is_requester", [True, False], ids=["owner", "other-user"])
-async def test_mark_thread_viewed_checks_ownership_and_returns_work_status(
-    test_client, standard_user, admin_headers, owner_is_requester
-):
+async def test_mark_thread_viewed_checks_ownership_and_returns_work_status(test_client, standard_user, admin_headers, owner_is_requester):
     owner_headers = admin_headers if owner_is_requester else standard_user["headers"]
     thread_id = await _create_thread_for_user(test_client, owner_headers)
     response = await test_client.post(f"/api/v1/agents/sessions/{thread_id}/viewed", headers=admin_headers)

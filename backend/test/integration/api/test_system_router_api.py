@@ -106,7 +106,9 @@ async def test_info_endpoint_is_public(test_client):
     assert response.status_code == 200
     payload = response.json()
     assert payload["success"] is True
-    assert "data" in payload
+    assert set(payload["data"]) == {"branding", "footer"}
+    assert set(payload["data"]["branding"]) == {"name", "logo", "title", "login_bg"}
+    assert all(isinstance(value, str) for value in payload["data"]["branding"].values())
 
 
 async def test_config_get_requires_login_and_update_requires_admin(test_client, standard_user):

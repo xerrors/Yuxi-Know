@@ -73,5 +73,11 @@ async def test_brand_info_uses_packaged_template_outside_project_directory(monke
 
     config = await system_router.load_info_config()
 
-    assert config["branding"]["name"] == "Yuxi"
+    assert set(config) == {"branding", "footer"}
+    assert config["branding"] == {
+        "name": "语析",
+        "logo": "/favicon.svg",
+        "title": "让知识，成为行动。",
+        "login_bg": "/login-bg.jpg",
+    }
     assert config["footer"]["copyright"].endswith("v0.7.3")

@@ -9,11 +9,6 @@
       aria-label="数据总览视图切换"
       @change="handleTabChange"
     >
-      <template #info>
-        <span class="header-context">
-          {{ headerContext }}
-        </span>
-      </template>
       <template #actions>
         <div class="dashboard-header-actions">
           <a-tooltip title="系统设置">
@@ -47,7 +42,6 @@
               @click="openJobCenter"
             >
               <ClipboardList class="header-action-icon" />
-              <span class="job-center-label">后台作业</span>
               <a-badge :count="activeJobCount" :overflow-count="99" size="small" />
             </button>
           </a-tooltip>
@@ -59,18 +53,14 @@
       v-if="overviewActivated"
       v-show="activeTab === 'overview'"
       :basic-stats="basicStats"
+      :vm-stats="vmStats"
+      :vm-stats-loading="vmStatsLoading"
+      :vm-stats-error="vmStatsError"
+      @refresh-vms="loadVmStats"
     />
 
-    <!-- Tab 1: 系统概览主要内容区域 -->
-    <div
-      v-if="overviewActivated"
-      v-show="activeTab === 'overview'"
-      class="dashboard-grid"
-    >
-      <!-- 调用统计模块 - 占据2x1网格 -->
-      <CallStatsComponent :loading="loading" ref="callStatsRef" />
-
-      <!-- 用户活跃度分析 - 占据1x1网格 -->
+    <div v-if="overviewActivated" v-show="activeTab === 'overview'" class="dashboard-grid">
+      <CallStatsComponent ref="callStatsRef" />
       <div class="grid-item user-stats">
         <UserStatsComponent
           :user-stats="allStatsData?.users"
@@ -78,17 +68,7 @@
           ref="userStatsRef"
         />
       </div>
-
-      <!-- AI智能体分析 - 占据1x1网格 -->
-      <div class="grid-item agent-stats">
-        <AgentStatsComponent
-          :agent-stats="allStatsData?.agents"
-          :loading="loading"
-          ref="agentStatsRef"
-        />
-      </div>
-
-      <!-- 工具调用监控 - 占据1x1网格 -->
+      <ConversationDistributionCard />
       <div class="grid-item tool-stats">
         <ToolStatsComponent
           :tool-stats="allStatsData?.tools"
@@ -96,8 +76,6 @@
           ref="toolStatsRef"
         />
       </div>
-
-      <!-- 知识库使用情况 - 占据1x1网格 -->
       <div class="grid-item knowledge-stats">
         <KnowledgeStatsComponent
           :knowledge-stats="allStatsData?.knowledge"
@@ -106,13 +84,7 @@
         />
       </div>
     </div>
-
-    <!-- Tab 2: 会话（Thread）多维分析试点 -->
-    <div v-if="threadActivated" v-show="activeTab === 'threads'" class="thread-tab-container">
-      <ThreadStatsComponent ref="threadStatsRef" />
-    </div>
     <AgentFeedbackList v-if="activeTab === 'feedback' && userStore.isSuperAdmin" />
-
   </div>
 </template>
 
@@ -132,10 +104,9 @@ import PageHeader from '@/shared/ui/PageHeader.vue'
 import UserStatsComponent from '@/modules/dashboard/ui/UserStatsComponent.vue'
 import ToolStatsComponent from '@/modules/dashboard/ui/ToolStatsComponent.vue'
 import KnowledgeStatsComponent from '@/modules/dashboard/ui/KnowledgeStatsComponent.vue'
-import AgentStatsComponent from '@/modules/dashboard/ui/AgentStatsComponent.vue'
 import CallStatsComponent from '@/modules/dashboard/ui/CallStatsComponent.vue'
 import StatsOverviewComponent from '@/modules/dashboard/ui/StatsOverviewComponent.vue'
-import ThreadStatsComponent from '@/modules/dashboard/ui/ThreadStatsComponent.vue'
+import ConversationDistributionCard from '@/modules/dashboard/ui/ConversationDistributionCard.vue'
 import AgentFeedbackList from '@/modules/dashboard/ui/AgentFeedbackList.vue'
 
 const route = useRoute()
@@ -143,18 +114,11 @@ const router = useRouter()
 const userStore = useUserStore()
 const dashboardTabs = computed(() => [
   { key: 'overview', label: '系统概览' },
-  { key: 'threads', label: '会话分析' },
   ...(userStore.isSuperAdmin ? [{ key: 'feedback', label: '智能体反馈' }] : [])
 ])
-const normalizeTab = (tab) => (tab === 'threads' || (tab === 'feedback' && userStore.isSuperAdmin) ? tab : 'overview')
+const normalizeTab = (tab) => (tab === 'feedback' && userStore.isSuperAdmin ? tab : 'overview')
 const activeTab = ref(normalizeTab(route.query.tab))
-const headerContext = computed(() => {
-  if (activeTab.value === 'overview') return '系统运行与资源使用'
-  if (activeTab.value === 'feedback') return '用户评价与智能体改进线索'
-  return '会话趋势与历史审计'
-})
 const overviewActivated = ref(activeTab.value === 'overview')
-const threadActivated = ref(activeTab.value === 'threads')
 
 // 组件引用
 const jobsStore = useBackgroundJobsStore()
@@ -165,11 +129,13 @@ const activeJobCount = computed(() => activeCount.value || 0)
 
 // 统计数据
 const basicStats = ref({})
+const vmStats = ref(null)
+const vmStatsLoading = ref(false)
+const vmStatsError = ref(false)
 const allStatsData = ref({
   users: null,
   tools: null,
-  knowledge: null,
-  agents: null
+  knowledge: null
 })
 
 const loading = ref(false)
@@ -180,8 +146,21 @@ const callStatsRef = ref(null)
 const userStatsRef = ref(null)
 const toolStatsRef = ref(null)
 const knowledgeStatsRef = ref(null)
-const agentStatsRef = ref(null)
-const threadStatsRef = ref(null)
+
+/** 独立读取执行节点计数，控制面不可用时保留其他统计。 */
+const loadVmStats = async () => {
+  if (vmStatsLoading.value) return
+  vmStatsLoading.value = true
+  vmStatsError.value = false
+  try {
+    vmStats.value = await dashboardApi.getVmStats()
+  } catch {
+    vmStats.value = null
+    vmStatsError.value = true
+  } finally {
+    vmStatsLoading.value = false
+  }
+}
 
 // 加载概览统计数据
 const loadAllStats = async () => {
@@ -194,8 +173,7 @@ const loadAllStats = async () => {
     allStatsData.value = {
       users: response.users,
       tools: response.tools,
-      knowledge: response.knowledge,
-      agents: response.agents
+      knowledge: response.knowledge
     }
     overviewLoaded.value = true
   } catch (error) {
@@ -216,38 +194,38 @@ const loadAllStats = async () => {
 
 // 切换 Tab 处理
 const handleTabChange = async ({ key }) => {
-  if (key === 'feedback') return
-  if (key === 'overview') {
-    overviewActivated.value = true
-    await loadAllStats()
-    await nextTick()
-    if (userStatsRef.value?.updateCharts) userStatsRef.value.updateCharts()
-    if (toolStatsRef.value?.updateCharts) toolStatsRef.value.updateCharts()
-    if (knowledgeStatsRef.value?.updateCharts) knowledgeStatsRef.value.updateCharts()
-    if (agentStatsRef.value?.updateCharts) agentStatsRef.value.updateCharts()
-    return
-  }
-
-  threadActivated.value = true
+  if (key !== 'overview') return
+  overviewActivated.value = true
+  loadVmStats()
+  await loadAllStats()
   await nextTick()
-  threadStatsRef.value?.resizeCharts?.()
+  callStatsRef.value?.resizeCharts()
+  if (userStatsRef.value?.updateCharts) userStatsRef.value.updateCharts()
+  if (toolStatsRef.value?.updateCharts) toolStatsRef.value.updateCharts()
+  if (knowledgeStatsRef.value?.updateCharts) knowledgeStatsRef.value.updateCharts()
 }
 
-watch(activeTab, (tab) => {
-  const normalizedTab = normalizeTab(tab)
-  if (normalizedTab === 'overview') overviewActivated.value = true
-  if (normalizedTab === 'threads') threadActivated.value = true
-  const query = { ...route.query }
-  if (normalizedTab === 'overview') delete query.tab
-  else query.tab = normalizedTab
-  if (route.query.tab !== query.tab) router.replace({ query })
-})
+watch(
+  activeTab,
+  (tab) => {
+    const normalizedTab = normalizeTab(tab)
+    if (normalizedTab === 'overview') overviewActivated.value = true
+    const query = { ...route.query }
+    if (normalizedTab === 'overview') delete query.tab
+    else query.tab = normalizedTab
+    if (route.query.tab !== query.tab) router.replace({ query })
+  },
+  { immediate: true }
+)
 
 watch(
   () => route.query.tab,
   (tab) => {
     const normalizedTab = normalizeTab(tab)
-    if (activeTab.value !== normalizedTab) activeTab.value = normalizedTab
+    if (activeTab.value !== normalizedTab) {
+      activeTab.value = normalizedTab
+      handleTabChange({ key: normalizedTab })
+    }
   }
 )
 
@@ -268,13 +246,11 @@ const cleanupCharts = () => {
   if (userStatsRef.value?.cleanup) userStatsRef.value.cleanup()
   if (toolStatsRef.value?.cleanup) toolStatsRef.value.cleanup()
   if (knowledgeStatsRef.value?.cleanup) knowledgeStatsRef.value.cleanup()
-  if (agentStatsRef.value?.cleanup) agentStatsRef.value.cleanup()
   if (callStatsRef.value?.cleanup) callStatsRef.value.cleanup()
-  if (threadStatsRef.value?.cleanup) threadStatsRef.value.cleanup()
 }
 
 onMounted(async () => {
-  if (overviewActivated.value) await loadAllStats()
+  if (overviewActivated.value) await Promise.all([loadAllStats(), loadVmStats()])
 })
 
 onUnmounted(() => {
@@ -287,12 +263,6 @@ onUnmounted(() => {
   background-color: var(--gray-25);
   min-height: calc(100vh - 64px);
   overflow-x: hidden;
-}
-
-.header-context {
-  color: var(--gray-500);
-  font-size: 12px;
-  white-space: nowrap;
 }
 
 .dashboard-header-actions {
@@ -338,134 +308,61 @@ onUnmounted(() => {
   padding-right: 10px;
 }
 
-.job-center-label {
-  line-height: 1;
-}
-
-.thread-tab-container {
-  width: 100%;
-}
-
-// Dashboard 特有的网格布局
 .dashboard-grid {
   display: grid;
-  padding: var(--page-padding);
-  grid-template-columns: 1fr 1fr 1fr;
-  grid-template-rows: auto auto;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 16px;
-  margin-bottom: 24px;
-  min-height: 600px;
-
-  .grid-item {
-    border-radius: 8px;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    min-height: 300px;
-    background-color: transparent;
-    border: none;
-    transition: all 0.2s ease;
-
-    &.call-stats {
-      grid-column: 1 / 3;
-      grid-row: 1 / 2;
-      min-height: 400px;
-    }
-
-    &.user-stats {
-      grid-column: 3 / 4;
-      grid-row: 1 / 2;
-      min-height: 400px;
-    }
-
-    &.agent-stats {
-      grid-column: 1 / 2;
-      grid-row: 2 / 3;
-      min-height: 350px;
-    }
-
-    &.tool-stats {
-      grid-column: 2 / 3;
-      grid-row: 2 / 3;
-      min-height: 350px;
-    }
-
-    &.knowledge-stats {
-      grid-column: 3 / 4;
-      grid-row: 2 / 3;
-      min-height: 350px;
-    }
-  }
+  padding: var(--page-padding);
+  align-items: stretch;
 }
-
-// 响应式设计
+.dashboard-grid > * {
+  min-width: 0;
+  grid-column: span 4;
+}
+.dashboard-grid > .call-stats {
+  grid-column: span 8;
+}
+.grid-item {
+  min-width: 0;
+}
+.dashboard-grid :deep(.ant-card-head-title) {
+  font-size: 15px !important;
+}
+.dashboard-grid :deep(.ant-card-head) {
+  min-height: 52px !important;
+  padding-inline: 18px !important;
+}
+.dashboard-grid :deep(.ant-card-body) {
+  padding: 0 18px 18px !important;
+}
+.dashboard-grid :deep(.dashboard-card-metric-grid) {
+  gap: 8px;
+}
+.dashboard-grid :deep(.dashboard-card-metric-grid .dashboard-metric-icon) {
+  display: none;
+}
+.dashboard-grid :deep(.dashboard-card-metric-grid .dashboard-metric-label) {
+  font-size: 11px;
+}
+.dashboard-grid :deep(.dashboard-card-metric-grid .dashboard-metric-value) {
+  font-size: 22px;
+}
 @media (max-width: 1200px) {
   .dashboard-grid {
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: auto auto auto;
-    gap: 16px;
-
-    .grid-item {
-      &.call-stats {
-        grid-column: 1 / 3;
-        grid-row: 1 / 2;
-        min-height: 350px;
-      }
-
-      &.user-stats {
-        grid-column: 1 / 2;
-        grid-row: 2 / 3;
-        min-height: 300px;
-      }
-
-      &.agent-stats {
-        grid-column: 2 / 3;
-        grid-row: 2 / 3;
-        min-height: 300px;
-      }
-
-      &.tool-stats {
-        grid-column: 1 / 2;
-        grid-row: 3 / 4;
-        min-height: 300px;
-      }
-
-      &.knowledge-stats {
-        grid-column: 2 / 3;
-        grid-row: 3 / 4;
-        min-height: 300px;
-      }
-    }
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dashboard-grid > *,
+  .dashboard-grid > .call-stats {
+    grid-column: span 1;
   }
 }
-
 @media (max-width: 900px) {
-  .header-context,
-  .job-center-label {
-    display: none;
-  }
-
   .job-center-button {
     padding-right: 8px;
   }
-}
-
-@media (max-width: 768px) {
   .dashboard-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 12px;
-
-    .grid-item {
-      &.call-stats,
-      &.agent-stats,
-      &.user-stats,
-      &.tool-stats,
-      &.knowledge-stats {
-        grid-column: 1 / 2;
-        grid-row: auto;
-        min-height: 300px;
-      }
-    }
   }
 }
 </style>

@@ -33,6 +33,15 @@ class AgentTurnRepository:
         """按 ID 读取 Turn。"""
         return await self.db.get(AgentTurn, turn_id)
 
+    async def get_trace_id(self, turn_id: str) -> str | None:
+        """读取本轮执行段已固化的 Trace，不借用其他轮次。"""
+        return await self.db.scalar(
+            select(AgentRun.langfuse_trace_id)
+            .where(AgentRun.turn_id == turn_id, AgentRun.langfuse_trace_id.is_not(None))
+            .order_by(AgentRun.created_at, AgentRun.id)
+            .limit(1)
+        )
+
     async def list_current_views(self, *, thread_ids: list[str], uid: str, app_id: str | None) -> dict:
         """批量读取最新 Turn、当前 Run 与队列数量，供完整资源投影。"""
         latest = (

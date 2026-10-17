@@ -1,10 +1,3 @@
-/** 区分完整用量、已记录的部分用量和缺失记录。 */
-export function formatTokenUsage(record) {
-  if (record.total_tokens == null) return '未记录'
-  const value = record.total_tokens.toLocaleString()
-  return record.token_usage_complete === false ? `≥ ${value}` : value
-}
-
 /** 格式化 Dashboard 指标数字。 */
 export const formatNumber = (value) => Number(value || 0).toLocaleString()
 

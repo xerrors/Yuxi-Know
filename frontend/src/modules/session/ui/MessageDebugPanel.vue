@@ -201,7 +201,7 @@
           <span>记录</span>
           <span
             class="column-time"
-            title="统一按上海时区显示。Run 行显示发送时间（缺失时取 Run 创建时间）；消息和工具行依次取结束、开始、记录时间。"
+            title="统一按上海时区显示。Turn 行显示轮次创建时间；消息和工具行依次取结束、开始、记录时间。"
           >
             时间（上海）
           </span>
@@ -221,17 +221,17 @@
             <button
               type="button"
               class="record-row run-row"
-              :class="{ selected: selectedTargetKey === runTargetKey(group) }"
-              :aria-label="runRowAriaLabel(group)"
-              @click="selectRun(group)"
+              :class="{ selected: selectedTargetKey === turnTargetKey(group) }"
+              :aria-label="turnRowAriaLabel(group)"
+              @click="selectTurn(group)"
             >
-              <span class="record-kind kind-run">{{ group.runId ? '运行' : '输入' }}</span>
+              <span class="record-kind kind-run">{{ group.turnId ? '轮次' : '输入' }}</span>
               <span class="record-summary run-summary">
-                <strong>{{ runTitle(group) }}</strong>
-                <span>{{ runSummary(group) }}</span>
+                <strong>{{ turnTitle(group) }}</strong>
+                <span>{{ turnSummary(group) }}</span>
               </span>
-              <time class="record-cell column-time">{{ formatRunTime(group) }}</time>
-              <span class="record-cell column-duration">{{ formatRunDuration(group) }}</span>
+              <time class="record-cell column-time">{{ formatTurnTime(group) }}</time>
+              <span class="record-cell column-duration">{{ formatTurnDuration(group) }}</span>
               <span class="record-cell column-tokens"></span>
               <ChevronRight :size="14" class="record-chevron" aria-hidden="true" />
             </button>
@@ -353,31 +353,31 @@
             </div>
           </dl>
           <div
-            v-if="selectedTarget.kind === 'run' && selectedTarget.group.runId"
+            v-if="selectedTarget.kind === 'turn' && selectedTarget.group.turnId"
             class="inspector-run-actions"
           >
             <button
               type="button"
-              :disabled="isLangfuseRunOpening(selectedTarget.group.runId)"
-              :aria-busy="isLangfuseRunOpening(selectedTarget.group.runId)"
-              @click="openRunInLangfuse(selectedTarget.group.runId)"
+              :disabled="isLangfuseTurnOpening(selectedTarget.group.turnId)"
+              :aria-busy="isLangfuseTurnOpening(selectedTarget.group.turnId)"
+              @click="openTurnInLangfuse(selectedTarget.group.turnId)"
             >
               <LoaderCircle
-                v-if="isLangfuseRunOpening(selectedTarget.group.runId)"
+                v-if="isLangfuseTurnOpening(selectedTarget.group.turnId)"
                 :size="13"
                 class="spinning"
                 aria-hidden="true"
               />
               <ExternalLink v-else :size="13" aria-hidden="true" />
               {{
-                isLangfuseRunOpening(selectedTarget.group.runId)
+                isLangfuseTurnOpening(selectedTarget.group.turnId)
                   ? '正在打开 Langfuse'
                   : '打开 Langfuse Trace'
               }}
             </button>
           </div>
-          <p v-if="selectedTarget.kind === 'run'" class="inspector-note">
-            Run 阶段时间来自 PostgreSQL 状态时间点；消息与工具耗时来自各自审计记录。
+          <p v-if="selectedTarget.kind === 'turn'" class="inspector-note">
+            轮次总耗时包含等待与恢复间隔；各 Run 阶段和消息耗时分别来自持久状态与审计记录。
           </p>
         </div>
         <div v-else class="inspector-data">
@@ -420,7 +420,7 @@ import {
   isMessageDebugEntryInTimeRange,
   isMessageDebugTimelineMarkSelected,
   mergeMessageDebugRunGroups,
-  resolveLangfuseRunUrl
+  groupMessageDebugTurns
 } from '@/modules/session/model/messageDebug'
 import {
   buildRunTimingPhases,
@@ -429,10 +429,10 @@ import {
   buildTimelineRangeAtPoint,
   constrainTimelineRange,
   formatRunTimingDuration,
-  getRunTimingWindow,
-  getRunTotalLatencyMs
+  getRunTimingWindow
 } from '@/modules/session/model/runTiming'
 import { formatDateTime } from '@/shared/lib/time'
+import { resolveLangfuseTraceUrl } from '@/shared/lib/langfuse'
 
 const props = defineProps({
   threadId: { type: String, default: null },
@@ -445,9 +445,10 @@ const currentFilter = ref('all')
 const searchQuery = ref('')
 const isAllCopied = ref(false)
 const copiedTargetKey = ref('')
-const openingLangfuseRunIds = ref(new Set())
+const openingLangfuseTurnIds = ref(new Set())
 const messageAudits = ref([])
 const runTraces = ref([])
+const turnTraces = ref([])
 const auditsTruncated = ref(false)
 const runsTruncated = ref(false)
 const isAuditLoading = ref(false)
@@ -470,9 +471,12 @@ let auditRequestInFlight = false
 
 const executionStatusLabels = {
   running: '运行中',
+  waiting: '等待中',
+  cancelling: '取消中',
   completed: '已完成',
   failed: '失败',
   interrupted: '已中断',
+  yielded: '已让位',
   abandoned: '已放弃',
   cancelled: '已取消',
   cancel_requested: '取消中',
@@ -501,6 +505,7 @@ const loadMessageAudits = async (silent = false) => {
     if (generation !== auditRequestGeneration) return
     messageAudits.value = Array.isArray(result?.audits) ? result.audits : []
     runTraces.value = Array.isArray(result?.runs) ? result.runs : []
+    turnTraces.value = Array.isArray(result?.turns) ? result.turns : []
     auditsTruncated.value = result?.truncated === true
     runsTruncated.value = result?.runs_truncated === true
     auditLoadError.value = false
@@ -533,6 +538,7 @@ watch(
     if (threadId !== previous[0]) {
       messageAudits.value = []
       runTraces.value = []
+      turnTraces.value = []
       auditsTruncated.value = false
       runsTruncated.value = false
       auditLoadError.value = false
@@ -614,13 +620,14 @@ const timelineItems = computed(() =>
   )
 )
 const runTraceById = computed(() => new Map(runTraces.value.map((run) => [run.run_id, run])))
-const baseGroups = computed(() =>
+const runGroups = computed(() =>
   mergeMessageDebugRunGroups(timelineItems.value, runTraces.value).map((group, index) => {
     const runTrace = runTraceById.value.get(group.runId) || null
     const timing = runTrace?.timing
     return {
       ...group,
       index,
+      turnId: runTrace?.turn_id || group.items.find((item) => item.turnId)?.turnId || null,
       inputId: group.inputId || runTrace?.input_id || null,
       runTrace,
       timing,
@@ -629,22 +636,32 @@ const baseGroups = computed(() =>
     }
   })
 )
+const baseGroups = computed(() => {
+  const turns = new Map(turnTraces.value.map((turn) => [turn.turn_id, turn]))
+  return groupMessageDebugTurns(runGroups.value).map((group) => ({
+    ...group,
+    turnTrace: turns.get(group.turnId) || null
+  }))
+})
+const turnKeyByRunGroup = computed(() => new Map(
+  baseGroups.value.flatMap((group) => group.runs.map((run) => [run.key, group.key]))
+))
 const combinedTrace = computed(() => {
-  const timeline = buildSequentialRunTiming(baseGroups.value.map((group) => group.timing))
+  const timeline = buildSequentialRunTiming(runGroups.value.map((group) => group.timing))
   if (!timeline) return null
   const segmentByGroupKey = new Map()
   const phases = []
   const spans = []
 
   timeline.segments.forEach((segment) => {
-    const group = baseGroups.value[segment.sourceIndex]
+    const group = runGroups.value[segment.sourceIndex]
     segmentByGroupKey.set(group.key, segment)
     buildRunTimingPhases(group.timing).forEach((phase) => {
       const startOffsetMs = segment.startOffsetMs + phase.startOffsetMs
       const endOffsetMs = segment.startOffsetMs + phase.endOffsetMs
       phases.push({
         ...phase,
-        groupKey: group.key,
+        groupKey: turnKeyByRunGroup.value.get(group.key),
         type: phase.key,
         key: `${group.key}:${phase.key}`,
         startOffsetMs,
@@ -659,7 +676,7 @@ const combinedTrace = computed(() => {
       const endOffsetMs = segment.startOffsetMs + span.endOffsetMs
       spans.push({
         ...span,
-        groupKey: group.key,
+        groupKey: turnKeyByRunGroup.value.get(group.key),
         key: `${group.key}:${span.key}`,
         item: itemsById.get(span.key),
         startOffsetMs,
@@ -849,33 +866,39 @@ const itemMatchesFilters = (item) => {
 }
 const filteredTimelineGroups = computed(() =>
   baseGroups.value.flatMap((group) => {
-    const segment = combinedTrace.value?.segmentByGroupKey.get(group.key)
-    const visibleItems = group.items.filter((item) => {
-      if (!itemMatchesFilters(item)) return false
-      if (!isTimelineRangeActive.value) return true
-      return isMessageDebugEntryInTimeRange(
-        item,
-        segment?.window,
-        segment?.startOffsetMs,
-        combinedTrace.value?.durationMs,
-        timelineRangeStart.value / 1000,
-        timelineRangeEnd.value / 1000
-      )
+    const visibleItems = group.runs.flatMap((run) => {
+      const segment = isTimelineRangeActive.value
+        ? combinedTrace.value?.segmentByGroupKey.get(run.key)
+        : null
+      return run.items.filter((item) => {
+        if (!itemMatchesFilters(item)) return false
+        if (!isTimelineRangeActive.value) return true
+        return isMessageDebugEntryInTimeRange(
+          item,
+          segment?.window,
+          segment?.startOffsetMs,
+          combinedTrace.value?.durationMs,
+          timelineRangeStart.value / 1000,
+          timelineRangeEnd.value / 1000
+        )
+      })
     })
     if (visibleItems.length) return [{ ...group, visibleItems }]
-    if (group.items.length || currentFilter.value !== 'all') return []
+    const emptyRuns = group.runs.filter((run) => run.items.length === 0)
+    if (!emptyRuns.length || currentFilter.value !== 'all') return []
     const query = searchQuery.value.trim().toLowerCase()
     if (
       query &&
-      !JSON.stringify(group.runTrace || {})
+      !JSON.stringify({ turn: group.turnTrace, runs: emptyRuns.map((run) => run.runTrace) })
         .toLowerCase()
         .includes(query)
     )
       return []
-    if (isTimelineRangeActive.value && segment && combinedTrace.value) {
+    if (isTimelineRangeActive.value && combinedTrace.value) {
       const rangeStartMs = combinedTrace.value.durationMs * (timelineRangeStart.value / 1000)
       const rangeEndMs = combinedTrace.value.durationMs * (timelineRangeEnd.value / 1000)
-      if (segment.endOffsetMs < rangeStartMs || segment.startOffsetMs > rangeEndMs) return []
+      const segments = emptyRuns.map((run) => combinedTrace.value.segmentByGroupKey.get(run.key)).filter(Boolean)
+      if (segments.length && !segments.some((segment) => segment.endOffsetMs >= rangeStartMs && segment.startOffsetMs <= rangeEndMs)) return []
     }
     return [{ ...group, visibleItems: [] }]
   })
@@ -890,28 +913,28 @@ const emptyTimelineText = computed(() => {
   return '当前会话暂无消息数据'
 })
 
-const runStatus = (group) => {
-  if (group.runTrace?.status) return group.runTrace.status
-  if (!group.runId && group.inputId) {
+const turnStatus = (group) => {
+  if (group.turnTrace?.status) return group.turnTrace.status
+  if (!group.turnId && group.inputId) {
     return group.items.find((item) => item.role === 'human')?.raw?.delivery_status || ''
   }
   return ''
 }
-const runTitle = (group) => {
-  if (group.runId) return `运行 ${group.index + 1}`
-  if (group.inputId) return runStatus(group) ? formatExecutionStatus(runStatus(group)) : '输入'
-  return '未关联运行'
+const turnTitle = (group) => {
+  if (group.turnId) return `Turn ${group.index + 1}`
+  if (group.inputId) return turnStatus(group) ? formatExecutionStatus(turnStatus(group)) : '输入'
+  return '未关联轮次'
 }
 const formatExecutionStatus = (status) => executionStatusLabels[status] || status || '状态未知'
 const itemRowAriaLabel = (item) => {
   const status = item.executionStatus ? `，${formatExecutionStatus(item.executionStatus)}` : ''
   return `${roleNames[item.role] || '记录'}${status}：${item.displaySummary}`
 }
-const runRowAriaLabel = (group) => {
-  const status = runStatus(group)
-  return `${runTitle(group)}${group.runId && status ? `，${formatExecutionStatus(status)}` : ''}：${runSummary(group)}`
+const turnRowAriaLabel = (group) => {
+  const status = turnStatus(group)
+  return `${turnTitle(group)}${group.turnId && status ? `，${formatExecutionStatus(status)}` : ''}：${turnSummary(group)}`
 }
-const runSummary = (group) => {
+const turnSummary = (group) => {
   const userMessage = group.items.find((item) => item.role === 'human')
   if (userMessage?.summary) return userMessage.summary
   return `${group.items.length} 条记录`
@@ -929,12 +952,16 @@ const formatAuditTimeTooltip = (item) =>
   ]
     .filter(Boolean)
     .join('\n')
-const formatRunTime = (group) => {
+const formatTurnTime = (group) => {
   const sentAt = group.items.find((item) => item.role === 'human')?.createdAt
-  const value = sentAt || group.timing?.created_at
+  const value = group.turnTrace?.created_at || sentAt
   return value ? formatDateTime(value, 'HH:mm:ss') : ''
 }
-const formatRunDuration = (group) => formatRunTimingDuration(getRunTotalLatencyMs(group.timing))
+const formatTurnDuration = (group) => {
+  const turn = group.turnTrace
+  if (!turn?.created_at || !turn.finished_at) return ''
+  return formatRunTimingDuration(Date.parse(turn.finished_at) - Date.parse(turn.created_at))
+}
 const traceSpanTitle = (span) => {
   const item = span.item
   if (!item) return ''
@@ -942,12 +969,12 @@ const traceSpanTitle = (span) => {
   return [roleNames[item.role] || '记录', item.displaySummary, duration].filter(Boolean).join(' · ')
 }
 
-const runTargetKey = (group) => `run:${group.key}`
+const turnTargetKey = (group) => `turn:${group.key}`
 const itemTargetKey = (group, item) => `item:${group.key}:${item.id}`
 const isTimelineMarkSelected = (mark) =>
   isMessageDebugTimelineMarkSelected(selectedTargetKey.value, mark.groupKey, mark.item?.id)
-const selectRun = (group) => {
-  selectedTargetKey.value = runTargetKey(group)
+const selectTurn = (group) => {
+  selectedTargetKey.value = turnTargetKey(group)
   inspectorTab.value = 'overview'
 }
 const selectItem = (group, item) => {
@@ -956,7 +983,7 @@ const selectItem = (group, item) => {
 }
 const selectedTarget = computed(() => {
   for (const group of baseGroups.value) {
-    if (selectedTargetKey.value === runTargetKey(group)) return { kind: 'run', group }
+    if (selectedTargetKey.value === turnTargetKey(group)) return { kind: 'turn', group }
     const item = group.items.find(
       (candidate) => selectedTargetKey.value === itemTargetKey(group, candidate)
     )
@@ -969,27 +996,31 @@ const selectedTargetData = computed(() => {
   if (selectedTarget.value.kind === 'item') return selectedTarget.value.item.raw
   const group = selectedTarget.value.group
   return {
-    ...group.runTrace,
-    run_id: group.runId,
+    ...group.turnTrace,
+    turn_id: group.turnId,
     input_id: group.inputId || null,
-    status: runStatus(group) || null,
-    timing: group.timing,
+    status: turnStatus(group) || null,
+    runs: group.runs.map((run) => run.runTrace),
     records: group.items.map((item) => item.raw)
   }
 })
 const inspectorOverviewRows = computed(() => {
   if (!selectedTarget.value) return []
-  if (selectedTarget.value.kind === 'run') {
+  if (selectedTarget.value.kind === 'turn') {
     const group = selectedTarget.value.group
     return [
-      { label: '状态', value: formatExecutionStatus(runStatus(group)) },
+      { label: '状态', value: formatExecutionStatus(turnStatus(group)) },
       { label: '记录', value: `${group.items.length} 条` },
-      { label: '发送时间', value: formatRunTime(group) },
-      ...group.timingRows.map((row) => ({
-        label: row.label,
-        value: row.formattedValue,
-        description: row.description
-      }))
+      { label: '创建时间', value: formatTurnTime(group) },
+      { label: '轮次总耗时', value: formatTurnDuration(group) || '暂无数据' },
+      ...group.runs.flatMap((run, index) => [
+        { label: `Run ${index + 1} 状态`, value: formatExecutionStatus(run.runTrace?.status) },
+        ...run.timingRows.map((row) => ({
+          label: `Run ${index + 1} · ${row.label}`,
+          value: row.formattedValue,
+          description: row.description
+        }))
+      ])
     ]
   }
   const item = selectedTarget.value.item
@@ -1023,15 +1054,15 @@ const inspectorOverviewRows = computed(() => {
   ].filter((row) => row.value)
 })
 
-const isLangfuseRunOpening = (runId) => openingLangfuseRunIds.value.has(runId)
-const setLangfuseRunOpening = (runId, opening) => {
-  const next = new Set(openingLangfuseRunIds.value)
-  if (opening) next.add(runId)
-  else next.delete(runId)
-  openingLangfuseRunIds.value = next
+const isLangfuseTurnOpening = (turnId) => openingLangfuseTurnIds.value.has(turnId)
+const setLangfuseTurnOpening = (turnId, opening) => {
+  const next = new Set(openingLangfuseTurnIds.value)
+  if (opening) next.add(turnId)
+  else next.delete(turnId)
+  openingLangfuseTurnIds.value = next
 }
-const openRunInLangfuse = async (runId) => {
-  if (!runId || isLangfuseRunOpening(runId)) return
+const openTurnInLangfuse = async (turnId) => {
+  if (!turnId || isLangfuseTurnOpening(turnId)) return
 
   const targetWindow = window.open('about:blank', '_blank')
   if (!targetWindow) {
@@ -1039,15 +1070,20 @@ const openRunInLangfuse = async (runId) => {
     return
   }
   targetWindow.opener = null
-  setLangfuseRunOpening(runId, true)
+  const threadId = props.threadId
+  setLangfuseTurnOpening(turnId, true)
 
   try {
-    const result = await agentApi.getAgentRun(props.threadId, runId)
-    const traceUrl = resolveLangfuseRunUrl(result)
+    const result = await agentApi.getTurnLangfuse(threadId, turnId)
+    if (threadId !== props.threadId) {
+      targetWindow.close()
+      return
+    }
+    const traceUrl = resolveLangfuseTraceUrl(result)
     if (!traceUrl) {
       targetWindow.close()
       if (!result?.langfuse_trace_id) {
-        message.warning('该 Run 暂无可用的 Langfuse Trace')
+        message.warning('本轮暂无可用的 Langfuse Trace')
       } else {
         message.error('Langfuse 当前不可用，请检查配置或稍后重试')
       }
@@ -1058,7 +1094,7 @@ const openRunInLangfuse = async (runId) => {
     targetWindow.close()
     message.error('获取 Langfuse 跳转地址失败，请稍后重试')
   } finally {
-    setLangfuseRunOpening(runId, false)
+    setLangfuseTurnOpening(turnId, false)
   }
 }
 

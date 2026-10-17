@@ -23,8 +23,6 @@
       </template>
     </PageShoulder>
 
-    <p class="mcp-usage-hint">启用服务后，还需在智能体的工具配置中绑定，或由 Skill 依赖激活后使用。</p>
-
     <div
       v-if="filteredEnabledServers.length === 0 && filteredDisabledServers.length === 0"
       class="extension-card-grid-empty-state"
@@ -316,13 +314,6 @@ defineExpose({ fetchServers, loading })
 </script>
 
 <style lang="less" scoped>
-.mcp-usage-hint {
-  margin: 0 16px 16px;
-  color: var(--color-text-secondary);
-  font-size: 13px;
-}
-
-
 .info-card-emoji-icon {
   font-size: 18px;
   line-height: 1;

@@ -383,7 +383,7 @@ const treeScopes = [
   { key: 'thread', label: '对话目录' },
   { key: 'workspace', label: '个人空间' }
 ]
-const activeTreeScope = ref('thread')
+const activeTreeScope = ref('workspace')
 const workspaceTreeData = ref([])
 const workspaceSelectedKeys = ref([])
 const workspaceExpandedKeys = ref([])

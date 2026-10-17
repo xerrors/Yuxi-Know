@@ -164,6 +164,21 @@ class CubeAdapter:
             response.raise_for_status()
             return response.json().get("state", "unknown")
 
+    def vm_stats(self) -> dict[str, int]:
+        """只读控制面全部实例，休眠 VM 计入总数且不会被唤醒。"""
+        with httpx.Client(timeout=10, trust_env=False) as client:
+            response = client.get(f"{self.config.api_url}/v2/sandboxes", headers=self._api_headers())
+            response.raise_for_status()
+            instances = response.json()
+        if not isinstance(instances, list) or any(
+            not isinstance(instance, dict) or not isinstance(instance.get("state"), str) for instance in instances
+        ):
+            raise ValueError("Cube 实例列表格式异常")
+        return {
+            "active_vms": sum(instance["state"].lower() == "running" for instance in instances),
+            "total_vms": len(instances),
+        }
+
     def pause(self, environment: Environment) -> bool:
         """暂停原实例；返回是否由本次操作确认休眠，已暂停返回 False。"""
         if self.state(environment).lower() == "paused":

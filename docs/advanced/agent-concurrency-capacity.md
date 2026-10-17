@@ -65,7 +65,7 @@ AgentRun 另行持久保存服务端权威时间点，用于历史诊断；它�
 | `first_output_latency_ms` | `created_at` → `first_output_at` | 服务端从 Run 创建到首次语义输出 |
 | `total_latency_ms` | `created_at` → `finished_at` | 服务端 Run 总时延 |
 
-`prepared_at` 与 `first_output_at` 只由当前 lease owner 写入一次。观测失败不阻断 Run，缺少阶段的值保持 `null`，API 不用负数或 0 掩盖缺失。`GET /api/v1/agents/sessions/{thread_id}/runs/{run_id}` 和管理员按需读取的 Thread 审计返回 Run 的 `timing` 投影；普通 History 只返回 Run 归属，不附带完整时延。前端调试面板按需读取审计，按 Run 展示五段明细；消息通过 `run_id` 关联。完整响应边界见[线程阅读数据](../mechanisms/agent-runtime.md#线程阅读数据)。
+`prepared_at` 与 `first_output_at` 只由当前 lease owner 写入一次。观测失败不阻断 Run，缺少阶段的值保持 `null`，API 不用负数或 0 掩盖缺失。`GET /api/v1/agents/sessions/{thread_id}/runs/{run_id}` 和管理员按需读取的 Thread 审计返回 Run 的 `timing` 投影；普通 History 只返回 Run 归属，不附带完整时延。前端调试面板按需读取审计，按 Turn 汇总记录，详情保留各 Run 阶段明细；消息通过持久 `run_id`、`turn_id` 关联。完整响应边界见[线程阅读数据](../mechanisms/agent-runtime.md#线程阅读数据)。
 
 上述服务端时间点在事务内产生：`created_at` 是 Run 行创建时间，`finished_at` 是终态转换时间，二者分别在 owning transaction 提交后可见并成为权威事实。因此 `total_latency_ms` 不包含终态写入后的 runtime cleanup、SSE 读取或浏览器渲染等待。
 

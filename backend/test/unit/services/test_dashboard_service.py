@@ -15,7 +15,7 @@ from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.identity.models import Department, User
 from yuxi.modules.system.services.dashboard import DashboardService
-from yuxi.shared.datetime import utc_now
+from yuxi.shared.datetime import UTC, utc_now
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.unit]
 
@@ -579,3 +579,79 @@ async def test_tool_stats_preserve_rolling_boundaries_with_one_aggregate(dashboa
     assert [
         after["call_count"] - before["call_count"] for after, before in zip(stats["daily_tool_calls"], baseline["daily_tool_calls"])
     ] == [1, 0, 0, 0, 0, 1, 2]
+
+
+@pytest.mark.parametrize(
+    "time_range,expected_threads,expected_average", [("all", 8, 1.4), ("3months", 6, 1.7), ("30days", 4, 1.8), ("7days", 2, 2.0)]
+)
+async def test_agent_distribution_uses_created_cohort_and_weighted_messages(dashboard_db, time_range, expected_threads, expected_average):
+    """创建边界、闰月回退、空会话和消息排除共同约束同口径的摘要与排行。"""
+    from zoneinfo import ZoneInfo
+
+    template = await dashboard_db.scalar(select(Session).where(Session.thread_id == "thread-101"))
+    now = datetime(2020, 5, 31, 12, tzinfo=ZoneInfo("Asia/Shanghai")).astimezone(UTC)
+    dates_and_messages = [
+        (datetime(2019, 1, 1), 1),
+        (datetime(2020, 2, 28, 23, 59, 59, 999999), 0),
+        (datetime(2020, 2, 29), 2),
+        (datetime(2020, 5, 1, 23, 59, 59, 999999), 1),
+        (datetime(2020, 5, 2), 3),
+        (datetime(2020, 5, 24, 23, 59, 59, 999999), 0),
+        (datetime(2020, 5, 25), 4),
+        (datetime(2020, 5, 31), 0),
+    ]
+    sessions = []
+    for index, (created, count) in enumerate(dates_and_messages):
+        session = Session(
+            thread_id=f"cohort-{index}",
+            project_id=template.project_id,
+            uid=template.uid,
+            agent_id="agent-coder" if index == 7 else "agent-helper",
+            status="active",
+            created_at=created.replace(tzinfo=ZoneInfo("Asia/Shanghai")).astimezone(UTC),
+        )
+        dashboard_db.add(session)
+        await dashboard_db.flush()
+        sessions.append(session)
+        for _ in range(count):
+            dashboard_db.add(Message(session_record_id=session.id, role="assistant", content="sample", created_at=now))
+    for message_type in ("model_audit", "tool_audit"):
+        dashboard_db.add(Message(session_record_id=sessions[6].id, role="assistant", content="", created_at=now, message_type=message_type))
+    dashboard_db.add(Message(session_record_id=sessions[6].id, role="assistant", content="future", created_at=now + timedelta(seconds=1)))
+    for index, (created, status, uid) in enumerate(
+        [(now + timedelta(seconds=1), "active", template.uid), (now, "deleted", template.uid), (now, "active", "uid-deleted")]
+    ):
+        dashboard_db.add(
+            Session(
+                thread_id=f"excluded-cohort-{index}",
+                project_id=template.project_id,
+                uid=uid,
+                agent_id="agent-helper",
+                status=status,
+                created_at=created,
+            )
+        )
+    await dashboard_db.flush()
+
+    result = await DashboardService(dashboard_db).repo.get_agent_session_distribution(time_range=time_range, now=now)
+
+    assert result["total_threads"] == expected_threads
+    assert result["agent_count"] == 2
+    assert result["avg_messages_per_thread"] == expected_average
+    assert sum(row["thread_count"] for row in result["agent_distribution"]) == expected_threads
+    assert (
+        sum(row["message_count"] for row in result["agent_distribution"]) == {"all": 11, "3months": 10, "30days": 7, "7days": 4}[time_range]
+    )
+    empty_agent = next(row for row in result["agent_distribution"] if row["agent_id"] == "agent-coder")
+    assert empty_agent["thread_count"] == 1
+    assert empty_agent["avg_messages"] == 0
+
+
+async def test_agent_distribution_empty_range_has_zero_summary(dashboard_db):
+    """无会话范围返回可解释的零值与空排行。"""
+    from yuxi.shared.datetime import UTC
+
+    result = await DashboardService(dashboard_db).repo.get_agent_session_distribution(
+        time_range="7days", now=datetime(2000, 1, 1, tzinfo=UTC)
+    )
+    assert result == {"total_threads": 0, "agent_count": 0, "avg_messages_per_thread": 0.0, "agent_distribution": []}

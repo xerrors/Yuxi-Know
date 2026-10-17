@@ -1,31 +1,31 @@
 <template>
-  <a-card title="知识库使用情况" :loading="loading" class="dashboard-card">
+  <DashboardChartCard title="知识库使用情况" :loading="loading" class="dashboard-card">
     <!-- 知识库概览 -->
-    <div class="dashboard-card-metric-grid">
-      <DashboardMetricCard
-        :icon="Database"
-        :value="formatNumber(knowledgeStats?.total_knowledge_bases)"
-        label="知识库总数"
-        tone="info"
-        compact
-      />
-      <DashboardMetricCard
-        :icon="FileText"
-        :value="formatNumber(knowledgeStats?.total_files)"
-        label="文件总数"
-        tone="success"
-        compact
-      />
-      <DashboardMetricCard
-        :icon="HardDrive"
-        :value="formattedStorage.value"
-        :label="`存储容量 (${formattedStorage.unit})`"
-        tone="warning"
-        compact
-      />
-    </div>
-
-    <a-divider />
+    <template #summary>
+      <div class="dashboard-card-metric-grid">
+        <DashboardMetricCard
+          :icon="Database"
+          :value="formatNumber(knowledgeStats?.total_knowledge_bases)"
+          label="知识库总数"
+          tone="info"
+          compact
+        />
+        <DashboardMetricCard
+          :icon="FileText"
+          :value="formatNumber(knowledgeStats?.total_files)"
+          label="文件总数"
+          tone="success"
+          compact
+        />
+        <DashboardMetricCard
+          :icon="HardDrive"
+          :value="formattedStorage.value"
+          :label="`存储容量 (${formattedStorage.unit})`"
+          tone="warning"
+          compact
+        />
+      </div>
+    </template>
 
     <div class="file-distribution">
       <h4>文件类型分布</h4>
@@ -52,10 +52,11 @@
       </template>
       <a-empty v-else description="暂无文件类型数据" />
     </div>
-  </a-card>
+  </DashboardChartCard>
 </template>
 
 <script setup>
+import DashboardChartCard from './DashboardChartCard.vue'
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import * as echarts from '@/modules/dashboard/model/dashboardCharts'
 import { getColorByIndex, getColorPalette } from '@/shared/lib/chartColors'

@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from yuxi.modules.agents.models.runs import AgentRun, build_agent_run_timing
 from yuxi.modules.agents.repositories.messages import MessageRepository
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
+from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.agents.services.thread_access import require_thread
 from yuxi.modules.agents.tool_results import normalize_tool_result
@@ -27,9 +28,20 @@ async def get_thread_audits(*, db: AsyncSession, scope: ActorScope, thread_id: s
     agent_session = await require_thread(db=db, scope=scope, thread_id=thread_id)
     messages, truncated = await MessageRepository(db).list_message_audits(agent_session.id, limit=MESSAGE_AUDIT_LIMIT)
     runs, runs_truncated = await AgentRunRepository(db).list_agent_runs_for_trace(agent_session.id, limit=AGENT_RUN_TRACE_LIMIT)
+    turn_ids = {run.turn_id for run in runs} | {message.turn_id for message in messages if message.turn_id}
+    turns = await AgentTurnRepository(db).list_for_scope(turn_ids=list(turn_ids), thread_id=thread_id, uid=scope.uid, app_id=scope.app_id)
     return {
         "audits": [_serialize_message_audit(message) for message in messages],
         "runs": [_serialize_run_trace(run) for run in runs],
+        "turns": [
+            {
+                "turn_id": turn.id,
+                "status": turn.status,
+                "created_at": format_utc_datetime(turn.created_at),
+                "finished_at": format_utc_datetime(turn.finished_at),
+            }
+            for turn in turns.values()
+        ],
         "runs_truncated": runs_truncated,
         "truncated": truncated,
     }
@@ -56,6 +68,7 @@ def _serialize_run_trace(run: AgentRun) -> dict[str, Any]:
     """从 AgentRun Owner 投影调试面板所需的状态与阶段时间。"""
     return {
         "run_id": run.id,
+        "turn_id": run.turn_id,
         "status": run.status,
         "timing": build_agent_run_timing(
             created_at=run.created_at,

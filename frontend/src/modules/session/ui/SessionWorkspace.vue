@@ -757,7 +757,8 @@ import { handleChatError, handleValidationError } from '@/shared/lib/errorHandle
 import {
   DRAFT_THREAD_ID,
   threadDraftStore,
-  createThreadDraftSession
+  createThreadDraftSession,
+  entryDraftHandoff
 } from '@/modules/session/model/thread_draft'
 import { ScrollController } from '@/modules/session/model/scrollController'
 import { resolveContextUsageSummary } from '@/modules/session/model/contextUsage'
@@ -864,6 +865,16 @@ function composeWidgetDraft(text) {
   userInput.value = [userInput.value, text].filter(Boolean).join('\n\n')
   nextTick(() => agentInputAreaRef.value?.focus())
 }
+
+watch(
+  [workspaceActive, () => props.isNewSession, currentThreadId],
+  ([active, isNewSession, threadId]) => {
+    if (!active || !isNewSession || threadId || props.embedded) return
+    const text = entryDraftHandoff.take()
+    if (text) composeWidgetDraft(text)
+  },
+  { immediate: true, flush: 'post' }
+)
 
 const messageInputStageRef = ref(null)
 const cooperationWorkspaceRefs = new Map()

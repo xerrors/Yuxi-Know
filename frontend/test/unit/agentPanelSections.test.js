@@ -157,3 +157,12 @@ test('文件树仅在页面可见的运行期文件视图中轮询', () => {
     false
   )
 })
+
+test('文件面板默认打开个人空间目录', () => {
+  const source = readFileSync(
+    new URL('../../src/modules/session/ui/workspace/AgentPanel.vue', import.meta.url),
+    'utf8'
+  )
+
+  assert.match(source, /const activeTreeScope = ref\('workspace'\)/)
+})

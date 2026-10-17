@@ -2,8 +2,19 @@
 
 import asyncio
 
+import httpx
+
 from yuxi.infrastructure.filesystem import await_io
 from yuxi.modules.agents.runtime.sandbox.provider import get_sandbox_provider
+from yuxi.shared.errors import UpstreamError
+
+
+async def get_vm_stats() -> dict[str, int]:
+    """读取执行节点实时 VM 计数，控制面失败不伪装为空节点。"""
+    try:
+        return await asyncio.to_thread(get_sandbox_provider().adapter.vm_stats)
+    except (httpx.HTTPError, ValueError) as exc:
+        raise UpstreamError("VM 统计暂不可用，请重试") from exc
 
 
 async def get_user_sandbox(uid: str) -> dict:

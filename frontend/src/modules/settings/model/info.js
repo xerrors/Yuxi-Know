@@ -19,25 +19,9 @@ export const useInfoStore = defineStore('info', () => {
   const debugMode = ref(readDebugMode())
   const showDebugModal = ref(false)
 
-  // 计算属性 - 组织信息
-  const organization = computed(
-    () =>
-      infoConfig.value.organization || {
-        name: '',
-        logo: '',
-        avatar: ''
-      }
-  )
-
-  // 计算属性 - 品牌信息
+  // 产品品牌只保留一份名称和 Logo。
   const branding = computed(
-    () =>
-      infoConfig.value.branding || {
-        name: '',
-        title: '',
-        subtitle: '',
-        subtitles: []
-      }
+    () => infoConfig.value.branding || { name: '', logo: '', title: '', login_bg: '' }
   )
 
   // 计算属性 - 页脚信息
@@ -125,7 +109,6 @@ export const useInfoStore = defineStore('info', () => {
     showDebugModal,
 
     // 计算属性
-    organization,
     branding,
     footer,
 

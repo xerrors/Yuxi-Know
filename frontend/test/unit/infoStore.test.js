@@ -25,6 +25,8 @@ test('调试模式读取受限 LocalStorage 时降级为关闭', async () => {
     const store = useInfoStore()
 
     assert.equal(store.debugMode, false)
+    assert.deepEqual(store.branding, { name: '', logo: '', title: '', login_bg: '' })
+    assert.equal('organization' in store, false)
   } finally {
     await server.close()
   }
@@ -45,10 +47,11 @@ test('品牌配置合并并发读取，成功缓存，失败与强制刷新可�
     const first = store.loadInfoConfig()
     const second = store.loadInfoConfig()
     assert.equal(pending.length, 1)
-    pending[0]({ success: true, data: { branding: { name: 'Test' } } })
-    assert.deepEqual(await first, { branding: { name: 'Test' } })
-    assert.deepEqual(await second, { branding: { name: 'Test' } })
-    assert.equal(store.branding.name, 'Test')
+    const data = { branding: { name: 'Test', logo: '/test.svg', title: 'Test title', login_bg: '/test.jpg' } }
+    pending[0]({ success: true, data })
+    assert.deepEqual(await first, data)
+    assert.deepEqual(await second, data)
+    assert.deepEqual(store.branding, data.branding)
     await store.loadInfoConfig()
     assert.equal(pending.length, 1)
     const forced = store.loadInfoConfig(true)

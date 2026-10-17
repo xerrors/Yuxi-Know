@@ -18,13 +18,13 @@ import {
   isMessageDebugEntryInTimeRange,
   isMessageDebugTimelineMarkSelected,
   mergeMessageDebugRunGroups,
-  resolveLangfuseRunUrl
 } from '../../src/modules/session/model/messageDebug.js'
+import { resolveLangfuseTraceUrl } from '../../src/shared/lib/langfuse.js'
 
-test('时间概览只高亮当前选中记录，选中 Run 时高亮其全部时间条', () => {
-  assert.equal(isMessageDebugTimelineMarkSelected('run:run-a-0', 'run-a-0'), true)
-  assert.equal(isMessageDebugTimelineMarkSelected('run:run-a-0', 'run-a-0', 'model-a'), true)
-  assert.equal(isMessageDebugTimelineMarkSelected('run:run-a-0', 'run-b-1', 'model-b'), false)
+test('时间概览只高亮当前选中记录，选中 Turn 时高亮其全部时间条', () => {
+  assert.equal(isMessageDebugTimelineMarkSelected('turn:run-a-0', 'run-a-0'), true)
+  assert.equal(isMessageDebugTimelineMarkSelected('turn:run-a-0', 'run-a-0', 'model-a'), true)
+  assert.equal(isMessageDebugTimelineMarkSelected('turn:run-a-0', 'run-b-1', 'model-b'), false)
 
   assert.equal(isMessageDebugTimelineMarkSelected('item:run-a-0:model-a', 'run-a-0'), false)
   assert.equal(
@@ -189,33 +189,33 @@ test('模型调试条目只保留模型自身时间，Run 由独立列表分组'
   assert.equal(entry.runId, 'run-a')
 })
 
-test('Langfuse Run 地址仅接受 Run 详情中的 HTTP(S) URL', () => {
+test('Langfuse Trace 地址仅接受后端返回的 HTTP(S) URL', () => {
   assert.equal(
-    resolveLangfuseRunUrl({
+    resolveLangfuseTraceUrl({
       langfuse_url: 'https://langfuse.example/project/project-1/traces/trace-1'
     }),
     'https://langfuse.example/project/project-1/traces/trace-1'
   )
-  assert.equal(resolveLangfuseRunUrl({ langfuse_url: 'javascript:alert(1)' }), null)
+  assert.equal(resolveLangfuseTraceUrl({ langfuse_url: 'javascript:alert(1)' }), null)
   assert.equal(
-    resolveLangfuseRunUrl({ langfuse_url: null }),
+    resolveLangfuseTraceUrl({ langfuse_url: null }),
     null
   )
 })
 
-test('Run 详情保留按稳定 run_id 打开 Langfuse Trace 的入口', () => {
+test('Turn 详情按稳定 turn_id 打开 Langfuse Trace', () => {
   const source = readFileSync(
     new URL('../../src/modules/session/ui/MessageDebugPanel.vue', import.meta.url),
     'utf8'
   )
 
   assert.match(source, /打开 Langfuse Trace/)
-  assert.match(source, /openRunInLangfuse\(selectedTarget\.group\.runId\)/)
-  assert.match(source, /agentApi\.getAgentRun\(props\.threadId, runId\)/)
-  assert.match(source, /resolveLangfuseRunUrl\(result\)/)
+  assert.match(source, /openTurnInLangfuse\(selectedTarget\.group\.turnId\)/)
+  assert.match(source, /agentApi\.getTurnLangfuse\(threadId, turnId\)/)
+  assert.match(source, /resolveLangfuseTraceUrl\(result\)/)
 })
 
-test('Run 行只读取审计接口返回的 AgentRun 状态而不从消息终态猜测', () => {
+test('Turn 行只读取审计接口返回的 Turn 状态而不从 Run 终态猜测', () => {
   const source = readFileSync(
     new URL('../../src/modules/session/ui/MessageDebugPanel.vue', import.meta.url),
     'utf8'
@@ -223,7 +223,7 @@ test('Run 行只读取审计接口返回的 AgentRun 状态而不从消息终态
 
   assert.match(source, /runTraces\.value = Array\.isArray\(result\?\.runs\)/)
   const persistedStatusRead = source.indexOf(
-    'if (group.runTrace?.status) return group.runTrace.status'
+    'if (group.turnTrace?.status) return group.turnTrace.status'
   )
   assert.ok(persistedStatusRead >= 0)
   assert.doesNotMatch(source, /if \(props\.runActive && props\.activeRunId/)

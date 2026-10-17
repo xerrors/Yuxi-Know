@@ -63,8 +63,7 @@ function emitChange(item) {
   gap: 16px;
   height: 48px;
   padding: 0 var(--page-padding);
-  background-color: var(--light-60);
-  backdrop-filter: blur(10px);
+  background-color: var(--gray-0);
   position: sticky;
   top: 0;
   z-index: 1000;

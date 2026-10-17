@@ -20,8 +20,6 @@
         <div class="brand-container" @click="goHome" style="cursor: pointer">
           <img v-if="brandLogo" :src="brandLogo" alt="logo" class="brand-logo" />
           <h1 class="brand-text">
-            <span v-if="brandOrgName" class="brand-org">{{ brandOrgName }}</span>
-            <span v-if="brandOrgName && brandName !== brandOrgName" class="brand-separator"></span>
             <span class="brand-main">{{ brandName }}</span>
           </h1>
         </div>
@@ -304,24 +302,12 @@ const agentStore = useAgentStore()
 
 // 品牌展示数据
 const loginBgImage = computed(() => {
-  return infoStore.organization?.login_bg || '/login-bg.jpg'
+  return infoStore.branding.login_bg || '/login-bg.jpg'
 })
 const brandLogo = computed(() => {
-  return infoStore.organization?.logo || ''
+  return infoStore.branding.logo || ''
 })
-const brandOrgName = computed(() => {
-  return infoStore.organization?.name?.trim() || ''
-})
-const brandName = computed(() => {
-  const orgName = brandOrgName.value
-  const brandNameRaw = infoStore.branding?.name?.trim() || 'Yuxi'
-
-  if (orgName && brandNameRaw && orgName !== brandNameRaw) {
-    return brandNameRaw
-  }
-
-  return orgName || brandNameRaw
-})
+const brandName = computed(() => infoStore.branding.name?.trim() || 'Yuxi')
 const userAgreementUrl = computed(() => {
   return infoStore.footer?.user_agreement_url?.trim() || ''
 })
@@ -714,21 +700,8 @@ onUnmounted(() => {
   align-items: center;
   gap: 12px;
 
-  .brand-org {
-    color: var(--gray-700);
-    font-weight: 600;
-  }
-
-  .brand-separator {
-    width: 4px;
-    height: 4px;
-    background-color: var(--gray-400);
-    border-radius: 50%;
-    font-weight: 600;
-  }
-
   .brand-main {
-    color: var(--main-color);
+    color: var(--gray-700);
     font-weight: 600;
   }
 }

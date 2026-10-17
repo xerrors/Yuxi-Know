@@ -18,7 +18,7 @@ export function formatMessageDebugContent(content) {
 /** 判断时间概览中的阶段或记录是否属于当前选中的调试对象。 */
 export function isMessageDebugTimelineMarkSelected(selectedTargetKey, groupKey, itemId = null) {
   if (!selectedTargetKey || !groupKey) return false
-  if (selectedTargetKey === `run:${groupKey}`) return true
+  if (selectedTargetKey === `turn:${groupKey}`) return true
   if (itemId === null || itemId === undefined) return false
   return selectedTargetKey === `item:${groupKey}:${itemId}`
 }
@@ -144,6 +144,7 @@ export function buildMessageDebugEntries(messages) {
             ? `${runId || 'unassigned'}:${auditRole(message) || 'unknown'}:${operationId}`
             : String(message?.id ?? `message-${index}`),
       runId,
+      turnId: message?.turn_id || null,
       operationId,
       model: message?.extra_metadata?.model || '',
       usage: message?.usage,
@@ -237,20 +238,6 @@ export function formatAuditDuration(durationMs) {
   return `${minutes}m ${seconds}s`
 }
 
-/** 从后端响应中读取可安全打开的 Langfuse HTTP(S) 地址。 */
-export function resolveLangfuseRunUrl(payload) {
-  if (typeof payload?.langfuse_url !== 'string') return null
-
-  const value = payload.langfuse_url.trim()
-  if (!value) return null
-  try {
-    const parsed = new URL(value)
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? value : null
-  } catch {
-    return null
-  }
-}
-
 /** 按连续 Run 或待运行请求分组，以请求身份保持接入前后的选择。 */
 export function groupMessageDebugEntries(entries) {
   const source = Array.isArray(entries) ? entries : []
@@ -312,6 +299,30 @@ export function mergeMessageDebugRunGroups(entries, runTraces) {
     groups.push(group)
   })
   groups.push(...missingGroups.slice(nextMissingIndex))
+  return groups
+}
+
+/** 将执行段按持久 Turn 归组，保留没有归属的输入与运行。 */
+export function groupMessageDebugTurns(runGroups) {
+  const groups = []
+  const turns = new Map()
+  for (const run of runGroups) {
+    let group = run.turnId ? turns.get(run.turnId) : null
+    if (!group) {
+      group = {
+        key: run.turnId ? `turn:${run.turnId}` : run.key,
+        turnId: run.turnId || null,
+        inputId: run.inputId,
+        index: groups.length,
+        runs: [],
+        items: []
+      }
+      groups.push(group)
+      if (run.turnId) turns.set(run.turnId, group)
+    }
+    group.runs.push(run)
+    group.items.push(...run.items)
+  }
   return groups
 }
 

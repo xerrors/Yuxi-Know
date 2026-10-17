@@ -16,4 +16,6 @@
 
 `GET /api/system/agent-feedback` 仅允许产品 JWT 的 `superadmin` 集中查看，可按 agent_id、source、rating 筛选并使用相同分页；普通 `admin`、Agent 管理者和所有 API Key 均被拒绝。列表不返回原始对话、manifest 或私有 Skill 元数据，也不扩展原会话、审计或文件权限。
 
+反馈详情的「打开 Langfuse Trace」调用 `GET /api/system/agent-feedback/{feedback_id}/langfuse`，以反馈的 Run 定位所属 Turn。该入口允许产品超级管理员跨用户复盘，已删除会话的反馈返回 `404`。自身会话调试面板使用 `GET /api/agent/threads/{thread_id}/turns/{turn_id}/langfuse`，同时检查会话拥有者与 Turn 归属。两者返回 `{turn_id, langfuse_trace_id, langfuse_url}`，拒绝普通用户、普通管理员和所有 API Key；缺少本轮 Trace 时后两个字段为 null，配置或 URL 解析不可用时 URL 为 null。Langfuse 配置与观测粒度见[接入 Langfuse](./langfuse-integration.md)。
+
 Agent 可通过[改进标记工具](../agents/tools-system.md#内置工具-记录改进线索)记录流程纠正或经验候选。保存反馈只完成采集，后续复盘和 Skill 更新需要独立流程。

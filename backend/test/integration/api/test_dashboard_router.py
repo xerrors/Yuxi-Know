@@ -19,6 +19,36 @@ from test.live_api_cleanup import make_test_session_title
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
 
+@pytest.mark.self_managed_resources
+async def test_dashboard_vm_stats_match_live_control_plane(test_client, admin_headers):
+    """真实 HTTP 计数与节点只读列表一致，不依赖数据库登记状态。"""
+    import httpx
+
+    from yuxi.modules.agents.runtime.sandbox.cube import CubeAdapter
+
+    adapter = CubeAdapter()
+    headers = {"X-API-Key": adapter.config.api_key} if adapter.config.api_key else {}
+    async with httpx.AsyncClient(timeout=10, trust_env=False) as client:
+        response = await client.get(f"{adapter.config.api_url}/v2/sandboxes", headers=headers)
+    response.raise_for_status()
+    instances = response.json()
+    stats = await test_client.get("/api/dashboard/stats/vms", headers=admin_headers)
+    assert stats.status_code == 200, stats.text
+    assert stats.json() == {
+        "active_vms": sum(instance["state"].lower() == "running" for instance in instances),
+        "total_vms": len(instances),
+    }
+
+
+@pytest.mark.self_managed_resources
+async def test_dashboard_vm_stats_require_superadmin(test_client, standard_user):
+    """未登录和普通用户不能读取节点 VM 统计。"""
+    anonymous = await test_client.get("/api/dashboard/stats/vms")
+    ordinary = await test_client.get("/api/dashboard/stats/vms", headers=standard_user["headers"])
+    assert anonymous.status_code == 401, anonymous.text
+    assert ordinary.status_code == 403, ordinary.text
+
+
 async def _set_session_statuses(member_thread_id: str, deleted_thread_id: str) -> None:
     """使用绑定当前测试事件循环的一次性引擎写入状态事实。"""
     engine = create_async_engine(os.environ["POSTGRES_URL"])

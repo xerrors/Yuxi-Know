@@ -7,9 +7,11 @@ from yuxi.modules.agents.models.definitions import Agent
 from yuxi.modules.agents.models.feedback import AgentFeedbackRecord
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.sessions import Session
+from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.modules.agents.repositories.pagination import order_page
 from yuxi.modules.agents.scope import ActorScope
 from yuxi.shared.datetime import utc_now
+from yuxi.shared.errors import PermissionDeniedError
 
 
 class AgentFeedbackRepository:
@@ -52,6 +54,18 @@ class AgentFeedbackRepository:
         self.db.add(record)
         await self.db.flush()
         return record
+
+    async def get_platform_turn(self, *, feedback_id: str, scope: ActorScope) -> AgentTurn | None:
+        """仅向平台 JWT 超级管理员返回可见反馈所属轮次。"""
+        if not scope.is_superadmin or scope.api_key_id is not None or scope.app_id is not None:
+            raise PermissionDeniedError("仅平台管理员可查询集中反馈")
+        return await self.db.scalar(
+            select(AgentTurn)
+            .join(AgentRun, AgentRun.turn_id == AgentTurn.id)
+            .join(AgentFeedbackRecord, AgentFeedbackRecord.run_id == AgentRun.id)
+            .join(Session, Session.id == AgentRun.session_record_id)
+            .where(AgentFeedbackRecord.id == feedback_id, Session.status.in_(("active", "archived")))
+        )
 
     async def list_page(
         self,

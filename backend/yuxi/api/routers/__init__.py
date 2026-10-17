@@ -5,6 +5,7 @@ from yuxi.api.routers.agents.files import router as agent_files_router
 from yuxi.api.routers.agents.management import agent_router
 from yuxi.api.routers.agents.mentions import mention_router
 from yuxi.api.routers.agents.references import reference_router
+from yuxi.api.routers.agents.tracing import trace_router
 from yuxi.api.routers.background_jobs import background_jobs
 from yuxi.api.routers.dashboard import dashboard as dashboard_routes
 from yuxi.api.routers.extensions.mcp import mcp
@@ -38,6 +39,7 @@ router.include_router(agent_files_router)  # /api/agent/files* 与 /api/agent/im
 router.include_router(agent_router)  # /api/agent/* 智能体管理与运行态
 router.include_router(feedback_router)  # /api/agent/threads/* Web 用户反馈
 router.include_router(reference_router)  # /api/agent/threads/* Web 回答来源标注
+router.include_router(trace_router)  # Web 管理员 Turn 观测跳转
 router.include_router(projects)  # /api/projects* 项目创建与选择
 router.include_router(scheduled_agents)  # /api/scheduled-tasks* 用户自建 Agent 定时任务
 

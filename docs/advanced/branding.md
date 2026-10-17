@@ -16,22 +16,19 @@ cp -n backend/yuxi/modules/system/static/info.template.yaml \
 在 `info.local.yaml` 中修改：
 
 ```yaml
-organization:
-  name: "Example Organization"
-  logo: "/logo.svg"
-  avatar: "/avatar.jpg"
-  login_bg: "/login-bg.jpg"
-
 branding:
   name: "Example App"
+  logo: "/logo.svg"
   title: "让团队知识更容易被使用"
-  subtitle: "知识库与智能体工作台"
+  login_bg: "/login-bg.jpg"
 
 footer:
-  copyright: "© Example Organization"
+  copyright: "© Example App"
   user_agreement_url: "/protocols/user-agreement.html"
   privacy_policy_url: "/protocols/privacy-policy.html"
 ```
+
+产品名称和 Logo 统一由 `branding.name`、`branding.logo` 拥有，首页、登录页和侧栏共用这两个字段。`title` 用于首页主标题，`login_bg` 用于登录背景。旧配置须把 `organization` 中的名称、Logo、登录背景合并到 `branding`，删除 `avatar`、`subtitle` 和 `subtitles`；名称只保留最终产品名称，不拼接组织名称。
 
 图片和协议页面放在 `frontend/public` 下，路径从网站根目录开始写，例如 `/logo.svg`。Compose 中 API 的工作目录是 `/app`，因此默认配置路径可以写成：
 
@@ -43,11 +40,7 @@ YUXI_BRAND_FILE_PATH=yuxi/modules/system/static/info.local.yaml
 
 ### 2. 重新加载
 
-开发环境的 API 直接挂载 `backend/yuxi`，修改 YAML 后重启 API 即可：
-
-```bash
-docker compose restart api
-```
+品牌接口每次请求读取 YAML。开发环境的 API 直接挂载 `backend/yuxi`，修改 YAML 后刷新浏览器页面即可读取新配置；前端在同一个页面会话内缓存已成功读取的品牌信息。
 
 生产 Compose 不挂载仓库源码，品牌 YAML 会在构建 API 镜像时复制进去。修改 `backend/yuxi/modules/system/static/info.local.yaml` 后，需要重新构建并创建 API/worker 容器：
 

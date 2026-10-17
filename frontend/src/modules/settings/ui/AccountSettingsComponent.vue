@@ -354,7 +354,7 @@ watch(() => [userStore.username, userStore.phoneNumber], syncProfileDraft, { imm
   gap: 16px;
 
   .account-card {
-    padding: 18px;
+    padding: 16px;
     border-radius: 12px;
     background: var(--gray-0);
     border: 1px solid var(--gray-150);
@@ -363,7 +363,7 @@ watch(() => [userStore.username, userStore.phoneNumber], syncProfileDraft, { imm
   .profile-card {
     display: flex;
     flex-direction: column;
-    gap: 18px;
+    gap: 16px;
     background: var(--gray-25);
   }
 
@@ -371,7 +371,7 @@ watch(() => [userStore.username, userStore.phoneNumber], syncProfileDraft, { imm
     display: flex;
     align-items: stretch;
     justify-content: space-between;
-    gap: 20px;
+    gap: 16px;
 
     @media (max-width: 760px) {
       flex-direction: column;
@@ -382,7 +382,7 @@ watch(() => [userStore.username, userStore.phoneNumber], syncProfileDraft, { imm
     min-width: 0;
     display: flex;
     align-items: center;
-    gap: 18px;
+    gap: 16px;
     flex: 1;
 
     @media (max-width: 520px) {
@@ -431,16 +431,16 @@ watch(() => [userStore.username, userStore.phoneNumber], syncProfileDraft, { imm
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
     flex: 1;
   }
 
   .profile-row {
     min-width: 0;
     display: grid;
-    grid-template-columns: 56px minmax(0, 1fr);
+    grid-template-columns: 48px minmax(0, 1fr);
     align-items: center;
-    gap: 10px;
+    gap: 6px;
   }
 
   .profile-label {
@@ -488,6 +488,11 @@ watch(() => [userStore.username, userStore.phoneNumber], syncProfileDraft, { imm
     flex-wrap: wrap;
     gap: 4px;
 
+    .profile-value,
+    :deep(.ant-btn:not(:disabled)) {
+      color: var(--gray-700);
+    }
+
     .profile-value {
       max-width: 100%;
       margin-right: 4px;
@@ -516,8 +521,8 @@ watch(() => [userStore.username, userStore.phoneNumber], syncProfileDraft, { imm
     display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: 12px;
-    padding: 14px;
+    gap: 8px;
+    padding: 12px;
     border-radius: 10px;
     background: var(--gray-0);
 
@@ -529,9 +534,9 @@ watch(() => [userStore.username, userStore.phoneNumber], syncProfileDraft, { imm
   .identity-item {
     min-width: 0;
     display: grid;
-    grid-template-columns: 20px 42px minmax(0, 1fr);
+    grid-template-columns: 20px 32px minmax(0, 1fr);
     align-items: center;
-    gap: 8px;
+    gap: 6px;
   }
 
   .identity-icon {

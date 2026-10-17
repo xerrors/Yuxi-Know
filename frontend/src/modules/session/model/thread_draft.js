@@ -52,6 +52,39 @@ export const createThreadDraftStore = (storage = globalThis.localStorage) => {
 // 线程列表清理和当前编辑器共享同一个存储 Owner。
 export const threadDraftStore = createThreadDraftStore()
 
+/** 暂存入口文本，跨登录返回后只向新会话追加一次。 */
+export function createEntryDraftHandoff(storage = globalThis.sessionStorage) {
+  const key = 'yuxi:session-entry-draft'
+  let pending = ''
+  let consumed = false
+  return {
+    save(text) {
+      pending = text
+      consumed = false
+      try {
+        storage.setItem(key, text)
+      } catch {
+        // 存储不可用时仍支持当前页面内的路由交接。
+      }
+    },
+    take() {
+      if (consumed) return ''
+      consumed = true
+      let text = pending
+      try {
+        text = pending || storage.getItem(key) || ''
+        storage.removeItem(key)
+      } catch {
+        // 仅消费当前页面中的待交接文本。
+      }
+      pending = ''
+      return text
+    }
+  }
+}
+
+export const entryDraftHandoff = createEntryDraftHandoff()
+
 /**
  * 创建绑定当前输入框的草稿会话，负责草稿与线程的对应关系。
  *

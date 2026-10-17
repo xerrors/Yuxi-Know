@@ -4,7 +4,8 @@ import test from 'node:test'
 import {
   DRAFT_THREAD_ID,
   createThreadDraftStore,
-  createThreadDraftSession
+  createThreadDraftSession,
+  createEntryDraftHandoff
 } from '../../src/modules/session/model/thread_draft.js'
 
 // 构造可注入的内存存储，模拟 localStorage 行为
@@ -17,6 +18,65 @@ const createMemoryStorage = () => {
     _raw: storage
   }
 }
+
+test('首页文本经过整页登录返回后仅交接一次，不改写会话草稿', () => {
+  const storage = createMemoryStorage()
+  const store = createThreadDraftStore(storage)
+  store.write(DRAFT_THREAD_ID, '已有的新会话草稿')
+  store.write('thread-a', '已有会话草稿')
+  createEntryDraftHandoff(storage).save('第一行\n第二行：整理知识')
+  const afterLogin = createEntryDraftHandoff(storage)
+  assert.equal(afterLogin.take(), '第一行\n第二行：整理知识')
+  assert.equal(afterLogin.take(), '')
+  assert.equal(createEntryDraftHandoff(storage).take(), '')
+  assert.equal(store.read(DRAFT_THREAD_ID), '已有的新会话草稿')
+  assert.equal(store.read('thread-a'), '已有会话草稿')
+})
+
+test('保活首页再次提交相同内容仍构成新的单次草稿交接', () => {
+  const handoff = createEntryDraftHandoff(createMemoryStorage())
+  assert.equal(handoff.take(), '')
+  handoff.save('再次提问')
+  assert.equal(handoff.take(), '再次提问')
+  assert.equal(handoff.take(), '')
+  handoff.save('再次提问')
+  assert.equal(handoff.take(), '再次提问')
+  assert.equal(handoff.take(), '')
+})
+
+test('存储写入或删除失败时优先交接本次文本且不重复读取旧值', () => {
+  const handoff = createEntryDraftHandoff({
+    getItem: () => '未能删除的旧文本',
+    setItem: () => {
+      throw new Error('quota')
+    },
+    removeItem: () => {
+      throw new Error('unavailable')
+    }
+  })
+  handoff.save('本次输入')
+  assert.equal(handoff.take(), '本次输入')
+  assert.equal(handoff.take(), '')
+})
+
+test('sessionStorage 不可用时路由交接仍保留内存文本', () => {
+  const brokenStorage = {
+    getItem: () => {
+      throw new Error('unavailable')
+    },
+    setItem: () => {
+      throw new Error('unavailable')
+    },
+    removeItem: () => {
+      throw new Error('unavailable')
+    }
+  }
+  const handoff = createEntryDraftHandoff(brokenStorage)
+  assert.equal(handoff.take(), '')
+  handoff.save('问题仍保留')
+  assert.equal(handoff.take(), '问题仍保留')
+  assert.equal(handoff.take(), '')
+})
 
 test('切换线程时保存旧线程草稿并还原新线程草稿', () => {
   const store = createThreadDraftStore(createMemoryStorage())

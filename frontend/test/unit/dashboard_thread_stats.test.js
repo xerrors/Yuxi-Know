@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { createPinia, setActivePinia } from 'pinia'
 import { createServer } from 'vite'
@@ -56,38 +55,6 @@ async function prepareStores(server) {
   return userStore
 }
 
-test('dashboardApi.getThreadStats 正确拼接时间范围与智能体过滤参数', async () => {
-  await withServer(async (server) => {
-    storageValues.clear()
-    const requests = []
-    globalThis.fetch = async (input) => {
-      requests.push(String(input))
-      return jsonResponse({
-        summary: { total_threads: 10, active_threads: 5 },
-        daily_trends: [],
-        depth_distribution: {},
-        agent_distribution: [],
-        top_users: [],
-        status_distribution: {}
-      })
-    }
-
-    await prepareStores(server)
-    const { dashboardApi } = await server.ssrLoadModule('/src/apis/dashboard_api.js')
-
-    const res1 = await dashboardApi.getThreadStats({ timeRange: '14days' })
-    assert.equal(requests[0], '/api/dashboard/stats/threads?time_range=14days')
-    assert.equal(res1.summary.total_threads, 10)
-
-    const res2 = await dashboardApi.getThreadStats({ timeRange: '30days', agentId: 'agent-coder' })
-    assert.equal(requests[1], '/api/dashboard/stats/threads?time_range=30days&agent_id=agent-coder')
-    assert.equal(res2.summary.active_threads, 5)
-
-    await dashboardApi.getThreadStats({ timeRange: '90days' })
-    assert.equal(requests[2], '/api/dashboard/stats/threads?time_range=90days')
-  })
-})
-
 test('dashboardApi.getAllStats 始终请求知识库统计', async () => {
   await withServer(async (server) => {
     storageValues.clear()
@@ -96,7 +63,6 @@ test('dashboardApi.getAllStats 始终请求知识库统计', async () => {
       '/api/dashboard/stats': { total_sessions: 3 },
       '/api/dashboard/stats/users': { total_users: 2 },
       '/api/dashboard/stats/tools': { total_calls: 4 },
-      '/api/dashboard/stats/agents': { total_agents: 1 },
       '/api/dashboard/stats/knowledge': { total_knowledge_bases: 5 }
     }
     globalThis.fetch = async (input) => {
@@ -110,68 +76,13 @@ test('dashboardApi.getAllStats 始终请求知识库统计', async () => {
     const result = await dashboardApi.getAllStats()
 
     assert.deepEqual(requests, Object.keys(responses))
-    assert.deepEqual(result.knowledge, responses['/api/dashboard/stats/knowledge'])
+    assert.deepEqual(result, {
+      basic: responses['/api/dashboard/stats'],
+      users: responses['/api/dashboard/stats/users'],
+      tools: responses['/api/dashboard/stats/tools'],
+      knowledge: responses['/api/dashboard/stats/knowledge']
+    })
   })
-})
-
-test('会话分析保持紧凑摘要、彩色排行、刷新 loading 与统一头像 fallback', () => {
-  const source = readFileSync(
-    new URL('../../src/modules/dashboard/ui/ThreadStatsComponent.vue', import.meta.url),
-    'utf8'
-  )
-  const refreshButton = source.match(/<a-button[^>]*class="refresh-btn"[\s\S]*?<\/a-button>/)?.[0]
-  const summaryStart = source.indexOf('<DashboardMetricGrid class="thread-summary-grid">')
-  const summaryEnd = source.indexOf('<!-- 筛选工具栏：位于指标卡与图表之间 -->')
-  const summarySource = source.slice(summaryStart, summaryEnd)
-  const agentChartStart = source.indexOf('const renderAgentChart')
-  const agentChartEnd = source.indexOf('const handleResize')
-  const agentChartSource = source.slice(agentChartStart, agentChartEnd)
-
-  assert.ok(refreshButton)
-  assert.ok(refreshButton.includes(':loading="loading"'))
-  assert.match(source, /:seed="record\.agent_id"/)
-  assert.match(source, /:seed="record\.uid"/)
-  assert.equal(summarySource.includes('#meta'), false)
-  assert.equal((summarySource.match(/<DashboardMetricCard/g) || []).length, 4)
-  assert.equal(summarySource.includes('Token'), false)
-  assert.match(agentChartSource, /color:\s*\(params\)\s*=>\s*getColorByIndex\(params\.dataIndex\)/)
-})
-
-test('智能体分析不再渲染 TOP 5 排行且保留分布图', () => {
-  const source = readFileSync(
-    new URL('../../src/modules/dashboard/ui/AgentStatsComponent.vue', import.meta.url),
-    'utf8'
-  )
-
-  assert.match(source, /对话\/工具调用分布 \(TOP 3\)/)
-  assert.doesNotMatch(source, /表现最佳智能体|top_performing_agents|topPerformers|performerColumns/)
-  assert.doesNotMatch(source, /<a-table/)
-})
-
-test('会话统计源码包含筛选请求代次和 loading 回写守卫', () => {
-  const source = readFileSync(
-    new URL('../../src/modules/dashboard/ui/ThreadStatsComponent.vue', import.meta.url),
-    'utf8'
-  )
-  const statsLoader = source.slice(
-    source.indexOf('const loadData'),
-    source.indexOf('const loadFilterOptions')
-  )
-  const sessionLoader = source.slice(
-    source.indexOf('const loadSessions'),
-    source.indexOf('const resetFilters')
-  )
-
-  assert.match(statsLoader, /const requestId = \+\+latestStatsRequest/)
-  assert.match(statsLoader, /if \(requestId !== latestStatsRequest\) return/)
-
-  assert.match(statsLoader, /if \(requestId === latestStatsRequest\) loading\.value = false/)
-  assert.match(sessionLoader, /const requestId = \+\+latestSessionRequest/)
-  assert.match(sessionLoader, /if \(requestId !== latestSessionRequest\) return/)
-  assert.match(
-    sessionLoader,
-    /if \(requestId === latestSessionRequest\) tableLoading\.value = false/
-  )
 })
 
 test('formatStorageSize 将容量限制为四位有效数字并分离单位', async () => {
@@ -207,60 +118,45 @@ test('buildHeatmapMonthSegments 忽略拥挤的残月并保留完整月份', asy
   })
 })
 
-test('dashboardApi.getSessionFilterOptions 请求会话审计筛选项', async () => {
+test('dashboardApi.getVmStats 独立请求执行节点实时计数', async () => {
   await withServer(async (server) => {
     storageValues.clear()
     const requests = []
     globalThis.fetch = async (input) => {
       requests.push(String(input))
-      return jsonResponse({ users: [], agents: [] })
+      return jsonResponse({ active_vms: 2, total_vms: 7 })
     }
-
     await prepareStores(server)
     const { dashboardApi } = await server.ssrLoadModule('/src/apis/dashboard_api.js')
-    const result = await dashboardApi.getSessionFilterOptions()
-
-    assert.equal(requests[0], '/api/dashboard/sessions/options')
-    assert.deepEqual(result, { users: [], agents: [] })
+    assert.deepEqual(await dashboardApi.getVmStats(), { active_vms: 2, total_vms: 7 })
+    assert.deepEqual(requests, ['/api/dashboard/stats/vms'])
   })
 })
 
-test('dashboardApi.getSessions 正确拼接 search 搜索关键词与分页参数', async () => {
+test('智能体会话分布独立查询四种范围', async () => {
   await withServer(async (server) => {
     storageValues.clear()
     const requests = []
     globalThis.fetch = async (input) => {
       requests.push(String(input))
       return jsonResponse({
-        items: [
-          {
-            thread_id: 'thread-123',
-            title: 'Search match',
-            status: 'active'
-          }
-        ],
-        total: 41,
-        limit: 20,
-        offset: 40
+        total_threads: 2,
+        agent_count: 1,
+        avg_messages_per_thread: 1.5,
+        agent_distribution: []
       })
     }
-
     await prepareStores(server)
     const { dashboardApi } = await server.ssrLoadModule('/src/apis/dashboard_api.js')
-
-    const result = await dashboardApi.getSessions({
-      status: 'active',
-      search: 'search term',
-      limit: 20,
-      offset: 40
-    })
-
-    assert.equal(
-      requests[0],
-      '/api/dashboard/sessions?status=active&search=search+term&limit=20&offset=40'
+    for (const range of ['all', '7days', '30days', '3months']) {
+      const result = await dashboardApi.getAgentSessionDistribution(range)
+      assert.equal(result.avg_messages_per_thread, 1.5)
+    }
+    assert.deepEqual(
+      requests,
+      ['all', '7days', '30days', '3months'].map(
+        (range) => `/api/dashboard/stats/agents/sessions?time_range=${range}`
+      )
     )
-    assert.equal(result.total, 41)
-    assert.equal(result.items.length, 1)
-    assert.equal(result.items[0].thread_id, 'thread-123')
   })
 })

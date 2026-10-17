@@ -19,6 +19,7 @@ const agentStore = useAgentStore()
 const router = useRouter()
 const agentLoading = ref(false)
 const searchQuery = ref('')
+const visibilityFilter = ref('all')
 
 const agentBackendOptions = ref([])
 const managedAgents = ref([])
@@ -46,8 +47,24 @@ const filteredAgents = computed(() => {
   )
 })
 
-const groupedAgents = computed(() => [
-  { key: 'agents', title: '智能体', agents: filteredAgents.value }
+const visibleAgents = computed(() =>
+  visibilityFilter.value === 'all'
+    ? filteredAgents.value
+    : filteredAgents.value.filter((agent) => agent.visibility === visibilityFilter.value)
+)
+
+const visibilityFilterOptions = computed(() => [
+  { value: 'all', label: '全部', count: managedAgents.value.length },
+  {
+    value: 'shared',
+    label: '共享',
+    count: managedAgents.value.filter((agent) => agent.visibility === 'shared').length
+  },
+  {
+    value: 'private',
+    label: '私有',
+    count: managedAgents.value.filter((agent) => agent.visibility === 'private').length
+  }
 ])
 
 const agentStats = computed(() => ({
@@ -190,18 +207,31 @@ defineExpose({
       </template>
     </PageShoulder>
 
-    <div v-if="groupedAgents.length === 0" class="agent-empty-state">
-      <a-empty :image="false" :description="searchQuery ? '没有匹配的智能体' : '暂无智能体'" />
+    <div class="agent-filter-row" role="group" aria-label="智能体范围筛选">
+      <button
+        v-for="option in visibilityFilterOptions"
+        :key="option.value"
+        type="button"
+        :class="{ active: visibilityFilter === option.value }"
+        :aria-pressed="visibilityFilter === option.value"
+        @click="visibilityFilter = option.value"
+      >
+        {{ option.label }} <span>{{ option.count }}</span>
+      </button>
+    </div>
+
+    <div v-if="!visibleAgents.length" class="agent-empty-state">
+      <a-empty
+        :image="false"
+        :description="searchQuery || visibilityFilter !== 'all' ? '没有匹配的智能体' : '暂无智能体'"
+      />
     </div>
 
     <template v-else>
-      <section v-for="group in groupedAgents" :key="group.key" class="agent-group-section">
-        <div class="agent-group-header">
-          <span>{{ group.title }}</span>
-        </div>
+      <section class="agent-group-section">
         <ExtensionCardGrid :min-width="320">
           <InfoCard
-            v-for="agent in group.agents"
+            v-for="agent in visibleAgents"
             :key="agent.agent_id"
             :title="agent.name"
             :subtitle="agent.agent_id"
@@ -246,7 +276,7 @@ defineExpose({
               </a-menu>
             </template>
 
-            <template v-if="group.key === 'agents'" #tag-actions>
+            <template #tag-actions>
               <a-button
                 v-if="agent.can_run"
                 type="text"
@@ -289,16 +319,43 @@ defineExpose({
   padding-top: 2px;
 }
 
-.agent-group-header {
+.agent-filter-row {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 12px var(--page-padding) 0;
-  color: var(--gray-500);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.4px;
-  line-height: 18px;
+  flex-wrap: wrap;
+
+  button {
+    display: inline-flex;
+    min-height: 32px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--gray-500);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    align-items: center;
+    gap: 5px;
+
+    &:hover,
+    &.active {
+      background: var(--gray-50);
+      color: var(--gray-900);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--main-color);
+      outline-offset: 2px;
+    }
+
+    span {
+      color: var(--gray-400);
+      font-variant-numeric: tabular-nums;
+    }
+  }
 }
 
 .agent-card-icon-image {

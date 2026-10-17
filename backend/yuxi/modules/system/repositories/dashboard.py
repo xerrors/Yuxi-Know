@@ -1,5 +1,6 @@
 """Dashboard 统计读模型的数据访问层。"""
 
+from calendar import monthrange
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -451,6 +452,8 @@ class DashboardRepository:
     ) -> dict[str, Any]:
         """查询并补齐十四个时间区间的调用分析序列。"""
         query_now = now or utc_now()
+        if metric_type == "sessions":
+            return await self._get_session_timeseries(time_range=time_range, now=query_now)
         query_local_now = local_now or shanghai_now()
         intervals = 14
 
@@ -642,6 +645,66 @@ class DashboardRepository:
             "peak_count": peak["total"],
             "peak_date": peak["date"],
             "agent_names": agent_names,
+        }
+
+    async def get_agent_session_distribution(self, *, time_range: str = "all", now: datetime | None = None) -> dict[str, Any]:
+        """统计所选范围内新建会话的智能体分布和截至当前的平均消息数。"""
+        query_now = (now or utc_now()).astimezone(UTC)
+        local_today = ensure_shanghai(query_now).replace(hour=0, minute=0, second=0, microsecond=0)
+        filters = [Session.status != "deleted", User.is_deleted == 0, Session.created_at <= query_now]
+        if time_range != "all":
+            if time_range == "3months":
+                year, month = divmod(local_today.year * 12 + local_today.month - 1 - 3, 12)
+                start = local_today.replace(year=year, month=month + 1, day=min(local_today.day, monthrange(year, month + 1)[1]))
+            else:
+                start = local_today - timedelta(days={"7days": 6, "30days": 29}[time_range])
+            filters.append(Session.created_at >= start.astimezone(UTC))
+        selected_sessions = (
+            select(Session.id, Session.agent_id, Agent.name.label("agent_name"))
+            .join(User, Session.uid == User.uid)
+            .join(Agent, Session.agent_id == Agent.slug)
+            .where(*filters)
+            .subquery()
+        )
+        message_counts = (
+            select(Message.session_record_id, func.count(Message.id).label("message_count"))
+            .where(
+                Message.session_record_id.in_(select(selected_sessions.c.id)),
+                Message.created_at <= query_now,
+                or_(Message.message_type.is_(None), Message.message_type.notin_(AUDIT_MESSAGE_TYPES)),
+            )
+            .group_by(Message.session_record_id)
+            .subquery()
+        )
+        rows = (
+            await self.db_session.execute(
+                select(
+                    selected_sessions.c.agent_id,
+                    selected_sessions.c.agent_name,
+                    func.count(selected_sessions.c.id).label("thread_count"),
+                    func.coalesce(func.sum(message_counts.c.message_count), 0).label("message_count"),
+                )
+                .outerjoin(message_counts, selected_sessions.c.id == message_counts.c.session_record_id)
+                .group_by(selected_sessions.c.agent_id, selected_sessions.c.agent_name)
+                .order_by(func.count(selected_sessions.c.id).desc(), selected_sessions.c.agent_id)
+            )
+        ).all()
+        total_threads = sum(row.thread_count for row in rows)
+        total_messages = sum(int(row.message_count) for row in rows)
+        return {
+            "total_threads": total_threads,
+            "agent_count": len(rows),
+            "avg_messages_per_thread": round(total_messages / total_threads, 1) if total_threads else 0.0,
+            "agent_distribution": [
+                {
+                    "agent_id": row.agent_id,
+                    "agent_name": row.agent_name,
+                    "thread_count": row.thread_count,
+                    "message_count": int(row.message_count),
+                    "avg_messages": round(int(row.message_count) / row.thread_count, 1),
+                }
+                for row in rows
+            ],
         }
 
     async def get_thread_analytics(
@@ -895,4 +958,65 @@ class DashboardRepository:
             "agent_distribution": agent_distribution,
             "top_users": top_users,
             "status_distribution": status_distribution,
+        }
+
+    async def _get_session_timeseries(self, *, time_range: str, now: datetime) -> dict[str, Any]:
+        """按上海时间补齐十四个桶，新增按创建时间、活跃按桶内去重消息会话计数。"""
+        local_now = ensure_shanghai(now)
+        unit = {"14hours": "hour", "14days": "day", "14weeks": "week"}[time_range]
+        current_bucket = local_now.replace(minute=0, second=0, microsecond=0)
+        if unit != "hour":
+            current_bucket = current_bucket.replace(hour=0)
+        if unit == "week":
+            current_bucket -= timedelta(days=current_bucket.weekday())
+        step = {"hour": timedelta(hours=1), "day": timedelta(days=1), "week": timedelta(weeks=1)}[unit]
+        first_bucket = current_bucket - 13 * step
+        start = first_bucket.astimezone(UTC)
+        visible = (Session.status != "deleted", User.is_deleted == 0)
+
+        created_bucket = func.date_trunc(unit, func.timezone("Asia/Shanghai", Session.created_at))
+        created_rows = (
+            await self.db_session.execute(
+                select(created_bucket, func.count(Session.id))
+                .join(User, Session.uid == User.uid)
+                .join(Agent, Session.agent_id == Agent.slug)
+                .where(*visible, Session.created_at >= start, Session.created_at <= now)
+                .group_by(created_bucket)
+            )
+        ).all()
+        active_bucket = func.date_trunc(unit, func.timezone("Asia/Shanghai", Message.created_at))
+        active_rows = (
+            await self.db_session.execute(
+                select(active_bucket, func.count(distinct(Message.session_record_id)))
+                .select_from(Message)
+                .join(Session, Message.session_record_id == Session.id)
+                .join(User, Session.uid == User.uid)
+                .join(Agent, Session.agent_id == Agent.slug)
+                .where(
+                    *visible,
+                    Message.created_at >= start,
+                    Message.created_at <= now,
+                    or_(Message.message_type.is_(None), Message.message_type.notin_(AUDIT_MESSAGE_TYPES)),
+                )
+                .group_by(active_bucket)
+            )
+        ).all()
+        date_format = {"hour": "%Y-%m-%d %H:00", "day": "%Y-%m-%d", "week": "%G-%V"}[unit]
+        created = {bucket.strftime(date_format): count for bucket, count in created_rows}
+        active = {bucket.strftime(date_format): count for bucket, count in active_rows}
+        data = []
+        for index in range(14):
+            key = (first_bucket + index * step).strftime(date_format)
+            new_count = created.get(key, 0)
+            data.append({"date": key, "data": {"new_threads": new_count, "active_threads": active.get(key, 0)}, "total": new_count})
+        # 活跃和新增可以重叠，摘要 total/average/peak 只统计新增，不能相加。
+        total = sum(item["total"] for item in data)
+        peak = max(data, key=lambda item: item["total"])
+        return {
+            "data": data,
+            "categories": ["new_threads", "active_threads"],
+            "total_count": total,
+            "average_count": round(total / 14, 2),
+            "peak_count": peak["total"],
+            "peak_date": peak["date"],
         }

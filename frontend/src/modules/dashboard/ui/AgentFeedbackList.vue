@@ -1,24 +1,13 @@
 <template>
-  <section class="feedback-list" aria-labelledby="feedback-list-title">
-    <header class="feedback-heading">
-      <div>
-        <h2 id="feedback-list-title">反馈记录</h2>
-        <p>汇总用户评价与智能体改进线索。</p>
-      </div>
-      <a-button class="refresh-btn" :loading="loading" @click="reload">
-        <template #icon><RefreshCw :size="14" aria-hidden="true" /></template>
-        刷新
-      </a-button>
-    </header>
-
+  <section class="feedback-list" aria-label="智能体反馈">
     <div class="feedback-panel">
-      <div class="feedback-filters">
+      <div class="feedback-toolbar" role="group" aria-label="反馈筛选与刷新">
         <div class="filter-field source-field">
-          <span id="feedback-source-label">反馈来源</span>
-          <a-segmented
+          <label for="feedback-source">反馈来源</label>
+          <a-select
+            id="feedback-source"
             v-model:value="filters.source"
             :options="sourceOptions"
-            aria-labelledby="feedback-source-label"
             @change="changeSource"
           />
         </div>
@@ -39,18 +28,21 @@
           <a-select id="feedback-rating" v-model:value="filters.rating" :options="ratingOptions" @change="reload" />
         </div>
         <a-button v-if="hasFilters" type="text" class="reset-filters" @click="clearFilters">重置筛选</a-button>
+        <div class="toolbar-actions">
+          <span class="feedback-count" role="status">{{ loading && !items.length ? '正在加载…' : `${items.length} 条` }}</span>
+          <a-button class="refresh-btn" :loading="loading" @click="reload">
+            <template #icon><RefreshCw :size="14" aria-hidden="true" /></template>
+            刷新
+          </a-button>
+        </div>
       </div>
       <p v-if="agentsError" class="agent-load-error" role="alert">
         智能体选项加载失败。
         <button type="button" class="text-action" @click="loadAgents">重新加载</button>
       </p>
 
-      <div class="list-caption">
-        <span role="status">{{ loading && !items.length ? '正在加载反馈…' : `已加载 ${items.length} 条` }}</span>
-        <span>记录时间降序</span>
-      </div>
       <div v-if="loading && !items.length" class="feedback-skeleton" aria-label="正在加载反馈" aria-busy="true">
-        <a-skeleton v-for="index in 3" :key="index" active :paragraph="{ rows: 2 }" />
+        <a-skeleton v-for="index in 3" :key="index" active :title="false" :paragraph="{ rows: 1 }" />
       </div>
       <ResourceEmptyState
         v-else-if="!items.length"
@@ -65,26 +57,53 @@
         </template>
       </ResourceEmptyState>
       <template v-else>
-        <div class="list-columns" aria-hidden="true">
-          <span>来源与评价</span><span>反馈内容</span><span>智能体</span><span>记录时间</span><span></span>
+        <div class="feedback-table-scroll" tabindex="0" role="region" aria-label="反馈表格，可横向滚动">
+          <table class="feedback-records" :aria-busy="loading" aria-label="智能体反馈记录">
+            <colgroup>
+              <col class="signal-column" />
+              <col />
+              <col class="agent-column" />
+              <col class="time-column" />
+              <col class="action-column" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th scope="col">来源与评价</th>
+                <th scope="col">反馈内容</th>
+                <th scope="col">智能体</th>
+                <th scope="col" aria-sort="descending">记录时间 <span aria-hidden="true">↓</span></th>
+                <th scope="col" class="action-cell">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in items" :key="item.id" class="feedback-record">
+                <td>
+                  <span class="feedback-signal" :class="signalClass(item)">
+                    <component :is="signalIcon(item)" :size="14" aria-hidden="true" />
+                    {{ signalLabel(item) }}
+                  </span>
+                </td>
+                <td>
+                  <p class="record-reason" :class="{ 'no-reason': !item.reason }">{{ item.reason || '无补充说明' }}</p>
+                </td>
+                <td>
+                  <button type="button" class="record-agent" :title="`筛选智能体：${item.agent_name || item.agent_id}`" @click="selectAgent(item.agent_id)">
+                    <FallbackAvatar kind="agent" :seed="item.agent_id" :size="24" decorative />
+                    <span>{{ item.agent_name || item.agent_id }}</span>
+                  </button>
+                </td>
+                <td>
+                  <time class="record-time" :datetime="item.created_at">{{ formatDateTime(item.created_at) }}</time>
+                </td>
+                <td class="action-cell">
+                  <button type="button" class="record-details text-action" :aria-label="`查看 ${item.agent_name || item.agent_id} 的${signalLabel(item)}详情`" @click="showDetails(item, $event)">
+                    查看详情 <ChevronRight :size="14" aria-hidden="true" />
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-        <ol class="feedback-records" :aria-busy="loading">
-          <li v-for="item in items" :key="item.id" class="feedback-record">
-            <span class="feedback-signal" :class="signalClass(item)">
-              <component :is="signalIcon(item)" :size="14" aria-hidden="true" />
-              {{ signalLabel(item) }}
-            </span>
-            <p class="record-reason" :class="{ 'no-reason': !item.reason }">{{ item.reason || '无补充说明' }}</p>
-            <button type="button" class="record-agent" :title="`筛选智能体：${item.agent_name || item.agent_id}`" @click="selectAgent(item.agent_id)">
-              <FallbackAvatar kind="agent" :seed="item.agent_id" :size="24" decorative />
-              <span>{{ item.agent_name || item.agent_id }}</span>
-            </button>
-            <time class="record-time" :datetime="item.created_at">{{ formatDateTime(item.created_at) }}</time>
-            <button type="button" class="record-details text-action" :aria-label="`查看 ${item.agent_name || item.agent_id} 的${signalLabel(item)}详情`" @click="showDetails(item, $event)">
-              查看详情 <ChevronRight :size="14" aria-hidden="true" />
-            </button>
-          </li>
-        </ol>
         <div v-if="error" class="page-error" role="alert">
           <AlertCircle :size="16" aria-hidden="true" />
           <span>{{ error }}</span>
@@ -130,11 +149,11 @@
         </section>
       </template>
       <template #footer>
-        <p v-if="selected && sessionError" class="session-error" role="alert">{{ sessionError }}</p>
+        <p v-if="selected && traceError" class="session-error" role="alert">{{ traceError }}</p>
         <div class="detail-footer">
-          <span>查看会话需具备相应访问权限。</span>
-          <a-button v-if="selected" :loading="openingSession === selected.session_id" :disabled="!!openingSession" @click="openSession(selected)">
-            查看原会话 <ArrowUpRight :size="14" aria-hidden="true" />
+          <span>在 Langfuse 中查看本轮执行。</span>
+          <a-button v-if="selected" :loading="openingTrace === selected.id" :disabled="!!openingTrace" @click="openTurnInLangfuse(selected)">
+            打开 Langfuse Trace <ArrowUpRight :size="14" aria-hidden="true" />
           </a-button>
         </div>
       </template>
@@ -144,11 +163,11 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onDeactivated, onMounted, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import { AlertCircle, ArrowUpRight, ChevronRight, Lightbulb, MessageSquare, RefreshCw, ThumbsDown, ThumbsUp } from '@lucide/vue'
 import { agentApi } from '@/apis'
 import { feedbackApi } from '@/apis/feedback_api'
 import { formatDateTime } from '@/shared/lib/time'
+import { resolveLangfuseTraceUrl } from '@/shared/lib/langfuse'
 import FallbackAvatar from '@/shared/ui/FallbackAvatar.vue'
 import ResourceEmptyState from '@/shared/ui/ResourceEmptyState.vue'
 
@@ -164,9 +183,8 @@ const retryMore = ref(false)
 const agents = ref([])
 const agentsLoading = ref(false)
 const agentsError = ref(false)
-const router = useRouter()
-const openingSession = ref(null)
-const sessionError = ref('')
+const openingTrace = ref(null)
+const traceError = ref('')
 const selected = ref(null)
 const detailOpen = ref(false)
 const detailHeading = ref(null)
@@ -196,7 +214,7 @@ watch([detailOpen, detailHeading], ([open, heading]) => {
   else detailViewRevision += 1
 }, { flush: 'post' })
 
-/** 离开列表时关闭详情，阻止迟到的会话查询接管导航。 */
+/** 离开列表时关闭详情，阻止迟到的观测查询接管导航。 */
 function closeOnLeave() {
   detailViewRevision += 1
   detailOpen.value = false
@@ -269,22 +287,38 @@ function showDetails(item, event) {
   detailViewRevision += 1
   detailTrigger = event.currentTarget
   selected.value = item
-  sessionError.value = ''
+  traceError.value = ''
   detailOpen.value = true
 }
-async function openSession(item) {
-  if (openingSession.value) return
+async function openTurnInLangfuse(item) {
+  if (openingTrace.value) return
+  const targetWindow = window.open('about:blank', '_blank')
+  if (!targetWindow) {
+    traceError.value = '浏览器阻止了新标签页，请允许弹窗后重试'
+    return
+  }
+  targetWindow.opener = null
   const revision = detailViewRevision
-  openingSession.value = item.session_id
-  sessionError.value = ''
+  openingTrace.value = item.id
+  traceError.value = ''
   try {
-    await agentApi.getPublicThread(item.session_id)
-    if (revision !== detailViewRevision) return
-    await router.push({ name: 'AgentCompWithThreadId', params: { thread_id: item.session_id } })
+    const result = await feedbackApi.getTurnLangfuse(item.id)
+    if (revision !== detailViewRevision) {
+      targetWindow.close()
+      return
+    }
+    const url = resolveLangfuseTraceUrl(result)
+    if (!url) {
+      targetWindow.close()
+      traceError.value = result.langfuse_trace_id ? 'Langfuse 当前不可用，请检查配置或稍后重试' : '本轮暂无可用的 Langfuse Trace'
+      return
+    }
+    targetWindow.location.replace(url)
   } catch (cause) {
-    if (revision === detailViewRevision) sessionError.value = cause.status === 404 ? '无会话访问权限' : (cause.message || '会话加载失败，请重试')
+    targetWindow.close()
+    if (revision === detailViewRevision) traceError.value = cause.status === 404 ? '反馈已不可用，请刷新列表' : (cause.message || '获取 Langfuse 地址失败，请重试')
   } finally {
-    openingSession.value = null
+    openingTrace.value = null
   }
 }
 onMounted(() => { void reload(); void loadAgents() })
@@ -292,37 +326,45 @@ onMounted(() => { void reload(); void loadAgents() })
 
 <style scoped lang="less">
 .feedback-list { padding: var(--page-padding); }
-.feedback-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 20px;
-  h2 { margin: 0; color: var(--gray-900); font-size: 18px; font-weight: 600; line-height: 1.4; }
-  p { margin: 6px 0 0; color: var(--gray-600); font-size: 13px; line-height: 1.6; }
-}
-.feedback-panel { container: feedback-panel / inline-size; border: 1px solid var(--gray-150); border-radius: 8px; background: var(--gray-0); overflow: hidden; }
-.feedback-filters { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 16px; padding: 20px; }
+.feedback-panel { border: 1px solid var(--gray-150); border-radius: 8px; background: var(--gray-0); overflow: hidden; }
+.feedback-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 20px; padding: 12px 16px; }
 .filter-field {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 8px;
-  > span, > label { font-size: 12px; color: var(--gray-600); }
+  > span, > label { flex-shrink: 0; font-size: 12px; color: var(--gray-600); }
 }
-.agent-field { width: 220px; }
-.rating-field { width: 132px; }
-.agent-load-error { margin: 0 20px 12px; color: var(--color-error-700); font-size: 13px; }
-.list-caption { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--gray-150); color: var(--gray-600); font-size: 12px; }
-.list-columns, .feedback-record { display: grid; grid-template-columns: 116px minmax(180px, 1fr) 160px 132px 88px; align-items: start; gap: 16px; padding: 16px 20px; }
-.list-columns { padding-block: 10px; background: var(--gray-25); border-top: 1px solid var(--gray-150); color: var(--gray-600); font-size: 12px; }
-.feedback-records { list-style: none; padding: 0; margin: 0; }
-.feedback-record { border-top: 1px solid var(--gray-150); min-height: 104px; }
+.source-field :deep(.ant-select) { width: 132px; }
+.agent-field :deep(.ant-select) { width: 180px; }
+.rating-field :deep(.ant-select) { width: 116px; }
+.toolbar-actions { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+.feedback-count { color: var(--gray-500); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.agent-load-error { margin: 0 16px 12px; color: var(--color-error-700); font-size: 13px; }
+.feedback-table-scroll { overflow-x: auto; border-top: 1px solid var(--gray-150); }
+.feedback-table-scroll:focus-visible { outline: 2px solid var(--main-color); outline-offset: -2px; }
+.feedback-records {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  .signal-column { width: 128px; }
+  .agent-column { width: 164px; }
+  .time-column { width: 148px; }
+  .action-column { width: 112px; }
+  th, td { padding: 10px 16px; text-align: left; vertical-align: middle; }
+  th { height: 40px; background: var(--gray-25); color: var(--gray-600); font-size: 12px; font-weight: 500; white-space: nowrap; }
+  td { border-top: 1px solid var(--gray-150); }
+  .action-cell { text-align: right; }
+}
+.feedback-record {
+  height: 64px;
+  &:hover { background: var(--gray-25); }
+}
 .feedback-signal {
   display: inline-flex;
   align-items: center;
-  justify-self: start;
   gap: 6px;
-  padding: 5px 8px;
+  padding: 3px 6px;
   border-radius: 6px;
   white-space: nowrap;
   font-size: 12px;
@@ -335,13 +377,14 @@ onMounted(() => { void reload(); void loadAgents() })
 .record-reason {
   margin: 0;
   color: var(--gray-800);
-  font-size: 14px;
-  line-height: 1.75;
-  white-space: pre-wrap;
+  font-size: 13px;
+  line-height: 20px;
+  white-space: normal;
   overflow-wrap: anywhere;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
+  max-height: 40px;
   overflow: hidden;
 }
 .no-reason { color: var(--gray-600); }
@@ -350,6 +393,8 @@ onMounted(() => { void reload(); void loadAgents() })
   align-items: center;
   gap: 8px;
   min-width: 0;
+  width: 100%;
+  min-height: 28px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -361,7 +406,8 @@ onMounted(() => { void reload(); void loadAgents() })
   span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   &:hover { color: var(--main-700); }
 }
-.record-time { font-size: 12px; color: var(--gray-600); line-height: 28px; font-variant-numeric: tabular-nums; }
+.record-details { white-space: nowrap; }
+.record-time { white-space: nowrap; font-size: 12px; color: var(--gray-600); line-height: 28px; font-variant-numeric: tabular-nums; }
 .text-action {
   display: inline-flex;
   align-items: center;
@@ -378,7 +424,7 @@ onMounted(() => { void reload(); void loadAgents() })
   &:hover { text-decoration: underline; }
 }
 .text-action:focus-visible, .record-agent:focus-visible { outline: 2px solid var(--main-color); outline-offset: 3px; border-radius: 4px; }
-.list-footer { display: flex; justify-content: center; align-items: center; min-height: 64px; padding: 16px; border-top: 1px solid var(--gray-150); color: var(--gray-600); font-size: 12px; }
+.list-footer { display: flex; justify-content: center; align-items: center; min-height: 44px; padding: 8px 16px; border-top: 1px solid var(--gray-150); color: var(--gray-600); font-size: 12px; }
 .page-error { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 16px 20px; padding: 12px; border-radius: 6px; background: var(--color-error-50); color: var(--color-error-700); font-size: 13px; span { flex: 1; } }
 .feedback-skeleton { padding: 0 20px; :deep(.ant-skeleton) { padding: 20px 0; border-top: 1px solid var(--gray-150); } }
 .detail-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; > div { display: grid; gap: 8px; min-width: 0; } strong { color: var(--gray-900); font-size: 16px; overflow-wrap: anywhere; } }
@@ -387,23 +433,5 @@ onMounted(() => { void reload(); void loadAgents() })
 .detail-metadata { margin: 0; > div { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 16px; padding: 8px 0; font-size: 12px; line-height: 1.6; } dt { color: var(--gray-600); } dd { margin: 0; color: var(--gray-800); overflow-wrap: anywhere; } }
 .detail-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; span { color: var(--gray-600); font-size: 12px; } }
 .session-error { margin: 0 0 12px; color: var(--color-error-700); font-size: 13px; }
-@container feedback-panel (max-width: 780px) {
-  .list-columns { display: none; }
-  .feedback-record { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'signal time' 'reason reason' 'agent details'; gap: 12px; }
-  .feedback-record > .feedback-signal { grid-area: signal; }
-  .record-reason { grid-area: reason; }
-  .record-agent { grid-area: agent; }
-  .record-time { grid-area: time; }
-  .record-details { grid-area: details; }
-}
-@media (max-width: 640px) {
-  .feedback-heading { gap: 12px; }
-  .feedback-filters { gap: 12px; padding: 16px; }
-  .source-field { width: 100%; :deep(.ant-segmented) { align-self: flex-start; max-width: 100%; } }
-  .agent-field { flex: 1; min-width: 160px; }
-  .list-caption, .feedback-record { padding-inline: 16px; }
-  .record-reason { -webkit-line-clamp: 4; }
-  .detail-metadata > div { grid-template-columns: 76px minmax(0, 1fr); gap: 8px; }
-}
 @media (prefers-reduced-motion: reduce) { .feedback-skeleton :deep(.ant-skeleton-content .ant-skeleton-title), .feedback-skeleton :deep(.ant-skeleton-content .ant-skeleton-paragraph > li) { animation: none; } }
 </style>

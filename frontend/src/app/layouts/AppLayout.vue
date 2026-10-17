@@ -161,9 +161,7 @@ const activeJobCount = computed(() => activeCountRef.value || 0)
 const activeSessionThreadId = computed(() => {
   return route.path.startsWith('/agent') ? currentThreadId.value : null
 })
-const organizationName = computed(() => {
-  return infoStore.organization.name || infoStore.branding.name || 'Yuxi'
-})
+const productName = computed(() => infoStore.branding.name || 'Yuxi')
 
 // 下面是导航菜单部分，添加智能体项
 const mainList = computed(() => {
@@ -380,8 +378,8 @@ provide('settingsModal', {
     <div class="header">
       <div class="sidebar-brand" @click.stop>
         <router-link v-if="!sidebarCollapsed" to="/" class="brand-link">
-          <img :src="infoStore.organization.avatar" class="brand-avatar" />
-          <span class="brand-name">{{ organizationName }}</span>
+          <img :src="infoStore.branding.logo" alt="" class="brand-logo" />
+          <span class="brand-name">{{ productName }}</span>
         </router-link>
         <button
           v-else
@@ -390,7 +388,7 @@ provide('settingsModal', {
           aria-label="展开侧边栏"
           @click="setSidebarCollapsed(false)"
         >
-          <img :src="infoStore.organization.avatar" class="brand-avatar brand-avatar-image" />
+          <img :src="infoStore.branding.logo" alt="" class="brand-logo brand-logo-image" />
           <PanelLeftOpen class="brand-expand-icon" size="20" />
         </button>
         <div v-if="!sidebarCollapsed" class="sidebar-header-actions" aria-label="侧边栏操作">
@@ -576,7 +574,7 @@ provide('settingsModal', {
 @sidebar-item-height: 32px;
 @sidebar-item-padding-x: 6px;
 @sidebar-icon-size: 16px;
-@brand-avatar-size: 24px;
+@brand-logo-size: 24px;
 @sidebar-collapsed-content-width: @sidebar-collapsed-width - @sidebar-border-width;
 @sidebar-collapsed-icon-padding-x: (
   (@sidebar-collapsed-content-width - @sidebar-icon-size - (2 * @sidebar-border-width)) / 2
@@ -584,7 +582,7 @@ provide('settingsModal', {
 @sidebar-collapsed-avatar-padding-x: (
   (@sidebar-collapsed-content-width - @sidebar-item-height - (2 * @sidebar-border-width)) / 2
 );
-@sidebar-collapsed-brand-padding-x: ((@sidebar-collapsed-content-width - @brand-avatar-size) / 2);
+@sidebar-collapsed-brand-padding-x: ((@sidebar-collapsed-content-width - @brand-logo-size) / 2);
 @sidebar-collapsed-brand-icon-padding-x: (
   (@sidebar-collapsed-content-width - @sidebar-icon-size) / 2
 );
@@ -695,12 +693,12 @@ div.header,
     cursor: pointer;
   }
 
-  .brand-avatar {
-    flex: 0 0 @brand-avatar-size;
-    width: @brand-avatar-size;
-    height: @brand-avatar-size;
+  .brand-logo {
+    flex: 0 0 @brand-logo-size;
+    width: @brand-logo-size;
+    height: @brand-logo-size;
     border-radius: 6px;
-    object-fit: cover;
+    object-fit: contain;
   }
 
   .brand-name {
@@ -985,7 +983,7 @@ div.header,
       padding: 0;
       border-radius: 8px;
 
-      .brand-avatar-image {
+      .brand-logo-image {
         margin-left: @sidebar-collapsed-brand-padding-x;
       }
 
@@ -1002,7 +1000,7 @@ div.header,
         background: var(--main-20);
         outline: none;
 
-        .brand-avatar-image {
+        .brand-logo-image {
           display: none;
         }
 

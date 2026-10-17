@@ -15,7 +15,7 @@ async function verifyEnterpriseLoginAndWorkspace(page) {
     if (url.endsWith('/system/info'))
       return respond({
         success: true,
-        data: { organization: { name: 'Yuxi', avatar: '/favicon.svg' } }
+        data: { branding: { name: 'Yuxi', logo: '/favicon.svg' } }
       })
     if (url.endsWith('/auth/me'))
       return respond({

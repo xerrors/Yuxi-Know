@@ -1,28 +1,30 @@
 <template>
-  <a-card title="用户活跃度分析" :loading="loading" class="dashboard-card">
-    <div class="dashboard-card-metric-grid">
-      <DashboardMetricCard
-        :icon="Users"
-        :value="formatNumber(userStats?.total_users)"
-        label="总用户"
-        tone="info"
-        compact
-      />
-      <DashboardMetricCard
-        :icon="Activity"
-        :value="formatNumber(userStats?.active_users_24h)"
-        label="24 小时活跃"
-        tone="success"
-        compact
-      />
-      <DashboardMetricCard
-        :icon="CalendarDays"
-        :value="formatNumber(userStats?.active_users_30d)"
-        label="30 天活跃"
-        tone="primary"
-        compact
-      />
-    </div>
+  <DashboardChartCard title="用户活跃度分析" :loading="loading" class="dashboard-card">
+    <template #summary>
+      <div class="dashboard-card-metric-grid">
+        <DashboardMetricCard
+          :icon="Users"
+          :value="formatNumber(userStats?.total_users)"
+          label="总用户"
+          tone="info"
+          compact
+        />
+        <DashboardMetricCard
+          :icon="Activity"
+          :value="formatNumber(userStats?.active_users_24h)"
+          label="24 小时活跃"
+          tone="success"
+          compact
+        />
+        <DashboardMetricCard
+          :icon="CalendarDays"
+          :value="formatNumber(userStats?.active_users_30d)"
+          label="30 天活跃"
+          tone="primary"
+          compact
+        />
+      </div>
+    </template>
 
     <div class="activity-heatmap-container">
       <div class="chart-header">
@@ -34,10 +36,11 @@
       </div>
       <DashboardActivityHeatmap :data="userStats?.daily_active_users" :loading="loading" />
     </div>
-  </a-card>
+  </DashboardChartCard>
 </template>
 
 <script setup>
+import DashboardChartCard from './DashboardChartCard.vue'
 import { Activity, CalendarDays, Users } from '@lucide/vue'
 import { formatNumber } from '@/modules/dashboard/model/dashboard'
 import DashboardActivityHeatmap from './DashboardActivityHeatmap.vue'
@@ -65,13 +68,8 @@ defineExpose({
 </script>
 
 <style scoped lang="less">
-.dashboard-card-metric-grid {
-  margin-bottom: 18px;
-}
-
 .activity-heatmap-container {
-  padding: 14px 0 2px;
-  border-top: 1px solid var(--gray-150);
+  padding: 0 0 2px;
 }
 
 .chart-header {

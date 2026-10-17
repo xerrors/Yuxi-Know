@@ -179,6 +179,9 @@ export const agentApi = {
   getTurnReferences: (threadId, turnId) =>
     apiGet(`/api/agent/threads/${threadId}/turns/${turnId}/references`),
 
+  getTurnLangfuse: (threadId, turnId) =>
+    apiGet(`/api/agent/threads/${encodeURIComponent(threadId)}/turns/${encodeURIComponent(turnId)}/langfuse`),
+
   annotateTurnReferences: (threadId, turnId) =>
     apiPost(`/api/agent/threads/${threadId}/turns/${turnId}/references`),
 

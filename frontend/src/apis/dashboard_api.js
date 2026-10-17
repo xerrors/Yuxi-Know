@@ -7,52 +7,15 @@ import { apiAdminGet } from './base'
 
 export const dashboardApi = {
   /**
-   * 获取所有对话记录
-   * @param {Object} params - 查询参数
-   * @param {string} [params.uid] - 用户 UID 过滤
-   * @param {string} [params.agent_id] - 智能体ID过滤
-   * @param {string} [params.status] - 状态过滤 (active/archived/deleted/all)
-   * @param {string} [params.search] - 标题/ID/UID 关键字搜索
-   * @param {number} [params.limit] - 每页数量
-   * @param {number} [params.offset] - 偏移量
-   * @returns {Promise<Object>} - 分页对话列表（items/total/limit/offset）
-   */
-  getSessions: (params = {}) => {
-    const queryParams = new URLSearchParams()
-    if (params.uid) queryParams.append('uid', params.uid)
-    if (params.agent_id) queryParams.append('agent_id', params.agent_id)
-    if (params.status) queryParams.append('status', params.status)
-    if (params.search) queryParams.append('search', params.search)
-    if (params.limit) queryParams.append('limit', params.limit)
-    if (params.offset) queryParams.append('offset', params.offset)
-
-    return apiAdminGet(`/api/dashboard/sessions?${queryParams.toString()}`)
-  },
-
-  /**
-   * 获取会话审计筛选选项
-   * @returns {Promise<Object>} - 用户与智能体选项
-   */
-  getSessionFilterOptions: () => {
-    return apiAdminGet('/api/dashboard/sessions/options')
-  },
-
-  /**
-   * 获取对话详情
-   * @param {string} threadId - 对话线程ID
-   * @returns {Promise<Object>} - 对话详情
-   */
-  getSessionDetail: (threadId) => {
-    return apiAdminGet(`/api/dashboard/sessions/${threadId}`)
-  },
-
-  /**
    * 获取Dashboard基础统计信息
    * @returns {Promise<Object>} - 统计信息
    */
   getStats: () => {
     return apiAdminGet('/api/dashboard/stats')
   },
+
+  /** 读取执行节点当前运行与全部 VM 数量。 */
+  getVmStats: () => apiAdminGet('/api/dashboard/stats/vms'),
 
   /**
    * 获取用户活跃度统计
@@ -78,28 +41,11 @@ export const dashboardApi = {
     return apiAdminGet('/api/dashboard/stats/knowledge')
   },
 
-  /**
-   * 获取AI智能体分析数据
-   * @returns {Promise<Object>} - AI智能体分析信息
-   */
-  getAgentStats: () => {
-    return apiAdminGet('/api/dashboard/stats/agents')
-  },
-
-  /**
-   * 获取会话（Thread）多维分析统计
-   * @param {Object} params - 查询参数
-   * @param {string} [params.timeRange='30days'] - 时间范围 (7days/14days/30days/90days)
-   * @param {string} [params.agentId] - 智能体过滤
-   * @returns {Promise<Object>} - 会话分析统计数据
-   */
-  getThreadStats: (params = {}) => {
-    const queryParams = new URLSearchParams()
-    if (params.timeRange) queryParams.append('time_range', params.timeRange)
-    if (params.agentId) queryParams.append('agent_id', params.agentId)
-
-    return apiAdminGet(`/api/dashboard/stats/threads?${queryParams.toString()}`)
-  },
+  /** 按创建范围读取智能体会话分布及平均消息数。 */
+  getAgentSessionDistribution: (timeRange = 'all') =>
+    apiAdminGet(
+      `/api/dashboard/stats/agents/sessions?${new URLSearchParams({ time_range: timeRange })}`
+    ),
 
   /**
    * 批量获取系统概览所有统计数据（并行请求）
@@ -107,19 +53,13 @@ export const dashboardApi = {
    */
   getAllStats: async () => {
     try {
-      const requests = {
-        basic: apiAdminGet('/api/dashboard/stats'),
-        users: apiAdminGet('/api/dashboard/stats/users'),
-        tools: apiAdminGet('/api/dashboard/stats/tools'),
-        agents: apiAdminGet('/api/dashboard/stats/agents'),
-        knowledge: apiAdminGet('/api/dashboard/stats/knowledge')
-      }
-
-      const entries = Object.entries(requests)
-      const values = await Promise.all(entries.map(([, request]) => request))
-      return {
-        ...Object.fromEntries(entries.map(([name], index) => [name, values[index]]))
-      }
+      const [basic, users, tools, knowledge] = await Promise.all([
+        apiAdminGet('/api/dashboard/stats'),
+        apiAdminGet('/api/dashboard/stats/users'),
+        apiAdminGet('/api/dashboard/stats/tools'),
+        apiAdminGet('/api/dashboard/stats/knowledge')
+      ])
+      return { basic, users, tools, knowledge }
     } catch (error) {
       console.error('批量获取统计数据失败:', error)
       throw error
@@ -128,7 +68,7 @@ export const dashboardApi = {
 
   /**
    * 获取调用统计时间序列数据
-   * @param {string} type - 数据类型 (models/agents/tokens/tools)
+   * @param {string} type - 数据类型 (models/agents/tokens/tools/sessions)
    * @param {string} timeRange - 时间范围 (14hours/14days/14weeks)
    * @returns {Promise<Object>} - 时间序列统计数据
    */

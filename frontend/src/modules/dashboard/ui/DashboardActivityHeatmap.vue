@@ -11,7 +11,7 @@
           <span>三</span>
           <span>五</span>
         </div>
-        <div class="heatmap-scroll">
+        <div class="heatmap-content">
           <div class="heatmap-months" :style="heatmapGridStyle" aria-hidden="true">
             <span
               v-for="month in months"
@@ -76,9 +76,6 @@ const props = defineProps({
   }
 })
 
-const CELL_SIZE = 16
-const CELL_GAP = 3
-
 const normalizedDays = computed(() =>
   props.data
     .map((item) => ({
@@ -111,8 +108,7 @@ const weeks = computed(() => {
 })
 
 const heatmapGridStyle = computed(() => ({
-  '--heatmap-weeks': weeks.value.length,
-  minWidth: `${Math.max(weeks.value.length * (CELL_SIZE + CELL_GAP) - CELL_GAP, 0)}px`
+  '--heatmap-weeks': weeks.value.length
 }))
 
 const months = computed(() => buildHeatmapMonthSegments(weeks.value))
@@ -132,9 +128,8 @@ const totalActiveUsers = computed(() =>
 .heatmap-loading {
   display: grid;
   width: 100%;
-  grid-template-columns: repeat(18, 16px);
-  justify-content: space-between;
-  gap: 3px 0;
+  grid-template-columns: repeat(18, minmax(0, 1fr));
+  gap: 3px;
   min-height: 130px;
 }
 
@@ -147,7 +142,6 @@ const totalActiveUsers = computed(() =>
 }
 
 .heatmap-loading-cell {
-  width: 16px;
   height: 16px;
   animation: heatmap-pulse 1.2s ease-in-out infinite alternate;
 }
@@ -189,19 +183,17 @@ const totalActiveUsers = computed(() =>
   }
 }
 
-.heatmap-scroll {
+.heatmap-content {
   min-width: 0;
   flex: 1;
-  overflow-x: auto;
-  scrollbar-width: thin;
 }
 
 .heatmap-months,
 .heatmap-grid {
   display: grid;
   width: 100%;
-  grid-template-columns: repeat(var(--heatmap-weeks), 16px);
-  justify-content: space-between;
+  grid-template-columns: repeat(var(--heatmap-weeks), minmax(0, 1fr));
+  column-gap: 3px;
 }
 
 .heatmap-months {
@@ -222,7 +214,7 @@ const totalActiveUsers = computed(() =>
 }
 
 .heatmap-cell {
-  width: 16px;
+  width: 100%;
   height: 16px;
   transition: filter 0.2s ease;
 

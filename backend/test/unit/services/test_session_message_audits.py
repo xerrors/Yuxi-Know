@@ -64,6 +64,7 @@ async def test_get_thread_message_audits_view_serializes_model_and_tool_facts(mo
     )
     run = SimpleNamespace(
         id="run-1",
+        turn_id="turn-1",
         status="completed",
         created_at=datetime(2026, 8, 30, 1, 0, 0),
         started_at=datetime(2026, 8, 30, 1, 0, 1),
@@ -89,6 +90,12 @@ async def test_get_thread_message_audits_view_serializes_model_and_tool_facts(mo
             assert limit == messages.AGENT_RUN_TRACE_LIMIT
             return [run], True
 
+        async def list_for_scope(self, *, turn_ids, thread_id, uid, app_id):
+            assert turn_ids == [run.turn_id]
+            assert (thread_id, uid, app_id) == ("thread-1", "user-1", None)
+            return {run.turn_id: SimpleNamespace(id=run.turn_id, status="waiting", created_at=run.created_at, finished_at=None)}
+
+    monkeypatch.setattr(messages, "AgentTurnRepository", FakeSessionRepository)
     monkeypatch.setattr(messages, "MessageRepository", FakeSessionRepository)
     monkeypatch.setattr(messages, "AgentRunRepository", FakeSessionRepository)
 
@@ -105,11 +112,13 @@ async def test_get_thread_message_audits_view_serializes_model_and_tool_facts(mo
     )
 
     assert [item["type"] for item in result["audits"]] == ["ai", "tool"]
+    assert result["turns"] == [{"turn_id": "turn-1", "status": "waiting", "created_at": "2026-08-30T01:00:00Z", "finished_at": None}]
     assert result["truncated"] is True
     assert result["runs_truncated"] is True
     assert result["runs"] == [
         {
             "run_id": "run-1",
+            "turn_id": "turn-1",
             "status": "completed",
             "timing": {
                 "created_at": "2026-08-30T01:00:00Z",
@@ -202,6 +211,7 @@ async def test_get_thread_message_audits_view_uses_agent_run_terminal_status(mon
     )
     run = SimpleNamespace(
         id="run-cancelled",
+        turn_id="turn-cancelled",
         status="cancelled",
         created_at=datetime(2026, 8, 30, 1, 0, 0),
         started_at=datetime(2026, 8, 30, 1, 0, 0),
@@ -225,6 +235,12 @@ async def test_get_thread_message_audits_view_uses_agent_run_terminal_status(mon
             assert limit == messages.AGENT_RUN_TRACE_LIMIT
             return [run], False
 
+        async def list_for_scope(self, *, turn_ids, thread_id, uid, app_id):
+            assert turn_ids == [run.turn_id]
+            assert (thread_id, uid, app_id) == ("thread-1", "user-1", None)
+            return {run.turn_id: SimpleNamespace(id=run.turn_id, status="waiting", created_at=run.created_at, finished_at=None)}
+
+    monkeypatch.setattr(messages, "AgentTurnRepository", FakeSessionRepository)
     monkeypatch.setattr(messages, "MessageRepository", FakeSessionRepository)
     monkeypatch.setattr(messages, "AgentRunRepository", FakeSessionRepository)
 

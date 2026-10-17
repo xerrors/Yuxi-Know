@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.api.dependencies.auth import get_db, get_superadmin_user
+from yuxi.modules.agents.services.sandbox import get_vm_stats
 from yuxi.modules.identity.models import User
 from yuxi.modules.system.services.dashboard import DashboardService
 
@@ -20,6 +21,13 @@ class UserActivityStats(BaseModel):
     active_users_24h: int
     active_users_30d: int
     daily_active_users: list[dict]
+
+
+class VmStats(BaseModel):
+    """执行节点实时 VM 数量。"""
+
+    active_vms: int
+    total_vms: int
 
 
 class ToolCallStats(BaseModel):
@@ -160,6 +168,25 @@ class ThreadAgentStat(BaseModel):
     agent_avatar: str | None = None
 
 
+class AgentSessionStat(BaseModel):
+    """所选创建范围内的单个智能体会话指标。"""
+
+    agent_id: str
+    agent_name: str
+    thread_count: int
+    message_count: int
+    avg_messages: float
+
+
+class AgentSessionDistribution(BaseModel):
+    """智能体会话分布与同口径摘要。"""
+
+    total_threads: int
+    agent_count: int
+    avg_messages_per_thread: float
+    agent_distribution: list[AgentSessionStat]
+
+
 class ThreadUserStat(BaseModel):
     """高频用户统计项。"""
 
@@ -200,6 +227,12 @@ async def get_user_activity_stats(
     return UserActivityStats(**await DashboardService(db).get_user_activity_stats())
 
 
+@dashboard.get("/stats/vms", response_model=VmStats)
+async def get_dashboard_vm_stats(current_user: User = Depends(get_superadmin_user)):
+    """只向超级管理员返回实时计数，不触发 VM 生命周期动作。"""
+    return await get_vm_stats()
+
+
 @dashboard.get("/stats/tools", response_model=ToolCallStats)
 async def get_tool_call_stats(
     db: AsyncSession = Depends(get_db),
@@ -220,7 +253,7 @@ async def get_agent_analytics(
 
 @dashboard.get("/stats/calls/timeseries", response_model=TimeSeriesStats)
 async def get_call_timeseries_stats(
-    type: Literal["models", "agents", "tokens", "tools"] = "models",
+    type: Literal["models", "agents", "tokens", "tools", "sessions"] = "models",
     time_range: Literal["14hours", "14days", "14weeks"] = "14days",
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_superadmin_user),
@@ -231,6 +264,16 @@ async def get_call_timeseries_stats(
         time_range=time_range,
     )
     return TimeSeriesStats(**data)
+
+
+@dashboard.get("/stats/agents/sessions", response_model=AgentSessionDistribution)
+async def get_agent_session_distribution(
+    time_range: Literal["all", "7days", "30days", "3months"] = "all",
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_superadmin_user),
+):
+    """按会话创建范围读取分布，仅超级管理员可访问。"""
+    return await DashboardService(db).get_agent_session_distribution(time_range=time_range)
 
 
 @dashboard.get("/stats/threads", response_model=ThreadAnalyticsResponse)

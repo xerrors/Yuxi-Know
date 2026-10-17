@@ -45,6 +45,10 @@ class DashboardService:
             time_range=time_range,
         )
 
+    async def get_agent_session_distribution(self, *, time_range: str = "all") -> dict[str, Any]:
+        """读取独立范围的智能体会话分布。"""
+        return await self.repo.get_agent_session_distribution(time_range=time_range)
+
     async def get_thread_analytics(
         self,
         *,
