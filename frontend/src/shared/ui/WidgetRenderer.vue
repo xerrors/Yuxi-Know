@@ -9,8 +9,19 @@
       </details>
     </div>
     <template v-else>
-      <WidgetNode :node="parsed.node" :disabled="disabled" @action="handleAction" @preview="preview = $event" />
-      <p v-if="feedback" class="widget-notice" role="status">{{ feedback }}</p>
+      <WidgetNode
+        :node="parsed.node"
+        :disabled="disabled || submitting || submitted"
+        @action="handleAction"
+        @preview="preview = $event"
+      />
+      <p
+        v-if="feedback"
+        :class="['widget-notice', { 'widget-submit-error': failed }]"
+        :role="failed ? 'alert' : 'status'"
+      >
+        {{ feedback }}
+      </p>
     </template>
     <Modal
       :open="Boolean(preview)"
@@ -25,7 +36,12 @@
     >
       <div v-if="preview" class="widget-viewer-layout">
         <div class="widget-viewer-toolbar">
-          <button type="button" class="widget-viewer-button" aria-label="关闭图片预览" @click="preview = null">
+          <button
+            type="button"
+            class="widget-viewer-button"
+            aria-label="关闭图片预览"
+            @click="preview = null"
+          >
             <X :size="22" aria-hidden="true" />
           </button>
         </div>
@@ -40,7 +56,9 @@
             aria-label="上一张"
             :disabled="preview.index === 0"
             @click="preview.index--"
-          ><ChevronLeft :size="24" aria-hidden="true" /></button>
+          >
+            <ChevronLeft :size="24" aria-hidden="true" />
+          </button>
           <button
             v-if="preview.images.length > 1"
             type="button"
@@ -48,9 +66,13 @@
             aria-label="下一张"
             :disabled="preview.index === preview.images.length - 1"
             @click="preview.index++"
-          ><ChevronRight :size="24" aria-hidden="true" /></button>
+          >
+            <ChevronRight :size="24" aria-hidden="true" />
+          </button>
         </div>
-        <p class="widget-viewer-caption">{{ preview.images[preview.index].caption || previewNode.alt }}</p>
+        <p class="widget-viewer-caption">
+          {{ preview.images[preview.index].caption || previewNode.alt }}
+        </p>
       </div>
     </Modal>
   </div>
@@ -67,14 +89,22 @@ const props = defineProps({
   source: { type: String, required: true },
   closed: Boolean,
   disabled: Boolean,
-  actionable: Boolean,
+  actionHandler: { type: Function, default: null },
   imageLoader: { type: Function, default: null },
   sourceImageLoader: { type: Function, default: null }
 })
-provide('widgetImageLoader', computed(() => props.imageLoader))
-provide('widgetSourceImageLoader', computed(() => props.sourceImageLoader))
-const emit = defineEmits(['action'])
+provide(
+  'widgetImageLoader',
+  computed(() => props.imageLoader)
+)
+provide(
+  'widgetSourceImageLoader',
+  computed(() => props.sourceImageLoader)
+)
 const feedback = ref('')
+const submitting = ref(false)
+const submitted = ref(false)
+const failed = ref(false)
 const preview = ref(null)
 const previewNode = computed(() => {
   if (!preview.value) return null
@@ -121,14 +151,37 @@ function handlePreviewKeydown(event) {
 }
 
 /** 明确告知操作结果，避免把草稿动作显示成业务完成。 */
-function handleAction(text) {
-  if (props.disabled) return
-  if (!props.actionable) {
+async function handleAction(action) {
+  if (props.disabled || submitting.value || submitted.value) return
+  failed.value = false
+  if (!props.actionHandler) {
     feedback.value = '请在会话中使用此组件'
     return
   }
-  emit('action', text)
-  feedback.value = '已填写到消息草稿，请检查后发送。'
+  const sending = typeof action !== 'string'
+  submitting.value = true
+  feedback.value = sending ? '正在发送…' : ''
+  try {
+    const accepted = await props.actionHandler(
+      sending ? { ...action, onAccepted: confirmSent } : action
+    )
+    if (sending && accepted !== true && !submitted.value)
+      throw new Error('未能发送，请使用输入框上方的提示重试。')
+    submitted.value = sending
+    feedback.value = sending ? '已发送' : '已填写到消息草稿，请检查后发送。'
+  } catch (error) {
+    failed.value = true
+    feedback.value = error.message || '发送失败，请重试。'
+  } finally {
+    submitting.value = false
+  }
+}
+
+/** 现有输入链路重试成功后，同步原组件的接收反馈。 */
+function confirmSent() {
+  submitted.value = true
+  failed.value = false
+  feedback.value = '已发送'
 }
 </script>
 
@@ -184,9 +237,17 @@ function handleAction(text) {
   color: var(--gray-900);
   cursor: pointer;
 
-  &:hover:not(:disabled) { background: var(--gray-50); }
-  &:disabled { opacity: 0.3; cursor: default; }
-  &:focus-visible { outline: 2px solid var(--main-color); outline-offset: 3px; }
+  &:hover:not(:disabled) {
+    background: var(--gray-50);
+  }
+  &:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+  &:focus-visible {
+    outline: 2px solid var(--main-color);
+    outline-offset: 3px;
+  }
 }
 
 .widget-viewer-stage {
@@ -226,8 +287,12 @@ function handleAction(text) {
   top: 50%;
   transform: translateY(-50%);
 }
-.widget-viewer-previous { left: 20px; }
-.widget-viewer-next { right: 20px; }
+.widget-viewer-previous {
+  left: 20px;
+}
+.widget-viewer-next {
+  right: 20px;
+}
 
 .widget-viewer-caption {
   align-self: center;
@@ -242,10 +307,18 @@ function handleAction(text) {
 }
 
 @media (max-width: 600px) {
-  .widget-viewer-toolbar { padding: 0 12px; }
-  .widget-viewer-stage { padding: 0 12px; }
-  .widget-viewer-previous { left: 12px; }
-  .widget-viewer-next { right: 12px; }
+  .widget-viewer-toolbar {
+    padding: 0 12px;
+  }
+  .widget-viewer-stage {
+    padding: 0 12px;
+  }
+  .widget-viewer-previous {
+    left: 12px;
+  }
+  .widget-viewer-next {
+    right: 12px;
+  }
 }
 
 .yuxi-widget,
@@ -287,6 +360,22 @@ function handleAction(text) {
   .widget-card.widget-size-full {
     max-width: none;
   }
+  .widget-card:has(.widget-form) {
+    padding: 20px 24px;
+    border-radius: 12px;
+    border-color: var(--gray-150);
+    box-shadow: none;
+    gap: 8px;
+
+    &.widget-size-md {
+      max-width: none;
+    }
+
+    > .widget-text.widget-color-default {
+      color: var(--widget-muted);
+      font-size: 13px;
+    }
+  }
   .widget-card,
   .widget-col,
   .widget-listviewitem {
@@ -302,6 +391,161 @@ function handleAction(text) {
   }
   .widget-row > .widget-col {
     flex: 1 1 100px;
+  }
+  .widget-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+    align-items: start;
+    margin: 0;
+    margin-top: 8px;
+    min-width: 0;
+    gap: 14px 20px;
+
+    > :not(.widget-field):not(.widget-radio-group),
+    > .widget-field-multiline,
+    > .widget-radio-group:has(.widget-radio-option:nth-of-type(3)) {
+      grid-column: 1 / -1;
+    }
+
+    > .widget-button {
+      justify-self: end;
+      margin-top: 4px;
+    }
+  }
+  .widget-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    width: 100%;
+    margin: 0;
+  }
+  .widget-field-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--gray-900);
+  }
+  .widget-field input,
+  .widget-field textarea {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    padding: 9px 12px;
+    border: 1px solid var(--widget-border);
+    border-radius: 8px;
+    background: var(--widget-surface);
+    color: inherit;
+    font: inherit;
+    line-height: 1.5;
+  }
+  .widget-field textarea {
+    resize: vertical;
+  }
+  .widget-radio-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  .widget-radio-group legend {
+    margin-bottom: 6px;
+    padding: 0;
+  }
+  .widget-radio-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+    min-height: 40px;
+    padding: 8px 12px;
+    margin: 0;
+    border: 1px solid var(--widget-border);
+    border-radius: 8px;
+    background: var(--widget-surface);
+    cursor: pointer;
+
+    &:has(input:checked) {
+      border-color: var(--main-color);
+      background: var(--main-10);
+      color: var(--main-700);
+    }
+  }
+  .widget-radio-option input {
+    margin: 0;
+    accent-color: var(--main-color);
+  }
+  .widget-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    align-self: flex-start;
+    gap: 8px;
+    max-width: 100%;
+    padding: 8px 16px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: var(--main-color);
+    color: var(--widget-on-solid);
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    transition:
+      background 150ms,
+      border-color 150ms;
+  }
+  .widget-button-secondary {
+    background: var(--gray-100);
+    color: var(--gray-900);
+  }
+  .widget-button-soft {
+    background: var(--main-10);
+    color: var(--main-700);
+  }
+  .widget-button-outline,
+  .widget-button-ghost {
+    background: transparent;
+    color: var(--main-700);
+  }
+  .widget-button-outline {
+    border-color: var(--widget-border);
+  }
+  .widget-button:hover:not(:disabled) {
+    filter: brightness(0.95);
+  }
+  .widget-button-sm {
+    padding: 5px 12px;
+    font-size: 13px;
+  }
+  .widget-button-lg {
+    padding: 11px 20px;
+    font-size: 16px;
+  }
+  .widget-button-block {
+    align-self: stretch;
+    width: 100%;
+  }
+  .widget-button.widget-pill {
+    border-radius: 999px;
+  }
+  .widget-button:disabled,
+  .widget-field input:disabled,
+  .widget-field textarea:disabled,
+  .widget-radio-group:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+  .widget-field input:focus-visible,
+  .widget-field textarea:focus-visible,
+  .widget-button:focus-visible,
+  .widget-radio-option input:focus-visible {
+    outline: 2px solid var(--main-color);
+    outline-offset: 2px;
+  }
+  .widget-submit-error {
+    color: var(--color-error-700);
   }
   .widget-listview {
     list-style: none;

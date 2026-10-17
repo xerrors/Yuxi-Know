@@ -1,6 +1,89 @@
 <template>
+  <form
+    v-if="node.type === 'Form'"
+    class="widget-form"
+    :style="nodeStyle"
+    @input="formError = ''"
+    @submit.prevent="submitForm"
+  >
+    <WidgetNode
+      v-for="(child, index) in node.children"
+      :key="index"
+      :node="child"
+      :disabled="disabled"
+      @action="emit('action', $event)"
+      @preview="emit('preview', $event)"
+    />
+    <p v-if="formError" class="widget-notice widget-submit-error" role="alert">{{ formError }}</p>
+  </form>
+  <fieldset
+    v-else-if="node.type === 'RadioGroup'"
+    class="widget-radio-group"
+    :disabled="disabled || node.disabled"
+  >
+    <legend class="widget-field-label">
+      {{ node.label }}<span v-if="node.required" aria-hidden="true"> *</span>
+    </legend>
+    <label v-for="option in node.options" :key="option.value" class="widget-radio-option">
+      <input
+        v-model="fieldValue"
+        type="radio"
+        :name="node.name"
+        :value="option.value"
+        :required="node.required"
+      />
+      <span>{{ option.label }}</span>
+    </label>
+  </fieldset>
+  <label
+    v-else-if="['Input', 'Textarea', 'DatePicker'].includes(node.type)"
+    :class="['widget-field', { 'widget-field-multiline': node.type === 'Textarea' }]"
+  >
+    <span class="widget-field-label"
+      >{{ node.label }}<span v-if="node.required" aria-hidden="true"> *</span></span
+    >
+    <textarea
+      v-if="node.type === 'Textarea'"
+      v-model="fieldValue"
+      :name="node.name"
+      :rows="node.rows || 3"
+      :placeholder="node.placeholder"
+      :required="node.required"
+      :disabled="disabled || node.disabled"
+      maxlength="4000"
+    ></textarea>
+    <input
+      v-else
+      v-model="fieldValue"
+      :type="node.type === 'DatePicker' ? 'date' : 'text'"
+      :name="node.name"
+      :placeholder="node.placeholder"
+      :min="node.min"
+      :max="node.max"
+      :required="node.required"
+      :disabled="disabled || node.disabled"
+      maxlength="4000"
+    />
+  </label>
+  <button
+    v-else-if="node.type === 'Button'"
+    :type="node.submit ? 'submit' : 'button'"
+    :class="[
+      'widget-button',
+      `widget-button-${node.style || 'primary'}`,
+      `widget-button-${node.variant || 'solid'}`,
+      `widget-button-${node.size || 'md'}`,
+      { 'widget-button-block': node.block, 'widget-pill': node.pill }
+    ]"
+    :disabled="disabled || node.disabled"
+    @click="clickButton"
+  >
+    <component v-if="node.iconStart" :is="icons[node.iconStart]" :size="16" aria-hidden="true" />
+    {{ node.label }}
+    <component v-if="node.iconEnd" :is="icons[node.iconEnd]" :size="16" aria-hidden="true" />
+  </button>
   <component
-    v-if="containers[node.type]"
+    v-else-if="containers[node.type]"
     :is="containers[node.type]"
     :class="[
       'widget-node',
@@ -77,10 +160,11 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { BookOpen, FileText, Lightbulb, Info, Check, Plus, Search, ChevronRight } from '@lucide/vue'
 import WidgetChart from '@/shared/ui/WidgetChart.vue'
 import WidgetImage from '@/shared/ui/WidgetImage.vue'
+import { widgetFormMessage } from '@/shared/lib/chatWidgets'
 const props = defineProps({
   node: { type: Object, required: true },
   disabled: Boolean,
@@ -88,6 +172,8 @@ const props = defineProps({
   previewable: { type: Boolean, default: true }
 })
 const emit = defineEmits(['action', 'preview'])
+const fieldValue = ref(props.node.defaultValue || '')
+const formError = ref('')
 const containers = {
   Card: 'section',
   Row: 'div',
@@ -141,11 +227,32 @@ const nodeStyle = computed(() => {
 
 /** 图片组保留完整顺序，其他容器透传图片自身的预览。 */
 function previewImage(preview, index) {
-  emit('preview', props.node.type === 'ImageGroup' ? { images: props.node.children, index } : preview)
+  emit(
+    'preview',
+    props.node.type === 'ImageGroup' ? { images: props.node.children, index } : preview
+  )
 }
 
 /** 将推荐项的续聊内容交给消息草稿。 */
 function selectItem() {
   if (!props.disabled) emit('action', props.node.onClickAction.text)
+}
+
+/** 原生表单验证通过后，将填写内容交给会话输入链路。 */
+function submitForm(event) {
+  if (props.disabled || !HTMLFormElement.prototype.reportValidity.call(event.currentTarget)) return
+  formError.value = ''
+  try {
+    const text = widgetFormMessage(props.node, new FormData(event.currentTarget))
+    emit('action', { type: 'send_message', text })
+  } catch (error) {
+    formError.value = error.message
+  }
+}
+
+/** 提交按钮交由所属表单处理，独立按钮只发送普通消息。 */
+function clickButton() {
+  if (!props.disabled && !props.node.disabled && !props.node.submit)
+    emit('action', { type: 'send_message', text: props.node.onClickAction.payload.text })
 }
 </script>

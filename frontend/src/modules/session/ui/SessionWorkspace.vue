@@ -124,8 +124,8 @@
                       :show-refs="showMsgRefs(displayItem.message, row.group)"
                       :hide-tool-calls="true"
                       :mention="mentionConfig"
-                      :widget-action="composeWidgetDraft"
-                      :widgets-disabled="row.group.status === 'streaming'"
+                      :widget-action="handleWidgetAction"
+                      :widgets-disabled="row.group.status === 'streaming' || widgetActionsDisabled"
                       @retry="retryMessage(displayItem.message)"
                     >
                     </AgentMessageComponent>
@@ -145,9 +145,9 @@
                       :message-count="displayItem.messageCount"
                       :tool-call-count="displayItem.toolCallCount"
                       :duration-ms="displayItem.durationMs"
-                      :widgets-disabled="row.group.status === 'streaming'"
+                      :widgets-disabled="row.group.status === 'streaming' || widgetActionsDisabled"
                       :mention="mentionConfig"
-                      :widget-action="composeWidgetDraft"
+                      :widget-action="handleWidgetAction"
                     />
                   </div>
                   <RunFailureNotice
@@ -886,6 +886,17 @@ const agentInputAreaRef = ref(null)
 function composeWidgetDraft(text) {
   userInput.value = [userInput.value, text].filter(Boolean).join('\n\n')
   nextTick(() => agentInputAreaRef.value?.focus())
+}
+
+/** 表单和按钮独立发送用户回答，旧列表动作继续填写草稿。 */
+function handleWidgetAction(action) {
+  if (typeof action === 'string') return composeWidgetDraft(action)
+  if (action?.type !== 'send_message' || widgetActionsDisabled.value) return false
+  return handleSendMessage({
+    text: action.text,
+    fromWidget: true,
+    onWidgetAccepted: action.onAccepted
+  })
 }
 
 watch(
@@ -2666,11 +2677,12 @@ const selectThreadFromRoute = async (threadId) => {
 const sessionInput = createSessionInput({
   runtime: sessionRuntime,
   onPrepared: (_threadId, draft) => {
-    if (userInput.value.trim() === draft.text) userInput.value = ''
+    if (!draft.fromWidget && userInput.value.trim() === draft.text) userInput.value = ''
     if (approvalState.threadId === _threadId) hideApprovalState()
     void nextTick(() => scrollController.scrollToBottom(true))
   },
   onAccepted: async (threadId, draft) => {
+    draft.onWidgetAccepted?.()
     draftFilesByThread.value[threadId] = (draftFilesByThread.value[threadId] || []).filter(
       (item) => !draft.data.attachment_file_ids.includes(item.id)
     )
@@ -2689,7 +2701,7 @@ const sessionInput = createSessionInput({
     await fetchThreadAttachments(threadId)
   },
   onRejected: async (threadId, draft, error, { accepted, restore }) => {
-    if (restore && currentChatId.value === threadId) {
+    if (restore && !draft.fromWidget && currentChatId.value === threadId) {
       userInput.value = [draft.text, userInput.value].filter(Boolean).join('\n')
       agentInputAreaRef.value?.restoreImages?.(draft.images)
     }
@@ -2705,10 +2717,27 @@ const sessionInput = createSessionInput({
   }
 })
 
-const handleSendMessage = async ({ images = [], mode = 'follow_up', retry = false } = {}) => {
+const widgetActionsDisabled = computed(
+  () =>
+    props.sendDisabled ||
+    isLoadingMessages.value ||
+    isProcessing.value ||
+    isWaitingForUserAction.value ||
+    sendCooldownActive.value ||
+    Boolean(pendingSends.value[currentChatId.value])
+)
+
+const handleSendMessage = async ({
+  images = [],
+  mode = 'follow_up',
+  retry = false,
+  text: submittedText,
+  fromWidget = false,
+  onWidgetAccepted
+} = {}) => {
   const original = pendingSends.value[currentChatId.value]
-  if ((original && !retry) || (retry && !original)) return
-  const text = original?.text ?? userInput.value.trim()
+  if ((original && !retry) || (retry && !original)) return false
+  const text = original?.text ?? submittedText ?? userInput.value.trim()
   if (
     (!text && !images.length && !original?.images.length) ||
     !currentAgent.value ||
@@ -2717,7 +2746,7 @@ const handleSendMessage = async ({ images = [], mode = 'follow_up', retry = fals
     isLoadingMessages.value ||
     isWaitingForUserAction.value
   )
-    return
+    return false
   startSendCooldown()
   let threadId = currentChatId.value
   const createdFromDraft = !threadId
@@ -2725,7 +2754,11 @@ const handleSendMessage = async ({ images = [], mode = 'follow_up', retry = fals
     text,
     images: images.map((image) => ({ ...image })),
     createdFromDraft,
-    attachments: currentPendingThreadAttachments.value.map((file) => ({ ...file })),
+    fromWidget,
+    onWidgetAccepted,
+    attachments: fromWidget
+      ? []
+      : currentPendingThreadAttachments.value.map((file) => ({ ...file })),
     modelSpec: currentModelSpec.value || null,
     toolApprovalMode: currentToolApprovalMode.value,
     mode
@@ -2740,7 +2773,7 @@ const handleSendMessage = async ({ images = [], mode = 'follow_up', retry = fals
     if (!threadId) return
     promoteDraftSelection(selectedModelByThread, threadId)
   }
-  await sessionInput.send(threadId, draft, { retry })
+  return sessionInput.send(threadId, draft, { retry })
 }
 
 const handleDirectSteer = async () => {

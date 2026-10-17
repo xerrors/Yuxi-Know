@@ -96,9 +96,11 @@ let referenceCloseTimer
 /** 仅在查看来源时强调命中的正文块。 */
 function highlightReferences(citations) {
   previewRef.value?.querySelectorAll('.reference-answer-highlight').forEach((block) => {
-    const active = citations.some((citation) =>
-      Number(block.dataset.sourceStart) <= citation.answer_end_line &&
-      Number(block.dataset.sourceEnd) >= citation.answer_start_line)
+    const active = citations.some(
+      (citation) =>
+        Number(block.dataset.sourceStart) <= citation.answer_end_line &&
+        Number(block.dataset.sourceEnd) >= citation.answer_start_line
+    )
     block.classList.toggle('reference-answer-active', active)
   })
 }
@@ -121,20 +123,29 @@ function closeReferencePreview() {
 
 /** 留出跨越卡片间隙的时间，再确认焦点和指针均已离开。 */
 function scheduleReferenceClose(event) {
-  const anchor = event?.target instanceof Element ? event.target.closest('.reference-citation') : null
+  const anchor =
+    event?.target instanceof Element ? event.target.closest('.reference-citation') : null
   if (anchor?.contains(event.relatedTarget)) return
   clearTimeout(referenceOpenTimer)
   cancelReferenceClose()
   referenceCloseTimer = setTimeout(() => {
     const anchor = referencePreview.value?.anchor
-    if (anchor?.matches(':hover') || anchor === document.activeElement || referencePopover.value?.isActive()) return
+    if (
+      anchor?.matches(':hover') ||
+      anchor === document.activeElement ||
+      referencePopover.value?.isActive()
+    )
+      return
     closeReferencePreview()
   }, 180)
 }
 
 /** 从胶囊索引取得当前回答的引用。 */
 function referenceCitations(anchor) {
-  return anchor.dataset.referenceIndices.split(',').map((index) => props.references[Number(index)]).filter(Boolean)
+  return anchor.dataset.referenceIndices
+    .split(',')
+    .map((index) => props.references[Number(index)])
+    .filter(Boolean)
 }
 
 /** 展示来源组，需要时将键盘焦点移入卡片。 */
@@ -156,7 +167,8 @@ async function showReferencePreview(anchor, focus = false) {
 
 /** 悬停后展示来源；键盘聚焦直接展示，避免操作等待。 */
 function handleReferenceEnter(event) {
-  const anchor = event.target instanceof Element ? event.target.closest('.reference-citation') : null
+  const anchor =
+    event.target instanceof Element ? event.target.closest('.reference-citation') : null
   if (!anchor || anchor.contains(event.relatedTarget)) return
   clearTimeout(referenceOpenTimer)
   cancelReferenceClose()
@@ -172,7 +184,8 @@ function handleReferenceEnter(event) {
 
 /** 向下键进入来源卡片。 */
 function handleReferenceKeydown(event) {
-  const anchor = event.target instanceof Element ? event.target.closest('.reference-citation') : null
+  const anchor =
+    event.target instanceof Element ? event.target.closest('.reference-citation') : null
   if (anchor && event.key === 'ArrowDown') {
     event.preventDefault()
     void showReferencePreview(anchor, true)
@@ -313,7 +326,8 @@ const replaceHtmlPreservingWidgets = (html) => {
     }
 
     for (const name of ['data-source-start', 'data-source-end']) {
-      if (nextNode.hasAttribute(name)) reusablePreview.setAttribute(name, nextNode.getAttribute(name))
+      if (nextNode.hasAttribute(name))
+        reusablePreview.setAttribute(name, nextNode.getAttribute(name))
       else reusablePreview.removeAttribute(name)
     }
 
@@ -337,20 +351,25 @@ const enhanceWidgets = () => {
   }
   if (!props.widgets || !root) return
   root.querySelectorAll('.widget-mount').forEach((slot) => {
-    render(h(WidgetRenderer, {
-      source: slot.parentElement.querySelector('.widget-source')?.textContent || '',
-      closed: slot.dataset.widgetClosed === 'true',
-      disabled: props.widgetsDisabled,
-      actionable: Boolean(props.widgetAction),
-      imageLoader: props.widgetImageLoader,
-      sourceImageLoader: widgetSourceImageLoader.value,
-      onAction: (text) => props.widgetAction?.(text)
-    }), slot)
+    render(
+      h(WidgetRenderer, {
+        source: slot.parentElement.querySelector('.widget-source')?.textContent || '',
+        closed: slot.dataset.widgetClosed === 'true',
+        disabled: props.widgetsDisabled,
+        actionHandler: props.widgetAction,
+        imageLoader: props.widgetImageLoader,
+        sourceImageLoader: widgetSourceImageLoader.value
+      }),
+      slot
+    )
     widgetMounts.add(slot)
   })
 }
 
-watch([() => props.widgetsDisabled, () => props.widgetImageLoader, widgetSourceImageLoader], enhanceWidgets)
+watch(
+  [() => props.widgetsDisabled, () => props.widgetImageLoader, widgetSourceImageLoader],
+  enhanceWidgets
+)
 
 const enhanceCodeBlocks = () => {
   const root = previewRef.value
@@ -462,7 +481,9 @@ watch(
     }
 
     const html = await renderMarkdown(content, {
-      theme, widgets, sourceLines: props.sourceLines || props.references.length > 0
+      theme,
+      widgets,
+      sourceLines: props.sourceLines || props.references.length > 0
     })
     if (!expired) {
       replaceHtmlPreservingWidgets(html)
@@ -663,14 +684,32 @@ const showCopiedFeedback = (btn) => {
   line-height: 1.5;
   vertical-align: middle;
   cursor: pointer;
-  transition: background-color 150ms ease, color 150ms ease;
-  &:hover, &[aria-expanded='true'] { background: var(--gray-200); color: var(--gray-1000); }
-  &:focus-visible { outline: 2px solid var(--main-500); outline-offset: 2px; }
-  .reference-citation-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .reference-citation-count { flex-shrink: 0; color: var(--gray-600); }
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+  &:hover,
+  &[aria-expanded='true'] {
+    background: var(--gray-200);
+    color: var(--gray-1000);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--main-500);
+    outline-offset: 2px;
+  }
+  .reference-citation-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .reference-citation-count {
+    flex-shrink: 0;
+    color: var(--gray-600);
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .yk-markdown-preview .reference-citation { transition: none; }
+  .yk-markdown-preview .reference-citation {
+    transition: none;
+  }
 }
 .yk-markdown-preview .source-line-highlight {
   background-color: var(--color-warning-25);
