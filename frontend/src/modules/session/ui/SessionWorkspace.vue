@@ -187,9 +187,6 @@
                 <div class="generating-indicator">
                   <span class="loading-spark" aria-hidden="true"></span>
                   <span class="generating-text">{{ replyLoadingText }}</span>
-                  <span v-if="replyElapsedLabel" class="generating-elapsed">{{
-                    replyElapsedLabel
-                  }}</span>
                 </div>
               </div>
             </div>
@@ -1893,72 +1890,6 @@ const replyLoadingText = computed(() => {
     return `排队中（${queuedInputCount.value} 条）...`
   return '正在生成回复...'
 })
-const replyElapsedSeconds = ref(0)
-let replyElapsedTimer = null
-let replyStartedAt = null
-const replyElapsedLabel = computed(() => {
-  if (!isStreaming.value || currentThreadState.value?.cooperationWaiting || !replyStartedAt)
-    return ''
-  const seconds = replyElapsedSeconds.value
-  if (!seconds) return ''
-  if (seconds < 60) return `${seconds}s`
-  const minutes = Math.floor(seconds / 60)
-  return `${minutes}分${seconds % 60}s`
-})
-const updateReplyElapsedSeconds = () => {
-  if (!replyStartedAt) return
-  replyElapsedSeconds.value = Math.max(0, Math.floor((Date.now() - replyStartedAt) / 1000))
-}
-const startReplyElapsedTimer = () => {
-  stopReplyElapsedTimer()
-  if (!replyStartedAt) return
-  updateReplyElapsedSeconds()
-  replyElapsedTimer = window.setInterval(updateReplyElapsedSeconds, 1000)
-}
-const stopReplyElapsedTimer = ({ reset = false } = {}) => {
-  if (replyElapsedTimer) {
-    window.clearInterval(replyElapsedTimer)
-    replyElapsedTimer = null
-  }
-  if (reset) {
-    replyStartedAt = null
-    replyElapsedSeconds.value = 0
-  }
-}
-watch(
-  [
-    currentChatId,
-    () => currentThreadState.value?.activeRunId,
-    () => currentThreadState.value?.runStateVersion,
-    isStreaming,
-    () => currentThreadState.value?.cooperationWaiting
-  ],
-  async ([threadId, runId, , streaming, waiting], _previous, onCleanup) => {
-    let stale = false
-    onCleanup(() => {
-      stale = true
-    })
-    stopReplyElapsedTimer({ reset: true })
-    if (!threadId || !runId || !streaming || waiting) return
-    try {
-      const knownTiming = currentRunById.value.get(runId)?.timing
-      const run = knownTiming?.started_at
-        ? { timing: knownTiming }
-        : await agentApi.getAgentRun(threadId, runId)
-      if (stale) return
-      const startedAt = run.timing?.started_at || run.started_at
-      if (!startedAt) return
-      const timestamp = dayjs.utc(startedAt).valueOf()
-      if (!Number.isFinite(timestamp)) return
-      replyStartedAt = timestamp
-      startReplyElapsedTimer()
-    } catch {
-      // 时间读取失败时隐藏秒数，生成状态仍由 SSE 拥有。
-    }
-  },
-  { immediate: true }
-)
-
 const isSendButtonDisabled = computed(() => {
   if (currentThreadState.value?.cancellationPending) return true
   return (
@@ -2293,9 +2224,6 @@ onActivated(() => {
     startChatMainResizeObserver()
     if (chatMainRef.value) chatMainRef.value.scrollTop = retainedScrollTop
   })
-  if (isReplyLoading.value) {
-    startReplyElapsedTimer()
-  }
 })
 
 onDeactivated(() => {
@@ -2303,7 +2231,6 @@ onDeactivated(() => {
   cooperationObservationEnabled.value = false
   stopChatMainResizeObserver()
   stopStreamingStateRefresh()
-  stopReplyElapsedTimer()
   scrollController.cleanup()
   if (props.isNewSession && currentChatId.value) {
     // 正式路由接管线程草稿；缓存的新建页不能在再次打开时覆写它。
@@ -2312,7 +2239,6 @@ onDeactivated(() => {
 })
 
 onUnmounted(() => {
-  stopReplyElapsedTimer({ reset: true })
   if (typeof document !== 'undefined') {
     document.removeEventListener('visibilitychange', handlePageVisibilityChange)
   }
@@ -4018,14 +3944,6 @@ watch(currentChatId, (threadId, oldThreadId) => {
     letter-spacing: 0.025em;
     color: var(--gray-600);
     animation: textBreath 1.8s ease-in-out infinite;
-  }
-
-  .generating-elapsed {
-    color: var(--gray-400);
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    line-height: 1.5;
-    white-space: nowrap;
   }
 }
 

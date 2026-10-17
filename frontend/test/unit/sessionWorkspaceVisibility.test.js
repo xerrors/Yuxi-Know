@@ -13,7 +13,7 @@ test('人工等待取消期间显示停止反馈，即使没有流和排队消�
   const state = ref({ cancellationPending: true })
   const expressions = source.slice(
     source.indexOf('const isProcessing ='),
-    source.indexOf('const replyElapsedSeconds =')
+    source.indexOf('const isSendButtonDisabled =')
   )
   const values = new Function(
     'computed',
