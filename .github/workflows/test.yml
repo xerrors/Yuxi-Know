@@ -3,6 +3,7 @@
 name: Backend Unit Tests
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - '.env.template'
