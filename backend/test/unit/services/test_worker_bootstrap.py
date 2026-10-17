@@ -1,13 +1,10 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import asynccontextmanager
-from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
 import yuxi.bootstrap.worker as worker_bootstrap
-from yuxi.bootstrap import options as config_options
 from yuxi.modules.system.services import options as option_values
 
 
@@ -19,7 +16,7 @@ def api_key_derivation_secret(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_worker_startup_ensures_builtin_mcp_servers(monkeypatch: pytest.MonkeyPatch):
+async def test_worker_startup_prepares_runtime_and_recovers_jobs(monkeypatch: pytest.MonkeyPatch):
     calls: list[str] = []
 
     def fake_initialize():
@@ -27,21 +24,6 @@ async def test_worker_startup_ensures_builtin_mcp_servers(monkeypatch: pytest.Mo
 
     async def fake_require_current_schema(_manager):
         calls.append("require_current_schema")
-
-    async def fake_ensure_builtin_mcp_servers_in_db():
-        calls.append("ensure_builtin_mcp_servers_in_db")
-
-    @asynccontextmanager
-    async def fake_session_ctx():
-        yield SimpleNamespace(commit=AsyncMock())
-
-    async def fake_init_builtin_skills(session):
-        del session
-        calls.append("init_builtin_skills")
-
-    async def fake_ensure_options_in_db(session):
-        del session
-        calls.append("ensure_options_in_db")
 
     async def fake_invalidate_option_cache(key):
         del key
@@ -82,10 +64,6 @@ async def test_worker_startup_ensures_builtin_mcp_servers(monkeypatch: pytest.Mo
 
     monkeypatch.setattr(worker_bootstrap.pg_manager, "initialize", fake_initialize)
     monkeypatch.setattr(worker_bootstrap, "require_current_schema", fake_require_current_schema)
-    monkeypatch.setattr(worker_bootstrap.pg_manager, "get_async_session_context", fake_session_ctx)
-    monkeypatch.setattr(worker_bootstrap, "ensure_builtin_mcp_servers_in_db", fake_ensure_builtin_mcp_servers_in_db)
-    monkeypatch.setattr(worker_bootstrap, "init_builtin_skills", fake_init_builtin_skills)
-    monkeypatch.setattr(config_options, "ensure_options_in_db", fake_ensure_options_in_db)
     monkeypatch.setattr(option_values, "invalidate_option_cache", fake_invalidate_option_cache)
     monkeypatch.setattr(worker_bootstrap, "recover_pending_dispatches", fake_recover_pending_dispatches)
     for name in ("reconcile_stopped_trees", "recover_cooperation_waits", "maintain_user_sandboxes"):
@@ -113,10 +91,7 @@ async def test_worker_startup_ensures_builtin_mcp_servers(monkeypatch: pytest.Mo
     assert calls == [
         "initialize",
         "require_current_schema",
-        "ensure_options_in_db",
         "invalidate_option_cache",
-        "ensure_builtin_mcp_servers_in_db",
-        "init_builtin_skills",
         "reconcile_expired_run_leases",
         "reconcile_pending_runtime_cleanups",
         "recover_pending_dispatches",
@@ -237,23 +212,19 @@ async def test_reconciliation_failure_does_not_refresh_success_lease(monkeypatch
     assert calls == {"reconcile": 2, "publish": 0}
 
 
-@pytest.mark.asyncio
-async def test_worker_startup_fails_when_system_options_cannot_initialize(monkeypatch: pytest.MonkeyPatch):
+@pytest.mark.parametrize("secret", ["JWT_SECRET_KEY", "API_KEY_DERIVATION_SECRET"])
+async def test_worker_rejects_invalid_actual_process_secret(monkeypatch, secret):
+    """单独启动 worker 也必须拒绝实际收到的无效密钥。"""
+    monkeypatch.setenv(secret, "short")
+    with pytest.raises(ValueError, match="至少 32"):
+        await worker_bootstrap._worker_startup({})
 
+
+async def test_worker_rejects_incompatible_schema_before_runtime_recovery(monkeypatch):
+    """应用初始化不能替代 worker 自身的版本检查。"""
     monkeypatch.setattr(worker_bootstrap.pg_manager, "initialize", lambda: None)
-    monkeypatch.setattr(worker_bootstrap, "require_current_schema", AsyncMock())
-
-    @asynccontextmanager
-    async def fake_session_ctx():
-        yield object()
-
-    async def fail_initialize(_session):
-        raise RuntimeError("config load failed")
-
-    monkeypatch.setattr(worker_bootstrap.pg_manager, "get_async_session_context", fake_session_ctx)
-    monkeypatch.setattr(config_options, "ensure_options_in_db", fail_initialize)
-
-    with pytest.raises(RuntimeError, match="config load failed"):
+    monkeypatch.setattr(worker_bootstrap, "require_current_schema", AsyncMock(side_effect=RuntimeError("schema mismatch")))
+    with pytest.raises(RuntimeError, match="schema mismatch"):
         await worker_bootstrap._worker_startup({})
 
 

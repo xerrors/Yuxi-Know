@@ -2,6 +2,18 @@
 .git
 .gitignore
 
+# 私有配置和独立运行槽位不得进入构建上下文
+.env
+.env.*
+!.env.template
+**/.env
+**/.env.*
+!**/.env.template
+.yuxi/
+.playwright*/
+docs/vibe/
+tmp/
+
 # macOS AppleDouble 元数据文件；它们可能携带不可读取的 xattr，不能进入 Docker 构建上下文
 ._*
 **/._*
@@ -19,6 +31,10 @@ backend/.venv/
 
 # 忽略 node_modules 文件夹（前端项目）
 frontend/node_modules/
+frontend/dist/
+docs/node_modules/
+docs/.vitepress/cache/
+docs/.vitepress/dist/
 
 # 忽略 Docker 运行时数据卷
 docker/volumes/

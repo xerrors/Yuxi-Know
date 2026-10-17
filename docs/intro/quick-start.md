@@ -36,14 +36,24 @@ Windows PowerShell：
 .\scripts\init.ps1
 ```
 
-脚本会交互式读取或生成以下内容，并写入项目根目录的 `.env`：
+脚本会读取或生成以下内容，并写入项目根目录的 `.env`：
 
 - 必填的 `SILICONFLOW_API_KEY`。
 - 可选的网页搜索供应商和对应密钥（豆包或 Tavily）。
 - `JWT_SECRET_KEY` 和 `API_KEY_DERIVATION_SECRET` 两个相互独立的随机密钥，每个至少 32 个字符。
 - `YUXI_INSTANCE_ID`，用于标识这套部署。
 
-脚本还会拉取开发环境需要的基础镜像。它不会把密钥打印到终端，Linux/macOS 下会把 `.env` 权限设为 `600`。已有 `.env` 时，脚本只补齐缺失项；升级时请保留原有密钥，尤其是 `JWT_SECRET_KEY` 和 `API_KEY_DERIVATION_SECRET`。
+脚本还会拉取基础镜像并构建 MinIO。镜像加速站失败时，Linux/macOS 脚本会提示并尝试原仓库；两处都失败时退出，可在网络恢复后重新运行。它不会把密钥打印到终端，Linux/macOS 下会把环境文件权限设为 `600`。已有配置中的安全密钥在未显式覆盖时保留；升级时请保留 `JWT_SECRET_KEY` 和 `API_KEY_DERIVATION_SECRET`。
+
+Linux/macOS 上的 Agent 或 CI 可以先通过安全的环境注入机制提供 `SILICONFLOW_API_KEY`，再关闭交互：
+
+```bash
+YUXI_INIT_NON_INTERACTIVE=1 ./scripts/init.sh
+```
+
+环境变量优先于文件。`SILICONFLOW_API_KEY`、搜索供应商及对应密钥、两个应用安全密钥和 `YUXI_INSTANCE_ID` 都支持覆盖；完整输入范围由 [初始化脚本](https://github.com/xerrors/Yuxi/blob/main/scripts/init.sh) 的配置循环维护。未提供的应用密钥和实例标识自动生成，缺少模型 Key 或已选择搜索供应商的 Key 时明确失败；非空非法安全密钥不会自动轮换。环境变量中的配置值必须为单行，脚本会保留美元符等字面值。PowerShell 入口使用交互式流程。
+
+`YUXI_ENV_FILE` 选择目标文件，默认 `.env`；`YUXI_INIT_SKIP_IMAGES=1` 只准备配置，稍后仍需构建镜像。开关只接受 `0` 或 `1`。生产部署使用[独立生产配置](../advanced/deployment.md#_1-准备生产配置)。
 
 不使用初始化脚本时，可以手动开始：
 
@@ -95,10 +105,10 @@ curl --fail http://localhost:5050/api/system/ready
 
 ```bash
 docker compose ps
-docker compose logs --tail=100 schema-init api worker
+docker compose logs --tail=100 app-init api worker
 ```
 
-`schema-init` 是一次性 Schema 初始化服务，成功后会退出，这是正常状态。API 和 worker 必须在它成功后才能启动。
+`storage-init` 准备挂载根权限；`app-init` 创建数据库基线并同步系统配置、内置 Agent、供应商、MCP 和 Skills。两个一次性服务成功后退出，这是正常状态。API 和 worker 等待 `app-init` 成功后启动。修改内置定义或升级镜像时，按[共享内容更新](../advanced/deployment.md#共享内容更新与失败重试)重新执行初始化。
 
 ### 镜像拉取失败
 

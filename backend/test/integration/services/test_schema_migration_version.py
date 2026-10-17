@@ -59,11 +59,10 @@ async def test_incompatible_schema_is_rejected_without_modifying_data(monkeypatc
                     "VALUES ('existing','existing','original','user',0,0)"
                 )
             )
-        monkeypatch.setattr(schema_bootstrap, "pg_manager", manager)
         monkeypatch.setattr(manager, "initialize", lambda: None)
         monkeypatch.setattr(manager, "close", AsyncMock())
         with pytest.raises(RuntimeError, match="Unsupported Yuxi schema"):
-            await schema_bootstrap.main()
+            await schema_bootstrap.initialize_schema(manager)
         assert (await get_schema_versions(manager))[domain] == version
         async with engine.connect() as conn:
             assert await conn.scalar(text("SELECT password_hash FROM users WHERE uid='existing'")) == "original"
@@ -337,7 +336,6 @@ async def test_failed_fresh_initialization_cleans_checkpoint_tables_and_can_retr
     manager.AsyncSession = async_sessionmaker(engine, expire_on_commit=False)
     monkeypatch.setattr(manager, "initialize", lambda: None)
     monkeypatch.setattr(manager, "close", AsyncMock())
-    monkeypatch.setattr(schema_bootstrap, "pg_manager", manager)
 
     async def checkpoint_stage(_manager):
         """模拟跨连接 checkpoint 阶段已经提交的四张持久表。"""
@@ -345,15 +343,19 @@ async def test_failed_fresh_initialization_cleans_checkpoint_tables_and_can_retr
             for name in ("checkpoints", "checkpoint_blobs", "checkpoint_writes", "checkpoint_migrations"):
                 await connection.execute(text(f"CREATE TABLE {name} (id INTEGER)"))
 
-    monkeypatch.setattr(schema_bootstrap, "setup_langgraph_checkpointer", checkpoint_stage)
-    monkeypatch.setattr(schema_bootstrap, "ensure_options_in_db", AsyncMock(side_effect=RuntimeError("after checkpoint")))
+    async def failed_checkpoint_stage(_manager):
+        """模拟 checkpoint 表已提交后失败。"""
+        await checkpoint_stage(_manager)
+        raise RuntimeError("after checkpoint")
+
+    monkeypatch.setattr(schema_bootstrap, "setup_langgraph_checkpointer", failed_checkpoint_stage)
     try:
         with pytest.raises(RuntimeError, match="after checkpoint"):
-            await schema_bootstrap.main()
+            await schema_bootstrap.initialize_schema(manager)
         async with engine.connect() as connection:
             assert (await connection.execute(text("SELECT tablename FROM pg_tables WHERE schemaname = current_schema()"))).all() == []
-        monkeypatch.setattr(schema_bootstrap, "ensure_options_in_db", AsyncMock())
-        await schema_bootstrap.main()
+        monkeypatch.setattr(schema_bootstrap, "setup_langgraph_checkpointer", checkpoint_stage)
+        await schema_bootstrap.initialize_schema(manager)
         await require_current_schema(manager)
         assert await get_schema_versions(manager) == {
             "business": BUSINESS_SCHEMA_VERSION,
@@ -367,13 +369,12 @@ async def test_failed_fresh_initialization_cleans_checkpoint_tables_and_can_retr
 async def test_unversioned_existing_yuxi_table_blocks_fresh_schema_initialization(monkeypatch, table_name) -> None:
     """未版本化的旧表不得被空库初始化误认为全新部署。"""
     schema, admin_engine, scoped_engine, manager = await _create_isolated_manager("pytest_fresh_only")
-    monkeypatch.setattr(schema_bootstrap, "pg_manager", manager)
     try:
-        await schema_bootstrap._require_empty_database()
+        await schema_bootstrap._require_empty_database(manager)
         async with scoped_engine.begin() as connection:
             await connection.execute(text(f"CREATE TABLE {table_name} (id integer PRIMARY KEY)"))
         with pytest.raises(RuntimeError, match=table_name):
-            await schema_bootstrap._require_empty_database()
+            await schema_bootstrap._require_empty_database(manager)
     finally:
         await _drop_isolated_schema(schema, admin_engine, scoped_engine)
 
@@ -488,12 +489,11 @@ async def test_fresh_initializer_creates_complete_baseline_and_restarts_without_
         open=False,
     )
     manager.langgraph_pool = pool
-    monkeypatch.setattr(schema_bootstrap, "pg_manager", manager)
     monkeypatch.setattr(manager, "initialize", lambda: None)
     monkeypatch.setattr(manager, "close", AsyncMock())
     try:
         await pool.open()
-        await schema_bootstrap.main()
+        await schema_bootstrap.initialize_schema(manager)
         await require_current_schema(manager)
         assert await get_schema_versions(manager) == {"business": BUSINESS_SCHEMA_VERSION, "knowledge": KNOWLEDGE_SCHEMA_VERSION}
         async with engine.connect() as conn:
@@ -516,7 +516,7 @@ async def test_fresh_initializer_creates_complete_baseline_and_restarts_without_
             sandbox_before = dict((await conn.execute(text("SELECT * FROM user_sandboxes WHERE uid='fixture'"))).mappings().one())
             assert sandbox_before["paused_at"] is None
             versions_before = (await conn.execute(text("SELECT * FROM yuxi_schema_migrations ORDER BY domain"))).all()
-        await schema_bootstrap.main()
+        await schema_bootstrap.initialize_schema(manager)
         async with engine.connect() as conn:
             assert dict((await conn.execute(text("SELECT * FROM user_sandboxes WHERE uid='fixture'"))).mappings().one()) == sandbox_before
             assert (await conn.execute(text("SELECT * FROM yuxi_schema_migrations ORDER BY domain"))).all() == versions_before

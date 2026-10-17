@@ -265,6 +265,7 @@ Write-Host "=========================" -ForegroundColor Cyan
 
 # List of Docker images to pull
 $images = @(
+    "alpine:3.20",
     "python:3.13-slim",
     "node:24-slim",
     "node:24-alpine",
@@ -299,10 +300,10 @@ foreach ($image in $images) {
 }
 
 # MinIO 官方镜像已全面下架，改为从仓库内 Dockerfile 构建
-Write-Host "🔄 Building minio image..." -ForegroundColor Yellow
-docker compose build minio
+Write-Host "🔄 Building minio and storage-init images..." -ForegroundColor Yellow
+docker compose build minio storage-init
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "❌ Failed to build minio image" -ForegroundColor Red
+    Write-Host "❌ Failed to build minio or storage-init image" -ForegroundColor Red
     exit 1
 }
 

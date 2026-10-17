@@ -16,6 +16,7 @@ echo "开始导出 Docker 镜像到 $OUTPUT_FILE..."
 # 从各个文件中提取的基础镜像列表
 IMAGES=(
     # 应用与基础设施（docker-compose*.yml、docker/*.Dockerfile）
+    "alpine:3.20"
     "python:3.13-slim"
     "ghcr.io/astral-sh/uv:0.12.6"
     "node:24-slim"
@@ -39,9 +40,14 @@ IMAGES=(
 # MinIO 的官方镜像已不再公开分发，改为按仓库内 Dockerfile 构建后再导出。
 # 镜像名从 Compose 解析而不是拼装：它跟随 .env 里的 COMPOSE_PROJECT_NAME，与 docker compose up 实际
 # 使用的名字一致；硬编码会在用户改过项目名时导出另一个 tag，目标机器上只能现场构建，离线环境直接失败。
-docker compose build minio
+docker compose build minio storage-init
 MINIO_IMAGE=$(docker compose config --images | grep -- '-minio:RELEASE') || {
     echo "❌ 未能从 Compose 配置解析出 MinIO 镜像名（需要可用的 .env）"
+    exit 1
+}
+
+STORAGE_IMAGE=$(docker compose config --images | grep -- '-storage-init:') || {
+    echo "❌ 未能从 Compose 配置解析出 storage-init 镜像名"
     exit 1
 }
 
@@ -54,7 +60,7 @@ done
 
 # 保存所有镜像到单个 tar 文件
 echo "正在保存镜像到 tar 文件..."
-docker save "${IMAGES[@]}" "$MINIO_IMAGE" -o "$OUTPUT_FILE"
+docker save "${IMAGES[@]}" "$MINIO_IMAGE" "$STORAGE_IMAGE" -o "$OUTPUT_FILE"
 
 # 计算文件大小
 FILE_SIZE=$(du -h "$OUTPUT_FILE" | cut -f1)

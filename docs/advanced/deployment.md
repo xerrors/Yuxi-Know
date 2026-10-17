@@ -19,10 +19,30 @@
 
 ## 1. 准备生产配置
 
-复制模板并编辑 `.env.prod`：
+Linux/macOS 可以使用初始化脚本准备 `.env.prod`。先通过安全环境注入提供模型 Key 和实际 Cube 节点配置，首次部署使用空状态目录和独立项目名：
+
+```bash
+export YUXI_ENV_FILE=.env.prod
+export YUXI_ENV=production
+export COMPOSE_PROJECT_NAME=production
+export YUXI_STATE_DIR=./.yuxi/production/state
+export YUXI_INSTANCE_ID=Production
+export CUBE_API_URL='http://<private-node-address>:3000'
+export CUBE_PROXY_NODE_IP='<private-node-address>'
+export CUBE_NODE_USER_DATA_DIR=/data/shared/production/threads
+export CUBE_NODE_SKILL_PROJECTION_DIR=/data/shared/production/skill-projections
+YUXI_INIT_NON_INTERACTIVE=1 ./scripts/init.sh
+```
+
+执行前须按[沙盒配置与运维](./sandbox-operations.md#原生执行节点)准备节点、模板和真实共享挂载。两个节点路径分别共享 `YUXI_STATE_DIR/yuxi/threads`、`YUXI_STATE_DIR/yuxi/skill-projections` 的底层文件；只填写路径不会建立共享。复用节点时为每套环境分配独立共享路径和实例标识，不能把开发环境的用户目录直接交给生产 API。Docker 项目名只接受小写字母、数字、连字符和下划线，因此显示名称 `Production` 对应项目名 `production`。
+
+脚本接受环境变量覆盖，并生成缺失的 PostgreSQL、Neo4j、MinIO 凭据和两个独立应用安全密钥；已有非空安全密钥无效时明确失败，不自动轮换。重建时保留配置文件及原有密钥，避免用临时环境变量覆盖已有生产凭据。开关、优先级和模型 Key 输入见[初始化环境](../intro/quick-start.md#_2-初始化环境)。
+
+也可以复制模板，手动编辑 `.env.prod` 并设置文件权限：
 
 ```bash
 cp .env.template .env.prod
+chmod 600 .env.prod
 ```
 
 至少填写：
@@ -68,13 +88,23 @@ MinIO 将同一宿主数据目录挂载到容器 `/data`，Neo4j 将日志目录
 
 ## 2. 首次启动
 
-先构建镜像并为生产进程准备三个可写目录。API 与 worker 固定使用 UID/GID `1000:1000`；Docker 自动创建的 bind mount 目录通常属于 root，直接启动会导致内置 Skills 初始化失败。以下命令只设置目录本身，不递归修改已有文件；已有部署恢复时保留文件的原数字属主。
+构建应用与存储初始化镜像，再启动完整拓扑：
 
 ```bash
-docker compose --env-file .env.prod -f docker-compose.prod.yml build api frontend minio
-docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm --no-deps --user 0:0 --entrypoint sh api -c 'mkdir -p /app/user-data /app/skill-sources /app/skill-projections && chown 1000:1000 /app/user-data /app/skill-sources /app/skill-projections && chmod 0700 /app/user-data /app/skill-sources /app/skill-projections'
+docker compose --env-file .env.prod -f docker-compose.prod.yml build api frontend minio storage-init
 docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --no-build
 ```
+
+Compose 自动创建缺失的挂载目录，`storage-init` 在无网络、无平台凭据的轻量容器中设置以下挂载根的权限。API、worker 与 Milvus 必须等待其退出码为 0 才启动；初始化失败时，先检查目录是否只读、宿主文件系统是否允许修改属主，以及部署使用的 UID 映射。
+
+| 目录 | UID:GID | 模式 |
+| --- | --- | --- |
+| `yuxi/threads`、`yuxi/skill-sources`、`yuxi/skill-projections` | `1000:1000` | `0700` |
+| `milvus/milvus`、`milvus/logs` | `999:999` | `0755` |
+
+以上路径均相对 `YUXI_STATE_DIR`。初始化可重复运行，仅调整五个目录本身；已有内部文件和目录的内容、数字属主与模式保持原值。恢复备份时保留原数字属主，历史内部权限错误由部署者离线处理。PostgreSQL、Redis、MinIO、Neo4j 继续遵循各自镜像的存储初始化契约。
+
+API、Web 与 MinIO 的项目文件在构建时明确权限：源码和配置归 root 持有，普通文件可读、目录可进入、入口脚本可执行；API 与 worker 仍以 `1000:1000` 运行，仅在专用数据与运行目录写入。构建输入的 `600/700` 模式不会使镜像内的项目文件失去可读性。开发 Compose 的源码 bind mount 使用宿主文件实际权限，宿主 checkout 仍须允许容器用户读取与遍历；镜像权限不会覆盖挂载内容。实现与回归入口见[权限决策](../develop-guides/decisions/implemented/2026-10-17-container-storage-permissions.md)。
 
 需要本地 MinerU 或 PaddleX OCR 时，再启用 `all` profile：
 
@@ -82,7 +112,23 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --no-build
 docker compose --env-file .env.prod -f docker-compose.prod.yml --profile all up -d --build
 ```
 
-`schema-init` 只为确认空库建立 business 版本 4 与 knowledge 版本 1 基线，包含当前表、索引、约束和 LangGraph checkpoint 表；当前版本直接结束，其他版本不匹配会明确失败。应用不提供历史迁移脚本。[单个部署的数据库调整记录](../develop-guides/decisions/implemented/2026-10-16-business-schema-v1-to-v4-migration.md)只描述该实例的离线操作与回读证据，不构成通用升级流程。
+`app-init` 以 UID/GID 1000 运行，等待 PostgreSQL 健康与 `storage-init` 成功后，在数据库锁内完成 Schema 和共享内容初始化。它为确认空库建立 business 版本 4 与 knowledge 版本 1 基线，包含当前表、索引、约束和 LangGraph checkpoint 表；当前版本跳过建表，其他版本不匹配会明确失败。随后同步系统配置定义、内置模型供应商、Agent、MCP 和 Skill 来源文件，API 与 worker 等待全部步骤成功。应用不提供历史迁移脚本。[单个部署的数据库调整记录](../develop-guides/decisions/implemented/2026-10-16-business-schema-v1-to-v4-migration.md)只描述该实例的离线操作与回读证据，不构成通用升级流程。
+
+### 共享内容更新与失败重试
+
+应用初始化每次部署都需要执行；当前 Schema 不变也会同步内置内容。系统配置值、Agent 名称与配置、供应商凭据与地址、MCP 和 Skill 启用状态按各业务域规则保留；代码拥有的定义和内置 Skill 文件按当前镜像刷新。初始化只挂载 Skill 来源目录，不访问用户工作区或 Milvus 数据。
+
+更新镜像或开发环境的内置定义后，在没有活动任务时停止 API 和 worker，再重新运行应用初始化并启动消费者：
+
+```bash
+docker compose --env-file .env.prod -f docker-compose.prod.yml stop api worker
+docker compose --env-file .env.prod -f docker-compose.prod.yml up --no-deps --force-recreate --exit-code-from app-init app-init
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --no-build
+```
+
+上述更新步骤要求 PostgreSQL 已健康、`storage-init` 已成功且目标镜像已构建或拉取。每条命令成功后再执行下一条。初始化失败时查看 `docker compose --env-file .env.prod -f docker-compose.prod.yml logs app-init`，修正问题后重跑；不要直接启动消费者绕过失败。新空库建表失败会清理该初始化器的半成品；共享内容同步失败保留已完成步骤和已有数据，通过幂等重跑完成剩余内容。多个阶段包含独立事务和文件操作，不承诺整体原子回滚。
+
+API 和 worker 在各自进程内继续校验密钥及 Schema，创建连接、缓存并检查运行依赖。外部模型 Token 与可选集成按实际启用和使用验证，不要求所有供应商配置齐全。职责与验证见[应用初始化决策](../develop-guides/decisions/implemented/2026-10-18-app-initialization.md)。
 
 ## 3. 数据库与文件目录
 
@@ -118,7 +164,7 @@ worker 的 Compose 健康检查通过 `python -m yuxi.workers.health` 轻量读�
 
 ## 开发环境端口与入口
 
-开发 Compose 发布到宿主机的端口如下；生产 Compose 默认只发布 Web 入口，其余服务通过 Compose 内网访问。
+开发 Compose 发布到宿主机的端口如下；生产 Compose 对外提供 Web 80 入口，同时将 API 与存储维护端口绑定到宿主 `127.0.0.1`。浏览器、CLI 和外部系统通过 Web 同源代理访问 API 与公开图片，无需开放这些维护端口。生产默认端口由 [docker-compose.prod.yml](https://github.com/xerrors/Yuxi/blob/main/docker-compose.prod.yml) 拥有。
 
 | 端口 | 服务 | 用途 |
 | --- | --- | --- |
@@ -181,7 +227,7 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml restart worker
 2. 停止 Web、API 和 worker，再停止全部本次部署的存储服务。不要复制仍在写入的 PostgreSQL、etcd、Neo4j 或对象目录。
 3. 对配置中的实际状态目录执行冷备份，保留数字属主、文件模式、符号链接和必要的扩展属性；外置共享目录或符号链接目标必须独立纳入同一批备份。保留原数据与原环境文件。
 4. 把备份解到新的空目录，核对文件摘要与数字属主。恢复环境使用同一组安全密钥；所有 bind mount、节点共享路径和实例身份必须与恢复方案一致，不能让新旧实例同时写同一目录。
-5. 用相同镜像启动存储、`schema-init`、API、worker 和 Web。核对 Schema、readiness、原用户登录、会话最终结果、反馈、知识文件正文与检索、原始对象字节、图谱及用户文件；再提交一条新对话，确认恢复后的写入链路可用。
+5. 用相同镜像启动存储、`app-init`、API、worker 和 Web。核对 Schema、readiness、原用户登录、会话最终结果、反馈、知识文件正文与检索、原始对象字节、图谱及用户文件；再提交一条新对话，确认恢复后的写入链路可用。
 
 以下示例要求 `STATE_DIR` 是实际本地状态根，且其内部数据都已纳入备份。按现场环境设置绝对路径；环境文件含凭据，备份目录只允许运维身份读取。
 
@@ -233,11 +279,11 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml \
 
 ### Milvus 3 全新部署
 
-Milvus 3.0.2 与 PyMilvus 3.0.2 配套部署，知识库与图向量通过 `MILVUS_DB` 使用同一个数据库，默认 `yuxi`。Compose 使用 Woodpecker 的对象存储模式，MinIO 固定到支持条件写入的版本；`milvus-storage-init` 在 Milvus 启动前设置绑定目录的 UID/GID，初始化失败会阻止启动。
+Milvus 3.0.2 与 PyMilvus 3.0.2 配套部署，知识库与图向量通过 `MILVUS_DB` 使用同一个数据库，默认 `yuxi`。Compose 使用 Woodpecker 的对象存储模式，MinIO 固定到支持条件写入的版本；`storage-init` 在 API、worker 和 Milvus 启动前设置各自绑定目录的 UID/GID，初始化失败会阻止启动。
 
 允许丢弃全部数据时，停掉当前 Compose project，在对应环境文件中把 `YUXI_STATE_DIR` 指向一个新的空目录，例如 `/srv/yuxi/state-milvus3`，然后重新构建并启动完整拓扑。开发使用 `docker-compose.yml`，生产使用本页的 `.env.prod` 与 `docker-compose.prod.yml`。新目录同时重置 PostgreSQL、对象存储、图谱、工作区及向量索引；需要重新初始化管理员、模型供应商和知识库，再上传、解析、索引文档。不要把旧的 PostgreSQL 文件记录与空的 Milvus 索引混用。
 
-检查 `milvus-storage-init` 和 `schema-init` 已成功退出，并确认 `/api/system/ready` 返回就绪。再按[知识库教程](../intro/knowledge-base.md#3-验证检索)确认文件为 `indexed`，三个检索模式返回目标文件的片段。集合的模型或 schema 不匹配时会显式报错，查询不会自动删除集合；需要修正部署状态并重新建立知识库。
+检查 `storage-init` 和 `app-init` 已成功退出，并确认 `/api/system/ready` 返回就绪。再按[知识库教程](../intro/knowledge-base.md#3-验证检索)确认文件为 `indexed`，三个检索模式返回目标文件的片段。集合的模型或 schema 不匹配时会显式报错，查询不会自动删除集合；需要修正部署状态并重新建立知识库。
 
 ## 第三方组件和许可证
 

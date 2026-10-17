@@ -45,10 +45,9 @@ OIDC_REDIRECT_URI=https://yuxi.example.com/api/auth/oidc/callback
 
 `OIDC_USE_RAW_USERNAME=true` 和非 `user` 的 `OIDC_DEFAULT_ROLE` 会阻止启动。保留空的端点覆盖项即可使用 discovery，不需要邮箱字段。配置由 API 进程启动时读取；所有 API 副本必须使用同一配置、JWT 密钥、PostgreSQL 和 Redis。
 
-升级数据库后重建 API 使配置生效。保留部署本身使用的 env file 和全部 Compose 覆盖文件，例如生产部署：
+更新 OIDC 配置后重建 API 使配置生效。保留部署本身使用的 env file 和全部 Compose 覆盖文件，例如生产部署：
 
 ```bash
-docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm schema-init
 docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --force-recreate api worker
 ```
 
@@ -62,7 +61,7 @@ OIDC 本地会话固定一小时；每次 API 访问和登录结果兑换都读�
 
 认证中心仅修改 Enabled 不保证发出登出通知。没有通知时，已签发的 Yuxi 会话可使用到期；需要即时停用时，结束认证中心会话并核对通知结果，或停用 Yuxi 用户。已经开始执行的任务不由登录撤销自动取消。密码登录属于独立凭据，不随 IdP 会话结束而撤销；Yuxi 主动退出会持久撤销当前密码 JWT，旧令牌不可继续访问。
 
-业务数据库由 `schema-init` 在空库建立当前 business 版本 2 与 knowledge 版本 1 基线，包含 OIDC 身份、会话、登出事件与本地 JWT 撤销表；API 与 worker 只接受精确当前版本。已有旧库需要部署者显式准备符合当前基线的数据与结构，不能仅修改版本号。历史绑定用户没有会话标识的旧 JWT 会被拒绝，需重新使用 OIDC 或密码登录。部署前保留数据库备份，具体边界见[部署指南](./deployment.md#_2-首次启动)。
+业务数据库由 `app-init` 在空库建立当前 business 版本 4 与 knowledge 版本 1 基线，包含 OIDC 身份、会话、登出事件与本地 JWT 撤销表；API 与 worker 只接受精确当前版本。已有旧库需要部署者显式准备符合当前基线的数据与结构，不能仅修改版本号。历史绑定用户没有会话标识的旧 JWT 会被拒绝，需重新使用 OIDC 或密码登录。部署前保留数据库备份，具体边界见[部署指南](./deployment.md#_2-首次启动)。
 
 ## 排查与验收
 

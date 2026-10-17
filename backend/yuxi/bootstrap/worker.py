@@ -24,8 +24,6 @@ from yuxi.modules.agents.services.leases import (
     reconcile_pending_runtime_cleanups,
 )
 from yuxi.modules.agents.services.scheduler import recover_pending_dispatches
-from yuxi.modules.extensions.mcp.service import ensure_builtin_mcp_servers_in_db
-from yuxi.modules.extensions.skills.builtin.sync import init_builtin_skills
 from yuxi.modules.identity.security import AuthUtils
 from yuxi.modules.schedules.service import claim_and_dispatch_due_jobs, recover_scheduled_dispatches
 from yuxi.workers.background_jobs import reconcile_and_publish_jobs
@@ -49,23 +47,10 @@ async def _worker_startup(ctx):
     ctx["worker_id"] = WORKER_ID
     pg_manager.initialize()
     await require_current_schema(pg_manager)
-    async with pg_manager.get_async_session_context() as session:
-        from yuxi.bootstrap.options import ensure_options_in_db
-        from yuxi.modules.system.options import system_options
-        from yuxi.modules.system.services.options import invalidate_option_cache
+    from yuxi.modules.system.options import system_options
+    from yuxi.modules.system.services.options import invalidate_option_cache
 
-        await ensure_options_in_db(session)
-        await session.commit()
     await invalidate_option_cache(system_options.key)
-    try:
-        await ensure_builtin_mcp_servers_in_db()
-    except Exception as exc:
-        logger.error(
-            "Optional worker component failed: component=builtin_mcp_servers, type=%s",
-            type(exc).__name__,
-        )
-    async with pg_manager.get_async_session_context() as session:
-        await init_builtin_skills(session)
     await _reconcile_agent_runs_once()
     await reconcile_and_publish_jobs()
     await _publish_job_reconciliation_health()

@@ -1,4 +1,4 @@
-"""Schema-init 使用的 PostgreSQL fresh baseline 与结构约束。"""
+"""App-init 使用的 PostgreSQL fresh baseline 与结构约束。"""
 
 from contextlib import asynccontextmanager
 
@@ -154,7 +154,7 @@ async def ensure_business_schema(manager):
 
 
 async def drop_fresh_schema(manager) -> None:
-    """删除未完成的 fresh baseline，使 schema-init 可以从零重试。"""
+    """删除未完成的 fresh baseline，使 app-init 可以从零重试。"""
     from yuxi.bootstrap.models import load_models
 
     load_models()

@@ -7,6 +7,7 @@ on:
   pull_request:
     paths:
       - '.env.template'
+      - '.dockerignore'
       - 'backend/**'
       - 'backend/pyproject.toml'
       - 'docker/**'
@@ -14,6 +15,9 @@ on:
       - 'docker-compose.prod.yml'
       - 'Makefile'
       - 'scripts/init.sh'
+      - 'scripts/pull_image.sh'
+      - 'scripts/test_docker_build_context.py'
+      - 'scripts/test_container_permissions.py'
       - 'scripts/init.ps1'
       - 'scripts/test_init_security.ps1'
       - '.github/workflows/test.yml'
@@ -24,12 +28,16 @@ on:
       - develop/0-8-0
     paths:
       - '.env.template'
+      - '.dockerignore'
       - 'backend/**'
       - 'backend/pyproject.toml'
       - 'docker/**'
       - 'docker-compose.yml'
       - 'docker-compose.prod.yml'
       - 'scripts/init.sh'
+      - 'scripts/pull_image.sh'
+      - 'scripts/test_docker_build_context.py'
+      - 'scripts/test_container_permissions.py'
       - 'scripts/init.ps1'
       - 'scripts/test_init_security.ps1'
       - '.github/workflows/test.yml'
@@ -48,6 +56,14 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+
+      - name: Verify private files stay outside the Docker build context
+        working-directory: .
+        run: python3 -m unittest scripts.test_docker_build_context
+
+      - name: Verify image and storage permissions
+        working-directory: .
+        run: python3 -m unittest scripts.test_container_permissions
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7

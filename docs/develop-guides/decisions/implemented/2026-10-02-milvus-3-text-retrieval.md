@@ -12,7 +12,7 @@ Owner：backend/yuxi/modules/knowledge/implementations/milvus.py
 
 ### 实现方案
 
-开发与生产 Compose 固定使用 Milvus/PyMilvus 3.0.2、etcd 3.5.25。Milvus 使用内嵌 Woodpecker 的对象存储模式；MinIO 二进制固定到 RELEASE.2024-12-18T13-15-44Z，并校验上游 SHA256，以满足[条件写入要求](https://milvus.io/docs/woodpecker.md#object-storage-compatibility-for-storagetypeminio)。启动前的 `milvus-storage-init` 为新绑定目录设置 UID/GID 999，失败阻止 Milvus 启动。PostgreSQL 继续拥有知识库、文件和 chunk 事实，MinIO 保存原件及解析产物，Milvus 保存派生索引。
+开发与生产 Compose 固定使用 Milvus/PyMilvus 3.0.2、etcd 3.5.25。Milvus 使用内嵌 Woodpecker 的对象存储模式；MinIO 二进制固定到 RELEASE.2024-12-18T13-15-44Z，并校验上游 SHA256，以满足[条件写入要求](https://milvus.io/docs/woodpecker.md#object-storage-compatibility-for-storagetypeminio)。启动前的 `storage-init` 为 Milvus 绑定目录设置 UID/GID 999，失败阻止 Milvus 启动；统一初始化与镜像权限由[存储权限决策](./2026-10-17-container-storage-permissions.md)拥有。PostgreSQL 继续拥有知识库、文件和 chunk 事实，MinIO 保存原件及解析产物，Milvus 保存派生索引。
 
 知识库与图向量 executor 通过各自连接 alias 明确创建并使用 `MILVUS_DB`，默认 `yuxi`；连接或集合加载失败显式报错。集合按当前 schema 创建，模型、维度或文本 schema 不匹配时拒绝使用，查询入口不删除集合。chunk 正文开启中文 analyzer 与 match，BM25 由服务端生成。
 

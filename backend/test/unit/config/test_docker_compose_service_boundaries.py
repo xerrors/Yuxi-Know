@@ -174,8 +174,6 @@ def test_default_agent_capacity_supports_one_hundred_concurrent_runs(filename: s
     assert services["postgres"]["command"][-1] == "max_connections=${POSTGRES_MAX_CONNECTIONS:-600}"
 
 
-
-
 @pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
 def test_milvus_suite_has_log_rotation_and_cpus_bound(filename: str) -> None:
     """milvus/etcd 日志轮转封顶；milvus 只保留 cpus 上界；不保留无效日志级别配置。"""
@@ -208,7 +206,7 @@ def test_workspace_consumers_use_fixed_runtime_identity_after_root_migration(fil
 
     assert services["api"]["user"] == "1000:1000"
     assert services["worker"]["user"] == "1000:1000"
-    assert "user" not in services["schema-init"]
+    assert "user" not in services["app-init"]
 
 
 def test_api_image_applies_owner_only_umask_before_dropping_to_runtime_identity() -> None:
@@ -236,25 +234,73 @@ def test_workspace_permission_guard_detects_reintroduced_world_writable_mode() -
 
 
 @pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
-def test_schema_initializer_gates_every_shipping_file_consumer(filename: str) -> None:
-    """文件 consumer 只能在 Schema 初始化成功后启动。"""
+def test_app_initializer_gates_every_shipping_file_consumer(filename: str) -> None:
+    """文件 consumer 只能在共享应用初始化成功后启动。"""
     compose = load_compose(filename)
-    for service_name in ("api", "worker"):
-        dependency = compose["services"][service_name]["depends_on"]["schema-init"]
-        assert dependency["condition"] == "service_completed_successfully"
-    initializer = compose["services"]["schema-init"]
-    assert "python -m yuxi.migrations.main" in initializer["command"]
+    assert _app_dependency_violations(compose) == set()
+    initializer = compose["services"]["app-init"]
+    assert "python -m yuxi.bootstrap.app" in initializer["command"]
     initializer_targets = {_volume_target(volume) for volume in initializer.get("volumes") or []}
     assert "/app/legacy-saves" not in initializer_targets
     assert not any(target.startswith("/app/legacy-") for target in initializer_targets)
     assert "/app/user-data" not in initializer_targets
-    assert "/app/skill-sources" not in initializer_targets
+    assert "/app/skill-sources" in initializer_targets
+    assert initializer["depends_on"]["storage-init"]["condition"] == "service_completed_successfully"
+    assert "schema-init" not in compose["services"]
     assert "/app/skill-projections" not in initializer_targets
     assert "YUXI_LEGACY_STORAGE_DIR" not in (initializer.get("environment") or {})
     assert "/app/legacy-projects" not in initializer_targets
     assert "/app/checkpoints" not in initializer_targets
     assert "YUXI_LEGACY_PROJECTS_DIR" not in (initializer.get("environment") or {})
     assert "minio" not in (initializer.get("depends_on") or {})
+
+
+def _app_dependency_violations(compose):
+    """识别未等待共享初始化成功的运行进程。"""
+    return {
+        name
+        for name in ("api", "worker")
+        if compose["services"][name].get("depends_on", {}).get("app-init", {}).get("condition") != "service_completed_successfully"
+    }
+
+
+@pytest.mark.parametrize("service_name", ["api", "worker"])
+@pytest.mark.parametrize("dependency", [{}, {"condition": "service_started"}])
+def test_app_gate_rejects_missing_or_nonblocking_dependency(service_name, dependency):
+    """恢复绕过共享初始化的依赖时，部署检查必须拒绝。"""
+    compose = deepcopy(load_compose("docker-compose.yml"))
+    compose["services"][service_name]["depends_on"]["app-init"] = dependency
+    assert _app_dependency_violations(compose) == {service_name}
+
+
+def _shared_initialization_calls(source):
+    """检测运行进程重新取得共享定义同步职责。"""
+    return {
+        name
+        for name in (
+            "ensure_options_in_db",
+            "ensure_builtin_mcp_servers_in_db",
+            "init_builtin_skills",
+            "initialize_agent_presets",
+            "ensure_builtin_model_providers_in_db",
+        )
+        if f"{name}(" in source
+    }
+
+
+@pytest.mark.parametrize(
+    "function_name",
+    [
+        "ensure_options_in_db",
+        "ensure_builtin_mcp_servers_in_db",
+        "init_builtin_skills",
+        "initialize_agent_presets",
+        "ensure_builtin_model_providers_in_db",
+    ],
+)
+def test_runtime_guard_rejects_reintroduced_shared_initialization(function_name):
+    """逐项恢复共享写入调用时，职责检查报告真实调用名。"""
+    assert _shared_initialization_calls(f"await {function_name}(session)") == {function_name}
 
 
 def test_runtime_processes_only_validate_schema_version() -> None:
@@ -277,6 +323,7 @@ def test_runtime_processes_only_validate_schema_version() -> None:
     for source in runtime_sources.values():
         assert "require_current_schema(" in source
         assert all(marker not in source for marker in ddl_markers)
+        assert _shared_initialization_calls(source) == set()
 
 
 @pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
@@ -293,10 +340,6 @@ def test_api_and_worker_use_distinct_local_runtime_directories(filename: str):
     assert _runtime_directory_violations(compose) == set()
     assert len(set(EXPECTED_RUNTIME_DIRS.values())) == len(EXPECTED_RUNTIME_DIRS)
     assert all(not path.startswith("/app/saves/") for path in EXPECTED_RUNTIME_DIRS.values())
-
-
-
-
 
 
 def test_integration_cleanup_does_not_access_docker_daemon():
@@ -377,3 +420,11 @@ def test_shipping_uses_only_cube_environment_configuration(filename):
         assert env["CUBE_NODE_SKILL_PROJECTION_DIR"].startswith("${CUBE_NODE_SKILL_PROJECTION_DIR:?")
         assert env["SANDBOX_IDLE_SECONDS"] == "${SANDBOX_IDLE_SECONDS:-300}"
         assert not any(key.startswith("SANDBOX_PROVISIONER") for key in env)
+
+
+@pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
+def test_filesystem_initializer_does_not_allocate_an_implicit_compose_network(filename):
+    """只修改目录属主的初始化器不能额外占用宿主子网。"""
+    compose = load_compose(filename)
+    initializer = compose["services"]["storage-init"]
+    assert initializer.get("network_mode") == "none"

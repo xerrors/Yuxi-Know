@@ -67,7 +67,7 @@ async def seed_initial_users() -> None:
     try:
         load_models()
         pg_manager.initialize()
-        # Schema 由 Compose 中的 schema-init 独占创建，这里只校验版本后写入种子数据。
+        # Schema 由 Compose 中的 app-init 独占创建，这里只校验版本后写入种子数据。
         from yuxi.infrastructure.postgres.schema import require_current_schema
 
         await require_current_schema(pg_manager)

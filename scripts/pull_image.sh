@@ -26,14 +26,16 @@ fi
 
 # Pull image from mirror
 echo "Pulling image from mirror: $MIRROR_URL/$IMAGE_TAG"
-docker pull $MIRROR_URL/$IMAGE_TAG
+if ! docker pull "$MIRROR_URL/$IMAGE_TAG"; then
+    echo "Mirror unavailable; pulling from the original registry: $IMAGE_TAG" >&2
+    docker pull "$IMAGE_TAG"
+    exit $?
+fi
 
 # Tag image with original name
-docker tag $MIRROR_URL/$IMAGE_TAG $IMAGE_TAG
+docker tag "$MIRROR_URL/$IMAGE_TAG" "$IMAGE_TAG"
 
 # Remove mirror image
-docker rmi $MIRROR_URL/$IMAGE_TAG
-
-docker images
+docker rmi "$MIRROR_URL/$IMAGE_TAG"
 
 echo "Process completed successfully!"

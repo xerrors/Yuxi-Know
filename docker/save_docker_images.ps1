@@ -18,6 +18,7 @@ Write-Host "开始导出Docker镜像到 $OutputFile..." -ForegroundColor Cyan
 # 从各个文件中提取的基础镜像列表
 $Images = @(
     # 应用与基础设施（docker-compose*.yml、docker/*.Dockerfile）
+    "alpine:3.20",
     "python:3.13-slim",
     "ghcr.io/astral-sh/uv:0.12.6",
     "node:24-slim",
@@ -42,7 +43,7 @@ $Images = @(
 # MinIO 的官方镜像已不再公开分发，改为按仓库内 Dockerfile 构建后再导出。
 # 镜像名从 Compose 解析而不是拼装：它跟随 .env 里的 COMPOSE_PROJECT_NAME，与 docker compose up 实际
 # 使用的名字一致；硬编码会在用户改过项目名时导出另一个 tag，目标机器上只能现场构建，离线环境直接失败。
-docker compose build minio
+docker compose build minio storage-init
 if ($LASTEXITCODE -ne 0) {
     Write-Host "❌ MinIO 镜像构建失败" -ForegroundColor Red
     exit 1
@@ -50,6 +51,12 @@ if ($LASTEXITCODE -ne 0) {
 $MinioImage = docker compose config --images | Where-Object { $_ -match '-minio:RELEASE' } | Select-Object -First 1
 if (-not $MinioImage) {
     Write-Host "❌ 未能从 Compose 配置解析出 MinIO 镜像名" -ForegroundColor Red
+    exit 1
+}
+
+$StorageImage = docker compose config --images | Where-Object { $_ -match '-storage-init:' } | Select-Object -First 1
+if (-not $StorageImage) {
+    Write-Host "❌ 未能从 Compose 配置解析出 storage-init 镜像名" -ForegroundColor Red
     exit 1
 }
 
@@ -61,7 +68,7 @@ foreach ($Image in $Images) {
 
 # 保存所有镜像到单个tar文件
 Write-Host "正在保存镜像到tar文件..." -ForegroundColor Yellow
-docker save ($Images + $MinioImage) -o $OutputFile
+docker save ($Images + $MinioImage + $StorageImage) -o $OutputFile
 
 # 计算文件大小
 $FileInfo = Get-Item $OutputFile

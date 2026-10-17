@@ -11,10 +11,8 @@ from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.infrastructure.postgres.schema import require_current_schema
 from yuxi.modules.agents.runtime.sandbox.provider import check_sandbox_provider
 from yuxi.modules.agents.services.transport import get_redis_client
-from yuxi.modules.extensions.mcp.service import ensure_builtin_mcp_servers_in_db
 from yuxi.modules.identity.oidc import get_oidc_config
 from yuxi.modules.identity.security import AuthUtils
-from yuxi.modules.models.providers.service import ensure_builtin_model_providers_in_db
 
 
 class RequiredStartupComponentError(RuntimeError):
@@ -46,69 +44,14 @@ async def _startup(app: FastAPI) -> None:
         operation=get_oidc_config,
     )
 
-    # Schema 只由 Compose 中的 schema-init 修改；运行进程仅校验兼容版本。
+    # 共享持久定义只由 Compose 中的 app-init 初始化；运行进程仅校验兼容版本。
     pg_manager.initialize()
     await require_current_schema(pg_manager)
 
-    from yuxi.bootstrap.options import ensure_options_in_db
     from yuxi.modules.system.options import system_options
     from yuxi.modules.system.services.options import invalidate_option_cache
 
-    async with pg_manager.get_async_session_context() as session:
-        await ensure_options_in_db(session)
-        await session.commit()
     await invalidate_option_cache(system_options.key)
-
-    await _initialize_startup_component(
-        app,
-        name="builtin_mcp_servers",
-        required=False,
-        operation=ensure_builtin_mcp_servers_in_db,
-    )
-
-    async def initialize_builtin_skills() -> None:
-        """在独立事务中安装内置 Skills。"""
-
-        from yuxi.modules.extensions.skills.builtin.sync import init_builtin_skills
-
-        async with pg_manager.get_async_session_context() as session:
-            await init_builtin_skills(session)
-
-    await _initialize_startup_component(
-        app,
-        name="builtin_skills",
-        required=True,
-        operation=initialize_builtin_skills,
-    )
-
-    async def initialize_default_agents() -> None:
-        """确保平台至少具有可用的默认 Agent 定义。"""
-
-        from yuxi.modules.agents.services.configuration import initialize_agent_presets
-
-        async with pg_manager.get_async_session_context() as session:
-            await initialize_agent_presets(session)
-
-    await _initialize_startup_component(
-        app,
-        name="default_agents",
-        required=True,
-        operation=initialize_default_agents,
-    )
-
-    # 初始化内置模型供应商配置
-    async def initialize_model_providers() -> None:
-        """确保内置模型供应商定义可以从数据库读取。"""
-
-        async with pg_manager.get_async_session_context() as session:
-            await ensure_builtin_model_providers_in_db(session)
-
-    await _initialize_startup_component(
-        app,
-        name="model_providers",
-        required=True,
-        operation=initialize_model_providers,
-    )
 
     # 初始化模型缓存（v2 模型选择使用）
     async def initialize_model_cache() -> None:

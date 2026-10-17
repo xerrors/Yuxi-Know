@@ -102,6 +102,12 @@ Compose API 容器只挂载后端目录时，部署配置测试会因缺少仓�
 uv run --project backend --no-sync --group test pytest backend/test/unit/config -q
 ```
 
+应用共享初始化使用真实 PostgreSQL 隔离 Schema 和临时 Skill 目录验证首次部署、当前版本重跑、管理员值保留、阶段失败重试与并发锁。独立子进程覆盖已有 Schema 的冷启动，并用缺少 ORM 注册的负控复现失败；这些用例接入 `system-tests.yml`：
+
+```bash
+docker compose exec api uv run --group test pytest test/integration/services/test_app_initialization.py test/integration/services/test_schema_migration_version.py -q
+```
+
 模型重放服务由测试环境启动；依赖共享重放的场景显式读取 `OPENAI_REPLAY_URL` 与 `COOPERATION_REPLAY_URL`。需要独占状态的场景复用 `e2e/conftest.py` 已有的重放 fixture，避免在测试文件内重复启动和回收服务器。
 
 默认 Compose 测试环境分别启动 `test/support/openai_replay_server.py` 与 `test.support.cooperation_replay_server` 后，在宿主导出 worker 可访问的地址；测试脚本把它们和测试账号转发给容器。CI 在现有环境生成步骤写入同样的值：
@@ -153,6 +159,12 @@ git diff --check
 ```bash
 make audit-dependencies
 make audit-licenses
+```
+
+Docker 镜像与挂载权限回归在仓库宿主执行，需要可用的 Docker Engine。测试使用临时合成文件与独立 Compose project，不挂载生产数据；受限构建输入、历史文件保留、只读存储失败与负向镜像均由真实容器结果验证。API 容器无需访问 Docker daemon。
+
+```bash
+python3 -m unittest scripts.test_docker_build_context scripts.test_container_permissions
 ```
 
 Windows 初始化脚本的安全行为需要在 Windows 或 PowerShell 7 环境中验证：

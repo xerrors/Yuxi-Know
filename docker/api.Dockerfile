@@ -45,25 +45,27 @@ RUN set -ex \
     && rm -rf /var/lib/apt/lists/*
 
 # 复制项目配置文件
-COPY backend/pyproject.toml /app/pyproject.toml
-COPY backend/.python-version /app/.python-version
-COPY backend/uv.lock /app/uv.lock
+COPY --chown=0:0 --chmod=0644 backend/pyproject.toml /app/pyproject.toml
+COPY --chown=0:0 --chmod=0644 backend/.python-version /app/.python-version
+COPY --chown=0:0 --chmod=0644 backend/uv.lock /app/uv.lock
 
 # 安装唯一的后端 Python 项目。
-COPY backend/README.md /app/README.md
-COPY backend/MANIFEST.in /app/MANIFEST.in
-COPY backend/yuxi /app/yuxi
+COPY --chown=0:0 --chmod=0644 backend/README.md /app/README.md
+COPY --chown=0:0 --chmod=0644 backend/MANIFEST.in /app/MANIFEST.in
+COPY --chown=0:0 backend/yuxi /app/yuxi
+# 构建输入可来自 600/700 checkout，镜像内源码只读权限不依赖宿主模式。
+RUN find /app/yuxi -type d -exec chmod 0755 {} + \
+    && find /app/yuxi -type f -exec chmod 0644 {} +
 
 # 如果网络还是不好，可以在后面添加 --index-url https://pypi.tuna.tsinghua.edu.cn/simple
 RUN uv sync --no-cache --group test --no-dev --frozen
 
-COPY docker/api-entrypoint.sh /usr/local/bin/yuxi-entrypoint
+COPY --chown=0:0 --chmod=0755 docker/api-entrypoint.sh /usr/local/bin/yuxi-entrypoint
 
 RUN groupadd --gid 1000 yuxi \
     && useradd --uid 1000 --gid 1000 --create-home yuxi \
     && mkdir -p /app/runtime /home/yuxi/.cache/rapidocr/models \
-    && chown -R 1000:1000 /app/runtime /home/yuxi \
-    && chmod 0755 /usr/local/bin/yuxi-entrypoint
+    && chown -R 1000:1000 /app/runtime /home/yuxi
 
 ENV HOME=/home/yuxi \
     RAPIDOCR_MODEL_DIR=/home/yuxi/.cache/rapidocr/models

@@ -31,9 +31,10 @@ PORT_MARKERS = {
     "paddlex": {"127.0.0.1:${YUXI_PADDLEX_PORT:-8080}:8080"},
 }
 LOCAL_IMAGE_SUFFIXES = {
+    "storage-init": "-storage-init:",
     "api": "-api:",
     "worker": "-api:",
-    "schema-init": "-api:",
+    "app-init": "-api:",
     "frontend": "-frontend:",
     "mineru-api": "-mineru:",
     "paddlex": "-paddlex:",

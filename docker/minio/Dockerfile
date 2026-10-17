@@ -30,8 +30,7 @@ RUN set -eux; \
 # 与原镜像保持一致：二进制位于 /opt/bin，且该目录在 PATH 中
 ENV PATH="/opt/bin:${PATH}"
 
-COPY docker-entrypoint.sh /usr/bin/docker-entrypoint.sh
-RUN chmod 0755 /usr/bin/docker-entrypoint.sh
+COPY --chown=0:0 --chmod=0755 docker-entrypoint.sh /usr/bin/docker-entrypoint.sh
 
 EXPOSE 9000 9001
 

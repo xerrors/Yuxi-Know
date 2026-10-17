@@ -31,11 +31,7 @@ SANDBOX_IDLE_SECONDS=300
 
 每个用户 VM 只挂载其 Workspace 子目录和授权 Skills 投影，投影只读；平台来源目录、数据库目录、`.env` 和 Docker socket 均不挂载。控制面及数据代理通过私网供 API/worker 访问，不作为公网产品接口开放。VM 默认禁止私网出口，外网包安装可用。
 
-```bash
-docker compose build api
-docker compose run --rm schema-init
-docker compose up -d api worker frontend
-```
+首次启动按[快速开始](../intro/quick-start.md)构建并启动完整拓扑；更新应用镜像或内置定义时，按[共享内容更新](./deployment.md#共享内容更新与失败重试)停止消费者、执行 app-init 后恢复服务，使用该环境原有的 Compose 与环境文件。
 
 API/worker 启动检查控制面、模板及代理。`/api/system/ready` 仍是业务核心依赖门槛；某个用户实例的健康与占用由用户设置查看。用户环境变量在 Run 开始执行时从数据库读取一次，同次执行的命令共用快照，不继承平台进程环境；保存与验证语义见[用户 Agent 环境变量](./configuration.md#用户-agent-环境变量)。不要把管理密钥放入用户环境或 Skill。
 

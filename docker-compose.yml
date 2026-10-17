@@ -99,13 +99,15 @@ services:
       retries: 8
       start_period: 180s
     depends_on:
+      storage-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
       minio:
         condition: service_healthy
-      schema-init:
+      app-init:
         condition: service_completed_successfully
 
   worker:
@@ -156,22 +158,25 @@ services:
       retries: 6
       start_period: 180s
     depends_on:
+      storage-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
       minio:
         condition: service_healthy
-      schema-init:
+      app-init:
         condition: service_completed_successfully
 
-  schema-init:
+  app-init:
     build:
       context: .
       dockerfile: docker/api.Dockerfile
     image: ${COMPOSE_PROJECT_NAME:-yuxi}-api:${YUXI_VERSION:-0.8.0.beta1}
     working_dir: /app
     volumes:
+      - ${YUXI_STATE_DIR:-./docker/volumes}/yuxi/skill-sources:/app/skill-sources
       - ./backend/yuxi:/app/yuxi:ro
     networks:
       - app-network
@@ -179,9 +184,11 @@ services:
       - ${YUXI_ENV_FILE:-.env}
     environment:
       <<: *api-worker-env
-    command: uv run --no-sync --no-dev python -m yuxi.migrations.main
+    command: uv run --no-sync --no-dev python -m yuxi.bootstrap.app
     restart: "no"
     depends_on:
+      storage-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
 
@@ -291,13 +298,17 @@ services:
       - app-network
     restart: unless-stopped
 
-  milvus-storage-init:
-    image: milvusdb/milvus:v3.0.2
+  storage-init:
+    build:
+      context: .
+      dockerfile: docker/storage-init.Dockerfile
+    image: ${COMPOSE_PROJECT_NAME:-yuxi}-storage-init:${YUXI_VERSION:-0.8.0.beta1}
+    network_mode: none
     user: "0:0"
-    entrypoint: ["/bin/sh", "-c"]
-    # 3.x 进程使用 UID 999；Docker 新建的 bind mount 由 root 拥有。
-    command: ["chown 999:999 /var/lib/milvus /var/lib/milvus/logs"]
     volumes:
+      - ${YUXI_STATE_DIR:-./docker/volumes}/yuxi/threads:/app/user-data
+      - ${YUXI_STATE_DIR:-./docker/volumes}/yuxi/skill-sources:/app/skill-sources
+      - ${YUXI_STATE_DIR:-./docker/volumes}/yuxi/skill-projections:/app/skill-projections
       - ${YUXI_STATE_DIR:-./docker/volumes}/milvus/milvus:/var/lib/milvus
       - ${YUXI_STATE_DIR:-./docker/volumes}/milvus/logs:/var/lib/milvus/logs
     restart: "no"
@@ -337,7 +348,7 @@ services:
       - "127.0.0.1:${YUXI_MILVUS_PORT:-19530}:19530"
       - "127.0.0.1:${YUXI_MILVUS_HEALTH_PORT:-9091}:9091"
     depends_on:
-      milvus-storage-init:
+      storage-init:
         condition: service_completed_successfully
       etcd:
         condition: service_healthy

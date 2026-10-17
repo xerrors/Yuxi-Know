@@ -1,8 +1,6 @@
 """当前 Schema 初始化入口拒绝旧版本。"""
 
-from contextlib import asynccontextmanager
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -12,38 +10,25 @@ from yuxi.migrations import main as schema_bootstrap
 @pytest.mark.asyncio
 async def test_legacy_schema_version_is_rejected_before_ddl(monkeypatch):
     """旧版本标记必须阻止任何当前 Schema 建表。"""
-    manager = SimpleNamespace(initialize=Mock(), close=AsyncMock())
-
-    @asynccontextmanager
-    async def locked(_manager):
-        yield
+    manager = object()
 
     create_tables = AsyncMock()
-    monkeypatch.setattr(schema_bootstrap, "pg_manager", manager)
-    monkeypatch.setattr(schema_bootstrap, "schema_migration_lock", locked)
     monkeypatch.setattr(schema_bootstrap, "get_schema_versions", AsyncMock(return_value={"business": 1, "knowledge": 1}))
     monkeypatch.setattr(schema_bootstrap, "create_business_tables", create_tables)
 
     with pytest.raises(RuntimeError, match="Unsupported Yuxi schema versions"):
-        await schema_bootstrap.main()
+        await schema_bootstrap.initialize_schema(manager)
 
     create_tables.assert_not_awaited()
-    manager.close.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 async def test_fresh_schema_failure_cleans_partial_tables_before_retry(monkeypatch):
     """fresh baseline 任一阶段失败后必须清理半成品。"""
-    manager = SimpleNamespace(initialize=Mock(), close=AsyncMock())
-
-    @asynccontextmanager
-    async def locked(_manager):
-        yield
+    manager = object()
 
     create_tables = AsyncMock(side_effect=RuntimeError("ddl failed"))
     drop_schema = AsyncMock()
-    monkeypatch.setattr(schema_bootstrap, "pg_manager", manager)
-    monkeypatch.setattr(schema_bootstrap, "schema_migration_lock", locked)
     monkeypatch.setattr(schema_bootstrap, "get_schema_versions", AsyncMock(return_value={}))
     monkeypatch.setattr(schema_bootstrap, "_require_empty_database", AsyncMock())
     monkeypatch.setattr(schema_bootstrap, "create_schema_version_table", AsyncMock())
@@ -52,7 +37,6 @@ async def test_fresh_schema_failure_cleans_partial_tables_before_retry(monkeypat
     monkeypatch.setattr(schema_bootstrap, "drop_fresh_schema", drop_schema)
 
     with pytest.raises(RuntimeError, match="ddl failed"):
-        await schema_bootstrap.main()
+        await schema_bootstrap.initialize_schema(manager)
 
     drop_schema.assert_awaited_once_with(manager)
-    manager.close.assert_awaited_once()

@@ -119,10 +119,15 @@ jobs:
           curl -fsS -X POST http://localhost:5050/api/auth/initialize \
             -H 'Content-Type: application/json' \
             --data "{\"uid\":\"${E2E_USERNAME}\",\"password\":\"${E2E_PASSWORD}\"}" >/dev/null
+      - name: Verify app initialization against isolated PostgreSQL schemas
+        run: |
+          docker compose exec -T api uv run --no-sync --no-dev pytest \
+            test/integration/services/test_app_initialization.py \
+            test/integration/services/test_schema_migration_version.py -q
       - name: Verify 后台作业 worker path
         run: |
           docker compose stop api worker
-          docker compose run --rm schema-init
+          docker compose run --rm app-init
           docker compose run --rm --no-deps api \
             uv run --no-sync --no-dev pytest test/integration/services/test_background_job_repository.py -q
           docker compose run --rm --no-deps \

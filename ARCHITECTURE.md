@@ -17,7 +17,8 @@ API 在 `/api/mcp` 提供只读知识库 MCP，与 HTTP API 共用进程和端�
 - `frontend`：Vue 3 / Vite 前端，挂载 `frontend/src` 并热更新。
 - `api`：FastAPI API 服务，挂载 `backend/yuxi` 和测试目录；API 与 worker 的源码修改通过显式重启生效。
 - `worker`：ARQ worker，执行已经派发的 AgentRun 与注册的 后台作业，并周期触发用户自建 Agent 定时任务；三者分别使用 PostgreSQL 中的运行租约、任务租约和调度锁闭合并发与恢复。
-- `schema-init`：Compose 中唯一修改 Yuxi 数据库 Schema 的一次性进程，只为确认空库建立 business 版本 4 与 knowledge 版本 1 基线；当前版本直接结束，其他版本或未版本化旧表明确拒绝。API 与 worker 等待其成功后只校验 Schema 版本。已存在数据库的版本调整在部署侧直接完成，不由应用代码提供历史迁移入口。
+- `storage-init`：无网络的一次性进程，准备 API/worker/app-init 与 Milvus 挂载根的属主和模式，不递归修改已有文件；消费进程等待其成功退出。
+- `app-init`：普通用户运行的部署任务，在 PostgreSQL advisory lock 内先建立或校验当前 Schema，再同步系统配置定义、内置供应商、Agent、MCP 与 Skill 来源文件。API 与 worker 等待全部成功。空库基线为 business 4、knowledge 1；其他版本明确拒绝，已有数据库的版本调整由部署侧负责。共享同步失败保留已提交内容，修正后幂等重跑。
 - Cube Linux/KVM 执行节点：每个用户拥有一个持久普通账号 VM，Workspace 与授权 Skills 共享宿主文件。
 - `postgres`：业务数据、知识库元数据、持久 Input 队列、Turn/Run 与 LangGraph checkpoint。
 - `redis`：ARQ 投递、运行事件、取消信号以及跨进程配置和模型缓存。
@@ -35,7 +36,7 @@ API 在 `/api/mcp` 提供只读知识库 MCP，与 HTTP API 共用进程和端�
 - `yuxi/api/main.py` 创建 FastAPI 应用；`api/routers` 统一注册 HTTP 路由，`api/lifespan.py` 连接 FastAPI 生命周期。
 - `yuxi/workers/main.py` 暴露 ARQ `WorkerSettings`；`workers` 拥有任务入口和健康上报，`bootstrap/worker.py` 装配连接、恢复循环和关闭顺序。
 - `bootstrap/api.py` 装配 API 必需与可选组件；`bootstrap/models.py` 显式导入分域 ORM，维持 business 与 knowledge 两套 metadata。
-- `migrations/main.py` 是 schema-init 的唯一入口，`migrations/schema.py` 拥有 DDL；`infrastructure/postgres/schema.py` 向 API/worker 提供只读版本检查。
+- `bootstrap/app.py` 是 app-init 入口，调用 `migrations/main.py` 的空库初始化与各域共享内容同步；`migrations/schema.py` 拥有 DDL；`infrastructure/postgres/schema.py` 向 API/worker 提供只读版本检查。
 
 Yuxi 始终交付完整知识能力。API 注册知识库、图谱、评估、Dashboard 与工作区知识路由，并注册 `knowledge-base` Skill 和知识工具；系统 discovery 向 Web 与 CLI 宣告知识能力。聊天附件仅在真实解析动作发生时加载 parser。
 
@@ -103,8 +104,8 @@ Yuxi 始终交付完整知识能力。API 注册知识库、图谱、评估、Da
 - `pending` Run 是持久化投递意图；`running` / `cancel_requested` Run 必须由唯一 attempt lease 拥有。Heartbeat 只能由当前 owner 续租，终态或 retry publication 清除 lease，过期 ownership 不能被另一个执行者静默接管。
 - Turn 结果以 `result_run_id` 指向的顶层 Run 及其 `output_message_id` 为权威；消息、事件和 artifact 均绑定明确的 Input/Turn/Run，禁止从未完成、其他 Turn 的子 Run 或相邻 Run 猜测输出。每个子任务的 Turn 结果只属于自身 Run。
 - `/api/system/health` 只表达 API 进程 liveness；Compose 以 `/api/system/ready` 判断启动完成、PostgreSQL/Redis 可用且存在完成启动的兼容 worker。worker 同时续租短 TTL ARQ 消费健康、AgentRun lease reconciliation 与 后台作业 reconciliation 成功事实；持久 key、超长 TTL、错误 Redis DSN 或持续无法收敛失联执行都不能维持 readiness。业务正确性仍由真实链路测试证明。
-- Yuxi 数据库 Schema 只由 `schema-init` 在 PostgreSQL advisory lock 内修改并记录 business/knowledge 域版本；API 与 worker 不建表或执行收敛 DDL，并在任一域版本缺失、过旧或过新时拒绝启动。
-- 内置 Skills 是默认 Agent shipping contract 的 required 组成，API/worker 通过 PostgreSQL advisory lock 串行同步；内置 MCP 定义是 optional，但失败必须形成可观测 degraded 而非被组件内部吞掉。
+- Yuxi 数据库 Schema 只由 `app-init` 在 PostgreSQL advisory lock 内修改并记录 business/knowledge 域版本；API 与 worker 不建表或同步发布内置定义，并在任一域版本缺失、过旧或过新时拒绝启动；各自保留真实环境配置校验、连接和缓存初始化、运行恢复与 readiness。
+- app-init 在同一 PostgreSQL advisory lock 内同步代码拥有的共享定义与内置 Skill 文件，任一步骤失败均阻止 API/worker 启动；内置 MCP 定义同步只处理本地发布内容，外部 MCP 的连接与调用按启用状态执行。
 - 跨 repository 的身份管理用例只有一个 service 事务 Owner；Department 与 User 同一提交。API Key 由独立服务端主密钥和客户端幂等 ID 确定性派生，只保存 hash；原始创建意图使用不可变指纹校验，撤销保留 request-id tombstone，同一请求可恢复响应但不能复活已撤销凭据。
 - 前端 API 调用集中在 `frontend/src/apis`，组件不要散落拼接普通 HTTP 接口。
 - 智能体能力通过 context、middleware、toolkits、Skills、MCP 和 backends 组合；不要把知识库、沙盒或扩展逻辑硬编码进单个页面或路由。
