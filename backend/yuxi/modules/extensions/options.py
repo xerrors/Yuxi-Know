@@ -18,3 +18,27 @@ remote_skill_source_policy = Option(
         ]
     },
 )
+
+WEB_PROVIDER_OPTIONS = {
+    provider: Option(
+        key=f"{provider}_search_opts",
+        name=name,
+        description="网页搜索与正文抓取凭据。" if provider != "doubao" else "豆包 Custom 网页搜索凭据。",
+        params={
+            "fields": [
+                {
+                    "key": "api_key",
+                    "label": "API Key",
+                    "type": "password",
+                    "sensitive": True,
+                    "environment": environment,
+                }
+            ],
+        },
+    )
+    for provider, name, environment in (
+        ("tavily", "Tavily", "TAVILY_API_KEY"),
+        ("deepseek", "DeepSeek", "DEEPSEEK_API_KEY"),
+        ("doubao", "豆包 Custom", "DOUBAO_SEARCH_API_KEY"),
+    )
+}

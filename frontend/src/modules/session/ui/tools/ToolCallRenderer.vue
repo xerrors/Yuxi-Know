@@ -34,6 +34,7 @@ const createRenderer = (loader) => defineAsyncComponent({
 
 const CooperationTool = createRenderer(() => import('./renderers/CooperationTool.vue'))
 const WebSearchTool = createRenderer(() => import('./renderers/WebSearchTool.vue'))
+const WebFetchTool = createRenderer(() => import('./renderers/WebFetchTool.vue'))
 const ListKbsTool = createRenderer(() => import('./renderers/ListKbsTool.vue'))
 const QueryKbTool = createRenderer(() => import('./renderers/QueryKbTool.vue'))
 const FindKbDocumentTool = createRenderer(() => import('./renderers/FindKbDocumentTool.vue'))
@@ -102,6 +103,7 @@ const TOOL_RENDERERS = {
   search_file: SearchFileTool,
   search_file_content: SearchFileContentTool,
   web_search: WebSearchTool,
+  web_fetch: WebFetchTool,
   tavily_search: WebSearchTool,
   doubao_search: WebSearchTool,
   text_to_img_qwen_image: ImageTool,

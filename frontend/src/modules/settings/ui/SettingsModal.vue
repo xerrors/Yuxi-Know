@@ -56,6 +56,15 @@
             <span>OCR 配置</span>
           </div>
           <div
+            v-if="userStore.isSuperAdmin"
+            class="sider-item"
+            :class="{ activesec: activeTab === 'webSearch' }"
+            @click="activeTab = 'webSearch'"
+          >
+            <Globe class="icon" :size="18" />
+            <span>网络搜索</span>
+          </div>
+          <div
             class="sider-item"
             :class="{ activesec: activeTab === 'user' }"
             @click="activeTab = 'user'"
@@ -161,6 +170,12 @@
           OCR 配置
         </div>
         <div
+          v-if="userStore.isSuperAdmin"
+          class="nav-item"
+          :class="{ active: activeTab === 'webSearch' }"
+          @click="activeTab = 'webSearch'"
+        >网络搜索</div>
+        <div
           class="nav-item"
           :class="{ active: activeTab === 'user' }"
           @click="activeTab = 'user'"
@@ -209,6 +224,9 @@
           <div v-show="activeTab === 'ocr'" v-if="userStore.isSuperAdmin && loadedTabs.has('ocr')">
             <OCRSettingsSection />
           </div>
+          <div v-show="activeTab === 'webSearch'" v-if="userStore.isSuperAdmin && loadedTabs.has('webSearch')">
+            <WebSearchSettingsSection />
+          </div>
 
           <div v-show="activeTab === 'user'" v-if="userStore.isAdmin && loadedTabs.has('user')">
             <UserManagementComponent />
@@ -232,6 +250,7 @@ import { useUserStore } from '@/modules/identity/model/user'
 import {
   CircleUser,
   ExternalLink,
+  Globe,
   Settings,
   Key,
   ScanText,
@@ -249,6 +268,7 @@ const AccountSettingsComponent = createAsyncPanel(
 const AgentEnvSettingsCard = createAsyncPanel(() => import('@/modules/settings/ui/AgentEnvSettingsCard.vue'))
 const BasicSettingsSection = createAsyncPanel(() => import('@/modules/settings/ui/BasicSettingsSection.vue'))
 const OCRSettingsSection = createAsyncPanel(() => import('@/modules/settings/ui/OCRSettingsSection.vue'))
+const WebSearchSettingsSection = createAsyncPanel(() => import('@/modules/settings/ui/WebSearchSettingsSection.vue'))
 const ApiKeyManagementComponent = createAsyncPanel(
   () => import('@/modules/settings/ui/ApiKeyManagementComponent.vue')
 )
@@ -289,7 +309,7 @@ const availableTabs = computed(() => {
   const tabs = []
   if (userStore.isLoggedIn) tabs.push('account', 'apiKeys', 'agentEnv')
   if (userStore.isAdmin) tabs.push('user')
-  if (userStore.isSuperAdmin) tabs.push('base', 'ocr')
+  if (userStore.isSuperAdmin) tabs.push('base', 'ocr', 'webSearch')
   if (userStore.isSuperAdmin) tabs.push('department')
   return tabs
 })

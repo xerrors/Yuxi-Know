@@ -1,0 +1,123 @@
+.option-card {
+  padding: 16px;
+  border: 1px solid var(--gray-150);
+  border-radius: 8px;
+  background: var(--gray-0);
+}
+
+.option-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.option-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+
+  h4,
+  p {
+    margin: 0;
+  }
+
+  h4 {
+    color: var(--gray-900);
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  p {
+    margin-top: 3px;
+    color: var(--color-text-secondary);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+}
+
+.option-actions {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.option-card:hover .option-actions,
+.option-card:focus-within .option-actions,
+.option-actions.editing {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.option-field :deep(.ant-input:disabled) {
+  color: var(--gray-600);
+  -webkit-text-fill-color: var(--gray-600);
+}
+
+.option-field :deep(.ant-input:disabled),
+.option-field :deep(.ant-input-affix-wrapper-disabled) {
+  background: var(--gray-25);
+}
+
+.save-button {
+  border-color: var(--gray-900);
+  background: var(--gray-900);
+
+  &:hover,
+  &:focus {
+    border-color: var(--gray-700);
+    background: var(--gray-700);
+  }
+}
+
+.option-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
+}
+
+.option-field {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 6px;
+
+  &:only-child {
+    grid-column: 1 / -1;
+  }
+
+  small {
+    color: var(--color-text-secondary);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+}
+
+.option-card .setting-label {
+  color: var(--gray-700);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.masked-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: 0.02em;
+}
+
+@container settings-services (max-width: 520px) {
+  .option-fields { grid-template-columns: 1fr; }
+  .option-header { flex-wrap: wrap; }
+  .option-actions { opacity: 1; pointer-events: auto; }
+}
+
+@media (hover: none) {
+  .option-actions { opacity: 1; pointer-events: auto; }
+}
+
+.option-heading { min-width: 0; }
+.option-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; }
+.option-field-name { color: var(--color-text-secondary); font-size: 12px; font-weight: 400; }

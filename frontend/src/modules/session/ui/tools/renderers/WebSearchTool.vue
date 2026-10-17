@@ -9,8 +9,9 @@
     </template>
     <template #result="{ resultContent }">
       <div class="web-search-result">
+        <p v-if="parsedData(resultContent).error" role="alert">{{ parsedData(resultContent).error }}</p>
         <WebSearchResultList
-          v-if="parsedData(resultContent).results && parsedData(resultContent).results.length > 0"
+          v-else-if="parsedData(resultContent).results && parsedData(resultContent).results.length > 0"
           :results="parsedData(resultContent).results"
         />
 

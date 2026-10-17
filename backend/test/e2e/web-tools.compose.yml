@@ -1,0 +1,37 @@
+# 仅叠加到独立测试槽位，不用于生产环境。
+services:
+  web-provider-replay:
+    image: ${COMPOSE_PROJECT_NAME:-yuxi}-api:${YUXI_VERSION:-0.8.0.beta1}
+    user: '0:0'
+    working_dir: /app
+    command: uv run --no-sync --no-dev python -m test.support.web_provider_replay
+    volumes:
+      - ./backend/test:/app/test:ro
+      - web-replay-certs:/replay-certs
+    networks: [app-network]
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://localhost:8767/ready']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  api:
+    environment:
+      HTTPS_PROXY: http://web-provider-replay:8767
+      SSL_CERT_FILE: /replay-certs/ca.pem
+      WEB_TOOLS_REPLAY_URL: http://web-provider-replay:8767/v1
+    volumes:
+      - web-replay-certs:/replay-certs:ro
+    depends_on:
+      web-provider-replay:
+        condition: service_healthy
+  worker:
+    environment:
+      HTTPS_PROXY: http://web-provider-replay:8767
+      SSL_CERT_FILE: /replay-certs/ca.pem
+    volumes:
+      - web-replay-certs:/replay-certs:ro
+    depends_on:
+      web-provider-replay:
+        condition: service_healthy
+volumes:
+  web-replay-certs:

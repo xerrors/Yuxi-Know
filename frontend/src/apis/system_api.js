@@ -63,6 +63,11 @@ export const configOptionsApi = {
     apiAdminPut(`/api/system/config/options/${encodeURIComponent(key)}`, { value })
 }
 
+export const webToolsApi = {
+  search: (payload) => apiAdminPost('/api/system/web-tools/search/test', payload),
+  fetch: (payload) => apiAdminPost('/api/system/web-tools/fetch/test', payload)
+}
+
 // =============================================================================
 // === 信息管理分组 ===
 // =============================================================================

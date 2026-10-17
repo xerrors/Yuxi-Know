@@ -185,29 +185,6 @@ if (Test-Path ".env") {
         }
     } while ([string]::IsNullOrEmpty($apiKey))
 
-    # Get Web Search Provider and API Key (optional)
-    Write-Host ""
-    Write-Host "🔍 Web Search Provider (optional)" -ForegroundColor Yellow
-    Write-Host "1) doubao (Doubao Custom Search)" -ForegroundColor Blue
-    Write-Host "2) tavily (Tavily Search)" -ForegroundColor Blue
-
-    $SEARCH_CHOICE = Read-Host "Please select web search provider (1 for doubao, 2 for tavily, press Enter to skip)"
-
-    $WEB_SEARCH_PROVIDER = ""
-    $DOUBAO_SEARCH_API_KEY = ""
-    $TAVILY_API_KEY = ""
-
-    if ($SEARCH_CHOICE -eq "1" -or $SEARCH_CHOICE -eq "doubao") {
-        $WEB_SEARCH_PROVIDER = "doubao"
-        Write-Host "Get your Doubao API Key from Volcengine Console" -ForegroundColor Blue
-        $DOUBAO_SEARCH_API_KEY = Read-Host "Please enter your DOUBAO_SEARCH_API_KEY"
-    } elseif ($SEARCH_CHOICE -eq "2" -or $SEARCH_CHOICE -eq "tavily") {
-        $WEB_SEARCH_PROVIDER = "tavily"
-        Write-Host "Get your Tavily API key from: https://app.tavily.com/" -ForegroundColor Blue
-        $TAVILY_API_KEY = Read-Host "Please enter your TAVILY_API_KEY"
-    }
-
-    Write-Host ""
     Write-Host "JWT security settings" -ForegroundColor Yellow
     $JWT_SECRET_KEY = Read-SecuritySecret "JWT_SECRET_KEY"
     $API_KEY_DERIVATION_SECRET = Read-SecuritySecret "API_KEY_DERIVATION_SECRET" @($JWT_SECRET_KEY)
@@ -227,14 +204,13 @@ SILICONFLOW_API_KEY=$apiKey
 # Web Search Provider settings
 "@
 
-    if (-not [string]::IsNullOrEmpty($WEB_SEARCH_PROVIDER)) {
-        $envContent += "`nWEB_SEARCH_PROVIDER=$WEB_SEARCH_PROVIDER"
-    }
-    if (-not [string]::IsNullOrEmpty($DOUBAO_SEARCH_API_KEY)) {
-        $envContent += "`nDOUBAO_SEARCH_API_KEY=$DOUBAO_SEARCH_API_KEY"
-    }
-    if (-not [string]::IsNullOrEmpty($TAVILY_API_KEY)) {
-        $envContent += "`nTAVILY_API_KEY=$TAVILY_API_KEY"
+    foreach ($searchName in @("WEB_SEARCH_PROVIDER", "DOUBAO_SEARCH_API_KEY", "TAVILY_API_KEY", "DEEPSEEK_API_KEY")) {
+        $searchValue = [Environment]::GetEnvironmentVariable($searchName)
+        if (-not [string]::IsNullOrEmpty($searchValue)) {
+            # 单引号 dotenv 值保留美元符号，避免 Compose 插值。
+            if ($searchValue -match "['\r\n]") { throw "$searchName contains unsupported characters" }
+            $envContent += "`n${searchName}='$searchValue'"
+        }
     }
 
     $envContent += @"
@@ -251,15 +227,13 @@ YUXI_INSTANCE_ID=$YUXI_INSTANCE_ID
 
     # Clear the variables from memory
     Remove-Variable -Name "apiKey" -ErrorAction SilentlyContinue
-    Remove-Variable -Name "WEB_SEARCH_PROVIDER" -ErrorAction SilentlyContinue
-    Remove-Variable -Name "DOUBAO_SEARCH_API_KEY" -ErrorAction SilentlyContinue
-    Remove-Variable -Name "TAVILY_API_KEY" -ErrorAction SilentlyContinue
     Remove-Variable -Name "JWT_SECRET_KEY" -ErrorAction SilentlyContinue
     Remove-Variable -Name "API_KEY_DERIVATION_SECRET" -ErrorAction SilentlyContinue
     Remove-Variable -Name "YUXI_INSTANCE_ID" -ErrorAction SilentlyContinue
 }
 
 Write-Host ""
+Write-Host "Configure Search and Fetch after login in Settings -> 网络搜索." -ForegroundColor Blue
 Write-Host "📦 Pulling Docker images..." -ForegroundColor Cyan
 Write-Host "=========================" -ForegroundColor Cyan
 

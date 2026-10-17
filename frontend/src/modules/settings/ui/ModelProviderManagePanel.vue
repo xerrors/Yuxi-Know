@@ -34,7 +34,6 @@ import ExtensionCardGrid from '@/modules/extensions/ui/ExtensionCardGrid.vue'
 
 const configStore = useConfigStore()
 const loading = ref(false)
-const remoteLoading = ref(false)
 const saving = ref(false)
 const providers = ref([])
 const searchQuery = ref('')
@@ -106,6 +105,14 @@ const editingModel = ref({
 // Models modal state (per provider)
 const showModelsModal = ref(false)
 const currentProviderForModels = ref(null)
+const remoteLoadingByProvider = ref({})
+const remoteErrorsByProvider = ref({})
+const remoteLoading = computed(
+  () => !!remoteLoadingByProvider.value[currentProviderForModels.value?.provider_id]
+)
+const remoteError = computed(
+  () => remoteErrorsByProvider.value[currentProviderForModels.value?.provider_id] || ''
+)
 
 // Remote models per provider
 const remoteModelsMap = ref({})
@@ -310,16 +317,11 @@ const loadProviders = async () => {
   }
 }
 
-function getUserUidHeaderDisplay(provider) {
-  if (!provider.include_user_uid) return '关闭'
-  return 'x-yuxi-uid（签名）'
-}
-
+/** 生成供应商卡片摘要。 */
 function getProviderInfo(provider) {
   return [
     { label: 'Base URL', value: provider.base_url || '-' },
-    { label: '能力', value: (provider.capabilities || []).join(', ') },
-    { label: '请求用户 ID', value: getUserUidHeaderDisplay(provider) }
+    { label: '模型', value: `已启用 ${provider.enabled_models?.length || 0} 个` }
   ]
 }
 
@@ -529,11 +531,15 @@ const openModelsModal = (provider) => {
   remoteModelTypeFilter.value[provider.provider_id] = 'all'
   showModelsModal.value = true
   loadModelMetadata()
+  fetchRemoteModels(provider.provider_id)
 }
 
 // ============ Remote Models Operations ============
+/** 按供应商加载远端候选模型，隔离并发请求的状态。 */
 const fetchRemoteModels = async (providerId) => {
-  remoteLoading.value = true
+  if (remoteLoadingByProvider.value[providerId]) return
+  remoteLoadingByProvider.value[providerId] = true
+  remoteErrorsByProvider.value[providerId] = ''
   try {
     const result = await modelProviderApi.fetchRemoteModels(providerId)
     remoteModelsMap.value = {
@@ -541,11 +547,10 @@ const fetchRemoteModels = async (providerId) => {
       [providerId]: result.data || []
     }
     remoteModelsLoaded.value[providerId] = true
-    message.success(`已获取 ${result.data?.length || 0} 个远端模型`)
   } catch (error) {
-    message.error(error.message || '获取远端模型失败')
+    remoteErrorsByProvider.value[providerId] = error.message || '获取远端模型失败'
   } finally {
-    remoteLoading.value = false
+    remoteLoadingByProvider.value[providerId] = false
   }
 }
 
@@ -805,8 +810,8 @@ defineExpose({
           :subtitle="provider.provider_id"
           :default-icon="Globe"
           :info="getProviderInfo(provider)"
-          :status="getProviderStatus(provider)"
-          @click="openEditProviderModal(provider)"
+          class="provider-card"
+          @click="openModelsModal(provider)"
         >
           <template #icon>
             <span
@@ -822,13 +827,24 @@ defineExpose({
               <img :src="getProviderAvatar(provider).icon" alt="" />
             </span>
           </template>
-          <template #footer>
-            <button class="view-models-btn" type="button" @click.stop="openModelsModal(provider)">
-              <Settings2 :size="14" />
-              管理模型
-              <span v-if="provider.enabled_models?.length" class="enabled-count"
-                >（已启用 {{ provider.enabled_models.length }} 个）</span
-              >
+          <template #actions>
+            <a-badge
+              :status="getProviderStatus(provider).level"
+              :text="getProviderStatus(provider).label"
+            />
+            <button
+              class="provider-card-trigger"
+              type="button"
+              :aria-label="`选择 ${provider.display_name} 模型`"
+            ></button>
+            <button
+              class="provider-settings-btn lucide-icon-btn"
+              type="button"
+              :aria-label="`配置 ${provider.display_name} 供应商`"
+              title="供应商设置"
+              @click.stop="openEditProviderModal(provider)"
+            >
+              <Settings2 :size="16" aria-hidden="true" />
             </button>
           </template>
         </InfoCard>
@@ -842,6 +858,7 @@ defineExpose({
           v-for="provider in disabledProviders"
           :key="provider.provider_id"
           variant="mini"
+          class="provider-card"
           :title="provider.display_name"
           :description="provider.provider_id"
           @click="openEditProviderModal(provider)"
@@ -859,6 +876,22 @@ defineExpose({
             >
               <img :src="getProviderAvatar(provider).icon" alt="" />
             </span>
+          </template>
+          <template #action>
+            <button
+              class="provider-card-trigger"
+              type="button"
+              :aria-label="`配置 ${provider.display_name}`"
+            ></button>
+            <button
+              class="provider-settings-btn lucide-icon-btn"
+              type="button"
+              :aria-label="`配置 ${provider.display_name} 供应商`"
+              title="供应商设置"
+              @click.stop="openEditProviderModal(provider)"
+            >
+              <Settings2 :size="16" aria-hidden="true" />
+            </button>
           </template>
         </InfoCard>
       </ExtensionCardGrid>
@@ -881,7 +914,13 @@ defineExpose({
               :checked="editingProviderId ? originalProviderEnabled : providerForm.is_enabled"
               :loading="saving"
               :disabled="saving"
-              :aria-label="editingProviderId ? (originalProviderEnabled ? '停用供应商' : '启用供应商') : '创建时启用供应商'"
+              :aria-label="
+                editingProviderId
+                  ? originalProviderEnabled
+                    ? '停用供应商'
+                    : '启用供应商'
+                  : '创建时启用供应商'
+              "
               @change="toggleProviderEnabled"
             />
           </div>
@@ -1043,7 +1082,11 @@ defineExpose({
 
         <div class="form-switch">
           <a-tooltip
-            :title="providerForm.provider_type === 'gemini' ? 'Gemini 供应商暂不支持请求携带用户 ID。' : '开启后，智能体对话产生的聊天模型请求会携带带 HMAC 签名的 x-yuxi-uid 请求头（值为当前用户 UID），外部网关验签后即可按用户统计用量并防止伪造。需要先在 API/worker 环境变量配置 YUXI_UID_SIGNATURE_SECRET，保存时会校验；仅影响该供应商且仅在开启时生效。'"
+            :title="
+              providerForm.provider_type === 'gemini'
+                ? 'Gemini 供应商暂不支持请求携带用户 ID。'
+                : '开启后，智能体对话产生的聊天模型请求会携带带 HMAC 签名的 x-yuxi-uid 请求头（值为当前用户 UID），外部网关验签后即可按用户统计用量并防止伪造。需要先在 API/worker 环境变量配置 YUXI_UID_SIGNATURE_SECRET，保存时会校验；仅影响该供应商且仅在开启时生效。'
+            "
           >
             <span>请求携带用户 ID</span>
           </a-tooltip>
@@ -1089,15 +1132,6 @@ defineExpose({
               已启用模型 ({{ currentProviderForModels.enabled_models?.length || 0 }})
             </h4>
             <div class="actions">
-              <a-button
-                size="small"
-                type="primary"
-                class="lucide-icon-btn"
-                :loading="remoteLoading"
-                @click="fetchRemoteModels(currentProviderForModels.provider_id)"
-              >
-                获取远程模型
-              </a-button>
               <a-button
                 size="small"
                 class="lucide-icon-btn"
@@ -1200,125 +1234,152 @@ defineExpose({
         <div class="models-section">
           <div class="remote-header">
             <h4 class="models-section-title">远端候选模型 ({{ filteredRemoteModels.length }})</h4>
-            <div
-              v-if="remoteModelsMap[currentProviderForModels.provider_id]?.length"
-              class="remote-controls"
-            >
-              <a-input
-                v-model:value="remoteModelSearch[currentProviderForModels.provider_id]"
-                class="remote-search-input"
-                placeholder="搜索模型..."
-                allow-clear
-                autocomplete="off"
-                autocapitalize="none"
-                autocorrect="off"
-                spellcheck="false"
-              >
-                <template #prefix><Search :size="12" /></template>
-              </a-input>
-              <button
-                type="button"
-                class="currency-toggle"
-                :title="
-                  priceCurrency === 'CNY'
-                    ? `当前按人民币展示，点击切换美元（1 USD ≈ ¥${USD_TO_CNY_RATE}）`
-                    : `当前按美元展示，点击切换人民币（1 USD ≈ ¥${USD_TO_CNY_RATE}）`
-                "
-                :aria-label="priceCurrency === 'CNY' ? '切换为美元计费' : '切换为人民币计费'"
-                @click="togglePriceCurrency"
-              >
-                {{ priceCurrency === 'CNY' ? '¥' : '$' }}
-              </button>
-              <a-segmented
-                v-model:value="remoteModelTypeFilter[currentProviderForModels.provider_id]"
-                :options="remoteModelTypeOptions"
-                class="remote-type-filter"
-              />
-            </div>
-          </div>
-          <div
-            class="remote-list"
-            v-if="remoteModelsMap[currentProviderForModels.provider_id]?.length"
-          >
-            <div
-              v-for="remoteModel in filteredRemoteModels"
-              :key="remoteModel.id"
-              class="remote-row"
-            >
-              <span class="remote-name">{{ getModelDisplayName(remoteModel) }}</span>
-              <div class="remote-tags">
-                <template
-                  v-for="mod in getProviderModelInfo(
-                    currentProviderForModels.provider_id,
-                    remoteModel
-                  ).inputModalities"
-                  :key="mod"
+            <div class="remote-controls">
+              <template v-if="remoteModelsMap[currentProviderForModels.provider_id]?.length">
+                <a-input
+                  v-model:value="remoteModelSearch[currentProviderForModels.provider_id]"
+                  class="remote-search-input"
+                  placeholder="搜索模型..."
+                  allow-clear
+                  autocomplete="off"
+                  autocapitalize="none"
+                  autocorrect="off"
+                  spellcheck="false"
                 >
-                  <a-tooltip :title="getModalityDisplay(mod).label">
-                    <span
-                      class="modality-tag"
-                      role="img"
-                      :aria-label="getModalityDisplay(mod).label"
-                    >
-                      <component :is="getModalityDisplay(mod).icon" :size="13" />
-                    </span>
-                  </a-tooltip>
-                </template>
-                <span class="type-tag" :class="remoteModel.type || 'chat'">
-                  {{ remoteModel.type || 'chat' }}
-                </span>
-              </div>
-              <span class="remote-context">{{
-                getProviderModelInfo(currentProviderForModels.provider_id, remoteModel)
-                  .contextLabel || '-'
-              }}</span>
-              <span
-                v-if="getRemoteModelPriceDisplay(currentProviderForModels.provider_id, remoteModel)"
-                class="remote-price"
-              >
-                {{ getRemoteModelPriceDisplay(currentProviderForModels.provider_id, remoteModel) }}
-              </span>
-              <span v-else class="remote-price placeholder">N/A</span>
+                  <template #prefix><Search :size="12" /></template>
+                </a-input>
+                <button
+                  type="button"
+                  class="currency-toggle"
+                  :title="
+                    priceCurrency === 'CNY'
+                      ? `当前按人民币展示，点击切换美元（1 USD ≈ ¥${USD_TO_CNY_RATE}）`
+                      : `当前按美元展示，点击切换人民币（1 USD ≈ ¥${USD_TO_CNY_RATE}）`
+                  "
+                  :aria-label="priceCurrency === 'CNY' ? '切换为美元计费' : '切换为人民币计费'"
+                  @click="togglePriceCurrency"
+                >
+                  {{ priceCurrency === 'CNY' ? '¥' : '$' }}
+                </button>
+                <a-segmented
+                  v-model:value="remoteModelTypeFilter[currentProviderForModels.provider_id]"
+                  :options="remoteModelTypeOptions"
+                  class="remote-type-filter"
+                />
+              </template>
               <a-button
                 size="small"
-                :type="
-                  currentProviderForModels.enabled_models?.some((m) => m.id === remoteModel.id)
-                    ? 'primary'
-                    : 'default'
-                "
                 class="lucide-icon-btn"
-                :title="
-                  currentProviderForModels.enabled_models?.some((m) => m.id === remoteModel.id)
-                    ? `${getModelDisplayName(remoteModel)} 已启用`
-                    : `启用 ${getModelDisplayName(remoteModel)}`
-                "
-                :aria-label="
-                  currentProviderForModels.enabled_models?.some((m) => m.id === remoteModel.id)
-                    ? `${getModelDisplayName(remoteModel)} 已启用`
-                    : `启用 ${getModelDisplayName(remoteModel)}`
-                "
-                :disabled="
-                  currentProviderForModels.enabled_models?.some((m) => m.id === remoteModel.id)
-                "
-                @click="addModelFromRemote(currentProviderForModels.provider_id, remoteModel)"
+                :disabled="remoteLoading"
+                :aria-busy="remoteLoading"
+                aria-label="刷新远端模型"
+                title="刷新远端模型"
+                @click="fetchRemoteModels(currentProviderForModels.provider_id)"
               >
-                <CheckCircle2
-                  :size="13"
-                  v-if="
-                    currentProviderForModels.enabled_models?.some((m) => m.id === remoteModel.id)
-                  "
-                />
-                <Plus :size="13" v-else />
+                <template #icon>
+                  <RefreshCw :size="14" :class="{ spinning: remoteLoading }" aria-hidden="true" />
+                </template>
               </a-button>
             </div>
           </div>
+          <a-spin :spinning="remoteLoading" tip="正在加载远端模型...">
+            <div class="remote-results" :aria-busy="remoteLoading" :inert="remoteLoading">
+              <a-alert v-if="remoteError" type="error" show-icon :message="remoteError" />
+              <div class="remote-list" v-if="filteredRemoteModels.length">
+                <div
+                  v-for="remoteModel in filteredRemoteModels"
+                  :key="remoteModel.id"
+                  class="remote-row"
+                >
+                  <span class="remote-name">{{ getModelDisplayName(remoteModel) }}</span>
+                  <div class="remote-tags">
+                    <template
+                      v-for="mod in getProviderModelInfo(
+                        currentProviderForModels.provider_id,
+                        remoteModel
+                      ).inputModalities"
+                      :key="mod"
+                    >
+                      <a-tooltip :title="getModalityDisplay(mod).label">
+                        <span
+                          class="modality-tag"
+                          role="img"
+                          :aria-label="getModalityDisplay(mod).label"
+                        >
+                          <component :is="getModalityDisplay(mod).icon" :size="13" />
+                        </span>
+                      </a-tooltip>
+                    </template>
+                    <span class="type-tag" :class="remoteModel.type || 'chat'">
+                      {{ remoteModel.type || 'chat' }}
+                    </span>
+                  </div>
+                  <span class="remote-context">{{
+                    getProviderModelInfo(currentProviderForModels.provider_id, remoteModel)
+                      .contextLabel || '-'
+                  }}</span>
+                  <span
+                    v-if="
+                      getRemoteModelPriceDisplay(currentProviderForModels.provider_id, remoteModel)
+                    "
+                    class="remote-price"
+                  >
+                    {{
+                      getRemoteModelPriceDisplay(currentProviderForModels.provider_id, remoteModel)
+                    }}
+                  </span>
+                  <span v-else class="remote-price placeholder">N/A</span>
+                  <a-button
+                    size="small"
+                    :type="
+                      currentProviderForModels.enabled_models?.some((m) => m.id === remoteModel.id)
+                        ? 'primary'
+                        : 'default'
+                    "
+                    class="lucide-icon-btn"
+                    :title="
+                      currentProviderForModels.enabled_models?.some((m) => m.id === remoteModel.id)
+                        ? `${getModelDisplayName(remoteModel)} 已启用`
+                        : `启用 ${getModelDisplayName(remoteModel)}`
+                    "
+                    :aria-label="
+                      currentProviderForModels.enabled_models?.some((m) => m.id === remoteModel.id)
+                        ? `${getModelDisplayName(remoteModel)} 已启用`
+                        : `启用 ${getModelDisplayName(remoteModel)}`
+                    "
+                    :disabled="
+                      currentProviderForModels.enabled_models?.some((m) => m.id === remoteModel.id)
+                    "
+                    @click="addModelFromRemote(currentProviderForModels.provider_id, remoteModel)"
+                  >
+                    <CheckCircle2
+                      :size="13"
+                      v-if="
+                        currentProviderForModels.enabled_models?.some(
+                          (m) => m.id === remoteModel.id
+                        )
+                      "
+                    />
+                    <Plus :size="13" v-else />
+                  </a-button>
+                </div>
+              </div>
+              <a-empty
+                v-else-if="!remoteLoading && !remoteError"
+                :description="
+                  remoteModelsMap[currentProviderForModels.provider_id]?.length
+                    ? '无匹配模型'
+                    : '暂无远端模型'
+                "
+              />
+            </div>
+          </a-spin>
           <div v-if="Object.keys(modelCatalogProviders).length" class="model-metadata-source">
             部分信息（价格、能力等）来自
             <a href="https://models.dev" target="_blank" rel="noreferrer">models.dev</a>
             填补。人民币价格按固定汇率 1 USD = ¥{{ USD_TO_CNY_RATE }}
             换算。以上信息仅供参考，可能和官网或实时汇率有偏差。
           </div>
-          <div class="remote-fetch-actions"></div>
         </div>
       </div>
     </a-modal>
@@ -1428,16 +1489,45 @@ defineExpose({
   }
 }
 
-.view-models-btn {
+.provider-card {
+  position: relative;
+
+  // 全局 relative 重置下，正文按钮仍以整张卡片作为定位边界。
+  :deep(.info-card-header),
+  :deep(.info-card-status),
+  :deep(.info-card-mini-row),
+  :deep(.info-card-mini-action) {
+    position: static;
+  }
+}
+
+.provider-card-trigger {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: none;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--main-color);
+    outline-offset: -2px;
+  }
+}
+
+.provider-settings-btn {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   border: none;
   background: transparent;
   color: var(--gray-700);
-  font-size: 12px;
-  font-weight: 500;
   cursor: pointer;
   border-radius: 4px;
   transition: background 0.15s;
@@ -1445,6 +1535,11 @@ defineExpose({
   &:hover {
     background: var(--gray-50);
     color: var(--gray-800);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--main-color);
+    outline-offset: 2px;
   }
 }
 
@@ -1462,12 +1557,6 @@ defineExpose({
   justify-content: center;
   padding: 100px 20px;
   text-align: center;
-}
-
-.enabled-count {
-  color: var(--gray-500);
-  font-size: 12px;
-  font-weight: 400;
 }
 
 .spinning {
@@ -1703,6 +1792,10 @@ defineExpose({
 .remote-type-filter {
   font-size: 12px;
   flex-shrink: 0;
+}
+
+.remote-results {
+  min-height: 96px;
 }
 
 .remote-list {

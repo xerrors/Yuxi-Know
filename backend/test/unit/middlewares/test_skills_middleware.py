@@ -840,3 +840,50 @@ async def test_mcp_failure_reaches_runtime_instead_of_removing_tools(monkeypatch
             await SkillsMiddleware()._get_mcp_tools_from_context(context, extra_mcps=["demo"])
     assert caught.value is failure
     assert context.mcp_tool_servers == {}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("configured", [False, True])
+async def test_skill_does_not_reintroduce_unconfigured_web_tools(configured):
+    """激活搜索 Skill 只能暴露本轮已经装配的网页能力。"""
+    from yuxi.modules.extensions.tools.builtin.web_search import web_search, web_fetch
+
+    context = SimpleNamespace(
+        tools=[],
+        mcps=[],
+        mcp_tool_servers={},
+        skill_runtime_snapshot={
+            "capability_limited": False,
+            "context_skills": [],
+            "context_preload_skills": [],
+            "skill_metadata": {},
+            "preloaded_skills": [],
+            "preloaded_skill_contents": {},
+            "effective_skills": ["research"],
+            "runtime_skills": {"research": _runtime_skill("research", tools=["web_search", "web_fetch"])},
+        },
+    )
+
+    class Request:
+        """保留真实工具实例与 Skill 上下文的模型请求。"""
+
+        def __init__(self, tools):
+            self.runtime = SimpleNamespace(context=context)
+            self.state = {"activated_skills": ["research"]}
+            self.tools = tools
+
+        def override(self, *, tools):
+            """模拟模型请求仅替换可见工具。"""
+            return Request(tools)
+
+    async def inspect(request):
+        """核对最终交给模型的工具集合。"""
+        names = {item.name for item in request.tools}
+        assert names == ({"web_search", "web_fetch"} if configured else set())
+        return "ok"
+
+    result = await SkillsMiddleware(enable_skills_prompt=False).awrap_model_call(
+        Request([web_search, web_fetch] if configured else []),
+        inspect,
+    )
+    assert result == "ok"

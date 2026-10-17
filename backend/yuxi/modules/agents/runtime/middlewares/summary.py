@@ -38,7 +38,7 @@ _DEFAULT_TOOL_ARG_MAX_LENGTH = 2000
 _TRUNCATED_TOOL_ARG_TEXT = "...(argument truncated for context view)"
 _TOOL_RESULT_SAVED_MARKER = "yuxi_tool_result_saved"
 _STRUCTURED_SEARCH_TOOL_NAMES = {"query_kb", "web_search"}
-_SEARCH_CONTENT_KEYS = ("content", "text", "snippet", "summary")
+_SEARCH_CONTENT_KEYS = ("relevant_content", "content", "text", "snippet", "summary")
 _SUMMARY_COMPRESSION_STATE: ContextVar[dict[str, bool] | None] = ContextVar(
     "yuxi_summary_compression_state",
     default=None,
@@ -603,7 +603,7 @@ def _search_header(tool_name: str, parsed: dict[str, Any], result_count: int) ->
         "kind": "knowledge_base" if tool_name == "query_kb" else "web_search",
         "result_count": result_count,
     }
-    for key in ("kb_id", "query", "response_time", "error"):
+    for key in ("kb_id", "query", "provider", "response_time", "error"):
         if parsed.get(key) is not None:
             preview[key] = _bounded_search_scalar(parsed[key])
     return preview
@@ -616,7 +616,7 @@ def _search_result_record(tool_name: str, result: Any) -> tuple[dict[str, Any], 
     keys = (
         ("id", "kb_id", "file_id", "title", "source", "score", "distance")
         if tool_name == "query_kb"
-        else ("title", "url", "site_name", "publish_time", "score")
+        else ("title", "url", "site_name", "publish_time", "score", "score_max")
     )
     record = {key: _bounded_search_scalar(result[key]) for key in keys if result.get(key) is not None}
     if tool_name == "query_kb" and isinstance(result.get("metadata"), dict):
@@ -635,7 +635,7 @@ def _search_result_record(tool_name: str, result: Any) -> tuple[dict[str, Any], 
         selected_metadata = {key: _bounded_search_scalar(metadata[key]) for key in metadata_keys if metadata.get(key) is not None}
         if selected_metadata:
             record["metadata"] = selected_metadata
-    body = next((result[key] for key in _SEARCH_CONTENT_KEYS if isinstance(result.get(key), str)), "")
+    body = next((result[key] for key in _SEARCH_CONTENT_KEYS if isinstance(result.get(key), str) and result[key]), "")
     return record, body
 
 

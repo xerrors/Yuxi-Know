@@ -11,6 +11,7 @@ const createBrandIcon = (url) => {
 }
 
 export const brandIcons = {
+  feishu: createBrandIcon('/icons/feishu.png'),
   dify: createBrandIcon(`${ICON_BASE}/dify-color.svg`),
   notion: createBrandIcon(`${ICON_BASE}/notion.svg`)
 }
@@ -29,6 +30,7 @@ export const getKbTypeLabel = (type) => {
 export const getKbTypeIcon = (type) => {
   const icons = {
     milvus: DatabaseZap,
+    feishu: brandIcons.feishu,
     dify: brandIcons.dify,
     notion: brandIcons.notion
   }

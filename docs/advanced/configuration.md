@@ -43,6 +43,16 @@ Cube 连接参数供 API/worker 使用，节点挂载目录必须与 Yuxi 共享
 - 沙盒应用层与 Cube 执行节点：[沙盒配置与运维](./sandbox-operations.md)。
 - 环境变量集中在仓库根 `.env.template`，不另外维护重复配置清单；Agent 并发相关变量的联动核算见 [Agent 并发容量](./agent-concurrency-capacity.md)。
 
+## 网络搜索与网页正文
+
+超级管理员在「设置 → 网络搜索」分别选择默认 Search 与 Fetch 供应商。三个服务配置项按 Tavily、DeepSeek、豆包 Custom 展示，每项独立保存 API Key。Tavily 与 DeepSeek 同时支持搜索和按 URL 抓取正文；豆包 Custom 只参与搜索选择，因此可以组合豆包搜索与 DeepSeek 正文抓取。
+
+Key 使用本页的优先级：设置保存值优先，未保存时分别读取 `TAVILY_API_KEY`、`DEEPSEEK_API_KEY`、`DOUBAO_SEARCH_API_KEY`。页面只显示来源与脱敏预览；点击「编辑」填写 Key，点击「保存」生效；编辑时留空并保存会清除数据库配置，恢复读取环境变量。修改环境变量需要重新创建 API 与 worker 容器，页面保存的配置在下一次工具调用时读取。新 Run 装配时只绑定已经配置的网页能力；启动时没有配置也可以稍后在页面启用，无需重启服务。
+
+未保存默认供应商时，Search 优先使用 `WEB_SEARCH_PROVIDER`；该变量也未指定时，按 Tavily、DeepSeek、豆包顺序选择有 Key 的供应商。Fetch 按 Tavily、DeepSeek 顺序选择。显式指定的供应商不可用时直接报错，调用失败不会自动换到另一家。Agent 使用 `web_search` 获取标题、链接、短摘要、相关片段与可选正文，通过 `web_fetch` 深入读取具体 URL 的 Markdown 正文；供应商分数按原始量程展示，不能跨供应商直接比较。
+
+各服务卡片右上角的「测试」使用固定查询与 Python 官方文档地址，分别检查搜索和正文抓取；豆包仅检查搜索。非编辑状态使用当前有效配置，编辑时需填写非空 Key 后测试草稿。测试不保存配置、不改变默认项，只展示「搜索通过」「Fetch 通过」或对应失败原因，空结果不算通过。测试请求可能消耗供应商额度；Tavily 的免费额度和收费规则以[官方说明](https://docs.tavily.com/documentation/api-credits)为准。
+
 ## 修改后的确认方式
 
 修改系统配置后，重新打开配置页面确认保存值，并用一次真实请求确认行为。只看到 HTTP 200 或提示“保存成功”不能证明模型、OCR 或检索链路已经可用：模型在供应商页面执行连接测试后再发起一次真实对话，OCR 查看健康状态后解析一份测试文件，知识库回到文件列表确认状态和检索结果，沙盒在用户设置检查环境状态后执行一次真实文件操作。

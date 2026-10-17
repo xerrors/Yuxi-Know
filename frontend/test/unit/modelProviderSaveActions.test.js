@@ -16,10 +16,12 @@ const compiledPath = fileURLToPath(
 )
 const source = readFileSync(componentPath, 'utf8')
 const requests = []
+const remoteRequests = []
 const confirmations = []
 const notices = []
 const configStore = { config: { default_model: 'other:model' }, refreshConfig: async () => {} }
 let updateProvider = async () => ({})
+let fetchRemoteModels = async () => ({ data: [] })
 
 globalThis.__modelProviderActionsTestDeps = {
   message: {
@@ -29,8 +31,13 @@ globalThis.__modelProviderActionsTestDeps = {
   },
   Modal: { confirm: (options) => confirmations.push(options) },
   useConfigStore: () => configStore,
+  loadModelMetadataCatalog: async () => ({ providers: {} }),
   modelProviderApi: {
     getProviders: async () => ({ data: [provider] }),
+    fetchRemoteModels: (id) => {
+      remoteRequests.push(id)
+      return fetchRemoteModels(id)
+    },
     updateProvider: (id, payload) => {
       requests.push([id, payload])
       return updateProvider(id, payload)
@@ -51,11 +58,11 @@ const executable = compiled
   )
   .replace(
     /const __returned__ = \{[\s\S]*?\}\nObject\.defineProperty/,
-    'const __returned__ = { showProviderModal, originalProviderEnabled, providerForm, saving, openCreateProviderModal, openEditProviderModal, toggleProviderEnabled, deleteProviderFromEdit }\nObject.defineProperty'
+    'const __returned__ = { showProviderModal, originalProviderEnabled, providerForm, saving, openCreateProviderModal, openEditProviderModal, toggleProviderEnabled, deleteProviderFromEdit, openModelsModal, fetchRemoteModels, showModelsModal, remoteLoading, remoteError, remoteModelsMap, remoteModelsLoaded }\nObject.defineProperty'
   )
   .replace(
     "import { computed, onMounted, reactive, ref } from 'vue'",
-    "import { computed, onMounted, reactive, ref } from 'vue'\nconst { message, Modal, useConfigStore, modelProviderApi, TextInitial, Image, Video, AudioLines, FileText } = globalThis.__modelProviderActionsTestDeps"
+    "import { computed, onMounted, reactive, ref } from 'vue'\nconst { message, Modal, useConfigStore, modelProviderApi, loadModelMetadataCatalog, TextInitial, Image, Video, AudioLines, FileText } = globalThis.__modelProviderActionsTestDeps"
   )
 writeFileSync(compiledPath, executable)
 let ProviderPanel
@@ -95,6 +102,8 @@ const renderer = createRenderer({
 
 function mountPanel() {
   requests.length = 0
+  remoteRequests.length = 0
+  fetchRemoteModels = async () => ({ data: [] })
   confirmations.length = 0
   notices.length = 0
   updateProvider = async () => ({})
@@ -229,6 +238,80 @@ test('停用请求尚未完成时保持弹窗并锁定表单', async () => {
     await nextTick()
     await nextTick()
     assert.equal(panel.showProviderModal, false)
+  } finally {
+    unmount()
+  }
+})
+
+
+test('每次打开模型弹窗自动加载，刷新完成后以远端结果替换列表', async () => {
+  const { panel, unmount } = mountPanel()
+  try {
+    fetchRemoteModels = async () => ({ data: [{ id: 'first' }] })
+    panel.openModelsModal(provider)
+    assert.equal(panel.showModelsModal, true)
+    assert.equal(panel.remoteLoading, true)
+    await flushAsync()
+    assert.deepEqual(panel.remoteModelsMap.sample, [{ id: 'first' }])
+    assert.equal(panel.remoteLoading, false)
+    assert.equal(panel.remoteModelsLoaded.sample, true)
+    assert.equal(panel.remoteError, '')
+
+    fetchRemoteModels = async () => ({ data: [{ id: 'updated' }] })
+    await panel.fetchRemoteModels('sample')
+    assert.deepEqual(panel.remoteModelsMap.sample, [{ id: 'updated' }])
+    panel.openModelsModal(provider)
+    await flushAsync()
+    assert.deepEqual(remoteRequests, ['sample', 'sample', 'sample'])
+    assert.deepEqual(notices, [])
+  } finally {
+    unmount()
+  }
+})
+
+test('供应商切换时各自显示加载状态，重复打开不叠加在途请求', async () => {
+  const { panel, unmount } = mountPanel()
+  const finishes = {}
+  try {
+    fetchRemoteModels = (id) => new Promise(resolve => { finishes[id] = resolve })
+    panel.openModelsModal(provider)
+    panel.openModelsModal(provider)
+    assert.deepEqual(remoteRequests, ['sample'])
+    panel.openModelsModal({ ...provider, provider_id: 'other' })
+    assert.equal(panel.remoteLoading, true)
+    finishes.sample({ data: [{ id: 'sample-model' }] })
+    await flushAsync()
+    assert.equal(panel.remoteLoading, true)
+    assert.deepEqual(panel.remoteModelsMap.sample, [{ id: 'sample-model' }])
+    finishes.other({ data: [{ id: 'other-model' }] })
+    await flushAsync()
+    assert.equal(panel.remoteLoading, false)
+    assert.deepEqual(panel.remoteModelsMap.other, [{ id: 'other-model' }])
+  } finally {
+    unmount()
+  }
+})
+
+test('远端加载失败显示错误并解除加载，重试失败保留旧列表，成功后清除错误', async () => {
+  const { panel, unmount } = mountPanel()
+  try {
+    fetchRemoteModels = async () => { throw new Error('远端不可用') }
+    panel.openModelsModal(provider)
+    await flushAsync()
+    assert.equal(panel.remoteLoading, false)
+    assert.equal(panel.remoteError, '远端不可用')
+    assert.equal(panel.remoteModelsLoaded.sample, undefined)
+    fetchRemoteModels = async () => ({ data: [{ id: 'cached' }] })
+    await panel.fetchRemoteModels('sample')
+    assert.equal(panel.remoteError, '')
+    fetchRemoteModels = async () => { throw new Error('刷新失败') }
+    await panel.fetchRemoteModels('sample')
+    assert.equal(panel.remoteError, '刷新失败')
+    assert.deepEqual(panel.remoteModelsMap.sample, [{ id: 'cached' }])
+    fetchRemoteModels = async () => ({ data: [] })
+    await panel.fetchRemoteModels('sample')
+    assert.deepEqual(panel.remoteModelsMap.sample, [])
+    assert.equal(panel.remoteError, '')
   } finally {
     unmount()
   }

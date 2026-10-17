@@ -57,6 +57,7 @@ export const TOOL_ICON_MAP = {
   search_file: FolderSearch,
   search_file_content: FolderSearch,
   web_search: Globe,
+  web_fetch: Globe,
   tavily_search: Globe,
   doubao_search: Globe,
   text_to_img_qwen_image: Image,

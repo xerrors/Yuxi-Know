@@ -902,8 +902,21 @@ div.header,
     }
     &.user-info {
       margin-bottom: 8px;
-      padding: 0 3px;
+      height: 40px;
+      padding: 0;
       overflow: hidden;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: inset 0 1px var(--gray-150);
+
+      &:hover,
+      &:focus-within,
+      &:has(.is-open) {
+        border-radius: 8px;
+        background: var(--gray-50);
+        box-shadow: inset 0 0 0 1px var(--gray-200);
+      }
 
       :deep(.user-info-component) {
         width: 100%;
@@ -911,19 +924,33 @@ div.header,
 
       :deep(.user-info-dropdown) {
         width: 100%;
-        height: @sidebar-item-height;
+        height: 40px;
+        padding: 0 4px;
+        box-sizing: border-box;
         border-radius: 8px;
+        color: var(--gray-800);
         transition:
           background-color 0.2s ease,
           color 0.2s ease;
       }
 
       :deep(.user-info-dropdown:hover) {
-        background: var(--main-20);
-        color: var(--main-color);
+        background: transparent;
+        color: var(--gray-900);
       }
       :deep(.user-name) {
         flex: 1 1 auto;
+        color: var(--gray-800);
+        font-size: 13px;
+        font-weight: 500;
+      }
+
+      :deep(.user-avatar) {
+        box-shadow: none;
+      }
+
+      :deep(.avatar-image) {
+        border-width: 1px;
       }
 
       :deep(.user-job-center) {
@@ -944,8 +971,14 @@ div.header,
 
         &:hover,
         &.active {
-          background: var(--main-30);
-          color: var(--main-color);
+          border-color: var(--gray-200);
+          background: var(--gray-100);
+          color: var(--gray-900);
+        }
+
+        &:focus-visible {
+          outline: 2px solid var(--gray-500);
+          outline-offset: 1px;
         }
 
         .job-center-badge {
@@ -1051,6 +1084,10 @@ div.header,
         :deep(.user-info-component),
         :deep(.user-info-dropdown) {
           justify-content: flex-start;
+        }
+
+        :deep(.user-info-dropdown) {
+          padding: 0;
         }
 
         :deep(.user-info-actions) {

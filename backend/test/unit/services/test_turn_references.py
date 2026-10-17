@@ -160,3 +160,22 @@ def test_multiple_sources_and_no_evidence_are_valid_results():
     sources = [{"id": "s1", "content": "证据"}, {"id": "s2", "content": "其他证据"}]
     assert [item["source_id"] for item in validate_reference_matches(raw, "回答", sources)] == ["s1", "s2"]
     assert validate_reference_matches('{"citations":[]}', "回答", sources) == []
+
+
+def test_normalized_search_and_fetch_provide_citable_content():
+    """新的摘要字段与独立正文工具都进入真实引用来源。"""
+    sources = collect_reference_sources(
+        [
+            tool(
+                "web_search",
+                {
+                    "results": [
+                        {"url": "https://example.org/search", "title": "Search", "relevant_content": "相关片段", "raw_content": "正文"}
+                    ]
+                },
+            ),
+            tool("web_fetch", {"url": "https://example.org/page", "title": "Fetch", "content": "# 网页正文"}, message_id=2),
+        ],
+        set(),
+    )
+    assert [source["content"] for source in sources] == ["相关片段", "# 网页正文"]

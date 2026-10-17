@@ -13,12 +13,12 @@
             </a>
           </h5>
           <span v-if="typeof result.score === 'number'" class="result-score">
-            相关度: {{ (result.score * 100).toFixed(1) }}%
+            相关度: {{ result.score.toFixed(2) }}{{ result.score_max ? ` / ${result.score_max}` : '' }}
           </span>
         </div>
 
-        <div v-if="result.content" class="result-content">
-          {{ result.content }}
+        <div v-if="result.snippet || result.relevant_content || result.content" class="result-content">
+          {{ result.snippet || result.relevant_content || result.content }}
         </div>
       </div>
     </div>

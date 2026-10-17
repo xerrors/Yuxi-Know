@@ -10,6 +10,21 @@ system_options = Option(
         "internal": True,
         "fields": [
             {
+                "key": "web_search_provider",
+                "label": "默认搜索供应商",
+                "type": "string",
+                "environment": "WEB_SEARCH_PROVIDER",
+                "default": "",
+                "choices": ["", "tavily", "deepseek", "doubao"],
+            },
+            {
+                "key": "web_fetch_provider",
+                "label": "默认网页抓取供应商",
+                "type": "string",
+                "default": "",
+                "choices": ["", "tavily", "deepseek"],
+            },
+            {
                 "key": "default_model",
                 "label": "默认对话模型",
                 "type": "model",
@@ -54,6 +69,8 @@ system_options = Option(
 def get_option_definitions() -> dict[str, Option]:
     """显式汇总各模块配置，系统管理机制不拥有领域定义。"""
     from yuxi.modules.documents.options import DOCUMENT_OPTIONS
-    from yuxi.modules.extensions.options import remote_skill_source_policy
+    from yuxi.modules.extensions.options import WEB_PROVIDER_OPTIONS, remote_skill_source_policy
 
-    return {option.key: option for option in (*DOCUMENT_OPTIONS, remote_skill_source_policy, system_options)}
+    return {
+        option.key: option for option in (*DOCUMENT_OPTIONS, *WEB_PROVIDER_OPTIONS.values(), remote_skill_source_policy, system_options)
+    }

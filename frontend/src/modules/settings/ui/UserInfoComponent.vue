@@ -1,7 +1,13 @@
 <template>
   <div class="user-info-component">
-    <a-dropdown v-model:open="menuOpen" :trigger="['click']" v-if="userStore.isLoggedIn">
-      <div class="user-info-dropdown" :data-align="showRole ? 'left' : 'center'">
+    <a-dropdown
+      v-model:open="menuOpen"
+      :trigger="['click']"
+      placement="topLeft"
+      :align="{ offset: [0, -8] }"
+      v-if="userStore.isLoggedIn"
+    >
+      <div class="user-info-dropdown" :class="{ 'is-open': menuOpen }" :data-align="showRole ? 'left' : 'center'">
         <div class="user-avatar">
           <FallbackAvatar
             :src="userStore.avatar"
@@ -266,6 +272,7 @@ const openProfile = () => {
 .user-account-menu {
   width: 260px;
   max-width: calc(100vw - 24px);
+  border-radius: 8px;
 }
 
 .user-info-display {

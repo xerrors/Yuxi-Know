@@ -137,7 +137,7 @@ def collect_reference_sources(messages: list[Message], visible_kb_ids: set[str])
     for message in messages:
         metadata = message.extra_metadata or {}
         tool_name = metadata.get("tool_name")
-        if tool_name not in {"query_kb", "open_kb_document", "find_kb_document", "web_search"}:
+        if tool_name not in {"query_kb", "open_kb_document", "find_kb_document", "web_search", "web_fetch"}:
             continue
         try:
             payload = json.loads(normalize_tool_result(metadata.get("output")).audit_content)
@@ -146,8 +146,8 @@ def collect_reference_sources(messages: list[Message], visible_kb_ids: set[str])
         if not isinstance(payload, (dict, list)) or isinstance(payload, dict) and payload.get("error"):
             continue
 
-        if tool_name == "web_search":
-            candidates = _web_sources(payload)
+        if tool_name in {"web_search", "web_fetch"}:
+            candidates = _web_sources({"results": [payload]} if tool_name == "web_fetch" else payload)
         else:
             kb_id = (metadata.get("input") or {}).get("kb_id")
             if kb_id not in visible_kb_ids:
@@ -258,7 +258,7 @@ def _web_sources(payload: dict) -> list[dict]:
     for item in payload.get("results") or []:
         if not isinstance(item, dict):
             continue
-        content = item.get("content")
+        content = item.get("relevant_content") or item.get("raw_content") or item.get("snippet") or item.get("content")
         url = item.get("url")
         if not isinstance(content, str) or not content.strip() or not isinstance(url, str):
             continue

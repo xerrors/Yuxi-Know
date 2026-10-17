@@ -215,7 +215,8 @@ export class MessageProcessor {
             title,
             url,
             score: typeof item?.score === 'number' ? item.score : null,
-            content: typeof item?.content === 'string' ? item.content : '',
+            content: item?.relevant_content || item?.snippet || (typeof item?.content === 'string' ? item.content : ''),
+            score_max: item?.score_max,
             published_date: typeof item?.published_date === 'string' ? item.published_date : ''
           })
         }

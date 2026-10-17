@@ -1,14 +1,16 @@
 <template>
   <div class="message-debug-panel">
     <header class="debug-toolbar">
-      <label class="filter-select-field">
-        <span class="sr-only">记录类型筛选</span>
-        <select v-model="currentFilter" aria-label="记录类型筛选">
-          <option v-for="option in filterTabs" :key="option.key" :value="option.key">
-            {{ option.label }} {{ option.count }}
-          </option>
-        </select>
-      </label>
+      <a-select
+        v-model:value="currentFilter"
+        class="filter-select-field"
+        size="small"
+        aria-label="记录类型筛选"
+      >
+        <a-select-option v-for="option in filterTabs" :key="option.key" :value="option.key">
+          {{ option.label }} {{ option.count }}
+        </a-select-option>
+      </a-select>
       <span
         v-if="traceDataTruncated"
         class="truncated-note"
@@ -1233,27 +1235,8 @@ const copyAllTimelineJson = async () => {
 }
 
 .filter-select-field {
-  display: flex;
-  height: 26px;
+  min-width: 100px;
   flex: 0 0 auto;
-
-  select {
-    min-width: 86px;
-    height: 26px;
-    padding: 0 24px 0 7px;
-    border: 1px solid var(--gray-300);
-    border-radius: 4px;
-    outline: 0;
-    background: var(--gray-0);
-    color: var(--gray-800);
-    font-size: 11.5px;
-    cursor: pointer;
-  }
-
-  select:focus-visible {
-    border-color: var(--main-500);
-    box-shadow: 0 0 0 1px var(--main-100);
-  }
 }
 
 .search-field {

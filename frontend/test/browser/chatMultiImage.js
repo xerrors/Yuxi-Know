@@ -59,7 +59,7 @@ async (page) => {
   await page.waitForTimeout(600)
   const [chooser] = await Promise.all([
     page.waitForEvent('filechooser'),
-    page.getByText('上传图片', { exact: true }).click()
+    page.getByText('添加图片', { exact: true }).click()
   ])
   check(chooser.isMultiple(), '菜单里的图片选择器不是多选，一次只能选一张')
   await chooser.setFiles([`${FIXTURES}/imgA.png`, `${FIXTURES}/imgB.png`])
@@ -176,7 +176,7 @@ async (page) => {
   await page.waitForTimeout(500)
   const [streamingChooser] = await Promise.all([
     page.waitForEvent('filechooser'),
-    page.getByText('上传图片', { exact: true }).click()
+    page.getByText('添加图片', { exact: true }).click()
   ])
   await streamingChooser.setFiles([`${FIXTURES}/imgA.png`])
   await page.waitForTimeout(5000)
@@ -207,7 +207,7 @@ async (page) => {
   await page.waitForTimeout(600)
   const [secondChooser] = await Promise.all([
     page.waitForEvent('filechooser'),
-    page.getByText('上传图片', { exact: true }).click()
+    page.getByText('添加图片', { exact: true }).click()
   ])
   await secondChooser.setFiles(eleven)
   await page.waitForTimeout(8000)

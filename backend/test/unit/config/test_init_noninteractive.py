@@ -201,3 +201,19 @@ def test_malformed_existing_dotenv_value_fails_clearly(tmp_path, value, error):
     result = run_init(tmp_path)
     assert result.returncode != 0
     assert error in result.stderr
+
+
+def test_search_keys_are_optional_and_deepseek_environment_is_preserved(tmp_path):
+    """初始化不询问搜索凭据，已有缺 Key 选择也不阻断部署。"""
+    result = run_init(
+        tmp_path,
+        SILICONFLOW_API_KEY="test-model-key",
+        WEB_SEARCH_PROVIDER="doubao",
+        DOUBAO_SEARCH_API_KEY="",
+        DEEPSEEK_API_KEY="test-deepseek-key",
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    values = read_env(tmp_path)
+    assert values["WEB_SEARCH_PROVIDER"] == "doubao"
+    assert values["DEEPSEEK_API_KEY"] == "test-deepseek-key"
+    assert "test-deepseek-key" not in result.stdout + result.stderr

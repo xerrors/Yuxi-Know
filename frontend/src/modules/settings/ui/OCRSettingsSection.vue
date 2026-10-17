@@ -2,15 +2,17 @@
   <div class="ocr-settings-section">
     <div class="section-title">默认 OCR 方法</div>
     <section class="settings-panel">
-      <div class="default-ocr-copy">
-        <div class="setting-label">{{ items?.default_ocr_engine?.des || '默认 OCR 解析引擎' }}</div>
-        <p>未单独指定解析方式时，使用此引擎识别文档内容与版面。</p>
-      </div>
-      <div class="default-ocr-selector">
-        <OCRSelector
-          :model-value="configStore.config?.default_ocr_engine"
-          @update:model-value="configStore.setConfigValue('default_ocr_engine', $event)"
-        />
+      <div class="setting-row">
+        <div class="setting-copy">
+          <div class="setting-label">{{ items?.default_ocr_engine?.des || '默认 OCR 解析引擎' }}</div>
+          <p class="setting-description">未单独指定解析方式时，使用此引擎识别文档内容与版面。</p>
+        </div>
+        <div class="setting-content is-compact">
+          <OCRSelector
+            :model-value="configStore.config?.default_ocr_engine"
+            @update:model-value="configStore.setConfigValue('default_ocr_engine', $event)"
+          />
+        </div>
       </div>
     </section>
 
@@ -21,8 +23,13 @@
     <div class="option-list">
       <section v-for="option in configOptions" :key="option.key" class="option-card">
         <header class="option-header">
-          <div>
-            <h4>{{ option.name }}</h4>
+          <div class="option-heading">
+            <div class="option-title">
+              <h4>{{ option.name }}</h4>
+              <span v-if="option.params.fields.length === 1" class="option-field-name">
+                {{ option.params.fields[0].label }}
+              </span>
+            </div>
             <p>{{ option.description }}</p>
           </div>
           <div class="option-actions" :class="{ editing: editingKey === option.key }">
@@ -42,6 +49,7 @@
             </template>
             <a-button
               v-else
+              type="text"
               size="small"
               :disabled="Boolean(editingKey)"
               @click="startEditing(option)"
@@ -52,16 +60,18 @@
         </header>
         <div v-if="editingKey === option.key" class="option-fields">
           <label v-for="field in option.params.fields" :key="field.key" class="option-field">
-            <span class="setting-label">{{ field.label }}</span>
+            <span v-if="option.params.fields.length > 1" class="setting-label">{{ field.label }}</span>
             <a-input-password
               v-if="field.sensitive"
               v-model:value="draftValue[field.key]"
+              :aria-label="field.label"
               :placeholder="field.environment"
               autocomplete="new-password"
             />
             <a-input
               v-else
               v-model:value="draftValue[field.key]"
+              :aria-label="field.label"
               :placeholder="field.placeholder || field.environment"
               allow-clear
             />
@@ -72,8 +82,9 @@
         </div>
         <div v-else class="option-fields option-values">
           <div v-for="field in option.params.fields" :key="field.key" class="option-field">
-            <span class="setting-label">{{ field.label }}</span>
+            <span v-if="option.params.fields.length > 1" class="setting-label">{{ field.label }}</span>
             <a-input
+              :aria-label="field.label"
               :value="getFieldDisplay(option, field)"
               :class="{ 'masked-value': field.sensitive }"
               disabled
@@ -161,180 +172,14 @@ onMounted(loadConfigOptions)
 </script>
 
 <style lang="less" scoped>
-.ocr-settings-section {
-  container: ocr-settings / inline-size;
-}
-
-.settings-panel,
-.option-card {
-  padding: 16px;
-  border: 1px solid var(--gray-150);
-  border-radius: 8px;
-  background: var(--gray-0);
-}
-
-.settings-panel {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px 16px;
-}
-
-.default-ocr-copy {
-  flex: 1;
-  min-width: 0;
-
-  .setting-label {
-    color: var(--gray-900);
-  }
-
-  p {
-    margin: 4px 0 0;
-    color: var(--color-text-secondary);
-    font-size: 12px;
-    line-height: 1.5;
-  }
-}
-
-.default-ocr-selector {
-  flex: 0 0 260px;
-  width: 260px;
-  max-width: 100%;
-  min-width: 0;
-}
-
-@container ocr-settings (max-width: 520px) {
-  .settings-panel {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
-  }
-
-  .default-ocr-selector {
-    flex: none;
-    width: 100%;
-    max-width: 260px;
-  }
-}
-
-.section-title {
-  margin: 0 0 10px;
-  color: var(--gray-900);
-  font-size: 15px;
-  font-weight: 600;
-
-  &:not(:first-child) {
-    margin-top: 24px;
-  }
-}
-
+.ocr-settings-section { container: settings-services / inline-size; }
 .section-description {
-  margin: 0;
+  margin: 0 0 12px;
   color: var(--color-text-secondary);
   font-size: 12px;
   line-height: 1.6;
 }
-
-.option-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: 12px;
-}
-
-.option-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 14px;
-
-  h4,
-  p {
-    margin: 0;
-  }
-
-  h4 {
-    color: var(--gray-900);
-    font-size: 14px;
-    font-weight: 500;
-  }
-
-  p {
-    margin-top: 3px;
-    color: var(--color-text-secondary);
-    font-size: 12px;
-  }
-}
-
-.option-actions {
-  display: flex;
-  flex: none;
-  gap: 8px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s ease;
-}
-
-.option-card:hover .option-actions,
-.option-card:focus-within .option-actions,
-.option-actions.editing {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.save-button {
-  border-color: var(--gray-900);
-  background: var(--gray-900);
-
-  &:hover,
-  &:focus {
-    border-color: var(--gray-700);
-    background: var(--gray-700);
-  }
-}
-
-.option-fields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px 16px;
-}
-
-.option-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-
-  &:only-child {
-    grid-column: 1 / -1;
-  }
-
-  small {
-    color: var(--color-text-secondary);
-    font-size: 12px;
-    line-height: 1.5;
-  }
-}
-
-.setting-label {
-  color: var(--gray-700);
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.masked-value {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  letter-spacing: 0.02em;
-}
-
-@media (max-width: 680px) {
-  .option-fields {
-    grid-template-columns: 1fr;
-  }
-
-  .option-field:only-child {
-    grid-column: auto;
-  }
-}
 </style>
+
+<style lang="less" scoped src="./settings-form.less"></style>
+<style lang="less" scoped src="./settings-service-card.less"></style>

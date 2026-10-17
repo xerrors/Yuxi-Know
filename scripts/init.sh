@@ -227,15 +227,13 @@ skip_existing_image() {
 echo "🚀 Initializing Yuxi project..."
 echo "=================================="
 
-new_env=0
 if [ ! -f "$env_file" ]; then
     touch "$env_file"
-    new_env=1
 fi
 chmod 600 "$env_file"
 
 # 只接收初始化拥有的输入，不把宿主全部环境或开发配置复制进新部署。
-for name in SILICONFLOW_API_KEY WEB_SEARCH_PROVIDER DOUBAO_SEARCH_API_KEY TAVILY_API_KEY \
+for name in SILICONFLOW_API_KEY WEB_SEARCH_PROVIDER DOUBAO_SEARCH_API_KEY TAVILY_API_KEY DEEPSEEK_API_KEY \
     JWT_SECRET_KEY API_KEY_DERIVATION_SECRET YUXI_INSTANCE_ID YUXI_ENV \
     POSTGRES_PASSWORD NEO4J_PASSWORD MINIO_ACCESS_KEY MINIO_SECRET_KEY \
     CUBE_API_URL CUBE_API_KEY CUBE_PROXY_NODE_IP CUBE_PROXY_PORT_HTTP CUBE_TEMPLATE_ID \
@@ -251,21 +249,15 @@ for name in SILICONFLOW_API_KEY WEB_SEARCH_PROVIDER DOUBAO_SEARCH_API_KEY TAVILY
 done
 
 ensure_required_value SILICONFLOW_API_KEY
-if [ "$new_env" = 1 ] && [ "$non_interactive" = 0 ] && [ -z "${WEB_SEARCH_PROVIDER+x}" ]; then
-    prompt_value WEB_SEARCH_PROVIDER "Web search provider (doubao/tavily, Enter to skip)"
-    case "$PROMPT_VALUE" in
-        doubao|tavily) set_env_value WEB_SEARCH_PROVIDER "$PROMPT_VALUE" ;;
-        "") ;;
-        *) fail "WEB_SEARCH_PROVIDER must be doubao or tavily." ;;
-    esac
-fi
 provider=$(get_env_value WEB_SEARCH_PROVIDER)
+provider="${provider#"${provider%%[![:space:]]*}"}"
+provider="${provider%"${provider##*[![:space:]]}"}"
+provider=$(printf '%s' "$provider" | tr '[:upper:]' '[:lower:]')
 case "$provider" in
-    doubao) ensure_required_value DOUBAO_SEARCH_API_KEY ;;
-    tavily) ensure_required_value TAVILY_API_KEY ;;
-    "") ;;
-    *) fail "WEB_SEARCH_PROVIDER must be doubao or tavily." ;;
+    ""|tavily|deepseek|doubao) ;;
+    *) fail "WEB_SEARCH_PROVIDER must be tavily, deepseek, or doubao." ;;
 esac
+echo "🔍 Configure Search and Fetch after login in Settings → 网络搜索 (environment keys are also supported)."
 
 # 先检查已有的非空值，避免无人值守时轮换持久密钥。
 ensure_security_secret JWT_SECRET_KEY

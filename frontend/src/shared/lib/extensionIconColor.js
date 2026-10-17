@@ -1,4 +1,4 @@
-import { presets } from '@/shared/lib/avatar/presets'
+import { presets } from './avatar/presets.js'
 
 const extensionIconPalette = Object.fromEntries(
   ['light', 'dark'].map((mode) => [

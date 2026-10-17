@@ -175,6 +175,19 @@ pwsh -NoProfile -File scripts/test_init_security.ps1
 
 这些命令的实际 workflow 和 selector 由仓库 `.github/workflows` 与 `Makefile` 维护；文档不复制一份会漂移的 CI 配置。
 
+## 网络搜索与正文工具
+
+设置持久化与权限由 `integration/api/test_web_tools_settings.py` 在真实 HTTP、独立 PostgreSQL Schema 上验证；`integration/services/test_web_provider_protocol.py` 启动独立 TLS 重放进程验证固定官方端点上的协议传输。供应商重放属于确定性证据，不能代替带真实凭据的外部探针。
+
+worker 全链路在独立测试槽位叠加协议重放拓扑：
+
+```bash
+docker compose -f docker-compose.yml -f backend/test/e2e/web-tools.compose.yml up -d web-provider-replay api worker
+docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_web_tools_e2e.py -q
+```
+
+该拓扑仅用于没有已保存搜索 Key 的隔离测试环境。它生成短期测试 CA，API 与 worker 的 HTTPS 请求由重放服务提供三家 Search 和两家 Fetch 固定结果；测试通过真实 Session SSE、worker 与持久消息确认配置切换，结束后清除自己保存的 Key。`system-tests.yml` 显式运行此测试，生产拓扑不使用该 CA 或代理。
+
 ## 性能评测
 
 性能工具位于 `backend/test/performance/`；参数、采样和探针的单测位于 `backend/test/unit/performance/`，由常规后端 unit 命令执行。仓库根目录使用同一个模块入口，Python 环境需要后端依赖：

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>网络搜索设置测试</title></head>
+<body>
+<div id="app"></div>
+<script type="module">
+import { createApp, h } from 'vue'
+import { createPinia } from 'pinia'
+import Antd, { ConfigProvider } from 'ant-design-vue'
+import { useThemeStore } from '../../src/shared/model/theme.js'
+import SettingsModal from '../../src/modules/settings/ui/SettingsModal.vue'
+import { useUserStore } from '../../src/modules/identity/model/user.js'
+import '../../src/assets/css/base.css'
+import '../../src/assets/css/base.dark.css'
+const pinia = createPinia()
+let theme
+const app = createApp({ render: () => h(ConfigProvider, { theme: theme.currentTheme }, { default: () => h(SettingsModal, { visible: true, initialTab: 'webSearch' }) }) })
+app.use(pinia)
+app.use(Antd)
+const user = useUserStore()
+user.token = 'web-search-browser-fixture'
+user.userRole = 'superadmin'
+theme = useThemeStore()
+theme.setTheme('light')
+window.webSettingsTheme = theme
+app.mount('#app')
+</script>
+</body>
+</html>

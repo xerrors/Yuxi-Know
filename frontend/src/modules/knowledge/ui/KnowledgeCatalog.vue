@@ -79,6 +79,7 @@
         :subtitle="cardSubtitle(knowledgeBase)"
         :description="knowledgeBase.description || '暂无描述'"
         :tags="cardTags(knowledgeBase)"
+        :icon-color="getExtensionIconColor(knowledgeBase.kb_id, themeStore.isDark)"
         :disabled="!kbUtils.supportsKnowledgeBaseDetail(knowledgeBase)"
         @click="navigateToKnowledgeBase(knowledgeBase)"
       >
@@ -130,10 +131,13 @@ import ResourceEmptyState from '@/shared/ui/ResourceEmptyState.vue'
 import KnowledgeBaseCreateFlowModal from '@/modules/knowledge/ui/KnowledgeBaseCreateFlowModal.vue'
 import ExtensionCardGrid from '@/modules/extensions/ui/ExtensionCardGrid.vue'
 import InfoCard from '@/shared/ui/InfoCard.vue'
+import { getExtensionIconColor } from '@/shared/lib/extensionIconColor'
+import { useThemeStore } from '@/shared/model/theme'
 import dayjs, { parseToShanghai } from '@/shared/lib/time'
 import { getKbTypeLabel, getKbTypeIcon, getKbTypeColor, kbUtils } from '@/modules/knowledge/model/kb_utils'
 import { getShareConfigLabel } from '@/modules/agents/model/shareConfig'
 
+const themeStore = useThemeStore()
 const route = useRoute()
 const router = useRouter()
 const knowledgeBaseStore = useKnowledgeBaseStore()
@@ -327,12 +331,6 @@ defineExpose({
 </script>
 
 <style lang="less" scoped>
-.knowledge-base-container {
-  :deep(.info-card-icon) {
-    background: var(--gray-0);
-  }
-}
-
 .knowledge-base-container {
   padding: 0;
 }

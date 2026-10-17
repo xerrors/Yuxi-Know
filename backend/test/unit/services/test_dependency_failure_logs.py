@@ -8,7 +8,7 @@ import pytest
 
 from yuxi.infrastructure.observability import logging as logging_module
 from yuxi.modules.extensions.mcp import runtime as mcp_runtime
-from yuxi.modules.extensions.tools.builtin import web_search
+from yuxi.modules.extensions.web import services as web_services
 from yuxi.modules.models.providers import cache as cache_module
 
 pytestmark = pytest.mark.unit
@@ -32,9 +32,10 @@ async def test_dependency_failure_fields_reach_shipping_file_log(monkeypatch, tm
             logging_module.setup_logger("audit-test", console=False)
 
             if component == "web_search":
-                for key in ("WEB_SEARCH_PROVIDER", "DOUBAO_SEARCH_API_KEY", "TAVILY_API_KEY"):
-                    monkeypatch.delenv(key, raising=False)
-                web_search._register_web_search_tool()
+                monkeypatch.setattr(
+                    web_services, "get_web_configuration", AsyncMock(return_value={"search": None, "fetch": None, "keys": {}})
+                )
+                assert await web_services.available_web_tools() == set()
             elif component == "model_cache":
 
                 @contextmanager

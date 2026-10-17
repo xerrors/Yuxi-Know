@@ -13,16 +13,16 @@
     </div>
 
     <div class="expand-options" v-if="hasOptionsLeft">
-      <ActionDropdown upward v-model:open="optionsExpanded">
-        <template #trigger>
-          <ActionTrigger label="添加内容" :open="optionsExpanded" icon-only>
-            <template #icon><Plus :size="17" /></template>
-          </ActionTrigger>
-        </template>
-        <slot name="options-left">
-          <div class="no-options">没有配置 options</div>
-        </slot>
-      </ActionDropdown>
+      <ActionTrigger
+        label="添加内容"
+        :open="mentionPopupVisible"
+        :disabled="disabled"
+        icon-only
+        @mousedown.prevent
+        @click.stop="toggleAddMenu"
+      >
+        <template #icon><Plus :size="17" /></template>
+      </ActionTrigger>
       <slot name="actions-left"></slot>
     </div>
 
@@ -47,6 +47,19 @@
     <!-- @ 提及选择弹窗 -->
     <div v-if="mentionPopupVisible" ref="mentionDropdownRef" class="mention-dropdown-wrapper">
       <div class="mention-popup" @mousedown.prevent>
+        <div v-if="addActions.length" class="mention-group">
+          <div class="mention-group-title">添加</div>
+          <button
+            v-for="(item, index) in addActions"
+            :key="item.value"
+            type="button"
+            :class="['mention-item', 'resource-item', 'add-action', { active: mentionSelectedIndex === index }]"
+            @click="selectAddAction(item)"
+          >
+            <component :is="item.icon" :size="15" aria-hidden="true" />
+            <span>{{ item.label }}</span>
+          </button>
+        </div>
         <!-- 文件列表 -->
         <div v-if="mentionItems.files.length > 0 || showFileSearchPrompt" class="mention-group">
           <div class="mention-group-title">文件</div>
@@ -108,6 +121,7 @@
             ]"
             @click="insertMention(item)"
           >
+            <MentionResourceAvatar :item="item" />
             <div class="resource-name">
               <span
                 v-for="(part, pIdx) in splitTextByQuery(item.label, mentionQuery)"
@@ -143,6 +157,7 @@
             :class="['mention-item', 'resource-item', { active: isItemSelected('mcp', index) }]"
             @click="insertMention(item)"
           >
+            <MentionResourceAvatar :item="item" />
             <div class="resource-name">
               <span
                 v-for="(part, pIdx) in splitTextByQuery(item.label, mentionQuery)"
@@ -178,6 +193,7 @@
             :class="['mention-item', 'resource-item', { active: isItemSelected('skill', index) }]"
             @click="insertMention(item)"
           >
+            <MentionResourceAvatar :item="item" />
             <div class="resource-name">
               <span
                 v-for="(part, pIdx) in splitTextByQuery(item.label, mentionQuery)"
@@ -213,6 +229,7 @@
             :class="['mention-item', 'resource-item', { active: isItemSelected('agent', index) }]"
             @click="insertMention(item)"
           >
+            <MentionResourceAvatar :item="item" />
             <div class="resource-name">
               <span
                 v-for="(part, pIdx) in splitTextByQuery(item.label, mentionQuery)"
@@ -276,7 +293,6 @@ import {
   nextTick,
   watch,
   onBeforeUnmount,
-  useSlots,
   h,
   render,
   getCurrentInstance
@@ -285,13 +301,15 @@ import {
   ArrowUp as ArrowUpOutlined,
   Square,
   Plus,
+  Paperclip,
+  ImagePlus,
   Send as SendOutlined
 } from '@lucide/vue'
 import { searchMentionFiles } from '@/apis/mention_api'
 import FileTypeIcon from '@/shared/ui/FileTypeIcon.vue'
-import ActionDropdown from '@/shared/ui/ActionDropdown.vue'
 import ActionTrigger from '@/shared/ui/ActionTrigger.vue'
 import MentionToken from '@/modules/session/ui/MentionToken.vue'
+import MentionResourceAvatar from '@/modules/session/ui/MentionResourceAvatar.vue'
 import { buildMentionResourceItems } from '@/modules/session/model/mention_resource_items'
 import {
   buildMentionDisplayLabels,
@@ -314,7 +332,7 @@ const closeMentionPopup = (e) => {
 
 const appContext = getCurrentInstance().appContext
 const inputRef = ref(null)
-const optionsExpanded = ref(false)
+const addMenuRange = ref(null)
 // 用于防抖的定时器
 const debounceTimer = ref(null)
 const props = defineProps({
@@ -358,18 +376,18 @@ const props = defineProps({
     type: String,
     default: ''
   },
+  enableUploads: { type: Boolean, default: false },
   showOptionsLeft: {
     type: Boolean,
     default: true
   }
 })
 
-const emit = defineEmits(['update:modelValue', 'send', 'keydown', 'paste-images', 'drop-files'])
-const slots = useSlots()
+const emit = defineEmits(['update:modelValue', 'send', 'keydown', 'paste-images', 'drop-files', 'upload-attachment', 'add-images'])
 
 // @ 提及功能是否启用
 const mentionEnabled = computed(() => {
-  return !!props.mention
+  return !!props.mention || props.enableUploads
 })
 
 const mentionDisplayLabels = computed(() => buildMentionDisplayLabels(props.mention || {}))
@@ -721,6 +739,7 @@ const replaceCurrentRawSelection = (replacement) => {
 // 检测是否在 @ 触发位置
 const checkMentionTrigger = () => {
   if (!inputRef.value || !mentionEnabled.value) return false
+  addMenuRange.value = null
 
   const selectionRange = getRawSelectionRange()
   if (!selectionRange.collapsed) {
@@ -879,7 +898,8 @@ const updateMentionItems = (query = '') => {
 
 // 检查项是否被选中
 const isItemSelected = (type, index) => {
-  if (mentionSelectedIndex.value < 0) return false
+  const selectedIndex = mentionSelectedIndex.value - addActions.value.length
+  if (selectedIndex < 0) return false
 
   const filesLen = mentionItems.value.files.length
   const kbLen = mentionItems.value.knowledgeBases.length
@@ -887,15 +907,15 @@ const isItemSelected = (type, index) => {
   const skillsLen = mentionItems.value.skills.length
 
   if (type === 'file') {
-    return mentionSelectedIndex.value === index
+    return selectedIndex === index
   } else if (type === 'knowledge') {
-    return mentionSelectedIndex.value === filesLen + index
+    return selectedIndex === filesLen + index
   } else if (type === 'mcp') {
-    return mentionSelectedIndex.value === filesLen + kbLen + index
+    return selectedIndex === filesLen + kbLen + index
   } else if (type === 'skill') {
-    return mentionSelectedIndex.value === filesLen + kbLen + mcpLen + index
+    return selectedIndex === filesLen + kbLen + mcpLen + index
   } else if (type === 'agent') {
-    return mentionSelectedIndex.value === filesLen + kbLen + mcpLen + skillsLen + index
+    return selectedIndex === filesLen + kbLen + mcpLen + skillsLen + index
   }
   return false
 }
@@ -908,6 +928,7 @@ const showFileSearchPrompt = computed(() => {
 const hasAnyItems = computed(() => {
   const items = mentionItems.value
   return (
+    addActions.value.length > 0 ||
     showFileSearchPrompt.value ||
     items.files.length > 0 ||
     items.knowledgeBases.length > 0 ||
@@ -941,9 +962,13 @@ const insertMention = (item) => {
   const currentValue = getEditorRawValue()
   const selectionRange = getRawSelectionRange()
   const activeMention = findActiveMentionQuery(currentValue, selectionRange.end)
-  if (!activeMention) return
-
-  commitMention(item, { start: activeMention.start, end: activeMention.end })
+  if (addMenuRange.value) {
+    const range = addMenuRange.value
+    addMenuRange.value = null
+    commitMention(item, range)
+  } else if (activeMention) {
+    commitMention(item, { start: activeMention.start, end: activeMention.end })
+  }
 }
 
 // 滚动到选中项
@@ -973,8 +998,14 @@ const scrollToItem = (index) => {
 // 处理键盘导航
 const handleMentionNavigation = (e) => {
   if (!mentionPopupVisible.value) return
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    mentionPopupVisible.value = false
+    return
+  }
 
   const allItems = [
+    ...addActions.value,
     ...mentionItems.value.files,
     ...mentionItems.value.knowledgeBases,
     ...mentionItems.value.mcps,
@@ -996,25 +1027,53 @@ const handleMentionNavigation = (e) => {
   } else if (e.key === 'Enter' || e.key === 'Tab') {
     if (mentionSelectedIndex.value >= 0 && mentionSelectedIndex.value < total) {
       e.preventDefault()
-      insertMention(allItems[mentionSelectedIndex.value])
+      const item = allItems[mentionSelectedIndex.value]
+      if (item.type === 'action') selectAddAction(item)
+      else insertMention(item)
     }
-  } else if (e.key === 'Escape') {
-    e.preventDefault()
-    mentionPopupVisible.value = false
   }
 }
 
-const hasOptionsLeft = computed(() => {
-  if (!props.showOptionsLeft) {
-    return false
-  }
-  const slot = slots['options-left']
-  if (!slot) {
-    return false
-  }
-  const renderedNodes = slot()
-  return Boolean(renderedNodes && renderedNodes.length)
+const hasOptionsLeft = computed(() => props.showOptionsLeft && mentionEnabled.value)
+const addActions = computed(() => {
+  if (!props.enableUploads || props.disabled) return []
+  return [
+    { type: 'action', value: 'attachment', label: '上传附件', icon: Paperclip },
+    { type: 'action', value: 'images', label: '添加图片', icon: ImagePlus }
+  ].filter(item => !mentionQuery.value || item.label.includes(mentionQuery.value))
 })
+
+/** 加号只记录插入位置，不向草稿写入临时触发字符。 */
+const toggleAddMenu = () => {
+  if (props.disabled) return
+  if (mentionPopupVisible.value) {
+    mentionPopupVisible.value = false
+    return
+  }
+  addMenuRange.value = getRawSelectionRange()
+  mentionQuery.value = ''
+  mentionSelectedIndex.value = 0
+  updateMentionItems()
+  mentionPopupVisible.value = true
+  inputRef.value?.focus()
+}
+
+/** 上传动作只消费当前查询片段，正文继续留在原草稿中。 */
+const selectAddAction = (item) => {
+  if (props.disabled) return
+  if (!addMenuRange.value) {
+    const range = getRawSelectionRange()
+    const active = findActiveMentionQuery(getEditorRawValue(), range.end)
+    if (active) {
+      const value = replaceRawRange(getEditorRawValue(), active.start, active.end, '')
+      updateRawValue(value, active.start)
+    }
+  }
+  mentionPopupVisible.value = false
+  mentionQuery.value = ''
+  addMenuRange.value = null
+  emit(item.value === 'attachment' ? 'upload-attachment' : 'add-images')
+}
 
 // 图标映射
 const iconComponents = {
@@ -1216,12 +1275,6 @@ const isComposing = ref(false)
 let activeAbortController = null
 let mentionSearchTimer = null
 
-watch(optionsExpanded, (open) => {
-  if (open) {
-    mentionPopupVisible.value = false
-  }
-})
-
 const adjustTextareaHeight = () => {
   if (!inputRef.value) {
     return
@@ -1237,9 +1290,9 @@ const focusInput = () => {
   if (inputRef.value && !props.disabled) {
     inputRef.value.focus()
     // 聚焦回来时，如果开启了提及，自动检测当前光标位置是否处于 @提及 范围，是则重新升起弹框
-    if (mentionEnabled.value) {
+    if (mentionEnabled.value && !addMenuRange.value) {
       nextTick(() => {
-        checkMentionTrigger()
+        if (!addMenuRange.value) checkMentionTrigger()
       })
     }
   }
@@ -1318,7 +1371,7 @@ defineExpose({
   focus: () => inputRef.value?.focus(),
   insertMention: commitMention,
   closeOptions: () => {
-    optionsExpanded.value = false
+    mentionPopupVisible.value = false
   }
 })
 </script>
@@ -1519,7 +1572,7 @@ defineExpose({
   max-height: 280px;
   overflow-y: auto;
   background: var(--gray-0);
-  border-radius: 8px;
+  border-radius: 12px;
   box-shadow:
     0 -4px 16px rgba(0, 0, 0, 0.08),
     0 4px 16px rgba(0, 0, 0, 0.12);
@@ -1545,6 +1598,14 @@ defineExpose({
     margin-bottom: 2px;
   }
 
+  .add-action {
+    width: calc(100% - 8px);
+    border: 0;
+    background: transparent;
+    text-align: left;
+    font-family: inherit;
+  }
+
   .mention-item {
     padding: 4px 8px;
     cursor: pointer;
@@ -1559,7 +1620,8 @@ defineExpose({
       align-items: center;
       gap: 8px;
       min-width: 0;
-      padding: 6px 10px;
+      padding: 6px 4px;
+      border-radius: 10px;
 
       .resource-name {
         color: var(--gray-800);

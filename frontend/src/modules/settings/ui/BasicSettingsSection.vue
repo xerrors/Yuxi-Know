@@ -60,20 +60,23 @@
       </section>
 
       <div class="section-title">协作限制</div>
-      <section class="cooperation-limit-card">
-        <div class="cooperation-limit-copy">
-          <label for="max-cooperation-depth">最大协作深度</label>
-          <p id="cooperation-depth-help">根对话为第 0 层，默认允许 2 层协作；设为 0 可关闭新增协作会话。</p>
+      <section class="settings-panel">
+        <div class="setting-row">
+          <div class="setting-copy">
+            <label class="setting-label" for="max-cooperation-depth">最大协作深度</label>
+            <p class="setting-description" id="cooperation-depth-help">根对话为第 0 层，默认允许 2 层协作；设为 0 可关闭新增协作会话。</p>
+          </div>
+          <div class="setting-content is-number">
+            <a-input-number
+              id="max-cooperation-depth"
+              aria-describedby="cooperation-depth-help"
+              :value="configStore.config?.max_cooperation_depth ?? 2"
+              :min="0"
+              :precision="0"
+              @change="handleCooperationDepthChange"
+            />
+          </div>
         </div>
-        <a-input-number
-          id="max-cooperation-depth"
-          class="cooperation-limit-input"
-          aria-describedby="cooperation-depth-help"
-          :value="configStore.config?.max_cooperation_depth ?? 2"
-          :min="0"
-          :precision="0"
-          @change="handleCooperationDepthChange"
-        />
       </section>
 
       <SkillSettingsSection :class="{ 'first-section': !userStore.isSuperAdmin }" />
@@ -116,120 +119,4 @@ const handleFastModelSelect = (spec) => {
 }
 </script>
 
-<style lang="less" scoped>
-.basic-settings-section {
-  .settings-panel {
-    container: default-model-settings / inline-size;
-    background: var(--gray-0);
-    border: 1px solid var(--gray-150);
-    border-radius: 8px;
-  }
-
-  .setting-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 16px;
-    padding: 14px 16px;
-
-    & + .setting-row {
-      border-top: 1px solid var(--gray-150);
-    }
-  }
-
-  .cooperation-limit-card {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 16px;
-    padding: 14px 16px;
-    border: 1px solid var(--gray-150);
-    border-radius: 8px;
-    background: var(--gray-0);
-  }
-
-  .cooperation-limit-copy {
-    flex: 1;
-    min-width: 0;
-
-    label {
-      display: block;
-      color: var(--gray-900);
-      font-size: 13px;
-      font-weight: 500;
-    }
-
-    p {
-      margin: 4px 0 0;
-      color: var(--color-text-secondary);
-      font-size: 12px;
-      line-height: 1.5;
-    }
-  }
-
-  .cooperation-limit-input {
-    flex: none;
-    width: 88px;
-  }
-
-  .setting-copy {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .setting-description {
-    margin: 4px 0 0;
-    color: var(--color-text-secondary);
-    font-size: 12px;
-    line-height: 1.5;
-  }
-
-  .setting-label {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--gray-900);
-  }
-
-  .setting-content {
-    flex: 0 1 340px;
-    width: 340px;
-    max-width: 100%;
-    min-width: 0;
-  }
-
-  .setting-content.is-compact {
-    flex-basis: 260px;
-    width: 260px;
-  }
-
-  @container default-model-settings (max-width: 520px) {
-    .setting-row {
-      flex-direction: column;
-      align-items: stretch;
-      gap: 8px;
-    }
-
-    .setting-content {
-      flex: none;
-      width: 100%;
-      max-width: 340px;
-    }
-
-    .setting-content.is-compact {
-      flex: none;
-      width: 100%;
-      max-width: 260px;
-    }
-  }
-
-  .agent-select {
-    width: 320px;
-    max-width: 100%;
-  }
-
-  @media (max-width: 768px) {
-    .agent-select {
-      width: 100%;
-    }
-  }
-}
-</style>
+<style lang="less" scoped src="./settings-form.less"></style>

@@ -386,9 +386,24 @@ jobs:
         run: CUBE_TEST_ISOLATED_TOPOLOGY=1 bash scripts/test_cube_worker_recovery.sh
       - name: Verify real Sandbox storage isolation and shared projections
         run: docker compose exec -T api uv run --no-sync --no-dev pytest test/integration/sandbox -q
+      - name: Verify web tool configuration and official HTTPS protocols
+        run: |
+          docker compose exec -T api uv run --no-sync --no-dev pytest \
+            test/integration/api/test_web_tools_settings.py \
+            test/integration/services/test_web_provider_protocol.py -q
+      - name: Verify Search and Fetch configuration through worker
+        run: |
+          docker compose -f docker-compose.yml -f backend/test/e2e/web-tools.compose.yml up -d web-provider-replay api worker
+          for attempt in $(seq 1 60); do
+            if docker compose exec -T api curl -fsS http://localhost:5050/api/system/ready >/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_web_tools_e2e.py -q
       - name: Runtime logs on failure
         if: failure() || cancelled()
         run: docker compose logs api worker --tail 300
       - name: Stop runtime topology
         if: always()
-        run: docker compose down -v
+        run: docker compose -f docker-compose.yml -f backend/test/e2e/web-tools.compose.yml down -v --remove-orphans

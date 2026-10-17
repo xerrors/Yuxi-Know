@@ -111,7 +111,12 @@ class SkillsMiddleware(AgentMiddleware):
         enabled_tools = []
         active_mcp_tools = []
         if activated_tool_names:
-            enabled_tools = [t for t in get_all_tool_instances() if t.name in activated_tool_names]
+            # 网页工具虽稳定注册，未配置时不会进入本轮 ToolNode，Skill 不能重新暴露它们。
+            enabled_tools = [
+                t
+                for t in get_all_tool_instances()
+                if t.name in activated_tool_names and (t.name not in {"web_search", "web_fetch"} or t.name in registered_tool_names)
+            ]
         if deps_bundle["mcps"]:
             active_mcp_tools = await self._get_mcp_tools_from_context(runtime_context, extra_mcps=deps_bundle["mcps"])
         active_mcp_tools_by_name = {}

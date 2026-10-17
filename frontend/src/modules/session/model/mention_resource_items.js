@@ -30,7 +30,7 @@ export const buildMentionResourceItems = (mention = {}) => {
         toResourceItem('knowledge', {
           value: kb.name,
           label: kb.name,
-          extra: { description: kb.description || '', resourceId: kb.kb_id }
+          extra: { description: kb.description || '', resourceId: kb.kb_id, kbType: kb.kb_type }
         })
       )
       .filter(Boolean),
@@ -39,7 +39,7 @@ export const buildMentionResourceItems = (mention = {}) => {
         toResourceItem('mcp', {
           value: m.slug,
           label: m.name,
-          extra: { description: m.description || '' }
+          extra: { description: m.description || '', icon: m.icon || '' }
         })
       )
       .filter(Boolean),

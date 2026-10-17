@@ -4,6 +4,8 @@
       <slot name="extra"></slot>
     </div>
 
+    <input ref="imagePickerRef" type="file" accept="image/*" multiple hidden @change="handleImagePickerChange" />
+
     <MessageInputComponent
       ref="inputRef"
       :model-value="modelValue"
@@ -14,6 +16,9 @@
       :placeholder="placeholder"
       :mention="mention"
       :thread-id="threadId"
+      enable-uploads
+      @upload-attachment="handleAttachmentUpload"
+      @add-images="openImagePicker"
       @send="handleSend"
       @keydown="handleKeyDown"
       @paste-images="handlePastedImages"
@@ -70,15 +75,6 @@
           </div>
         </div>
       </template>
-      <template #options-left>
-        <AttachmentOptionsComponent
-          :disabled="disabled"
-          :mention="mention"
-          @upload="handleAttachmentUpload"
-          @upload-image-files="handleImageFilesSelected"
-          @select-mention="handleMentionSelect"
-        />
-      </template>
       <template #actions-left>
         <div class="input-actions-left">
           <slot name="actions-left-extra"></slot>
@@ -98,7 +94,6 @@ import { computed, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import MessageInputComponent from '@/modules/session/ui/MessageInputComponent.vue'
 import ImagePreviewComponent from '@/shared/ui/ImagePreviewComponent.vue'
-import AttachmentOptionsComponent from '@/modules/session/ui/AttachmentOptionsComponent.vue'
 import { X } from '@lucide/vue'
 import { normalizeAttachmentPreviews } from '@/shared/lib/file_utils'
 import { uploadMultimodalImage } from '@/modules/session/model/multimodal_image_upload'
@@ -205,9 +200,19 @@ const handleDroppedFiles = (files = []) => {
   }
 }
 
-const handleMentionSelect = (item) => {
-  inputRef.value?.insertMention(item)
-  inputRef.value?.closeOptions()
+const imagePickerRef = ref(null)
+
+/** 共用原生选图入口，上传与限额仍由图片流程处理。 */
+const openImagePicker = () => {
+  if (props.disabled) return
+  imagePickerRef.value?.click()
+}
+
+/** 清空文件选择，允许再次选择同一张图片。 */
+const handleImagePickerChange = (event) => {
+  const files = Array.from(event.target.files || [])
+  event.target.value = ''
+  handleImageFilesSelected(files)
 }
 
 const handleImageRemoved = (index) => {

@@ -99,7 +99,7 @@ async function attachmentDraftOwnership(page) {
     const input = probe.locator('.agent-view [contenteditable="true"]')
     await input.waitFor()
     await probe.getByRole('button', { name: '添加内容', exact: true }).click()
-    await probe.getByText('添加附件', { exact: true }).click()
+    await probe.getByText('上传附件', { exact: true }).click()
     const modal = probe.getByRole('dialog')
     await modal
       .locator('input[type="file"]')

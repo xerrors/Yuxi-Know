@@ -29,6 +29,7 @@ export const TOOL_NAME_MAP = {
   open_kb_document: '打开知识库文档',
   calculator: '计算器',
   web_search: '网络搜索',
+  web_fetch: '网页抓取',
   tavily_search: '网络搜索',
   doubao_search: '网络搜索',
   ocr_parse_file: 'OCR识别文件',

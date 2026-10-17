@@ -18,6 +18,17 @@ async def resolve_configured_runtime_tools(context) -> list[Any]:
     selected_tool_names: set[str] = set()
     selected_tool_sources: dict[str, str] = {}
     builtin_tools = {tool.name: tool for tool in get_tool_instances_by_category("builtin")}
+    from yuxi.modules.extensions.web.services import available_web_tools
+
+    # 工具注册稳定，凭据决定本轮可绑定能力；执行时再次读取有效配置。
+    skill_tools = resolve_skill_gated_tools(context) if getattr(context, "skill_runtime_snapshot", None) else []
+    requested_web = {"web_search", "web_fetch"} & {
+        *(getattr(context, "tools", None) or []),
+        *(tool.name for tool in skill_tools),
+    }
+    available_web = await available_web_tools() if requested_web else set()
+    for name in {"web_search", "web_fetch"} - available_web:
+        builtin_tools.pop(name, None)
 
     for tool_name in (*BASE_TOOL_NAMES, *(getattr(context, "tools", None) or [])):
         if not isinstance(tool_name, str) or tool_name in selected_tool_names:
@@ -65,7 +76,9 @@ async def resolve_configured_runtime_tools(context) -> list[Any]:
     # Skill 依赖的本地工具：必须随基础工具一起注册进 create_agent 的 ToolNode 才可执行，
     # 否则 Skill 激活后模型虽能发起调用，执行器仍报 "not a valid tool"。
     # 默认绑定给模型的可见性由 SkillsMiddleware 按 Skill 激活状态门控（保持按需加载）。
-    for tool in resolve_skill_gated_tools(context):
+    for tool in skill_tools:
+        if tool.name in {"web_search", "web_fetch"} and tool.name not in available_web:
+            continue
         if tool.name in selected_tool_names:
             if selected_tool_sources[tool.name] != "local":
                 source = selected_tool_sources[tool.name]
