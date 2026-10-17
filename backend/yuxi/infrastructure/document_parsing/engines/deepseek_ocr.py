@@ -17,6 +17,7 @@ import requests
 
 from yuxi.infrastructure.document_parsing import DocumentParserException
 from yuxi.infrastructure.document_parsing.engines import DocumentEngine
+from yuxi.infrastructure.document_parsing.pdf_utils import PDFIUM_LOCK, render_pdf_page_image
 from yuxi.infrastructure.observability.logging import logger
 
 
@@ -109,11 +110,13 @@ class DeepSeekOCRParser(DocumentEngine):
 
     def _process_pdf(self, file_path: str, params: dict[str, Any]) -> str:
         """Process PDF by converting pages to images"""
-        pdf = pdfium.PdfDocument(file_path)
+        with PDFIUM_LOCK:
+            pdf = pdfium.PdfDocument(file_path)
         try:
             full_text = []
 
-            total_pages = len(pdf)
+            with PDFIUM_LOCK:
+                total_pages = len(pdf)
             logger.info(f"Processing PDF with {total_pages} pages")
 
             # pypdfium2 的 scale 是 72dpi 的倍数，200dpi 对应 scale=200/72
@@ -121,17 +124,17 @@ class DeepSeekOCRParser(DocumentEngine):
 
             for i in range(total_pages):
                 logger.debug(f"Processing page {i + 1}/{total_pages}")
-                bitmap = pdf[i].render(scale=scale).to_pil()
-                buf = io.BytesIO()
-                bitmap.save(buf, format="PNG")
-                img_bytes = buf.getvalue()
+                with render_pdf_page_image(pdf, i, scale=scale) as image, io.BytesIO() as buffer:
+                    image.save(buffer, format="PNG")
+                    img_bytes = buffer.getvalue()
 
                 page_text = self._call_api(img_bytes, "image/png", params)
                 full_text.append(page_text)
 
             return "\n\n".join(full_text)
         finally:
-            pdf.close()
+            with PDFIUM_LOCK:
+                pdf.close()
 
     def _process_image(self, file_path: str, params: dict[str, Any]) -> str:
         """Process single image file"""

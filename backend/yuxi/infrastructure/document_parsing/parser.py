@@ -11,6 +11,7 @@ import threading
 from pathlib import Path
 from urllib.parse import unquote
 
+from bs4 import BeautifulSoup
 from docling.backend.msexcel_backend import MsExcelDocumentBackend
 from docling.backend.mspowerpoint_backend import MsPowerpointDocumentBackend
 from docling.backend.msword_backend import MsWordDocumentBackend
@@ -74,9 +75,18 @@ def _convert_document(source: Path, output_dir: Path, options: ParseOptions) -> 
     elif suffix == ".csv":
         markdown = _convert_csv_to_markdown(source)
     elif suffix in (".html", ".htm"):
+        html_text_only = options.params.get("html_text_only", False)
+        if not isinstance(html_text_only, bool):
+            raise ValueError("html_text_only 必须是布尔值")
         content = source.read_text(encoding="utf-8")
+        if html_text_only:
+            document = BeautifulSoup(content, "html.parser")
+            for image in document.find_all("img"):
+                image.replace_with(image.get("alt", ""))
+            content = str(document)
         markdown = md_convert(content, heading_style="ATX")
-        markdown = _copy_markdown_resources(source, output_dir, markdown)
+        if not html_text_only:
+            markdown = _copy_markdown_resources(source, output_dir, markdown)
     elif suffix == ".json":
         content = source.read_text(encoding="utf-8")
         markdown = f"```json\n{json.dumps(json.loads(content), ensure_ascii=False, indent=2)}\n```"
@@ -84,6 +94,8 @@ def _convert_document(source: Path, output_dir: Path, options: ParseOptions) -> 
         markdown = extract_markdown_archive(str(source), output_dir)
     else:
         raise ValueError(f"Unsupported file type: {suffix}")
+    # PostgreSQL 文本不接受 NUL；单字符替换保留正文位置与其余提取内容。
+    markdown = markdown.replace("\x00", "\ufffd")
     # 只有资源完整且路径有效时才发布 Markdown 入口。
     for link in local_image_links(markdown):
         relative = resource_path(unquote(link))

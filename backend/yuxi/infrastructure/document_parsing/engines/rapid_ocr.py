@@ -16,6 +16,7 @@ from rapidocr import EngineType, LangDet, LangRec, ModelType, OCRVersion, RapidO
 
 from yuxi.infrastructure.document_parsing import OCRException
 from yuxi.infrastructure.document_parsing.engines import DocumentEngine
+from yuxi.infrastructure.document_parsing.pdf_utils import PDFIUM_LOCK, render_pdf_page_image
 from yuxi.infrastructure.observability.logging import logger
 
 
@@ -118,26 +119,25 @@ class RapidOCRParser(DocumentEngine):
 
         try:
             all_text = []
-            pdf_doc = pdfium.PdfDocument(pdf_path)
-            total_pages = len(pdf_doc)
+            with PDFIUM_LOCK:
+                pdf_doc = pdfium.PdfDocument(pdf_path)
+            try:
+                with PDFIUM_LOCK:
+                    total_pages = len(pdf_doc)
 
-            logger.info(f"开始处理 PDF: {os.path.basename(pdf_path)} ({total_pages} 页)")
+                logger.info(f"开始处理 PDF: {os.path.basename(pdf_path)} ({total_pages} 页)")
 
-            # 流式处理每一页,避免一次性加载所有图片到内存
-            for page_num in range(total_pages):
-                page = pdf_doc[page_num]
+                # 原生资源在锁内释放，耗时 OCR 只消费已复制的图像并在锁外执行。
+                for page_num in range(total_pages):
+                    with render_pdf_page_image(pdf_doc, page_num, scale=zoom_x) as img_pil:
+                        text = self.process_image(img_pil)
+                    all_text.append(text)
 
-                # pypdfium2 仅支持统一缩放（原 zoom_x/zoom_y 默认均为 2）
-                img_pil = page.render(scale=zoom_x).to_pil()
-
-                # 立即处理,不保存到列表
-                text = self.process_image(img_pil)
-                all_text.append(text)
-
-                if (page_num + 1) % 10 == 0:
-                    logger.info(f"已处理 {page_num + 1}/{total_pages} 页")
-
-            pdf_doc.close()
+                    if (page_num + 1) % 10 == 0:
+                        logger.info(f"已处理 {page_num + 1}/{total_pages} 页")
+            finally:
+                with PDFIUM_LOCK:
+                    pdf_doc.close()
 
             result_text = "\n\n".join(all_text)
             logger.info(f"PDF OCR 完成: {os.path.basename(pdf_path)} - {len(result_text)} 字符")

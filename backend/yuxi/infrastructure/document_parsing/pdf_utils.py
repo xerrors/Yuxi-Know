@@ -1,4 +1,4 @@
-"""PDF 解析前置检查。
+"""PDFium 原生调用的串行边界与 PDF 解析前置检查。
 
 本模块在文档进入 MinerU、pypdf 等解析器之前，
 先用 Yuxi 已有的 pypdfium2 依赖检查 PDF 页面树是否能逐页加载。
@@ -10,10 +10,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Lock
+from typing import TYPE_CHECKING
 
 import pypdfium2 as pdfium
 
 from yuxi.infrastructure.document_parsing import DocumentParserException
+
+if TYPE_CHECKING:
+    from PIL import Image
+
+# PDFium 不支持跨线程同时操作不同文档；预检和两个本地渲染器共用此锁。
+PDFIUM_LOCK = Lock()
 
 
 @dataclass(slots=True)
@@ -24,6 +32,79 @@ class PDFPageLoadIssue:
     message: str
 
 
+def validate_pdf_page_tree_loadable(file_path: str | Path) -> None:
+    """校验 PDF 页树中的每一个页槽都能作为页面加载。"""
+
+    path = Path(file_path)
+
+    with PDFIUM_LOCK:
+        try:
+            doc = pdfium.PdfDocument(str(path))
+        except Exception as exc:  # noqa: BLE001
+            # pypdfium2 打开加密 PDF 时抛 PdfiumError（消息含 password），无独立加密属性。
+            if isinstance(exc, pdfium.PdfiumError) and "password" in str(exc).lower():
+                raise DocumentParserException(
+                    "PDF 文件已加密或需要密码，无法进入文档解析流程",
+                    "pdf_preflight",
+                    "encrypted_pdf",
+                ) from exc
+            raise DocumentParserException(
+                f"PDF 文件结构异常，无法打开页面目录: {exc}",
+                "pdf_preflight",
+                "invalid_pdf_structure",
+            ) from exc
+
+        try:
+            page_count = len(doc)
+            if page_count <= 0:
+                raise DocumentParserException(
+                    "PDF 文件没有可解析页面",
+                    "pdf_preflight",
+                    "empty_pdf",
+                )
+
+            issues: list[PDFPageLoadIssue] = []
+            for page_index in range(page_count):
+                try:
+                    page = doc[page_index]
+                    # 访问页面尺寸会触发页面对象基础解析，能提前暴露 null/非 Page 页槽。
+                    try:
+                        _ = page.get_size()
+                    finally:
+                        # 页面循环引用不能留给其他线程 GC；PDFium 原生释放须由当前执行方完成。
+                        page.close()
+                except Exception as exc:  # noqa: BLE001
+                    issues.append(PDFPageLoadIssue(page_number=page_index + 1, message=str(exc)))
+
+            if issues:
+                bad_pages = _format_page_numbers([issue.page_number for issue in issues])
+                first_error = issues[0].message or "页面对象无法加载"
+                raise DocumentParserException(
+                    "PDF 页面结构异常："
+                    f"声明页数为 {page_count}，但第 {bad_pages} 个页槽不是可加载页面对象。"
+                    f"底层错误：{first_error}。请先用 Acrobat、打印为 PDF、qpdf 或 mutool 等工具重写 PDF 后再上传。",
+                    "pdf_preflight",
+                    "invalid_pdf_page_tree",
+                )
+        finally:
+            doc.close()
+
+
+def render_pdf_page_image(document: pdfium.PdfDocument, page_index: int, *, scale: float) -> Image.Image:
+    """串行渲染并复制一页图像，返回值与已关闭的 PDFium bitmap 脱离。"""
+    with PDFIUM_LOCK:
+        page = document[page_index]
+        try:
+            bitmap = page.render(scale=scale)
+            try:
+                with bitmap.to_pil() as image:
+                    return image.copy()
+            finally:
+                bitmap.close()
+        finally:
+            page.close()
+
+
 def _format_page_numbers(page_numbers: list[int], *, limit: int = 8) -> str:
     """格式化页码列表，避免异常信息过长。"""
 
@@ -32,56 +113,3 @@ def _format_page_numbers(page_numbers: list[int], *, limit: int = 8) -> str:
     if len(page_numbers) > limit:
         result = f"{result} 等 {len(page_numbers)} 个"
     return result
-
-
-def validate_pdf_page_tree_loadable(file_path: str | Path) -> None:
-    """校验 PDF 页树中的每一个页槽都能作为页面加载。"""
-
-    path = Path(file_path)
-
-    try:
-        doc = pdfium.PdfDocument(str(path))
-    except Exception as exc:  # noqa: BLE001
-        # pypdfium2 打开加密 PDF 时抛 PdfiumError（消息含 password），无独立加密属性。
-        if isinstance(exc, pdfium.PdfiumError) and "password" in str(exc).lower():
-            raise DocumentParserException(
-                "PDF 文件已加密或需要密码，无法进入文档解析流程",
-                "pdf_preflight",
-                "encrypted_pdf",
-            ) from exc
-        raise DocumentParserException(
-            f"PDF 文件结构异常，无法打开页面目录: {exc}",
-            "pdf_preflight",
-            "invalid_pdf_structure",
-        ) from exc
-
-    try:
-        page_count = len(doc)
-        if page_count <= 0:
-            raise DocumentParserException(
-                "PDF 文件没有可解析页面",
-                "pdf_preflight",
-                "empty_pdf",
-            )
-
-        issues: list[PDFPageLoadIssue] = []
-        for page_index in range(page_count):
-            try:
-                page = doc[page_index]
-                # 访问页面尺寸会触发页面对象基础解析，能提前暴露 null/非 Page 页槽。
-                _ = page.get_size()
-            except Exception as exc:  # noqa: BLE001
-                issues.append(PDFPageLoadIssue(page_number=page_index + 1, message=str(exc)))
-
-        if issues:
-            bad_pages = _format_page_numbers([issue.page_number for issue in issues])
-            first_error = issues[0].message or "页面对象无法加载"
-            raise DocumentParserException(
-                "PDF 页面结构异常："
-                f"声明页数为 {page_count}，但第 {bad_pages} 个页槽不是可加载页面对象。"
-                f"底层错误：{first_error}。请先用 Acrobat、打印为 PDF、qpdf 或 mutool 等工具重写 PDF 后再上传。",
-                "pdf_preflight",
-                "invalid_pdf_page_tree",
-            )
-    finally:
-        doc.close()

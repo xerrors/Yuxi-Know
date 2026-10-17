@@ -18,6 +18,21 @@ Office 文件使用本地转换：`.docx`、`.pptx`、`.xlsx` 由 Docling Slim �
 
 ZIP 优先选择名为 `full.md` 的文件，否则选择按路径排序的第一个 `.md`，并按完整路径提取正文引用的资源。绝对路径、`..`、重复归档路径、符号链接和缺失图片均拒绝整个结果。解析失败时回收输出目录。
 
+## 离线 HTML 正文提取
+
+`.html` 和 `.htm` 默认复制正文引用的本地图片；缺失图片或越界路径会使整篇解析失败。对于没有随文件打包图片的离线网页，管理员可以在单文件解析参数中显式设置 `html_text_only: true`。解析器在转换 Markdown 前把 `img` 元素替换为原 HTML 的 `alt` 文本，保留前后正文，不读取本地图片或下载远程图片。上传的 HTML 原件保持完整，图片像素中的文字和图表内容不进入解析结果。
+
+调用 `POST /api/knowledge/knowledge-bases/<kb_id>/documents/parse` 时，正文示例为：
+
+```json
+{
+  "file_ids": ["<file_id>"],
+  "params": { "html_text_only": true }
+}
+```
+
+该参数随文件的 `processing_params` 保存，只接受布尔值，默认 `false`；它只作用于 HTML，其他格式继续执行原有资源检查。解析成功后另行执行入库，并确认文件状态和检索结果。
+
 ## 从 URL 导入网页
 
 网页导入受白名单控制。设置 `YUXI_URL_WHITELIST` 后，系统才会抓取 URL，并把 HTML 转成 Markdown 进入同一套知识库处理流程：
