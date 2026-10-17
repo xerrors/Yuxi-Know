@@ -34,11 +34,11 @@ Message 是消费后的执行投影：`source_input_id + input_position` 唯一�
 
 `yuxi.session.input.promote` 使用 `input_id` 和 `Idempotency-Key` 将 pending follow-up 原地转为 steer，保留 ID、正文、附件及接收顺序。同命令重试返回原 Receipt；新的命令遇到仍 pending 的 steer 视为已满足，不重复调度。已消费或取消、附件未就绪、等待回答/审批/协作、取消清理期间返回 `409`。空闲时可优先开启下一轮，队列暂停时可调整优先级但不解除暂停。
 
-`cancel_input` 仅取消选中的 pending Input，保留正文及附件归属，不生成 Message，也不释放附件供其他输入复用。若模型前已让位但事务内已无就绪引导，原 Run 保持 running，由同一 owner 从 checkpoint 继续，不重放原始输入或已完成工具；模型后已完成的轮次不额外调用模型。
+`cancel_input` 仅取消选中的 pending Input，保留正文及附件归属，不生成 Message，也不释放附件供其他输入复用。取消最后一条待办时清除空队列的暂停标记。若模型前已让位但事务内已无就绪引导，原 Run 保持 running，由同一 owner 从 checkpoint 继续，不重放原始输入或已完成工具；模型后已完成的轮次不额外调用模型。
 
-取消 Turn 先设置 `cancelling` 并暂停队列，未消费 Input 保留；worker 或等待清理 owner 收敛当前 Run 和 checkpoint 后，Turn 才到 `cancelled`。`continue` 只在当前 Turn 已结束时解除暂停并领取优先队头，不复活取消的 Turn。未指定目标的取消在 owning transaction 中固定当前 Turn，重复取消返回原目标；已切换 Run 时可用 `expected_run_id` 拒绝陈旧操作。
+取消 Turn 先设置 `cancelling`，有 pending Input 时暂停队列并保留输入；空队列不设置暂停。worker 确认当前 Run 已停止、必要资源清理完成后直接结束 Turn，人工等待取消则先清理 checkpoint。正常结束不等待周期扫描；进程失联或清理失败由恢复扫描补偿。`continue` 只在当前 Turn 已结束时解除暂停并领取优先队头，不复活取消的 Turn。未指定目标的取消在 owning transaction 中固定当前 Turn，重复取消返回原目标；已切换 Run 时可用 `expected_run_id` 拒绝陈旧操作。
 
-等待取消通过原图的状态 API 清理 checkpoint：先合入已完成节点的 pending writes 并清除等待任务，再为当前 AI 的未完成调用补齐取消 ToolMessage，最后清除状态改写触发的待办节点。已完成工具结果与业务增量保留；当前 AI 之后的工具结果拥有完成事实，历史重复 call ID 不影响本批次。清理不执行模型或工具，进程在任一持久改写后失联时可幂等重试；失败仍保留 `cancelling` 由恢复扫描处理。
+等待取消通过原图的状态 API 清理 checkpoint：先合入已完成节点的 pending writes 并清除等待任务，再为当前 AI 的未完成调用补齐取消 ToolMessage，最后清除状态改写触发的待办节点。已完成工具结果与业务增量保留；当前 AI 之后的工具结果拥有完成事实，历史重复 call ID 不影响本批次。Thread/Turn 锁覆盖状态复查、资源与 checkpoint 清理和终态提交，使重复清理与下一轮领取串行。清理不执行模型或工具，进程在任一持久改写后失联时可幂等重试；失败仍保留 `cancelling` 由恢复扫描处理。
 
 ## 状态与故障恢复
 
@@ -48,11 +48,13 @@ Message 是消费后的执行投影：`source_input_id + input_position` 唯一�
 | Turn | `running`、`waiting`、`cancelling`、`completed`、`failed`、`cancelled` | 一轮工作的当前段、等待点和明确结果 |
 | Run | `pending`、`running`、`cancel_requested`、`completed`、`failed`、`cancelled`、`interrupted`、`yielded` | 一段执行及其 owner、lease 和结束原因 |
 
-正常输出、Run 结束和 Turn 最终结果在 PostgreSQL 中按明确关联收敛；`output_message_id` 只指向同 Run 的 assistant Message，Turn `result_run_id` 只指向同 Turn 的顶层 Run。Run `yielded` 或 `interrupted` 不是 Turn 完成。失败和取消使后续队列暂停，用户显式继续后才能领取保留的优先队头。
+正常输出、Run 结束和 Turn 最终结果在 PostgreSQL 中按明确关联收敛；`output_message_id` 只指向同 Run 的 assistant Message，Turn `result_run_id` 只指向同 Turn 的顶层 Run。Run `yielded` 或 `interrupted` 不是 Turn 完成。失败、最终超时和取消仅暂停已有待办。用户显式继续时领取原优先队头；用户提交新的公开消息时，接收事务持久保存恢复意图并解除目标队列暂停，调度器优先单独消费最新恢复消息。该消息的附件未就绪时保留优先位置，旧 steer 不与它合批。新轮成功后恢复旧队列，再次失败或取消则暂停剩余待办；幂等重放、协作与定时输入不触发自动恢复。前轮必要清理未完成时，调度器不创建下一轮。
 
 附件 Input 先持久接收来源，再准备 Workdir 文件并提交就绪事实。队头未就绪时不创建 Turn/Run，也不跳过它；pending steer 未就绪时不能安全接管。恢复扫描补全同一文件，取消只停止执行，仍完成已接收的文件提交；会话归档或 Project 软删除后准备恢复也继续，执行领取仍拒绝归档会话。准备失败与状态通过 Input/queue 的 `attachment_status`、`attachment_error` 回读，详细文件规则见[公开 API](../advanced/agents-public-api.md#图片与文件附件)。
 
 ARQ 投递只发生在 owning transaction 提交后。持久 `pending` Run 可由恢复扫描补投同一个 Run；已经失败的工作不会自动创建新业务 Run。Worker 取得 Run 时记录唯一 attempt token、heartbeat 和 lease；过期的 `running` 或 `cancel_requested` 会收敛为可观察的 `worker_lease_expired` 失败。该失败只说明执行 ownership 丢失，外部工具副作用仍需核对。
+
+`YUXI_JOB_TIMEOUT_SECONDS` 拥有单次 Agent 执行的业务时限，默认 3600 秒。到期后 runner 关闭执行流并持久化 `failed / execution_timeout`，ARQ 在外层额外保留 30 秒用于清理与提交。worker 退出继续使用 lease 释放与恢复路径。模型网络重试预算和工具局部超时由各自 runtime 拥有。
 
 Thread SSE 把输入接收、Input 消费、Run 结束、Turn 结束和短期增量分开通知。断线时按 `Last-Event-ID` 续订，并重读 Input、Turn、Run 和历史的持久事实；Redis 的短期事件不是业务终态。
 
@@ -91,4 +93,4 @@ Public 身份在 HTTP 边界变为包含 `uid`、`app_id` 的作用域；接收�
 
 ## 独立委派
 
-协作会话复用持久 Input、Receipt、优先领取、提交后投递和 lease 链路，各自 Turn 拥有 current_run_id、result_run_id 和等待点。普通取消只影响指定 Turn，父轮次完成、失败或取消均保留后代独立工作。新工作通过 submit_input 按 FIFO 接收，队列暂停时只排队；用户显式“停止全部”才取消整树在途 Turn 并阻止各队列消费。“继续整树队列”重新调度保留输入，已取消的 Turn 保持终态。协作等待保存目标、游标和截止时间，在同一 Turn 建立下一 Run，等待中的普通 follow-up 只排队，steer 明确拒绝。具体约束见[会话协作](../agents/session-cooperation.md)。
+协作会话复用持久 Input、Receipt、优先领取、提交后投递和 lease 链路，各自 Turn 拥有 current_run_id、result_run_id 和等待点。普通取消只影响指定 Turn，父轮次完成、失败或取消均保留后代独立工作。新工作通过 submit_input 按 FIFO 接收，队列暂停时只排队；用户显式“停止全部”才取消整树在途 Turn 并阻止各队列消费。“继续整树队列”重新调度保留输入，已取消的 Turn 保持终态。整树在途工作与清理全部结束后，用户发送新消息可解除整树停止门禁，但只恢复目标会话并优先处理该消息；其他成员的旧待办保持暂停。协作等待保存目标、游标和截止时间，在同一 Turn 建立下一 Run，等待中的普通 follow-up 只排队，steer 明确拒绝。具体约束见[会话协作](../agents/session-cooperation.md)。

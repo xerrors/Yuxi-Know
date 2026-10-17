@@ -228,6 +228,12 @@ async def accept_message(
         require_receipt_replay(existing, "agent.session.input.message", intent_hash)
         return _accepted(existing)
 
+    resume_queue = False
+    if source == "public_api":
+        from yuxi.modules.agents.services.cooperation import resume_tree_for_user_input
+
+        resume_queue = await resume_tree_for_user_input(db=db, agent_session=agent_session)
+        resume_queue = resume_queue or agent_session.queue_paused
     receipt = await accept_locked(
         db=db,
         scope=scope,
@@ -235,6 +241,7 @@ async def accept_message(
         idempotency_key=idempotency_key,
         event_type="agent.session.input.message",
         intent_hash=intent_hash,
+        frozen_payload={"resume_queue": True} if resume_queue else None,
         mode=mode,
         messages=messages,
         attachment_file_ids=attachment_file_ids,
@@ -245,6 +252,8 @@ async def accept_message(
         external_id=external_id,
         origin_metadata=origin_metadata,
     )
+    if resume_queue:
+        agent_session.queue_paused = False
     await db.commit()
     await dispatch_next_input(uid=scope.uid, agent_slug=agent_session.agent_id, thread_id=agent_session.thread_id)
     return _accepted(receipt)

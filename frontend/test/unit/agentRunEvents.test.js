@@ -4,7 +4,7 @@ import { setImmediate } from 'node:timers'
 import { createServer } from 'vite'
 import { createItemState } from '../../src/modules/session/model/agentItems.js'
 
-let server, api, useAgentRunStream, processRunSseResponse
+let server, api, useAgentRunStream, processRunSseResponse, ErrorHandler
 before(async () => {
   globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} }
   server = await createServer({ server: { middlewareMode: true, hmr: false } })
@@ -12,21 +12,240 @@ before(async () => {
   ;({ useAgentRunStream, processRunSseResponse } = await server.ssrLoadModule(
     '/src/modules/session/model/useAgentRunStream.js'
   ))
-
+  ;({ ErrorHandler } = await server.ssrLoadModule('/src/shared/lib/errorHandler.js'))
 })
 after(async () => {
   await server?.close()
   delete globalThis.localStorage
 })
 const tick = () => new Promise((resolve) => setImmediate(resolve))
+
+test('停止请求立即展示等待，重复点击不重发，持久终态到达后结束', async (t) => {
+  let accept
+  const accepted = new Promise((resolve) => {
+    accept = resolve
+  })
+  let requests = 0
+  t.mock.method(api, 'cancelThreadTurn', async () => {
+    requests++
+    await accepted
+  })
+  const h = harness(t, [event('agent.session.turn.cancelled')])
+  h.state.runStreamAbortController = new AbortController()
+  t.mock.method(api, 'getThreadTurn', async () => ({
+    status: 'in_progress',
+    yuxi: { current_run_id: 'run', cancellation_pending: true }
+  }))
+  const stopping = h.stream.requestTurnCancellation('thread')
+  assert.equal(h.state.cancellationPending, true)
+  assert.equal(h.state.activeRunSteerable, false)
+  assert.equal(await h.stream.requestTurnCancellation('thread'), false)
+  assert.equal(requests, 1)
+  accept()
+  assert.equal(await stopping, true)
+  assert.equal(h.state.cancellationPending, true, '接收回执不能冒充取消完成')
+  h.stream.stopRunStreamSubscription('thread')
+  await h.stream.startRunStream('thread', 'run', null, { turnId: 'turn' })
+  assert.equal(h.state.cancellationPending, false)
+  assert.equal(h.state.isStreaming, false)
+  assert.equal(h.state.turnStatus, 'cancelled')
+})
+
+test('其他页面发出的取消回执也展示正在停止', async (t) => {
+  const h = harness(t, [
+    {
+      type: 'yuxi.session.input.accepted',
+      session_id: 'thread',
+      yuxi: { input_type: 'agent.session.input.cancel', turn_id: 'turn', run_id: 'run' }
+    }
+  ])
+  t.mock.method(api, 'getThreadTurn', async () => ({
+    status: 'in_progress',
+    yuxi: { current_run_id: 'run', cancellation_pending: true }
+  }))
+  await h.stream.startRunStream('thread', 'run', null, { turnId: 'turn' })
+  assert.equal(h.state.cancellationPending, true)
+  assert.equal(h.state.isStreaming, true)
+})
+
+test('人工等待取消的 interrupted Run 也能从快照恢复正在停止', async (t) => {
+  const h = harness(t, [])
+  t.mock.method(api, 'getPublicThread', async () => ({ yuxi: { current_turn: { id: 'turn' } } }))
+  t.mock.method(api, 'getThreadTurn', async () => ({
+    status: 'in_progress',
+    yuxi: {
+      current_run_id: 'run',
+      cancellation_pending: true,
+      waitpoint: { kind: 'answer' },
+      runs: [{ id: 'run', status: 'interrupted' }]
+    }
+  }))
+  await h.stream.resumeActiveRunForThread('thread')
+  await tick()
+  assert.equal(h.state.cancellationPending, true)
+  assert.equal(h.state.activeRunSteerable, false)
+})
+
+test('取消请求期间的旧等待快照不能恢复输入或显示审批', async (t) => {
+  const h = harness(t, [event('yuxi.session.turn.waiting')])
+  let accept
+  t.mock.method(
+    api,
+    'cancelThreadTurn',
+    () =>
+      new Promise((resolve) => {
+        accept = resolve
+      })
+  )
+  t.mock.method(api, 'getPublicThread', async () => ({ yuxi: { current_turn: { id: 'turn' } } }))
+  t.mock.method(api, 'getThreadTurn', async () => ({
+    status: 'requires_action',
+    yuxi: { current_run_id: 'run', cancellation_pending: false }
+  }))
+  const stopping = h.stream.requestTurnCancellation('thread')
+  await h.stream.resumeActiveRunForThread('thread')
+  await tick()
+  assert.equal(h.state.cancellationPending, true)
+  assert.equal(h.state.activeRunSteerable, false)
+  accept()
+  await stopping
+})
+
+test('下一轮先被队列观察到时不继承上一轮的停止状态', async (t) => {
+  const h = harness(t, [])
+  h.state.cancellationPending = true
+  t.mock.method(api, 'getThreadTurn', async () => ({
+    status: 'in_progress',
+    yuxi: { current_run_id: 'new-run', cancellation_pending: false }
+  }))
+  await h.stream.startRunStream('thread', 'new-run', null, { turnId: 'new-turn' })
+  assert.equal(h.state.cancellationPending, false)
+  assert.equal(h.state.activeRunSteerable, true)
+})
+
+test('取消被拒绝时即使同轮 Run 已切换，也能恢复新 Run 的输入', async (t) => {
+  const h = harness(t, [])
+  let reject
+  t.mock.method(
+    api,
+    'cancelThreadTurn',
+    () =>
+      new Promise((_, fail) => {
+        reject = fail
+      })
+  )
+  const stopping = h.stream.requestTurnCancellation('thread')
+  h.state.activeRunId = 'new-run'
+  h.state.turnStatus = 'in_progress'
+  t.mock.method(api, 'getThreadTurn', async () => ({
+    status: 'in_progress',
+    yuxi: { current_run_id: 'new-run', cancellation_pending: false }
+  }))
+  reject(new Error('当前 Run 已变化'))
+  assert.equal(await stopping, false)
+  assert.equal(h.state.cancellationPending, false)
+  assert.equal(h.state.activeRunSteerable, true)
+})
+
+test('取消已提交但响应丢失时，快照保留停止反馈直到终态', async (t) => {
+  const h = harness(t, [])
+  t.mock.method(api, 'cancelThreadTurn', async () => {
+    throw new Error('response lost')
+  })
+  t.mock.method(api, 'getThreadTurn', async () => ({
+    status: 'in_progress',
+    yuxi: { current_run_id: 'run', cancellation_pending: true }
+  }))
+  assert.equal(await h.stream.requestTurnCancellation('thread'), false)
+  assert.equal(h.state.cancellationPending, true)
+  assert.equal(h.state.activeRunSteerable, false)
+})
+
+test('跨轮重连只恢复新轮的停止事实', async (t) => {
+  const h = harness(t, [])
+  h.state.cancellationPending = true
+  t.mock.method(api, 'getPublicThread', async () => ({
+    yuxi: { current_turn: { id: 'new-turn' } }
+  }))
+  t.mock.method(api, 'getThreadTurn', async () => ({
+    status: 'in_progress',
+    yuxi: { current_run_id: 'new-run', cancellation_pending: false }
+  }))
+  await h.stream.resumeActiveRunForThread('thread')
+  await tick()
+  assert.equal(h.state.currentTurnId, 'new-turn')
+  assert.equal(h.state.cancellationPending, false)
+  assert.equal(h.state.activeRunSteerable, true)
+})
+
+test('取消协调的旧快照失效后，后续有效快照仍能解除请求等待', async (t) => {
+  const h = harness(t, [event('agent.session.turn.in_progress')])
+  let lookup, releaseLookup
+  const lookupStarted = new Promise((resolve) => {
+    lookup = resolve
+  })
+  const snapshot = {
+    status: 'in_progress',
+    yuxi: { current_run_id: 'run', cancellation_pending: false }
+  }
+  t.mock.method(api, 'cancelThreadTurn', async () => {
+    throw new Error('rejected')
+  })
+  let calls = 0
+  t.mock.method(api, 'getThreadTurn', async () => {
+    if (++calls === 1) {
+      lookup()
+      return new Promise((resolve) => {
+        releaseLookup = resolve
+      })
+    }
+    return snapshot
+  })
+  const stopping = h.stream.requestTurnCancellation('thread')
+  await lookupStarted
+  await h.stream.startRunStream('thread', 'run', null, { turnId: 'turn' })
+  releaseLookup(snapshot)
+  await stopping
+  assert.equal(h.state.cancellationPending, false)
+  assert.equal(h.state.activeRunSteerable, true)
+})
+
+test('取消请求及首次快照均失败后，网络恢复可以解除停止等待', async (t) => {
+  const h = harness(t, [])
+  t.mock.method(api, 'cancelThreadTurn', async () => {
+    throw new Error('offline')
+  })
+  let calls = 0
+  t.mock.method(api, 'getThreadTurn', async () => {
+    if (++calls === 1) throw new Error('offline')
+    return { status: 'in_progress', yuxi: { current_run_id: 'run', cancellation_pending: false } }
+  })
+  await h.stream.requestTurnCancellation('thread')
+  await tick()
+  assert.equal(h.state.cancellationPending, false)
+  assert.equal(h.state.activeRunSteerable, true)
+})
 const event = (type, runId = 'run', turnId = 'turn') => ({
   type,
   event_id: `${type}:${runId}`,
   session_id: 'thread',
   turn_id: turnId,
   yuxi: { run_id: runId },
-  ...((type.startsWith('agent.session.turn.') && ['created', 'in_progress', 'completed', 'failed', 'cancelled'].includes(type.split('.').at(-1))) || type === 'yuxi.session.turn.waiting'
-    ? { turn: { status: type === 'yuxi.session.turn.waiting' ? 'requires_action' : type.endsWith('.created') ? 'queued' : type.split('.').at(-1) } }
+  ...((type.startsWith('agent.session.turn.') &&
+    ['created', 'in_progress', 'completed', 'failed', 'cancelled'].includes(
+      type.split('.').at(-1)
+    )) ||
+  type === 'yuxi.session.turn.waiting'
+    ? {
+        turn: {
+          status:
+            type === 'yuxi.session.turn.waiting'
+              ? 'requires_action'
+              : type.endsWith('.created')
+                ? 'queued'
+                : type.split('.').at(-1)
+        }
+      }
     : {})
 })
 const response = (events) =>
@@ -49,6 +268,7 @@ function harness(
   events,
   { status = 'running', currentRun = 'run', snapshot = async () => {} } = {}
 ) {
+  t.mock.method(ErrorHandler, 'handleError', (error) => error)
   const state = {
     currentTurnId: 'turn',
     activeRunId: currentRun,
@@ -222,7 +442,11 @@ test('协作等待保留 SSE，自动恢复的 Run 重新允许 steer 并接收�
     controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(value)}\n\n`))
   const subscribed = h.stream.startRunStream('thread', 'run', null, { turnId: 'turn' })
   await tick()
-  emit({ ...event('yuxi.session.turn.waiting'), turn: { status: 'in_progress' }, waitpoint: { kind: 'cooperation' } })
+  emit({
+    ...event('yuxi.session.turn.waiting'),
+    turn: { status: 'in_progress' },
+    waitpoint: { kind: 'cooperation' }
+  })
   await tick()
   assert.equal(h.state.turnStatus, 'in_progress')
   assert.equal(h.state.activeRunSteerable, false)
@@ -230,7 +454,11 @@ test('协作等待保留 SSE，自动恢复的 Run 重新允许 steer 并接收�
   h.state.queuedInputs ||= []
   h.state.itemState ||= createItemState()
   h.state.optimisticInputs ||= {}
-  h.state.queuedInputs.push({ input_id: 'queued-input', status: 'pending', content: '队列里的新工作' })
+  h.state.queuedInputs.push({
+    input_id: 'queued-input',
+    status: 'pending',
+    content: '队列里的新工作'
+  })
   assert.equal(signal.aborted, false, '协作等待保留当前 Turn 的 SSE')
   currentRun = 'resumed'
   emit(event('agent.session.turn.in_progress', 'resumed'))

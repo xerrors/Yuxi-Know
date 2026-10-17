@@ -522,24 +522,22 @@ async def control_tree(*, db, scope: ActorScope, thread_id: str, idempotency_key
     member = await require_thread(db=db, scope=scope, thread_id=thread_id)
     event_type = "yuxi.session.tree.stop" if stopped else "yuxi.session.tree.continue"
     intent = control_intent_hash(event_type)
-    members = []
-    if not stopped:
-        # 与会话生命周期保持 Session → Turn/Run → 树锁的方向；一起解除队列暂停。
-        members = list(
-            (
-                await db.scalars(
-                    select(Session)
-                    .where(
-                        Session.tree_root_thread_id == member.tree_root_thread_id,
-                        Session.uid == scope.uid,
-                        Session.app_id == scope.app_id,
-                        Session.status == "active",
-                    )
-                    .order_by(Session.thread_id)
-                    .with_for_update(key_share=True)
+    # Session → 树锁；停止意图提交时固定全树队列，避免恢复早于逐成员取消。
+    members = list(
+        (
+            await db.scalars(
+                select(Session)
+                .where(
+                    Session.tree_root_thread_id == member.tree_root_thread_id,
+                    Session.uid == scope.uid,
+                    Session.app_id == scope.app_id,
+                    Session.status == "active",
                 )
-            ).all()
-        )
+                .order_by(Session.thread_id)
+                .with_for_update(key_share=True)
+            )
+        ).all()
+    )
     await db.execute(
         text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
         {"key": cooperation_lock_key(member.tree_root_thread_id)},
@@ -578,10 +576,12 @@ async def control_tree(*, db, scope: ActorScope, thread_id: str, idempotency_key
         intent_hash=intent,
     )
     for target in members:
-        target.queue_paused = False
+        target.queue_paused = stopped and await AgentInputRepository(db).has_pending_inputs(
+            thread_id=target.thread_id, uid=target.uid, app_id=target.app_id
+        )
     await db.commit()
     if stopped:
-        await reconcile_stopped_trees()
+        await reconcile_stopped_trees(tree_root_thread_id=member.tree_root_thread_id)
     else:
         from yuxi.modules.agents.services.scheduler import dispatch_next_input
 
@@ -590,7 +590,45 @@ async def control_tree(*, db, scope: ActorScope, thread_id: str, idempotency_key
     return control_accepted(receipt)
 
 
-async def reconcile_stopped_trees() -> None:
+async def resume_tree_for_user_input(*, db, agent_session: Session) -> bool:
+    """整树结束后仅恢复用户目标会话，保留其他成员的旧待办暂停。"""
+    from sqlalchemy import text
+
+    from yuxi.modules.agents.models.cooperation import CooperationRuntime
+    from yuxi.modules.agents.runtime_locks import cooperation_lock_key
+
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+        {"key": cooperation_lock_key(agent_session.tree_root_thread_id)},
+    )
+    runtime = await db.get(CooperationRuntime, agent_session.tree_root_thread_id, populate_existing=True)
+    if runtime is None or not runtime.stopped:
+        return False
+    active = await db.scalar(
+        select(AgentTurn.id)
+        .join(Session, Session.thread_id == AgentTurn.thread_id)
+        .where(
+            Session.tree_root_thread_id == agent_session.tree_root_thread_id,
+            AgentTurn.status.in_(["running", "waiting", "cancelling"]),
+        )
+        .limit(1)
+    )
+    cleanup = await db.scalar(
+        select(AgentRun.id)
+        .join(Session, Session.thread_id == AgentRun.thread_id)
+        .where(
+            Session.tree_root_thread_id == agent_session.tree_root_thread_id,
+            AgentRun.runtime_cleanup_pending.is_(True),
+        )
+        .limit(1)
+    )
+    if active is not None or cleanup is not None:
+        raise StateConflictError("正在停止全部任务，请等待清理完成")
+    runtime.stopped = False
+    return True
+
+
+async def reconcile_stopped_trees(*, tree_root_thread_id: str | None = None) -> None:
     """补做已持久停止意图，禁止父轮次结束默认影响后代。"""
     from yuxi.modules.agents.models.cooperation import CooperationRuntime
 
@@ -600,11 +638,16 @@ async def reconcile_stopped_trees() -> None:
                 await db.scalars(
                     select(Session)
                     .join(CooperationRuntime, CooperationRuntime.tree_root_thread_id == Session.tree_root_thread_id)
-                    .where(CooperationRuntime.stopped.is_(True), Session.status == "active")
+                    .where(
+                        CooperationRuntime.stopped.is_(True),
+                        Session.status == "active",
+                        *([Session.tree_root_thread_id == tree_root_thread_id] if tree_root_thread_id else []),
+                    )
                 )
             ).all()
         )
     failures = 0
+    waiting = []
     for member in members:
         try:
             async with pg_manager.get_async_session_context() as db:
@@ -617,7 +660,11 @@ async def reconcile_stopped_trees() -> None:
                 )
                 if not stopped:
                     continue
-                target.queue_paused = True
+                target.queue_paused = await AgentInputRepository(db).has_pending_inputs(
+                    thread_id=target.thread_id,
+                    uid=target.uid,
+                    app_id=target.app_id,
+                )
                 turn = await AgentTurnRepository(db).lock_active_for_thread(
                     thread_id=target.thread_id,
                     uid=target.uid,
@@ -631,9 +678,20 @@ async def reconcile_stopped_trees() -> None:
                         turn_id=turn.id,
                         idempotency_key=f"tree-stop:{turn.id}",
                         notify_parent=False,
+                        cleanup_waiting=False,
                     )
+                    if turn.waitpoint:
+                        waiting.append((target, turn.id))
         except Exception:
             failures += 1
             logger.exception("Stopped tree recovery failed: thread_id=%s", member.thread_id)
+    from yuxi.modules.agents.services.turns import settle_waiting_cancel
+
+    for target, turn_id in waiting:
+        try:
+            await settle_waiting_cancel(thread_id=target.thread_id, turn_id=turn_id, uid=target.uid, app_id=target.app_id)
+        except Exception:
+            failures += 1
+            logger.exception("Stopped waiting cleanup failed: turn_id=%s", turn_id)
     if failures:
         raise RuntimeError(f"停止会话恢复失败：{failures} 条")

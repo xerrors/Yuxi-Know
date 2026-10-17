@@ -22,6 +22,7 @@ export function useAgentThreadState({
       chatState.threadStates[threadId] = {
         displayText: {},
         isStreaming: false,
+        cancellationPending: false,
         runStreamAbortController: null,
         runReconnectTimer: null,
         runReconnectAttempts: 0,

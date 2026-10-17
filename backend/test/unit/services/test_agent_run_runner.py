@@ -6,11 +6,12 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-import yuxi.modules.agents.services.runner as runner
+from arq.worker import RetryJob
+
+import yuxi.bootstrap.worker as worker_bootstrap
 import yuxi.modules.agents.services.event_writer as event_writer
 import yuxi.modules.agents.services.leases as leases
-import yuxi.bootstrap.worker as worker_bootstrap
-from arq.worker import RetryJob
+import yuxi.modules.agents.services.runner as runner
 from yuxi.modules.agents.services.execution import RunExecutionResult
 
 
@@ -410,7 +411,7 @@ async def test_process_agent_run_rejects_corrupted_runtime_scope_before_executio
 
     assert stream_called is False
     assert terminal_calls[0]["status"] == "failed"
-    assert terminal_calls[0]["args"][0] == "invalid_runtime_scope"
+    assert terminal_calls[0]["error_type"] == "invalid_runtime_scope"
 
 
 @pytest.mark.asyncio
@@ -849,6 +850,36 @@ async def test_infrastructure_cancel_releases_pending_and_propagates(monkeypatch
     assert released[0][0] == "run-1"
     assert released[0][1].startswith("worker-shutdown:")
     assert closed == [released[0][1]]
+
+
+async def test_execution_timeout_fails_run_instead_of_releasing_for_retry(monkeypatch):
+    """业务时限到期必须持久失败，不能当作 worker 退出重新排队。"""
+    run = _build_run()
+    _patch_common(monkeypatch, run)
+    entered, closed = asyncio.Event(), asyncio.Event()
+
+    async def blocked_stream(**_):
+        """模拟已进入但不会自行结束的模型流。"""
+        try:
+            entered.set()
+            await asyncio.Event().wait()
+            yield b"unreachable"
+        finally:
+            closed.set()
+
+    async def settle(run_id, status, **kwargs):
+        """保存单测的业务结果，校验执行先完成关闭。"""
+        assert run_id == run.id and entered.is_set() and closed.is_set()
+        run.status = status
+        run.error_type = kwargs["error_type"]
+        return runner.TerminalTransition(status=status, changed=True)
+
+    monkeypatch.setattr(runner, "RUN_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(runner, "stream_agent_execution", blocked_stream)
+    monkeypatch.setattr(runner, "_settle_uncommitted_run", settle)
+    monkeypatch.setattr(runner, "release_run_lease_for_retry", AsyncMock(side_effect=AssertionError("超时不释放为 pending")))
+    await runner.process_agent_run({"worker_id": "timeout-worker", "job_try": 1}, run.id)
+    assert (run.status, run.error_type) == ("failed", "execution_timeout")
 
 
 @pytest.mark.asyncio

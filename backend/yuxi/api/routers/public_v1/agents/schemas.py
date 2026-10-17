@@ -409,6 +409,7 @@ class TurnExtension(BaseModel):
     current_run_id: str | None
     result_run_id: str | None
     waitpoint: dict[str, Any] | None
+    cancellation_pending: bool = Field(description="取消意图已提交，当前轮次仍在停止和清理。")
     runs: list[dict[str, Any]]
     output: list[Annotated[MessageItem | FunctionCallItem | FunctionOutputItem, Field(discriminator="type")]] | None
     usage: dict[str, Any]

@@ -154,7 +154,10 @@
                     v-if="row.group.run?.status === 'failed'"
                     :error-message="row.group.run.error_message"
                   />
-                  <div v-else-if="!row.displayItems.length && row.group.run" class="chat-inline-notice">
+                  <div
+                    v-else-if="!row.displayItems.length && row.group.run"
+                    class="chat-inline-notice"
+                  >
                     {{ formatEmptyRunStatus(row.group.run.status) }}
                   </div>
                   <AgentArtifactsCard
@@ -190,11 +193,21 @@
                 </div>
               </div>
             </div>
-            <div ref="messageInputDockRef" class="bottom" :class="{ 'start-screen': showStartScreen }">
+            <div
+              ref="messageInputDockRef"
+              class="bottom"
+              :class="{ 'start-screen': showStartScreen }"
+            >
               <div class="message-input-wrapper">
                 <div v-if="pendingSends[currentChatId]" class="queued-request-notice">
                   <span>发送结果待确认，重试会确认同一条消息。</span>
-                  <button class="queued-request-continue" :disabled="sendCooldownActive || pendingSends[currentChatId]?.submitting" @click="handleSendMessage({ retry: true })">重试发送</button>
+                  <button
+                    class="queued-request-continue"
+                    :disabled="sendCooldownActive || pendingSends[currentChatId]?.submitting"
+                    @click="handleSendMessage({ retry: true })"
+                  >
+                    重试发送
+                  </button>
                 </div>
                 <!-- 加载状态：加载消息 -->
                 <div v-if="isLoadingMessages" class="chat-loading" role="status">
@@ -241,15 +254,26 @@
                         {{ input.content || '排队输入' }}
                       </span>
                       <span class="queued-request-status" :title="input.attachment_error || ''">
-                        {{ input.attachment_status === 'preparing' ? '附件准备中' : input.kind === 'steer' ? '等待引导' : '排队中' }}
+                        {{
+                          input.attachment_status === 'preparing'
+                            ? '附件准备中'
+                            : input.kind === 'steer'
+                              ? '等待引导'
+                              : '排队中'
+                        }}
                       </span>
                       <div class="queued-request-actions">
                         <button
                           v-if="canPromoteQueuedInput(input)"
                           type="button"
                           class="queued-request-delete lucide-icon-btn"
-                          :disabled="promotingInputIds.has(input.input_id) || cancellingInputIds.has(input.input_id)"
-                          :title="isStreaming ? '转为引导，将沿用当前任务的模型和审批配置' : '转为引导'"
+                          :disabled="
+                            promotingInputIds.has(input.input_id) ||
+                            cancellingInputIds.has(input.input_id)
+                          "
+                          :title="
+                            isStreaming ? '转为引导，将沿用当前任务的模型和审批配置' : '转为引导'
+                          "
                           aria-label="转为引导"
                           @click="handlePromoteQueuedInput(input.input_id)"
                         >
@@ -770,9 +794,7 @@ import { useConfigStore } from '@/modules/settings/model/config'
 import { useInfoStore } from '@/modules/settings/model/info'
 import { useUserStore } from '@/modules/identity/model/user'
 import { storeToRefs } from 'pinia'
-import {
-  getMessageRunId
-} from '@/modules/session/model/messageDebug'
+import { getMessageRunId } from '@/modules/session/model/messageDebug'
 import { MessageProcessor } from '@/modules/session/model/messageProcessor'
 import { itemsToMessages } from '@/modules/session/model/agentItems'
 import dayjs, { parseToShanghai } from '@/shared/lib/time'
@@ -903,11 +925,12 @@ const {
   fetchThreadMessages,
   fetchAgentState,
   startRunStream,
+  requestTurnCancellation,
   resumeActiveRunForThread,
   resumeQueuedInputs,
   cancelInput,
   promoteInput,
-  continueQueue,
+  continueQueue
 } = sessionRuntime
 const { threadMessages, threadRuns, historyPages, pendingSends } = storeToRefs(sessionRuntime)
 const setCurrentThreadId = (threadId, options) => {
@@ -985,7 +1008,10 @@ const updateStatePanelPlacement = () => {
         }
       : null
   statePanelPlacement.value = getStatePanelPlacement(
-    workspace, trigger, visibleInput, embeddedArea,
+    workspace,
+    trigger,
+    visibleInput,
+    embeddedArea,
     !isAgentPanelMaximized.value && main ? main : workspace
   )
 }
@@ -1399,8 +1425,8 @@ const currentThreadAttachments = computed(() => {
   if (!currentChatId.value) return []
   return threadAttachmentsMap.value[currentChatId.value] || []
 })
-const currentPendingThreadAttachments = computed(() =>
-  draftFilesByThread.value[currentChatId.value || DRAFT_MODEL_KEY] || []
+const currentPendingThreadAttachments = computed(
+  () => draftFilesByThread.value[currentChatId.value || DRAFT_MODEL_KEY] || []
 )
 const currentArtifacts = computed(() => {
   const artifacts = currentAgentState.value?.artifacts
@@ -1608,9 +1634,7 @@ const { mentionConfig } = useAgentMentionConfig({
 
 const currentThreadMessages = computed(() => threadMessages.value[currentChatId.value] || [])
 const currentThreadRuns = computed(() => threadRuns.value[currentChatId.value] || [])
-const currentRunById = computed(
-  () => new Map(currentThreadRuns.value.map((run) => [run.id, run]))
-)
+const currentRunById = computed(() => new Map(currentThreadRuns.value.map((run) => [run.id, run])))
 const getMessageRun = (message) => currentRunById.value.get(getMessageRunId(message)) || null
 const currentThreadHasHistory = computed(() => currentThreadMessages.value.length > 0)
 const currentThreadConfigNotice = computed(() => {
@@ -1696,13 +1720,24 @@ const runGroups = computed(() => {
     ...item,
     content: state?.displayText[item.id] ?? item.content
   }))
-  const inputIds = new Set(messages.filter((item) => item.type === 'human').map((item) => item.input_id))
-  const optimistic = Object.values(state?.optimisticInputs || {}).flat()
+  const inputIds = new Set(
+    messages.filter((item) => item.type === 'human').map((item) => item.input_id)
+  )
+  const optimistic = Object.values(state?.optimisticInputs || {})
+    .flat()
     .filter((item) => !inputIds.has(item.extra_metadata?.input_id))
-  const groups = MessageProcessor.convertServerHistoryToMessages([...messages, ...optimistic], currentThreadRuns.value)
+  const groups = MessageProcessor.convertServerHistoryToMessages(
+    [...messages, ...optimistic],
+    currentThreadRuns.value
+  )
   for (const group of groups) {
-    if (state?.isStreaming && (group.run?.id === state.activeRunId ||
-      group.messages.some((item) => getMessageRunId(item) === state.activeRunId || item.id === state.pendingInputId))) {
+    if (
+      state?.isStreaming &&
+      (group.run?.id === state.activeRunId ||
+        group.messages.some(
+          (item) => getMessageRunId(item) === state.activeRunId || item.id === state.pendingInputId
+        ))
+    ) {
       group.status = 'streaming'
     }
   }
@@ -1773,9 +1808,11 @@ const hasQueuedInputs = computed(() => queuedInputCount.value > 0)
 const isWaitingForUserAction = computed(() =>
   isThreadWaitingForUserAction(currentThreadState.value)
 )
-const queuePausedMessage = '后续队列已暂停，请手动继续。'
+const queuePausedMessage = '后续队列已暂停。发送新消息将优先处理并继续队列。'
 const shouldShowStopButton = computed(
-  () => (isStreaming.value || currentThreadState.value?.cooperationWaiting) && !String(userInput.value || '').trim()
+  () =>
+    (isStreaming.value || currentThreadState.value?.cooperationWaiting) &&
+    !String(userInput.value || '').trim()
 )
 const canSubmitSteer = computed(
   () =>
@@ -1787,8 +1824,10 @@ const canSubmitSteer = computed(
 )
 const canCancelQueuedInput = (input) => input?.status !== 'sending'
 const canPromoteQueuedInput = (input) =>
-  input?.status === 'pending' && input.kind === 'follow_up' &&
-  input.attachment_status !== 'preparing' && !isWaitingForUserAction.value &&
+  input?.status === 'pending' &&
+  input.kind === 'follow_up' &&
+  input.attachment_status !== 'preparing' &&
+  !isWaitingForUserAction.value &&
   !currentThreadState.value?.cooperationWaiting &&
   (!currentThreadState.value?.activeRunId || currentThreadState.value?.activeRunSteerable === true)
 const shouldRefreshStateWhileStreaming = computed(
@@ -1823,24 +1862,32 @@ const agentPanelFilesystemPollingActive = computed(() =>
 )
 const isProcessing = computed(
   () =>
-    isStreaming.value || currentThreadState.value?.cooperationWaiting ||
+    isStreaming.value ||
+    currentThreadState.value?.cooperationWaiting ||
+    currentThreadState.value?.cancellationPending ||
     (hasQueuedInputs.value && currentQueueSnapshot.value.status !== 'paused')
 )
 const isReplyLoading = computed(() => {
-  return isProcessing.value && !isWaitingForUserAction.value
+  return (
+    currentThreadState.value?.cancellationPending ||
+    (isProcessing.value && !isWaitingForUserAction.value)
+  )
 })
 const replyLoadingText = computed(() => {
   const threadState = currentThreadState.value
+  if (threadState?.cancellationPending) return '正在停止，等待任务清理完成...'
   if (threadState?.cooperationWaiting) return '等待协作任务完成...'
   if (threadState?.contextCompressing) return '正在压缩上下文...'
-  if (!isStreaming.value && hasQueuedInputs.value) return `排队中（${queuedInputCount.value} 条）...`
+  if (!isStreaming.value && hasQueuedInputs.value)
+    return `排队中（${queuedInputCount.value} 条）...`
   return '正在生成回复...'
 })
 const replyElapsedSeconds = ref(0)
 let replyElapsedTimer = null
 let replyStartedAt = null
 const replyElapsedLabel = computed(() => {
-  if (!isStreaming.value || currentThreadState.value?.cooperationWaiting || !replyStartedAt) return ''
+  if (!isStreaming.value || currentThreadState.value?.cooperationWaiting || !replyStartedAt)
+    return ''
   const seconds = replyElapsedSeconds.value
   if (!seconds) return ''
   if (seconds < 60) return `${seconds}s`
@@ -1877,7 +1924,9 @@ watch(
   ],
   async ([threadId, runId, , streaming, waiting], _previous, onCleanup) => {
     let stale = false
-    onCleanup(() => { stale = true })
+    onCleanup(() => {
+      stale = true
+    })
     stopReplyElapsedTimer({ reset: true })
     if (!threadId || !runId || !streaming || waiting) return
     try {
@@ -1900,6 +1949,7 @@ watch(
 )
 
 const isSendButtonDisabled = computed(() => {
+  if (currentThreadState.value?.cancellationPending) return true
   return (
     sendCooldownActive.value ||
     props.sendDisabled ||
@@ -2103,7 +2153,10 @@ const loadEarlierMessages = async () => {
           (element) => element.dataset.historyKey === anchorKey
         )
     const offset = currentAnchor
-      ? currentAnchor.getBoundingClientRect().top - anchorTop + container.scrollTop - previousScrollTop
+      ? currentAnchor.getBoundingClientRect().top -
+        anchorTop +
+        container.scrollTop -
+        previousScrollTop
       : container.scrollHeight - previousHeight
     container.scrollTop += offset
     retainedScrollTop = container.scrollTop
@@ -2318,7 +2371,8 @@ const createActiveThread = async () => {
   let request = threadCreationRequest.value
   if (!request || request.agentId !== selectedAgent || request.projectId !== selectedProject) {
     request = {
-      ...creationContext, id: createInputRequestId(),
+      ...creationContext,
+      id: createInputRequestId(),
       metadata: { tool_approval_mode: currentToolApprovalMode.value }
     }
     threadCreationRequest.value = request
@@ -2336,7 +2390,8 @@ const createActiveThread = async () => {
       requestId: request.id,
       create: (stableRequestId) =>
         chatThreadsStore.createThread(selectedAgent, null, request.metadata, {
-          requestId: stableRequestId, projectId: projectId || undefined
+          requestId: stableRequestId,
+          projectId: projectId || undefined
         })
     })
     if (!thread) throw new Error('创建对话失败')
@@ -2352,7 +2407,8 @@ const createActiveThread = async () => {
     setCurrentThreadId(thread.id, { force: true })
     return thread.id
   } catch (error) {
-    if (error.status >= 400 && error.status < 500 && error.status !== 429) threadCreationRequest.value = null
+    if (error.status >= 400 && error.status < 500 && error.status !== 429)
+      threadCreationRequest.value = null
     throw error
   } finally {
     chatThreadsStore.setThreadCreationInFlight(false)
@@ -2392,7 +2448,9 @@ const handleAttachmentRemove = async (file) => {
   const key = currentChatId.value || DRAFT_MODEL_KEY
   try {
     await threadApi.deleteDraftFile(file.id)
-    draftFilesByThread.value[key] = (draftFilesByThread.value[key] || []).filter((item) => item.id !== file.id)
+    draftFilesByThread.value[key] = (draftFilesByThread.value[key] || []).filter(
+      (item) => item.id !== file.id
+    )
   } catch (error) {
     handleChatError(error, 'delete')
   }
@@ -2613,16 +2671,20 @@ const sessionInput = createSessionInput({
     void nextTick(() => scrollController.scrollToBottom(true))
   },
   onAccepted: async (threadId, draft) => {
-    draftFilesByThread.value[threadId] = (draftFilesByThread.value[threadId] || [])
-      .filter((item) => !draft.data.attachment_file_ids.includes(item.id))
+    draftFilesByThread.value[threadId] = (draftFilesByThread.value[threadId] || []).filter(
+      (item) => !draft.data.attachment_file_ids.includes(item.id)
+    )
     const model = draft.data.model_spec
     const thread = threads.value.find((item) => item.id === threadId)
     if (model && thread) {
       thread.agent.model = model
       delete selectedModelByThread[threadId]
-      void chatThreadsStore.updateThread(threadId, null, undefined, undefined, model).catch(() => {})
+      void chatThreadsStore
+        .updateThread(threadId, null, undefined, undefined, model)
+        .catch(() => {})
     }
-    if (draft.createdFromDraft && currentChatId.value === threadId) threadDraftSession.clearDraftThread()
+    if (draft.createdFromDraft && currentChatId.value === threadId)
+      threadDraftSession.clearDraftThread()
     if (props.isNewSession && currentChatId.value === threadId) emit('thread-change', threadId)
     await fetchThreadAttachments(threadId)
   },
@@ -2632,8 +2694,11 @@ const sessionInput = createSessionInput({
       agentInputAreaRef.value?.restoreImages?.(draft.images)
     }
     if (isRunInterruptedConflict(error)) {
-      try { await fetchAgentState(threadId, { required: true }) }
-      catch { message.error('审批状态恢复失败，请刷新页面后重试') }
+      try {
+        await fetchAgentState(threadId, { required: true })
+      } catch {
+        message.error('审批状态恢复失败，请刷新页面后重试')
+      }
     }
     if (accepted && props.isNewSession) emit('thread-change', threadId)
     handleChatError(error, 'send')
@@ -2642,21 +2707,36 @@ const sessionInput = createSessionInput({
 
 const handleSendMessage = async ({ images = [], mode = 'follow_up', retry = false } = {}) => {
   const original = pendingSends.value[currentChatId.value]
-  if (original && !retry || retry && !original) return
+  if ((original && !retry) || (retry && !original)) return
   const text = original?.text ?? userInput.value.trim()
-  if ((!text && !images.length && !original?.images.length) || !currentAgent.value ||
-    sendCooldownActive.value || props.sendDisabled || isLoadingMessages.value || isWaitingForUserAction.value) return
+  if (
+    (!text && !images.length && !original?.images.length) ||
+    !currentAgent.value ||
+    sendCooldownActive.value ||
+    props.sendDisabled ||
+    isLoadingMessages.value ||
+    isWaitingForUserAction.value
+  )
+    return
   startSendCooldown()
   let threadId = currentChatId.value
   const createdFromDraft = !threadId
   const draft = {
-    text, images: images.map((image) => ({ ...image })), createdFromDraft,
+    text,
+    images: images.map((image) => ({ ...image })),
+    createdFromDraft,
     attachments: currentPendingThreadAttachments.value.map((file) => ({ ...file })),
-    modelSpec: currentModelSpec.value || null, toolApprovalMode: currentToolApprovalMode.value, mode
+    modelSpec: currentModelSpec.value || null,
+    toolApprovalMode: currentToolApprovalMode.value,
+    mode
   }
   if (!threadId) {
-    try { threadId = await ensureActiveThread() }
-    catch { message.error('创建对话失败，请重试'); return }
+    try {
+      threadId = await ensureActiveThread()
+    } catch {
+      message.error('创建对话失败，请重试')
+      return
+    }
     if (!threadId) return
     promoteDraftSelection(selectedModelByThread, threadId)
   }
@@ -2704,14 +2784,13 @@ const handleSendOrStop = async (payload) => {
   const threadId = currentChatId.value
   const threadState = getThreadState(threadId)
   const hasNewInput = Boolean(String(userInput.value || '').trim() || payload?.images?.length)
-  if (threadState?.activeRunId && (threadState.isStreaming || threadState.cooperationWaiting) && !hasNewInput) {
+  if (
+    threadState?.activeRunId &&
+    (threadState.isStreaming || threadState.cooperationWaiting) &&
+    !hasNewInput
+  ) {
     try {
-      await agentApi.cancelThreadTurn(
-        threadId,
-        threadState.currentTurnId,
-        `cancel-${threadState.currentTurnId}`,
-        threadState.activeRunId
-      )
+      if (!(await requestTurnCancellation(threadId))) return
       threadState.pendingInterrupt = null
       if (approvalState.threadId === threadId) {
         hideApprovalState()
@@ -2798,19 +2877,13 @@ const handleQuestionCancel = async () => {
   const threadState = getThreadState(threadId)
   threadState.approvalSubmitting = true
   try {
-    const thread = await agentApi.getPublicThread(threadId)
-    const turnId = thread.yuxi.current_turn?.id
-    if (!turnId) throw new Error('当前线程没有等待中的 Turn')
-    await agentApi.cancelThreadTurn(
-      threadId,
-      turnId,
-      `cancel-${turnId}`,
-      approvalState.interruptedRunId
-    )
+    if (!threadState.currentTurnId || !threadState.activeRunId)
+      throw new Error('当前线程没有等待中的 Turn')
+    if (!(await requestTurnCancellation(threadId))) return
     hideApprovalState()
     getThreadState(threadId).pendingInterrupt = null
     await resumeQueuedInputs(threadId)
-    message.info('已取消当前任务，后续队列已暂停')
+    message.info('已请求停止当前任务')
   } catch (error) {
     handleChatError(error, 'stop')
   } finally {
@@ -2888,10 +2961,7 @@ const handleAgentStateRefresh = async (threadId = null) => {
   if (!chatId) return
   isRefreshingState.value = true
   try {
-    await Promise.all([
-      fetchAgentState(chatId),
-      fetchThreadAttachments(chatId)
-    ])
+    await Promise.all([fetchAgentState(chatId), fetchThreadAttachments(chatId)])
   } finally {
     isRefreshingState.value = false
   }

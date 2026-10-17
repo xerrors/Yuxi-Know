@@ -27,8 +27,8 @@ from yuxi.modules.agents.repositories.cooperation import CooperationRepository
 from yuxi.modules.agents.repositories.definitions import DEFAULT_SHARE_CONFIG
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.repositories.sessions import SessionRepository
-from yuxi.modules.agents.services.cooperation import SessionCooperationService, recover_cooperation_waits
 from yuxi.modules.agents.scope import ActorScope
+from yuxi.modules.agents.services.cooperation import SessionCooperationService, recover_cooperation_waits
 from yuxi.modules.identity.models import User
 from yuxi.shared.datetime import utc_now
 from yuxi.shared.errors import DomainError, StateConflictError
@@ -637,15 +637,124 @@ async def test_cancel_parent_preserves_descendants(tree, monkeypatch):
         assert (await db.get(AgentTurn, member["turn_id"])).status == "running"
         root = await db.scalar(select(Session).where(Session.thread_id == root_id))
         descendant = await db.scalar(select(Session).where(Session.thread_id == member["session_id"]))
-        assert root.queue_paused and not descendant.queue_paused
+        assert not root.queue_paused and not descendant.queue_paused
+
+
+async def test_user_message_after_tree_stop_resumes_only_target_queue(tree, monkeypatch):
+    """整树收尾后，新消息优先恢复当前会话，旧子队列保持暂停。"""
+    from yuxi.modules.agents.input_messages import build_chat_input_message
+    from yuxi.modules.agents.models.cooperation import CooperationRuntime
+    from yuxi.modules.agents.services.cooperation import control_tree
+    from yuxi.modules.agents.services.inputs import accept_message
+    from yuxi.modules.agents.services.leases import complete_run_command_cleanup
+
+    monkeypatch.setattr("yuxi.modules.agents.services.turns.publish_cancel_signals", AsyncMock())
+    monkeypatch.setattr(
+        "yuxi.modules.agents.services.leases.get_sandbox_provider",
+        lambda: type("Provider", (), {"cancel_run": staticmethod(lambda *_: None)})(),
+    )
+    factory, run_id, root_id, uid = tree
+    member = await child(tree)
+    async with factory() as db:
+        service = SessionCooperationService(db, run_id=run_id, uid=uid)
+        old_root = await service.submit_input(target=root_id, description="old root", call_id="old-root")
+        old_child = await service.submit_input(target=member["session_id"], description="old child", call_id="old-child")
+        await control_tree(db=db, scope=ActorScope(uid=uid, app_id=None), thread_id=root_id, idempotency_key="stop-all", stopped=True)
+    arguments = dict(
+        scope=ActorScope(uid=uid, app_id=None),
+        thread_id=root_id,
+        idempotency_key="new-work",
+        mode=None,
+        messages=[build_chat_input_message("new root work")],
+    )
+    async with factory() as db:
+        with pytest.raises(StateConflictError, match="停止全部"):
+            await accept_message(db=db, **arguments)
+    async with factory() as db:
+        run = await db.get(AgentRun, run_id)
+        await settle_locked_run(db=db, run=run, worker_id="root-worker", status="cancelled", token_usage=None)
+        await db.commit()
+    await complete_run_command_cleanup(run)
+    async with factory() as db:
+        accepted = await accept_message(db=db, **arguments)
+    async with factory() as db:
+        assert not (await db.get(CooperationRuntime, root_id)).stopped
+        fresh = await db.get(AgentInput, accepted["input_id"])
+        assert fresh.status == "consumed"
+        assert (await db.get(AgentInput, old_root["input_id"])).status == "pending"
+        assert (await db.get(AgentInput, old_child["input_id"])).status == "pending"
+        descendant = await db.scalar(select(Session).where(Session.thread_id == member["session_id"]))
+        assert descendant.queue_paused
+
+
+async def test_tree_stop_pauses_idle_queues_before_user_can_resume(tree, monkeypatch):
+    """停止扫描尚未遍历时，新用户恢复也不能唤醒其他成员的旧待办。"""
+    from yuxi.modules.agents.input_messages import build_chat_input_message
+    from yuxi.modules.agents.repositories.turn import AgentTurnRepository
+    from yuxi.modules.agents.services import cooperation
+    from yuxi.modules.agents.services.inputs import accept_message
+    from yuxi.modules.agents.services.scheduler import dispatch_next_input
+
+    factory, run_id, root_id, uid = tree
+    member = await child(tree)
+    async with factory() as db:
+        service = SessionCooperationService(db, run_id=run_id, uid=uid)
+        await service.submit_input(target=root_id, description="old root", call_id="idle-root")
+        old_child = await service.submit_input(target=member["session_id"], description="old child", call_id="idle-child")
+        root_run = await db.get(AgentRun, run_id)
+        await settle_locked_run(db=db, run=root_run, worker_id="root-worker", status="failed", token_usage=None)
+        child_run, changed = await AgentRunRepository(db).set_terminal_status(member["run_id"], status="failed")
+        assert changed
+        await AgentTurnRepository(db).set_terminal(await db.get(AgentTurn, member["turn_id"]), status="failed")
+        root_run.runtime_cleanup_pending = child_run.runtime_cleanup_pending = False
+        (await db.scalar(select(Session).where(Session.thread_id == root_id))).queue_paused = False
+        await db.commit()
+
+    scan_started, allow_scan = asyncio.Event(), asyncio.Event()
+    original_scan = cooperation.reconcile_stopped_trees
+
+    async def delayed_scan(**kwargs):
+        """在停止已提交、逐成员取消尚未开始的真实边界让出执行。"""
+        scan_started.set()
+        await allow_scan.wait()
+        await original_scan(**kwargs)
+
+    monkeypatch.setattr(cooperation, "reconcile_stopped_trees", delayed_scan)
+
+    async def stop_tree():
+        """用独立事务提交整树停止。"""
+        async with factory() as db:
+            await cooperation.control_tree(
+                db=db, scope=ActorScope(uid=uid, app_id=None), thread_id=root_id, idempotency_key="stop-idle-tree", stopped=True
+            )
+
+    stopping = asyncio.create_task(stop_tree())
+    try:
+        await asyncio.wait_for(scan_started.wait(), 5)
+        async with factory() as db:
+            await accept_message(
+                db=db,
+                scope=ActorScope(uid=uid, app_id=None),
+                thread_id=root_id,
+                idempotency_key="resume-before-scan",
+                mode=None,
+                messages=[build_chat_input_message("new root work")],
+            )
+        assert await dispatch_next_input(uid=uid, agent_slug=child_run.agent_slug, thread_id=member["session_id"]) is None
+        async with factory() as db:
+            assert (await db.get(AgentInput, old_child["input_id"])).status == "pending"
+            assert (await db.scalar(select(Session).where(Session.thread_id == member["session_id"]))).queue_paused
+    finally:
+        allow_scan.set()
+        await asyncio.wait_for(stopping, 10)
 
 
 async def test_old_stop_scan_cannot_repause_continued_tree(tree, monkeypatch):
     """让旧停止扫描晚于继续事务取得成员锁，验证不会重新暂停队列。"""
     from yuxi.modules.agents.models.cooperation import CooperationRuntime
     from yuxi.modules.agents.repositories.sessions import SessionRepository
-    from yuxi.modules.agents.services.cooperation import control_tree, reconcile_stopped_trees
     from yuxi.modules.agents.scope import ActorScope
+    from yuxi.modules.agents.services.cooperation import control_tree, reconcile_stopped_trees
 
     factory, run_id, root_id, uid = tree
     async with factory() as db:
@@ -767,7 +876,7 @@ async def test_stopped_member_at_model_boundary_requests_cancellation(tree, monk
         turn = await db.get(AgentTurn, run.turn_id)
         member = await db.scalar(select(Session).where(Session.thread_id == root_id))
         assert run.status == "cancel_requested" and run.worker_id == "root-worker"
-        assert turn.status == "cancelling" and member.queue_paused
+        assert turn.status == "cancelling" and not member.queue_paused
 
 
 async def test_tree_stop_cancels_released_retry_without_lease_failure(tree, monkeypatch):
@@ -969,6 +1078,7 @@ async def complete_member(factory, member, content):
         await db.flush()
         run.output_message_id = output.id
         await repo.set_terminal_status(run.id, status="completed", worker_id="result-worker")
+        run.runtime_cleanup_pending = False
         await AgentTurnRepository(db).set_terminal(await db.get(AgentTurn, run.turn_id), status="completed", result_run_id=run.id)
         await db.commit()
 

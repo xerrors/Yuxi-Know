@@ -36,6 +36,8 @@ async def claim_next_input(*, db: AsyncSession, agent_session: Session, binding:
     """在已锁 Thread 上领取优先队头，原子建立 Turn 与首段 Run。"""
     if agent_session.status != "active" or agent_session.queue_paused:
         return None
+    if await AgentRunRepository(db).has_thread_cleanup(agent_session.thread_id):
+        return None
 
     from yuxi.modules.agents.models.cooperation import CooperationRuntime
 

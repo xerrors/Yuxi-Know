@@ -45,7 +45,8 @@ async def submit_public_event(
     202 仅证明持久接收。相同会话、幂等键和意图可重试；改变意图返回 409。
     普通消息在运行中默认 steer，空闲默认 follow_up；等待回答/审批时返回 409。
     显式 follow_up 按 FIFO 排队，Turn/Run ID 在消费时绑定。
-    cancel 暂停后续队列；恢复、审批、队列及协作控制使用 yuxi.* 扩展。
+    cancel 仅暂停已有待办；新用户消息优先恢复目标队列，重放不再次恢复。
+    恢复、审批、队列及协作控制使用 yuxi.* 扩展。
     """
     result = await submit_thread_event(
         db=db,

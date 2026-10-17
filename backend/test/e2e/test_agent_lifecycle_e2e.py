@@ -6,7 +6,7 @@ import asyncio
 import json
 import os
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 import asyncpg
 import httpx
@@ -14,21 +14,33 @@ import pytest
 
 from test.e2e.e2e_helpers import (
     DETERMINISTIC_MODEL as MODEL,
+)
+from test.e2e.e2e_helpers import (
     DETERMINISTIC_OUTPUT as OUTPUT,
+)
+from test.e2e.e2e_helpers import (
     create_lifecycle_agent as _agent,
+)
+from test.e2e.e2e_helpers import (
     delete_agent,
     output_text,
     postgres_dsn,
-    public_message as _message,
-    register_replay_provider as _provider,
     wait_for_consumed_input,
+)
+from test.e2e.e2e_helpers import (
+    public_message as _message,
+)
+from test.e2e.e2e_helpers import (
+    register_replay_provider as _provider,
+)
+from test.e2e.e2e_helpers import (
     wait_for_terminal_turn as _turn,
 )
 from test.live_api_cleanup import make_test_session_title
 from test.support.public_events import read_events
 from yuxi.modules.agents.runtime.sandbox import UserSandboxBackend
-from yuxi.modules.agents.services.transport import get_redis_client
 from yuxi.modules.agents.services.tracing import get_langfuse_client
+from yuxi.modules.agents.services.transport import get_redis_client
 from yuxi.modules.workspace.paths import user_workspace_dir
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.e2e, pytest.mark.slow, pytest.mark.timeout(240)]
@@ -151,7 +163,8 @@ async def test_public_session_initial_text_stream_and_saved_items(e2e_client, e2
                 JOIN sessions session ON session.id=run.session_record_id
                 WHERE run.id=$1 AND run.thread_id=$2
                 """,
-                consumed["run_id"], session_id,
+                consumed["run_id"],
+                session_id,
             )
             assert origin["agent_slug"] == slug
             assert origin["id"] == origin["result_run_id"] == result["yuxi"]["result_run_id"]
@@ -162,9 +175,17 @@ async def test_public_session_initial_text_stream_and_saved_items(e2e_client, e2
             assert origin["invocation"] is None
             if input_kind == "text" and not stream:
                 rejected = await e2e_client.post(
-                    f"/api/v1/agents/sessions/{session_id}/events", headers={**e2e_headers, "Idempotency-Key": str(uuid.uuid4())},
-                    json={"events": [{"type": "agent.session.input.message", "input": [_message("invalid")],
-                                      "evaluation": {"dataset_name": "removed"}}]},
+                    f"/api/v1/agents/sessions/{session_id}/events",
+                    headers={**e2e_headers, "Idempotency-Key": str(uuid.uuid4())},
+                    json={
+                        "events": [
+                            {
+                                "type": "agent.session.input.message",
+                                "input": [_message("invalid")],
+                                "evaluation": {"dataset_name": "removed"},
+                            }
+                        ]
+                    },
                 )
                 assert rejected.status_code == 422, rejected.text
                 assert await conn.fetchval("SELECT count(*) FROM agent_inputs WHERE thread_id=$1", session_id) == 1
@@ -1085,7 +1106,8 @@ async def test_cancel_waiting_turn_pauses_queue_until_continue(e2e_client, e2e_h
         assert deleted.status_code in {200, 404}, deleted.text
 
 
-async def test_cancel_running_model_closes_audit_without_foreign_output(e2e_client, e2e_headers):
+@pytest.mark.parametrize("with_queue", [False, True])
+async def test_cancel_running_model_closes_audit_without_foreign_output(e2e_client, e2e_headers, with_queue):
     """模型响应中途取消仍关闭唯一 Model 审计并保留当前 Run trace。"""
     me = await e2e_client.get("/api/auth/me", headers=e2e_headers)
     assert me.status_code == 200, me.text
@@ -1137,13 +1159,31 @@ async def test_cancel_running_model_closes_audit_without_foreign_output(e2e_clie
         finally:
             await conn.close()
 
+        queued_id = None
+        if with_queue:
+            queued = await e2e_client.post(
+                f"/api/v1/agents/sessions/{thread_id}/events",
+                headers={**e2e_headers, "Idempotency-Key": f"old-queue-{uuid.uuid4().hex}"},
+                json={
+                    "events": [
+                        {
+                            "type": "agent.session.input.message",
+                            "input": [_message(f"{OUTPUT} DETERMINISTIC_CANCEL_FOLLOWUP")],
+                            "yuxi": {"mode": "steer"},
+                        }
+                    ]
+                },
+            )
+            assert queued.status_code == 202, queued.text
+            queued_id = queued.json()["input_id"]
         cancelled = await e2e_client.post(
             f"/api/v1/agents/sessions/{thread_id}/events",
             headers={**e2e_headers, "Idempotency-Key": f"cancel-model-control-{uuid.uuid4().hex}"},
             json={"events": [{"type": "agent.session.input.cancel", "yuxi": {"turn_id": turn_id}}]},
         )
         assert cancelled.status_code == 202, cancelled.text
-        terminal = await _turn(e2e_client, e2e_headers, thread_id, turn_id)
+        async with asyncio.timeout(10):
+            terminal = await _turn(e2e_client, e2e_headers, thread_id, turn_id)
         assert terminal["status"] == "cancelled", terminal
         conn = await asyncpg.connect(postgres_dsn())
         try:
@@ -1166,6 +1206,42 @@ async def test_cancel_running_model_closes_audit_without_foreign_output(e2e_clie
             assert run["langfuse_trace_id"]
         assert run["output_message_id"] is None and visible == 0
         assert [(row["turn_id"], row["run_id"], row["execution_status"]) for row in audits] == [(turn_id, run_id, "interrupted")]
+        queue = await e2e_client.get(f"/api/v1/agents/sessions/{thread_id}/queue", headers=e2e_headers)
+        assert queue.json()["queue_paused"] is with_queue
+        async with httpx.AsyncClient(base_url=os.environ["OPENAI_REPLAY_URL"].removesuffix("/v1"), timeout=5) as replay:
+            await replay.get("/release-blocking", params={"token": token})
+        fresh = await e2e_client.post(
+            f"/api/v1/agents/sessions/{thread_id}/events",
+            headers={**e2e_headers, "Idempotency-Key": f"new-message-{uuid.uuid4().hex}"},
+            json={
+                "events": [
+                    {
+                        "type": "agent.session.input.message",
+                        "input": [_message(f"{OUTPUT} DETERMINISTIC_CANCEL_FOLLOWUP new")],
+                        "yuxi": {"mode": "follow_up"},
+                    }
+                ]
+            },
+        )
+        assert fresh.status_code == 202, fresh.text
+        consumed = await wait_for_consumed_input(e2e_client, e2e_headers, fresh.json())
+        resumed = await _turn(e2e_client, e2e_headers, thread_id, consumed["turn_id"])
+        assert resumed["status"] == "completed" and consumed["turn_id"] != turn_id
+        if queued_id:
+            old = await wait_for_consumed_input(
+                e2e_client, e2e_headers, {"session_id": thread_id, "input_id": queued_id, "turn_id": None, "run_id": None}
+            )
+            assert old["turn_id"] != consumed["turn_id"], "新用户消息不能与旧引导合批"
+            assert (await _turn(e2e_client, e2e_headers, thread_id, old["turn_id"]))["status"] == "completed"
+            conn = await asyncpg.connect(postgres_dsn())
+            try:
+                assert await conn.fetchval(
+                    "SELECT (SELECT consumed_at FROM agent_inputs WHERE id=$1) < (SELECT consumed_at FROM agent_inputs WHERE id=$2)",
+                    fresh.json()["input_id"],
+                    queued_id,
+                )
+            finally:
+                await conn.close()
     finally:
         async with httpx.AsyncClient(base_url=os.environ["OPENAI_REPLAY_URL"].removesuffix("/v1"), timeout=5) as replay:
             await replay.get("/release-blocking", params={"token": token})
@@ -1279,7 +1355,7 @@ async def test_attachment_reads_live_bytes_across_backends(e2e_client, e2e_heade
 
 
 async def test_model_rate_limit_failure_preserves_error_and_queue_can_continue(e2e_client, e2e_headers):
-    """模型重试耗尽会形成持久失败，后续输入须显式继续且可完成。"""
+    """模型重试耗尽持久失败，空队列不暂停，下一条用户输入可直接完成。"""
     me = await e2e_client.get("/api/auth/me", headers=e2e_headers)
     assert me.status_code == 200, me.text
     await _provider(e2e_client, e2e_headers)
@@ -1330,9 +1406,10 @@ async def test_model_rate_limit_failure_preserves_error_and_queue_can_continue(e
         assert queued.status_code == 202, queued.text
         assert queued.json()["turn_id"] is None
         queue = await e2e_client.get(f"/api/v1/agents/sessions/{thread_id}/queue", headers=e2e_headers)
-        assert queue.status_code == 200 and queue.json()["queue_paused"] is True
-        assert [item["input_id"] for item in queue.json()["inputs"]] == [queued.json()["input_id"]]
-        await _continue_queued_input(e2e_client, e2e_headers, thread_id, queued.json()["input_id"], "rate-limit-continue")
+        assert queue.status_code == 200 and queue.json()["queue_paused"] is False
+        next_input = await wait_for_consumed_input(e2e_client, e2e_headers, queued.json())
+        completed = await _turn(e2e_client, e2e_headers, thread_id, next_input["turn_id"])
+        assert completed["status"] == "completed" and next_input["turn_id"] != first_turn_id
     finally:
         if thread_id and first_turn_id:
             current = await e2e_client.get(f"/api/v1/agents/sessions/{thread_id}/turns/{first_turn_id}", headers=e2e_headers)

@@ -13,6 +13,7 @@ from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.modules.agents.receipts import input_intent_hash, require_idempotency_key, require_receipt_replay
+from yuxi.modules.agents.repositories.input import AgentInputRepository
 from yuxi.modules.agents.repositories.input_receipt import AgentInputReceiptRepository
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
@@ -129,6 +130,7 @@ async def cancel_turn(
     idempotency_key: str,
     expected_run_id: str | None = None,
     notify_parent: bool = True,
+    cleanup_waiting: bool = True,
 ) -> dict:
     """取消指定轮次，保留已产生副作用与待消费输入。"""
     require_idempotency_key(idempotency_key)
@@ -162,7 +164,11 @@ async def cancel_turn(
     waiting_cleanup = False
     terminal_changed = False
     if turn.status != "cancelled":
-        agent_session.queue_paused = True
+        agent_session.queue_paused = await AgentInputRepository(db).has_pending_inputs(
+            thread_id=agent_session.thread_id,
+            uid=agent_session.uid,
+            app_id=agent_session.app_id,
+        )
         waiting_cleanup = turn.status == "waiting" or (turn.status == "cancelling" and bool(turn.waitpoint))
         if turn.status != "cancelling":
             await turn_repo.set_cancelling(turn)
@@ -202,7 +208,7 @@ async def cancel_turn(
         await finish_turn_observation_if_terminal(turn.id)
     if cancelled_run_ids:
         await publish_cancel_signals(cancelled_run_ids)
-    if waiting_cleanup:
+    if waiting_cleanup and cleanup_waiting:
         try:
             await settle_waiting_cancel(thread_id=thread_id, turn_id=turn.id, uid=scope.uid, app_id=scope.app_id)
         except Exception:
@@ -245,6 +251,7 @@ async def get_turn_snapshot(*, db: AsyncSession, scope: ActorScope, thread_id: s
         "current_run_id": turn.current_run_id,
         "result_run_id": turn.result_run_id,
         "waitpoint": turn.waitpoint,
+        "cancellation_pending": turn.status == "cancelling",
         "runs": [serialize_public_run(run, input_ids[run.id]) for run in runs],
         "output": output,
         "usage": _summarize_turn_usage(audits),
@@ -324,28 +331,47 @@ async def list_turn_page(
 
 async def settle_waiting_cancel(*, thread_id: str, turn_id: str, uid: str, app_id: str | None) -> bool:
     """清理等待 checkpoint，再把 cancelling Turn 变为 cancelled。"""
+    from yuxi.modules.agents.services.leases import complete_run_command_cleanup
+
     async with pg_manager.get_async_session_context() as db:
         scope = ActorScope(uid=uid, app_id=app_id)
-        await require_thread(db=db, scope=scope, thread_id=thread_id)
-        turn = await AgentTurnRepository(db).get_for_scope(turn_id=turn_id, thread_id=thread_id, uid=uid, app_id=app_id)
+        # 与其他清理和新轮领取串行；checkpoint 按 Thread 保存，末尾复查无法撤销迟到的清理。
+        await require_thread(db=db, scope=scope, thread_id=thread_id, lock=True)
+        turn = await AgentTurnRepository(db).get_for_scope(turn_id=turn_id, thread_id=thread_id, uid=uid, app_id=app_id, for_update=True)
         if turn is None or turn.status != "cancelling" or not turn.waitpoint:
             return False
         run = await AgentRunRepository(db).get_run(turn.current_run_id)
         if run is None or run.status != "interrupted":
             return False
-    await _clear_waitpoint_checkpoint(run)
-
-    async with pg_manager.get_async_session_context() as db:
-        agent_session = await require_thread(db=db, scope=scope, thread_id=thread_id, lock=True)
-        turn = await AgentTurnRepository(db).get_for_scope(turn_id=turn_id, thread_id=thread_id, uid=uid, app_id=app_id, for_update=True)
-        if turn is None or turn.status != "cancelling" or turn.current_run_id != run.id:
-            return False
-        if not agent_session.queue_paused:
-            raise ValueError("等待取消未保持队列暂停")
+        await complete_run_command_cleanup(run)
+        await _clear_waitpoint_checkpoint(run)
         await AgentTurnRepository(db).set_terminal(turn, status="cancelled")
 
         await notify_turn_state(db, run)
     await finish_turn_observation_if_terminal(turn_id)
+    return True
+
+
+async def finish_cancelled_run(run: AgentRun) -> bool:
+    """当前取消 Run 的必要清理完成后，直接结束所属 Turn。"""
+    async with pg_manager.get_async_session_context() as db:
+        scope = ActorScope(uid=run.uid, app_id=run.app_id)
+        await require_thread(db=db, scope=scope, thread_id=run.thread_id, lock=True)
+        turn = await AgentTurnRepository(db).get_for_scope(
+            turn_id=run.turn_id,
+            thread_id=run.thread_id,
+            uid=run.uid,
+            app_id=run.app_id,
+            for_update=True,
+        )
+        if turn is None or turn.status != "cancelling" or turn.current_run_id != run.id:
+            return False
+        current = await AgentRunRepository(db).get_run(run.id)
+        if current.status != "cancelled" or current.runtime_cleanup_pending:
+            return False
+        await AgentTurnRepository(db).set_terminal(turn, status="cancelled")
+        await notify_turn_state(db, current)
+    await finish_turn_observation_if_terminal(turn.id)
     return True
 
 
@@ -371,23 +397,8 @@ async def reconcile_cancelling_turns() -> list[str]:
                 ):
                     settled.append(candidate.id)
             elif run.status == "cancelled" and not run.runtime_cleanup_pending:
-                async with pg_manager.get_async_session_context() as db:
-                    scope = ActorScope(uid=candidate.uid, app_id=candidate.app_id)
-                    await require_thread(db=db, scope=scope, thread_id=candidate.thread_id, lock=True)
-                    turn = await AgentTurnRepository(db).get_for_scope(
-                        turn_id=candidate.id,
-                        thread_id=candidate.thread_id,
-                        uid=candidate.uid,
-                        app_id=candidate.app_id,
-                        for_update=True,
-                    )
-                    if turn is not None and turn.status == "cancelling":
-                        await AgentTurnRepository(db).set_terminal(turn, status="cancelled")
-
-                        await notify_turn_state(db, run)
-                        settled.append(candidate.id)
-                if candidate.id in settled:
-                    await finish_turn_observation_if_terminal(candidate.id)
+                if await finish_cancelled_run(run):
+                    settled.append(candidate.id)
         except Exception:
             failures += 1
             logger.exception("Failed to reconcile cancelling Turn: %s", candidate.id)

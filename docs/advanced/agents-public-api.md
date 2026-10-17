@@ -176,7 +176,7 @@ Turn 等待用户回答或审批时普通消息被拒绝，协作等待时 follo
 {"events":[{"type":"yuxi.session.input.resume","turn_id":"<turn-id>","waitpoint_id":"<waitpoint-id>","response":{"type":"answer","answers":[{"question_id":"<question-id>","answer":"确认"}]}}]}
 ```
 
-官方取消事件为 `agent.session.input.cancel`，可用 `yuxi.turn_id`、`yuxi.expected_run_id` 固定目标。省略目标时，事务内选择当前 Turn；幂等重试仍取消首次选定的 Turn。取消使当前 Turn 收敛，并暂停保留的后续 `follow_up`；等待点的 checkpoint 清理完成前，队列不会继续。`yuxi.session.input.continue` 在清理完成后显式解除暂停。`yuxi.session.input.cancel_input` 只移除指定的待处理 Input，不冒充尚未创建的 Turn。归档拒绝活跃 Turn 或待处理 Input；归档后的详情与历史仍可读。
+官方取消事件为 `agent.session.input.cancel`，可用 `yuxi.turn_id`、`yuxi.expected_run_id` 固定目标。省略目标时，事务内选择当前 Turn；幂等重试仍取消首次选定的 Turn。取消使当前 Turn 收敛，有 pending 输入时暂停保留的队列，空队列不设置暂停；执行和必要清理完成后直接结束取消，等待点先清理 checkpoint。`yuxi.session.input.continue` 在清理完成后显式解除暂停并领取原优先队头。用户向暂停会话发送新的消息时，解除目标队列暂停并优先单独执行这条消息，之后恢复旧队列；附件未就绪时旧队列继续等待，旧 steer 不与恢复消息合批。幂等重放不再次恢复队列。`yuxi.session.input.cancel_input` 只移除指定的待处理 Input，不冒充尚未创建的 Turn。归档拒绝活跃 Turn 或待处理 Input；归档后的详情与历史仍可读。
 
 ## 读取与事件
 
@@ -186,7 +186,7 @@ Items 页面另含 `yuxi.runs`，仅返回当前页内容引用的轻量 Run，�
 
 `GET /sessions/{session_id}` 返回 Session 资源，`yuxi` 包含 `current_turn`、`queue_paused` 和 `queued_input_count`。`/turns/{turn_id}` 返回 `object=agent.session.turn`，核心字段与 SSE 事件中的 `turn` 使用同一投影：`id`、`session_id`、Agent、状态、Unix 秒时间、错误和用量。`started_at` 表达本轮首次执行，恢复 Run 不重置它。核心状态为 `queued/in_progress/requires_action/completed/failed/cancelled`；取消清理期间保持 `in_progress`。waitpoint 提供等待内容，内部 Turn/Run 状态不用于修正公开工作状态。核心 `usage` 为 null，Yuxi 用量统计位于 `yuxi.usage`。
 
-Turn 详情的 `yuxi` 包含 `current_run_id`、`result_run_id`、`waitpoint`、`runs` 和 `output`。结果只来自 `yuxi.result_run_id` 指向的本轮 Run；模型正文结束、`interrupted` 和 `yielded` 均不表示 Turn 完成。`/turns/{turn_id}/items` 复用相同分页与公开投影。`/state` 提供运行状态，内容统一从 Items 读取。普通用户可读取已经展示的工具参数、结果和执行状态；内部 prompt、checkpoint 和完整审计不进入普通历史，审计仍仅允许超级管理员 JWT。
+Turn 详情的 `yuxi` 包含 `current_run_id`、`result_run_id`、`waitpoint`、`cancellation_pending`、`runs` 和 `output`。`cancellation_pending=true` 表示本轮已接受取消且仍在停止或清理，适用于 Run 保持 `interrupted` 的等待取消；客户端据此恢复停止反馈，终态后该值为 false。结果只来自 `yuxi.result_run_id` 指向的本轮 Run；模型正文结束、`interrupted` 和 `yielded` 均不表示 Turn 完成。`/turns/{turn_id}/items` 复用相同分页与公开投影。`/state` 提供运行状态，内容统一从 Items 读取。普通用户可读取已经展示的工具参数、结果和执行状态；内部 prompt、checkpoint 和完整审计不进入普通历史，审计仍仅允许超级管理员 JWT。
 
 `GET /sessions/{session_id}/events` 订阅整个 Thread，每条 SSE `data` 就是一个公开事件，`event` 等于其 `type`，`id` 是订阅 cursor。`event_id` 标识逻辑事件，Redis 重放保持稳定；它与 cursor 分开。`session_id` 是真实 Thread ID，`yuxi.run_id` 是业务执行段。协作成员通过自己的 Thread 入口读取历史和事件；父页面通过 `/state` 的 `agent_state.cooperation` 读取树内持久状态。
 
@@ -206,6 +206,6 @@ Turn 详情的 `yuxi` 包含 `current_run_id`、`result_run_id`、`waitpoint`、
 
 `Last-Event-ID` 使用 v2 cursor 续订。Redis 增量过期时发送 `yuxi.session.resync`，客户端缓冲新事件、重读 items 和快照，再按稳定 ID 合并。已完成正文与工具结果先持久化再发送完成边界；进行中的内容依赖短期 Redis 重放，不承诺逐 token 落库。
 
-协作成员拥有独立 Thread、Turn、Run、等待点和结果，全部使用相同公开协议。父轮次完成、失败或取消均保留后代工作；普通取消固定指定 Turn。“停止全部”通过 POST `/sessions/{session_id}/events` 提交 `yuxi.session.tree.stop`，停止所有成员在途 Turn 与队列消费；`yuxi.session.tree.continue` 在在途工作收敛后重新消费保留队列，已取消轮次不恢复。这两种控制输入本身不作为 SSE 输出事件发布，结果通过持久树状态和各 Turn 观察。整树共享实际沙盒与 Project Workdir，各 Run 的 lease 和 heartbeat 独立。工具与用户操作见[会话协作](../agents/session-cooperation.md)。
+协作成员拥有独立 Thread、Turn、Run、等待点和结果，全部使用相同公开协议。父轮次完成、失败或取消均保留后代工作；普通取消固定指定 Turn。“停止全部”通过 POST `/sessions/{session_id}/events` 提交 `yuxi.session.tree.stop`，停止所有成员在途 Turn 与队列消费，先向各成员提交取消请求再清理等待点；`yuxi.session.tree.continue` 在在途工作收敛后重新消费保留队列，已取消轮次不恢复。全树在途工作及清理结束后，用户新消息可解除停止门禁并只恢复目标会话，其他成员旧待办继续暂停。这两种控制输入本身不作为 SSE 输出事件发布，结果通过持久树状态和各 Turn 观察。整树共享实际沙盒与 Project Workdir，各 Run 的 lease 和 heartbeat 独立。工具与用户操作见[会话协作](../agents/session-cooperation.md)。
 
 该协议使用 Redis 事件格式 v2 和 cursor v2。数据库使用[部署参考](./deployment.md#_3-数据库与文件目录)定义的当前空库基线，schema-init 在写入前拒绝其他版本；已有数据库由运维显式处置。旧创建请求顶层 `attachment_file_ids` 和逐消息 `input[].yuxi.attachment_file_ids` 不再支持，统一使用提交级 `yuxi.attachment_file_ids`；事件没有双格式消费。

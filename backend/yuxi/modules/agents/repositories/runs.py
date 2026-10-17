@@ -692,6 +692,19 @@ class AgentRunRepository:
         await self.db.flush()
         return run, True
 
+    async def has_thread_cleanup(self, thread_id: str) -> bool:
+        """前轮清理责任未释放时阻止该 Thread 开启新轮。"""
+        return (
+            await self.db.scalar(
+                select(AgentRun.id)
+                .where(
+                    AgentRun.thread_id == thread_id,
+                    AgentRun.runtime_cleanup_pending.is_(True),
+                )
+                .limit(1)
+            )
+        ) is not None
+
     async def list_pending_runtime_cleanups(self, *, limit: int = 100) -> list[AgentRun]:
         """列出仍由 PostgreSQL 持久拥有的根 runtime 清理任务。"""
         result = await self.db.execute(

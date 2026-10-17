@@ -1,29 +1,37 @@
 """真实 API、worker、checkpoint 和共享沙盒的 Session 协作链。"""
 
-import os
 import asyncio
 import json
+import os
 import sys
 import uuid
 
 import asyncpg
 import pytest
-from test.e2e.e2e_helpers import wait_for_consumed_input
 from langchain_core.messages import ToolMessage
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
-from test.e2e.e2e_helpers import archive_public_thread, delete_agent, postgres_dsn
+from test.e2e.e2e_helpers import (
+    archive_public_thread,
+    delete_agent,
+    output_text,
+    postgres_dsn,
+    wait_for_consumed_input,
+)
 from test.e2e.e2e_helpers import (
     create_lifecycle_agent as _agent,
-    output_text,
+)
+from test.e2e.e2e_helpers import (
     public_message as _message,
+)
+from test.e2e.e2e_helpers import (
     register_replay_provider as _provider,
 )
 from test.live_api_cleanup import make_test_session_title
-from yuxi.modules.workspace.paths import user_workspace_dir
-from yuxi.modules.agents.runtime.sandbox import get_sandbox_provider, UserSandboxBackend
-from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.bootstrap.models import load_models
+from yuxi.infrastructure.postgres.manager import pg_manager
+from yuxi.modules.agents.runtime.sandbox import UserSandboxBackend, get_sandbox_provider
+from yuxi.modules.workspace.paths import user_workspace_dir
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.e2e, pytest.mark.slow, pytest.mark.timeout(240)]
 OUTPUT = "DETERMINISTIC_AGENT_E2E_OK"
@@ -357,7 +365,12 @@ async def test_full_tree_capacity_control_and_sibling_tools(e2e_client, e2e_head
         if stop_tree:
             assert all(t["status"] == "cancelled" for t in turns)
             assert await conn.fetchval("SELECT stopped FROM session_cooperation_runtimes WHERE tree_root_thread_id=$1", root_id)
-            assert await conn.fetchval("SELECT bool_and(queue_paused) FROM sessions WHERE tree_root_thread_id=$1", root_id)
+            assert await conn.fetchval(
+                "SELECT bool_and(s.queue_paused = EXISTS("
+                "SELECT 1 FROM agent_inputs i WHERE i.thread_id=s.thread_id AND i.status='pending')) "
+                "FROM sessions s WHERE s.tree_root_thread_id=$1",
+                root_id,
+            )
             assert await conn.fetchval("SELECT status FROM agent_inputs WHERE id=$1", queued["input_id"]) == "pending"
             await _assert_thread_activity(e2e_client, e2e_headers, root_id, "cancelled")
             await event(root_id, {"type": "yuxi.session.tree.continue"})

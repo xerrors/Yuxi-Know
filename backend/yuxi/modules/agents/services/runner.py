@@ -15,6 +15,7 @@ from sqlalchemy.exc import OperationalError
 
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.manager import pg_manager
+from yuxi.infrastructure.runtime_settings import get_int_env
 from yuxi.modules.agents.input_messages import restore_chat_input_message
 from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.agents.models.runs import AgentRun
@@ -65,6 +66,7 @@ from yuxi.modules.workspace.services.bindings import (
 from yuxi.shared.datetime import utc_now
 
 MAX_RUN_TRIES = 2
+RUN_TIMEOUT_SECONDS = get_int_env("YUXI_JOB_TIMEOUT_SECONDS", 3600)
 
 
 RUN_CANCEL_POLL_SECONDS = 0.2
@@ -487,6 +489,16 @@ async def _settle_uncommitted_run(
         token_usage=token_usage,
         worker_id=worker_id,
     )
+    if status == "failed" and transition.status == "cancel_requested":
+        # 用户取消可能晚于失败检查、早于终态事务；仍由当前 owner 确认取消。
+        transition = await mark_run_terminal(
+            run_id,
+            "cancelled",
+            error_type="cancelled",
+            error_message="对话已取消",
+            token_usage=token_usage,
+            worker_id=worker_id,
+        )
     if publish_end and transition.status in TERMINAL_RUN_STATUSES:
         committed_run = await _get_run(run_id)
         await _publish_committed_terminal(
@@ -537,7 +549,13 @@ async def _consume_stream_with_cancel(agen, run_ctx: RunContext):
 
 
 async def process_agent_run(ctx, run_id: str):
-    """执行队列中的 AgentRun，并只从 run 列和输入消息恢复运行参数。"""
+    """在业务执行时限内运行，保留 ARQ 外层时间用于清理。"""
+    async with asyncio.timeout(RUN_TIMEOUT_SECONDS) as execution_timeout:
+        await _process_agent_run(ctx, run_id, execution_timeout)
+
+
+async def _process_agent_run(ctx, run_id: str, execution_timeout: asyncio.Timeout):
+    """执行持久 Run，分别收敛用户取消、执行超时和基础设施退出。"""
     run = await _get_run(run_id)
     if not run:
         logger.warning(f"Run not found: {run_id}")
@@ -548,7 +566,7 @@ async def process_agent_run(ctx, run_id: str):
         if cleanup_was_pending:
             await _require_runtime_cleanup(run, f"Run {run_id} 尚未完成 runtime cleanup")
             await publish_run_settlement(run_id, run.status, thread_id=run.thread_id)
-        if run.status == "completed":
+        if run.status in {"completed", "failed", "cancelled"}:
             await dispatch_next_input(
                 uid=run.uid,
                 agent_slug=run.agent_slug,
@@ -591,43 +609,51 @@ async def process_agent_run(ctx, run_id: str):
             raise asyncio.CancelledError(f"run {run_id} cancelled before execution")
 
         if not isinstance(run.input_payload, dict):
-            await mark_run_terminal(
+            await _settle_uncommitted_run(
                 run_id,
                 "failed",
-                "invalid_input_payload",
-                "run input_payload 必须是对象",
                 worker_id=worker_id,
+                error_type="invalid_input_payload",
+                error_message="run input_payload 必须是对象",
+                thread_id=thread_id,
+                current_user=user,
             )
             return
         payload = run.input_payload
         runtime = payload.get("runtime") or {}
         if not isinstance(runtime, dict):
-            await mark_run_terminal(
+            await _settle_uncommitted_run(
                 run_id,
                 "failed",
-                "invalid_runtime_payload",
-                "run input_payload.runtime 必须是对象",
                 worker_id=worker_id,
+                error_type="invalid_runtime_payload",
+                error_message="run input_payload.runtime 必须是对象",
+                thread_id=thread_id,
+                current_user=user,
             )
             return
 
         input_messages = await _load_run_input_messages(run)
         if not input_messages:
-            await mark_run_terminal(
+            await _settle_uncommitted_run(
                 run_id,
                 "failed",
-                "input_message_not_found",
-                "运行任务缺少输入消息",
                 worker_id=worker_id,
+                error_type="input_message_not_found",
+                error_message="运行任务缺少输入消息",
+                thread_id=thread_id,
+                current_user=user,
             )
             return
         if any(not isinstance(message.extra_metadata, dict) for message in input_messages):
-            await mark_run_terminal(
+            await _settle_uncommitted_run(
                 run_id,
                 "failed",
-                "invalid_input_metadata",
-                "输入消息 metadata 必须是对象",
                 worker_id=worker_id,
+                error_type="invalid_input_metadata",
+                error_message="输入消息 metadata 必须是对象",
+                thread_id=thread_id,
+                current_user=user,
             )
             return
 
@@ -635,35 +661,41 @@ async def process_agent_run(ctx, run_id: str):
         image_content = any(message.image_content for message in input_messages)
 
         if run_type not in SUPPORTED_RUN_TYPES:
-            await mark_run_terminal(
+            await _settle_uncommitted_run(
                 run_id,
                 "failed",
-                "invalid_run_type",
-                f"不支持的 run_type: {run_type}",
                 worker_id=worker_id,
+                error_type="invalid_run_type",
+                error_message=f"不支持的 run_type: {run_type}",
+                thread_id=thread_id,
+                current_user=user,
             )
             return
 
         user = await _load_user(uid)
         if not user:
-            await mark_run_terminal(
+            await _settle_uncommitted_run(
                 run_id,
                 "failed",
-                "user_not_found",
-                f"user {uid} not found",
                 worker_id=worker_id,
+                error_type="user_not_found",
+                error_message=f"user {uid} not found",
+                thread_id=thread_id,
+                current_user=user,
             )
             return
 
         try:
             workdir_binding = await _validate_run_workdir_binding(run)
         except Exception as exc:  # noqa: BLE001
-            await mark_run_terminal(
+            await _settle_uncommitted_run(
                 run_id,
                 "failed",
-                "invalid_runtime_scope",
-                str(exc),
                 worker_id=worker_id,
+                error_type="invalid_runtime_scope",
+                error_message=str(exc),
+                thread_id=thread_id,
+                current_user=user,
             )
             return
 
@@ -672,12 +704,14 @@ async def process_agent_run(ctx, run_id: str):
         if run_type == "resume":
             resume_input = input_metadata.get("resume")
             if resume_input is None:
-                await mark_run_terminal(
+                await _settle_uncommitted_run(
                     run_id,
                     "failed",
-                    "resume_input_not_found",
-                    "resume run 缺少 resume 输入",
                     worker_id=worker_id,
+                    error_type="resume_input_not_found",
+                    error_message="resume run 缺少 resume 输入",
+                    thread_id=thread_id,
+                    current_user=user,
                 )
                 return
         else:
@@ -691,12 +725,14 @@ async def process_agent_run(ctx, run_id: str):
                     for message in input_messages
                 ]
             except ValueError as exc:
-                await mark_run_terminal(
+                await _settle_uncommitted_run(
                     run_id,
                     "failed",
-                    "invalid_input_message",
-                    str(exc),
                     worker_id=worker_id,
+                    error_type="invalid_input_message",
+                    error_message=str(exc),
+                    thread_id=thread_id,
+                    current_user=user,
                 )
                 return
 
@@ -715,12 +751,14 @@ async def process_agent_run(ctx, run_id: str):
             if await _is_cancel_requested(run_id):
                 raise asyncio.CancelledError(f"run {run_id} cancelled during preparation")
             logger.error(f"Failed to persist AgentRun manifest: run={run_id}", exc_info=True)
-            await mark_run_terminal(
+            await _settle_uncommitted_run(
                 run_id,
                 "failed",
                 error_type="manifest_persist_failed",
                 error_message=f"运行清单固化失败，执行未开始：{manifest_error}",
                 worker_id=worker_id,
+                thread_id=thread_id,
+                current_user=user,
             )
             return
 
@@ -857,6 +895,18 @@ async def process_agent_run(ctx, run_id: str):
             logger.info(f"Run user cancellation settled: run={run_id}, changed={transition.changed}")
             return
 
+        if execution_timeout.expired():
+            await _settle_uncommitted_run(
+                run_id,
+                "failed",
+                thread_id=thread_id,
+                current_user=user,
+                worker_id=worker_id,
+                error_type="execution_timeout",
+                error_message=f"任务执行超过 {RUN_TIMEOUT_SECONDS} 秒时限",
+            )
+            return
+
         try:
             released = await release_run_lease_for_retry(run_id, worker_id)
         except Exception:
@@ -927,8 +977,8 @@ async def process_agent_run(ctx, run_id: str):
             final_run = None
         if final_run and final_run.status == "cancelled":
             await clear_cancel_signal(run_id)
-        # 整轮完成后再领取下一条 follow-up。
-        if final_run and final_run.status == "completed" and not final_run.runtime_cleanup_pending:
+        # 清理后领取已获用户恢复许可的输入；失败或取消保留的暂停仍由调度器执行。
+        if final_run and final_run.status in {"completed", "failed", "cancelled"} and not final_run.runtime_cleanup_pending:
             await dispatch_next_input(
                 uid=uid,
                 agent_slug=agent_slug,

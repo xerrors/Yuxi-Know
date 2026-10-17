@@ -28,6 +28,7 @@ from yuxi.api.dependencies.auth import get_db
 from yuxi.api.errors import domain_error_handler
 from yuxi.api.routers.public_v1.agents.auth import require_public_context
 from yuxi.api.routers.public_v1.agents.events import router
+from yuxi.modules.agents.input_messages import build_chat_input_message
 from yuxi.modules.agents.models.definitions import Agent
 from yuxi.modules.agents.models.inputs import AgentInput, AgentInputReceipt
 from yuxi.modules.agents.models.messages import Message
@@ -38,9 +39,9 @@ from yuxi.modules.agents.repositories.input import AgentInputRepository
 from yuxi.modules.agents.repositories.input_receipt import AgentInputReceiptRepository
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.repositories.sessions import SessionRepository
-from yuxi.modules.agents.services import input_config, inputs, checkpoint_messages as messages, runs, scheduler, threads, turns
-from yuxi.modules.agents.input_messages import build_chat_input_message
 from yuxi.modules.agents.scope import ActorScope
+from yuxi.modules.agents.services import checkpoint_messages as messages
+from yuxi.modules.agents.services import input_config, inputs, runs, scheduler, threads, turns
 from yuxi.shared.errors import DomainError, StateConflictError
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
@@ -141,6 +142,7 @@ async def test_promote_after_completion_opens_next_turn(sessions):
         await db.flush()
         run.output_message_id = output.id
         await settle_locked_run(db=db, run=run, worker_id="owner", status="completed", token_usage=None)
+        run.runtime_cleanup_pending = False
         await db.commit()
         accepted = await threads.promote_input(
             db=db, scope=SCOPE, thread_id="input-thread", input_id=queued["input_id"], idempotency_key="next-turn"
@@ -379,8 +381,8 @@ async def test_steer_before_first_model_is_saved_as_yielded_not_failed(sessions,
     """模型前让位允许无输出；提交前取消批次则继续原 Run 而非失败。"""
     from langchain.messages import AIMessage
 
-    from yuxi.modules.agents.runtime.middlewares.steer import SteerMiddleware
     from yuxi.modules.agents.repositories.model_audit import ModelMessageAuditRepository
+    from yuxi.modules.agents.runtime.middlewares.steer import SteerMiddleware
     from yuxi.shared.datetime import utc_now
 
     current = await _start(sessions)
@@ -451,12 +453,22 @@ async def test_steer_before_first_model_is_saved_as_yielded_not_failed(sessions,
             assert await db.scalar(select(func.count()).select_from(AgentRun)) == 1
             model = ModelMessageAuditRepository(db)
             await model.start(
-                run_id=current.id, thread_id="input-thread", worker_id="owner",
-                operation_id="after-cancel", sequence=0, started_at=utc_now(),
+                run_id=current.id,
+                thread_id="input-thread",
+                worker_id="owner",
+                operation_id="after-cancel",
+                sequence=0,
+                started_at=utc_now(),
             )
             await model.finish(
-                run_id=current.id, thread_id="input-thread", worker_id="owner",
-                operation_id="after-cancel", content="original task done", finished_at=utc_now(), duration_ms=0, usage=None,
+                run_id=current.id,
+                thread_id="input-thread",
+                worker_id="owner",
+                operation_id="after-cancel",
+                content="original task done",
+                finished_at=utc_now(),
+                duration_ms=0,
+                usage=None,
             )
             status = await messages.save_messages_from_langgraph_state(
                 state=SimpleNamespace(values={"messages": [AIMessage(content="original task done", id="after-cancel")]}),
@@ -611,6 +623,7 @@ async def test_completion_winning_thread_lock_still_accepts_steer(sessions):
             await AgentRunRepository(db).set_output_message(run.id, output.id, worker_id="owner")
             settled = await settle_locked_run(db=db, run=run, worker_id="owner", status="completed", token_usage=None)
             assert settled.status == "completed"
+            run.runtime_cleanup_pending = False
             await db.commit()
             return output.id
 
@@ -681,8 +694,8 @@ async def test_http_steer_has_no_target_or_effective_mode_and_keeps_scope(sessio
         assert (await client.post(url, headers={"Idempotency-Key": "http-spoof"}, json=body)).status_code == 404
     async with sessions() as db:
         persisted = await db.get(AgentInput, accepted["input_id"])
-        assert persisted.kind == "steer" and persisted.status == "pending" and persisted.turn_id is None
-        assert await AgentInputRepository(db).list_messages(persisted.id) == []
+        assert persisted.kind == "steer" and persisted.status == "consumed" and persisted.turn_id is not None
+        assert len(await AgentInputRepository(db).list_messages(persisted.id)) == 1
         assert persisted.messages[0]["content"] == [{"type": "text", "text": "S1"}]
         with pytest.raises(DomainError) as exc:
             await inputs.accept_message(

@@ -34,12 +34,15 @@ async def complete_run_command_cleanup(run: AgentRun) -> bool:
         current = await db.scalar(select(AgentRun).where(AgentRun.id == run.id).with_for_update(key_share=True))
         if current is None:
             raise RuntimeError("Run 的 cleanup Owner 不存在")
-        if not current.runtime_cleanup_pending:
-            return True
-        # 与 retry 领取持同一 Run 锁；取消也必须等待外部清理结束后才能释放。
-        await await_io(asyncio.to_thread(get_sandbox_provider().cancel_run, current.uid, current.id))
-        current.runtime_cleanup_pending = False
-        await db.flush()
+        if current.runtime_cleanup_pending:
+            # 与 retry 领取持同一 Run 锁；取消也必须等待外部清理结束后才能释放。
+            await await_io(asyncio.to_thread(get_sandbox_provider().cancel_run, current.uid, current.id))
+            current.runtime_cleanup_pending = False
+            await db.flush()
+    if current.status == "cancelled":
+        from yuxi.modules.agents.services.turns import finish_cancelled_run
+
+        await finish_cancelled_run(current)
     return True
 
 
@@ -128,7 +131,11 @@ async def reconcile_expired_run_leases(*, now: datetime | None = None) -> list[s
                 if run is None:
                     continue
                 if turn.current_run_id == run.id:
-                    agent_session.queue_paused = True
+                    agent_session.queue_paused = await AgentInputRepository(db).has_pending_inputs(
+                        thread_id=agent_session.thread_id,
+                        uid=agent_session.uid,
+                        app_id=agent_session.app_id,
+                    )
                     await AgentTurnRepository(db).set_terminal(turn, status="failed")
 
                     await notify_turn_state(db, run)
@@ -157,7 +164,7 @@ async def reconcile_pending_runtime_cleanups() -> list[str]:
                 continue
             if run.status in TERMINAL_RUN_STATUSES:
                 await publish_run_settlement(run.id, run.status, thread_id=run.thread_id)
-            if run.status == "completed":
+            if run.status in {"completed", "failed", "cancelled"}:
                 await dispatch_next_input(
                     uid=run.uid,
                     agent_slug=run.agent_slug,

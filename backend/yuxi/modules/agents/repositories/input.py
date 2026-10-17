@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select, update
+from sqlalchemy import exists, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.modules.agents.input_messages import deserialize_input_message
@@ -42,23 +42,54 @@ class AgentInputRepository:
             statement = statement.with_for_update()
         return await self.db.scalar(statement.execution_options(populate_existing=True))
 
-    async def list_pending_inputs(self, *, thread_id: str, uid: str, app_id: str | None) -> list[AgentInput]:
+    async def list_pending_inputs(self, *, thread_id: str, uid: str, app_id: str | None, turn_id: str | None = None) -> list[AgentInput]:
         """按引导优先、原始接收序号返回队列。"""
-        return list(
+        cutoff = await self._resume_sequence(turn_id)
+        pending = list(
             await self.db.scalars(
                 select(AgentInput)
                 .where(
-                    AgentInput.thread_id == thread_id, AgentInput.uid == uid, AgentInput.app_id == app_id, AgentInput.status == "pending"
+                    AgentInput.thread_id == thread_id,
+                    AgentInput.uid == uid,
+                    AgentInput.app_id == app_id,
+                    AgentInput.status == "pending",
+                    AgentInput.received_seq > cutoff,
                 )
                 .order_by((AgentInput.kind == "steer").desc(), AgentInput.received_seq)
             )
         )
+        return sorted(
+            pending,
+            key=lambda item: (
+                item.input_payload.get("resume_queue") is not True,
+                -item.received_seq if item.input_payload.get("resume_queue") is True else 0,
+            ),
+        )
 
-    async def get_pending_steer(self, *, thread_id: str, uid: str, app_id: str | None, for_update: bool = True) -> AgentInput | None:
+    async def has_pending_inputs(self, *, thread_id: str, uid: str, app_id: str | None) -> bool:
+        """读取授权 Thread 是否仍有待办，包括附件准备中的输入。"""
+        return bool(
+            await self.db.scalar(
+                select(
+                    exists().where(
+                        AgentInput.thread_id == thread_id,
+                        AgentInput.uid == uid,
+                        AgentInput.app_id == app_id,
+                        AgentInput.status == "pending",
+                    )
+                )
+            )
+        )
+
+    async def get_pending_steer(
+        self, *, thread_id: str, uid: str, app_id: str | None, for_update: bool = True, turn_id: str | None = None
+    ) -> AgentInput | None:
         """读取最早的待消费引导，用于安全边界就绪检查。"""
+        cutoff = await self._resume_sequence(turn_id)
         statement = (
             select(AgentInput)
             .where(
+                AgentInput.received_seq > cutoff,
                 AgentInput.thread_id == thread_id,
                 AgentInput.uid == uid,
                 AgentInput.app_id == app_id,
@@ -72,9 +103,9 @@ class AgentInputRepository:
             statement = statement.with_for_update()
         return await self.db.scalar(statement.execution_options(populate_existing=for_update))
 
-    async def ready_batch(self, *, thread_id: str, uid: str, app_id: str | None) -> list[AgentInput]:
+    async def ready_batch(self, *, thread_id: str, uid: str, app_id: str | None, turn_id: str | None = None) -> list[AgentInput]:
         """Session 锁内选择就绪队头，steer 仅合并连续就绪前缀。"""
-        pending = await self.list_pending_inputs(thread_id=thread_id, uid=uid, app_id=app_id)
+        pending = await self.list_pending_inputs(thread_id=thread_id, uid=uid, app_id=app_id, turn_id=turn_id)
         preparation = await AttachmentRepository(self.db).statuses_for_inputs([item.id for item in pending])
         batch = []
         for item in pending:
@@ -83,7 +114,7 @@ class AgentInputRepository:
             if batch and item.kind != "steer":
                 break
             batch.append(item)
-            if item.kind == "follow_up":
+            if item.kind == "follow_up" or item.input_payload.get("resume_queue") is True:
                 break
         return batch
 
@@ -158,3 +189,16 @@ class AgentInputRepository:
         input_item.cancelled_at = utc_now()
         await self.db.flush()
         return input_item
+
+    async def _resume_sequence(self, turn_id: str | None) -> int:
+        """恢复轮次只接受其后的新引导，保留旧队列到本轮完成。"""
+        if turn_id is None:
+            return 0
+        return (
+            await self.db.scalar(
+                select(func.max(AgentInput.received_seq)).where(
+                    AgentInput.turn_id == turn_id,
+                    AgentInput.input_payload["resume_queue"].as_boolean().is_(True),
+                )
+            )
+        ) or 0

@@ -84,7 +84,7 @@ Yuxi 始终交付完整知识能力。API 注册知识库、图谱、评估、Da
 
 1. `AgentView` 装配 `SessionWorkspace`，后者收集文本、图片、附件、模型与审批配置，`frontend/src/apis/agent_api.js` 调用 Public Session API。Repository 批量读取事实，由唯一 Session 投影生成详情、列表、搜索和更新响应。
 2. `api/routers/public_v1/agents` 将 JWT 或 API Key 身份转为完整 ActorScope，并把有序消息和配置交给 `modules/agents/services/inputs.py`。接入事务锁定 Thread，验证作用域与幂等回执，保存独立 Input 原始内容、提交级文件引用和 Receipt，并绑定附件到 Input；配置在接收时冻结，正文与原始文件 ID 永久保留。
-3. `modules/agents/services/scheduler.py` 在线程锁下领取未暂停队列的就绪优先队头，原子创建 Turn、首个 pending Run 和正式 Message。follow-up 单条 FIFO；steer 按原接收序号消费连续就绪前缀，各 Input 保持独立。消费固定 Input 的执行归属，并将各 Input 附件挂到自己的最后一条 Message；Receipt 保持接收时的命令目标，不回填执行归属。Message 的 received_at 保留接收时间，created_at 表示进入执行投影的时间。等待回答或审批时拒绝普通消息。
+3. `modules/agents/services/scheduler.py` 在线程锁下领取未暂停队列的就绪优先队头，原子创建 Turn、首个 pending Run 和正式 Message。follow-up 单条 FIFO；steer 按原接收序号消费连续就绪前缀，各 Input 保持独立。暂停后用户主动提交的恢复消息持久固定优先位置并单独消费，完成后继续原队列。消费固定 Input 的执行归属，并将各 Input 附件挂到自己的最后一条 Message；Receipt 保持接收时的命令目标，不回填执行归属。Message 的 received_at 保留接收时间，created_at 表示进入执行投影的时间。等待回答或审批时拒绝普通消息。
 4. owning transaction 提交后才向 ARQ 投递 pending Run。恢复扫描可补投未成功投递的同一个 Run，不自动重试已经失败的工作。
 5. `worker` 中的 `modules/agents/services/runner.py` 使用进程 identity 与 job-attempt token 取得 Run lease；未取得 ownership 的重复任务不会执行。Heartbeat 在独立事务中续租，再加载运行上下文执行 LangGraph。Langfuse 使用 Turn 级 trace 与 Run 级 observation；远端观测不拥有业务终态。
 6. 所有 Session 通过同一 Agent 后端与 middleware 组合 Workdir、Skills、MCP、审批、摘要及协作能力。协作成员拥有独立上下文、Thread/Input/Turn/Run，以父关系和树内名称关联；不继承父历史。全树共享 Project Workdir 与四个执行名额，同一用户的所有树共用一个 Cube VM，等待释放 worker 与执行名额。PostgreSQL 拥有协作消息、等待与终态事实；普通取消只影响指定 Turn，用户明确停止才停止整树。各 Run 的 lease、结果和终态发布独立，用户环境由 worker 在该用户无活动 Run 或操作时空闲休眠；具体行为见[会话协作](docs/agents/session-cooperation.md)。

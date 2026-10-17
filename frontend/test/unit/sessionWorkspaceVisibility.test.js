@@ -9,6 +9,27 @@ const source = readFileSync(
   'utf8'
 )
 
+test('人工等待取消期间显示停止反馈，即使没有流和排队消息', () => {
+  const state = ref({ cancellationPending: true })
+  const expressions = source.slice(
+    source.indexOf('const isProcessing ='),
+    source.indexOf('const replyElapsedSeconds =')
+  )
+  const values = new Function(
+    'computed',
+    'currentThreadState',
+    'isStreaming',
+    'hasQueuedInputs',
+    'currentQueueSnapshot',
+    'isWaitingForUserAction',
+    'queuedInputCount',
+    `${expressions}; return { isProcessing, isReplyLoading, replyLoadingText }`
+  )(computed, state, ref(false), ref(false), ref({ status: 'ready' }), ref(true), ref(0))
+  assert.equal(values.isProcessing.value, true)
+  assert.equal(values.isReplyLoading.value, true)
+  assert.equal(values.replyLoadingText.value, '正在停止，等待任务清理完成...')
+})
+
 test('隐藏成员标签继续接收终态，但不标已读或滚动；显示后恢复可见副作用', () => {
   const props = reactive({ visible: false })
   const visibility = source.slice(

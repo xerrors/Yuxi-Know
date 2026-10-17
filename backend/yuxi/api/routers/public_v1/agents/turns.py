@@ -119,9 +119,10 @@ async def retrieve_public_turn(
     output 只来自 result_run_id 指向的顶层 Run。模型正文 done 或 Run interrupted/yielded 不证明完成。
     """
     result = await get_turn_snapshot(db=db, scope=context.scope, thread_id=session_id, turn_id=turn_id)
+    return_keys = {"current_run_id", "result_run_id", "waitpoint", "cancellation_pending", "runs", "output", "usage"}
     return {
         **result["core"],
-        "yuxi": {key: result[key] for key in ("current_run_id", "result_run_id", "waitpoint", "runs", "output", "usage")},
+        "yuxi": {key: result[key] for key in return_keys},
     }
 
 

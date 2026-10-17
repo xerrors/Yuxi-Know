@@ -9,22 +9,22 @@ from datetime import timedelta
 from unittest.mock import AsyncMock
 
 import pytest
+from agent_run_test_helpers import cleanup_agent_run_threads, create_agent_run
 from langchain_core.messages import ToolMessage
 from langgraph.types import Command
 
-from agent_run_test_helpers import cleanup_agent_run_threads, create_agent_run
-from yuxi.modules.agents.repositories.runs import AgentRunRepository
-from yuxi.modules.agents.repositories.model_audit import ModelMessageAuditRepository
-from yuxi.modules.agents.repositories.tool_audit import ToolMessageAuditRepository
-import yuxi.modules.agents.services.runner as run_worker
 import yuxi.modules.agents.services.leases as lease_worker
+import yuxi.modules.agents.services.runner as run_worker
 from yuxi.infrastructure.postgres.manager import pg_manager
+from yuxi.modules.agents.models.messages import Message
+from yuxi.modules.agents.models.runs import AgentRun
+from yuxi.modules.agents.models.sessions import Session
+from yuxi.modules.agents.models.turns import AgentTurn
+from yuxi.modules.agents.repositories.model_audit import ModelMessageAuditRepository
+from yuxi.modules.agents.repositories.runs import AgentRunRepository
+from yuxi.modules.agents.repositories.tool_audit import ToolMessageAuditRepository
 from yuxi.modules.agents.services.message_recorder import RunMessageRecorder
 from yuxi.modules.agents.services.openai_events import OpenAIEventAdapter
-from yuxi.modules.agents.models.runs import AgentRun
-from yuxi.modules.agents.models.turns import AgentTurn
-from yuxi.modules.agents.models.sessions import Session
-from yuxi.modules.agents.models.messages import Message
 from yuxi.shared.datetime import utc_now
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
@@ -141,7 +141,7 @@ async def test_expired_lease_reconciliation_is_single_winner_and_closes_audit(po
             [audit] = await ModelMessageAuditRepository(db).list_for_run(run_id)
             [attempt] = await AgentRunRepository(db).list_run_attempts(run_id)
             assert (run.status, run.error_type, run.worker_id) == ("failed", "worker_lease_expired", None)
-            assert turn.status == "failed" and agent_session.queue_paused is True
+            assert turn.status == "failed" and agent_session.queue_paused is False
             assert audit.execution_status == "abandoned"
             assert attempt.outcome == "lease_expired"
     finally:

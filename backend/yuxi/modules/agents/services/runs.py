@@ -51,6 +51,7 @@ async def should_yield_for_steer(run_id: str) -> bool:
             uid=run.uid,
             app_id=run.app_id,
             for_update=False,
+            turn_id=turn.id,
         )
         return pending is not None and not await AttachmentRepository(db).has_unready(pending.id)
 
@@ -122,7 +123,11 @@ async def settle_checkpoint(
         )
         if terminal is None or not changed:
             return RunSettlement(status=terminal.status if terminal else status, changed=False)
-        agent_session.queue_paused = True
+        agent_session.queue_paused = await AgentInputRepository(db).has_pending_inputs(
+            thread_id=agent_session.thread_id,
+            uid=agent_session.uid,
+            app_id=agent_session.app_id,
+        )
         if status == "failed":
             await turn_repo.set_terminal(turn, status="failed")
         elif turn.status != "cancelling":
@@ -142,6 +147,7 @@ async def lock_ready_steer(db: AsyncSession, *, agent_session: Session, turn: Ag
         thread_id=agent_session.thread_id,
         uid=agent_session.uid,
         app_id=agent_session.app_id,
+        turn_id=turn.id,
     )
     if pending is None or await AttachmentRepository(db).has_unready(pending.id):
         return None
@@ -190,7 +196,7 @@ async def get_run_snapshot(*, db: AsyncSession, scope: ActorScope, thread_id: st
 async def _consume_steer(*, db: AsyncSession, agent_session: Session, turn: AgentTurn, previous: AgentRun, pending) -> Dispatch:
     """消费 Thread 优先批次，在当前 Turn 建立下一执行段。"""
     input_repo = AgentInputRepository(db)
-    batch = await input_repo.ready_batch(thread_id=previous.thread_id, uid=previous.uid, app_id=previous.app_id)
+    batch = await input_repo.ready_batch(thread_id=previous.thread_id, uid=previous.uid, app_id=previous.app_id, turn_id=turn.id)
     if not batch or batch[0].id != pending.id or batch[0].kind != "steer":
         raise ValueError("Steer 队头已变化或尚未就绪")
     run = await create_turn_run(

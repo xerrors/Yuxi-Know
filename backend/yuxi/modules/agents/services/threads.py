@@ -256,7 +256,7 @@ async def cancel_input(*, db: AsyncSession, scope: ActorScope, thread_id: str, i
         require_receipt_replay(existing, event_type, intent_hash)
         return control_accepted(existing)
 
-    await require_thread(db=db, scope=scope, thread_id=thread_id, lock=True)
+    agent_session = await require_thread(db=db, scope=scope, thread_id=thread_id, lock=True)
     existing = await receipt_repo.get_for_scope(uid=scope.uid, app_id=scope.app_id, thread_id=thread_id, idempotency_key=idempotency_key)
     if existing is not None:
         require_receipt_replay(existing, event_type, intent_hash)
@@ -268,6 +268,8 @@ async def cancel_input(*, db: AsyncSession, scope: ActorScope, thread_id: str, i
     if input_item.status != "pending":
         raise StateConflictError("Input 已被领取或取消")
     await input_repo.cancel(input_item)
+    if agent_session.queue_paused:
+        agent_session.queue_paused = await input_repo.has_pending_inputs(thread_id=thread_id, uid=scope.uid, app_id=scope.app_id)
     receipt = await receipt_repo.create(
         receipt_id=str(uuid.uuid4()),
         idempotency_key=idempotency_key,

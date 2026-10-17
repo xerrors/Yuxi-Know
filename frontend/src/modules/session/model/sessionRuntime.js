@@ -18,11 +18,13 @@ export const useSessionRuntimeStore = defineStore('sessionRuntime', () => {
   const chatThreads = useChatThreadsStore()
   const feedback = useSessionFeedbackStore()
   const chatState = reactive({ threadStates: {} })
-  const threadMessages = computed(() => Object.fromEntries(
-    Object.entries(chatState.threadStates)
-      .filter(([, state]) => state.historyLoaded || Object.keys(state.itemState.items).length)
-      .map(([id, state]) => [id, itemsToMessages(Object.values(state.itemState.items))])
-  ))
+  const threadMessages = computed(() =>
+    Object.fromEntries(
+      Object.entries(chatState.threadStates)
+        .filter(([, state]) => state.historyLoaded || Object.keys(state.itemState.items).length)
+        .map(([id, state]) => [id, itemsToMessages(Object.values(state.itemState.items))])
+    )
+  )
   const threadRuns = ref({})
   const historyPages = reactive({})
   const pendingSends = reactive({})
@@ -71,7 +73,7 @@ export const useSessionRuntimeStore = defineStore('sessionRuntime', () => {
       try {
         const projection = state.itemState
         const previousIds = new Set(Object.keys(projection.items))
-        const paging = historyPages[threadId] ||= { after: null, hasMore: false, loading: false }
+        const paging = (historyPages[threadId] ||= { after: null, hasMore: false, loading: false })
         paging.loading = true
         let after = more ? paging.after : undefined
         let pagesRead = 0
@@ -89,7 +91,8 @@ export const useSessionRuntimeStore = defineStore('sessionRuntime', () => {
           after = page.last_id
           pagesRead++
           // 恢复目标轮次读取完整页；Session 刷新读到已加载区域即可。
-          const recoverGap = !more && previousIds.size && !page.data.some((item) => previousIds.has(item.id))
+          const recoverGap =
+            !more && previousIds.size && !page.data.some((item) => previousIds.has(item.id))
           if (!page.has_more || (!turnId && !recoverGap && pagesRead >= 3)) break
           page = await agentApi.getSessionItems(threadId, { after, turnId, limit: 100 })
         }
@@ -106,9 +109,16 @@ export const useSessionRuntimeStore = defineStore('sessionRuntime', () => {
         }
         state.historyLoaded = true
         streamSmoother.flushThread(threadId)
-        void feedback.load(threadId, threadMessages.value[threadId]
-          .filter((message) => message.phase === 'final_answer' && message.execution_status === 'completed')
-          .map((message) => message.run_id), fresh)
+        void feedback.load(
+          threadId,
+          threadMessages.value[threadId]
+            .filter(
+              (message) =>
+                message.phase === 'final_answer' && message.execution_status === 'completed'
+            )
+            .map((message) => message.run_id),
+          fresh
+        )
         threadRuns.value[threadId] = [...runs.values()]
         if (!state.isStreaming) state.turnStatus = session.yuxi.current_turn?.status || null
         chatThreads.upsertThread(session)
@@ -116,7 +126,8 @@ export const useSessionRuntimeStore = defineStore('sessionRuntime', () => {
         handleChatError(error, 'load')
         throw error
       } finally {
-        if (isCurrentThreadState(threadId, state) && historyPages[threadId]) historyPages[threadId].loading = false
+        if (isCurrentThreadState(threadId, state) && historyPages[threadId])
+          historyPages[threadId].loading = false
       }
     })
   }
@@ -176,7 +187,10 @@ export const useSessionRuntimeStore = defineStore('sessionRuntime', () => {
     handlePublicEvent: (event, threadId) => {
       const result = handlePublicEvent(event, threadId)
       if (event.turn && event.session_id === threadId) {
-        chatThreads.upsertThread({ id: threadId, status: event.turn.status === 'queued' ? 'in_progress' : event.turn.status })
+        chatThreads.upsertThread({
+          id: threadId,
+          status: event.turn.status === 'queued' ? 'in_progress' : event.turn.status
+        })
       }
       return result
     },
@@ -260,6 +274,7 @@ export const useSessionRuntimeStore = defineStore('sessionRuntime', () => {
     fetchAgentState,
     observeThread,
     startRunStream: stream.startRunStream,
+    requestTurnCancellation: stream.requestTurnCancellation,
     resumeActiveRunForThread,
     resumeQueuedInputs,
     startInputMonitor: queue.startInputMonitor,

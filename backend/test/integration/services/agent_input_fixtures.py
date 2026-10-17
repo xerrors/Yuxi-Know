@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from yuxi.infrastructure.postgres.manager import PostgresManager
 from yuxi.migrations.schema import create_business_tables
+from yuxi.modules.agents.input_messages import build_chat_input_message, serialize_input_message
 from yuxi.modules.agents.models.definitions import Agent
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.repositories.definitions import DEFAULT_SHARE_CONFIG
@@ -21,10 +22,8 @@ from yuxi.modules.agents.repositories.input import AgentInputRepository
 from yuxi.modules.agents.repositories.input_receipt import AgentInputReceiptRepository
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.repositories.sessions import SessionRepository
-from yuxi.modules.agents.services import input_config, scheduler, threads, turns
-from yuxi.modules.agents.input_messages import build_chat_input_message, serialize_input_message
-from yuxi.modules.agents.services import inputs
 from yuxi.modules.agents.scope import ActorScope
+from yuxi.modules.agents.services import input_config, inputs, scheduler, threads, turns
 from yuxi.modules.workspace.services.bindings import WorkdirBinding
 
 SCOPE = ActorScope(uid="input-user", app_id=None)
@@ -107,13 +106,14 @@ async def queue_inputs(sessions, *, count: int) -> None:
 
 
 async def send_input(sessions, content: str, mode: str = "steer") -> dict:
-    """通过接收用例提交一条独立幂等消息。"""
+    """提交队列测试输入，用户主动恢复由专门的 HTTP 用例验证。"""
     async with sessions() as db:
         return await inputs.accept_message(
             db=db,
             scope=SCOPE,
             thread_id="input-thread",
             idempotency_key=content,
+            source="test_queue",
             mode=mode,
             messages=[build_chat_input_message(content)],
         )
