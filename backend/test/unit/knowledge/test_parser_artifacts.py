@@ -113,6 +113,65 @@ async def test_html_text_only_preserves_text_without_resource_access(tmp_path, m
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("suffix", [".html", ".htm"])
+@pytest.mark.parametrize("poster", ["poster.png", "../outside.png", "/absolute.png", "https://example.test/poster.png", None])
+@pytest.mark.parametrize("source_kind", ["attribute", "source_child"])
+async def test_html_video_text_only_preserves_fallback_and_link_without_resources(tmp_path, monkeypatch, suffix, poster, source_kind):
+    """正文模式保留视频替代正文与链接，poster 不引入图片或资源访问。"""
+    source = tmp_path / f"source{suffix}"
+    video_url = "https://example.test/video.mp4"
+    poster_attribute = f' poster="{poster}"' if poster is not None else ""
+    video_source = f' src="{video_url}"' if source_kind == "attribute" else ""
+    child_source = f'<source src="{video_url}">' if source_kind == "source_child" else ""
+    original = f"<p>前文</p><video{video_source}{poster_attribute}>{child_source}视频替代正文</video><p>后文</p>"
+    source.write_text(original)
+    original_open = Path.open
+
+    def open_without_resource_reads(path, mode="r", *args, **kwargs):
+        """仅允许读取完整原件，拒绝图片文件读取。"""
+        if "r" in mode and path != source:
+            pytest.fail(f"正文提取读取了额外文件: {path}")
+        return original_open(path, mode, *args, **kwargs)
+
+    def reject_network(*args, **kwargs):
+        """正文模式保留视频 URL 而不读取远端媒体。"""
+        pytest.fail("正文提取访问了网络")
+
+    with monkeypatch.context() as guarded:
+        guarded.setattr(Path, "open", open_without_resource_reads)
+        guarded.setattr(socket.socket, "connect", reject_network)
+        result = await parse(str(source), tmp_path / "parsed", params={"html_text_only": True})
+
+    markdown = result.markdown_path.read_text()
+    assert re.search(r"前文[\s\S]+视频替代正文[\s\S]+后文", markdown)
+    assert video_url in markdown
+    assert "![" not in markdown
+    assert result.resources == ()
+    assert source.read_text() == original
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("suffix", [".html", ".htm"])
+@pytest.mark.parametrize(
+    ("poster", "error", "message"),
+    [
+        ("missing.png", FileNotFoundError, "missing.png"),
+        ("../outside.png", ValueError, "不安全的资源路径"),
+        ("/absolute.png", ValueError, "不安全的资源路径"),
+    ],
+)
+async def test_html_video_default_rejects_missing_or_unsafe_poster(tmp_path, suffix, poster, error, message):
+    """默认视频 poster 仍受原有图片完整性与路径边界约束。"""
+    source = tmp_path / f"source{suffix}"
+    source.write_text(f'<video src="https://example.test/video.mp4" poster="{poster}">视频替代正文</video>')
+
+    with pytest.raises(error, match=message):
+        await parse(str(source), tmp_path / "parsed")
+
+    assert not (tmp_path / "parsed").exists()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("value", ["true", "false", 1, 0, None, [], {}])
 async def test_html_text_only_rejects_non_boolean_option(tmp_path, value):
     """非布尔值不能隐式开启或关闭正文提取。"""

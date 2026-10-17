@@ -83,6 +83,8 @@ def _convert_document(source: Path, output_dir: Path, options: ParseOptions) -> 
             document = BeautifulSoup(content, "html.parser")
             for image in document.find_all("img"):
                 image.replace_with(image.get("alt", ""))
+            for video in document.find_all("video"):
+                video.attrs.pop("poster", None)
             content = str(document)
         markdown = md_convert(content, heading_style="ATX")
         if not html_text_only:
