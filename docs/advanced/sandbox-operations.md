@@ -1,6 +1,6 @@
 # 沙盒配置与运维
 
-Yuxi 固定使用 CubeSandbox v0.7.3 的用户 VM。服务继续使用 Compose，执行节点必须是专用 Linux/KVM，Yuxi 与 Cube 的 Workspace/Skills 挂载必须指向同一份文件。旧 Docker/Kubernetes provider、provisioner 和 Docker socket 挂载已删除，没有运行时回退。
+本页供部署管理员准备和维护 Cube 用户 VM。Yuxi 固定使用 CubeSandbox v0.7.3，应用服务使用 Compose，执行节点需要专用 Linux/KVM；Yuxi 与 Cube 的 Workspace/Skills 挂载必须指向同一份文件。运行时只装配 Cube，节点或实例故障会明确失败。
 
 ## 原生执行节点
 
@@ -30,6 +30,8 @@ SANDBOX_IDLE_SECONDS=300
 两个 `CUBE_NODE_*` 值都是执行节点上的目录，分别与 API/worker 的 `/app/user-data`、`/app/skill-projections` 指向同一份底层文件；容器路径不能直接当成节点路径。示例要求管理员先将这两份存储共享或绑定到执行节点的 `/data/shared/yuxi` 下，符合 CubeMaster 默认的 `/data/shared/` 挂载白名单；设置环境变量不会创建共享挂载。使用其他节点目录时，管理员在 `extra_conf.allowed_host_mount_prefixes` 中显式配置所需窄前缀。
 
 每个用户 VM 只挂载其 Workspace 子目录和授权 Skills 投影，投影只读；平台来源目录、数据库目录、`.env` 和 Docker socket 均不挂载。控制面及数据代理通过私网供 API/worker 访问，不作为公网产品接口开放。VM 默认禁止私网出口，外网包安装可用。
+
+同一用户的不同 Run 复用同一 VM，协作树成员共用 Project Workdir；每棵协作树最多同时执行 4 个 Run。模板构建脚本使用 `--cpu 1000 --memory 1024`，实例资源随实际模板决定，更新模板不会调整已有实例。节点容量需要按活跃用户与命令负载测量，应用连接池预算见[Agent 并发容量](./agent-concurrency-capacity.md)。
 
 首次启动按[快速开始](../intro/quick-start.md)构建并启动完整拓扑；更新应用镜像或内置定义时，按[共享内容更新](./deployment.md#共享内容更新与失败重试)停止消费者、执行 app-init 后恢复服务，使用该环境原有的 Compose 与环境文件。
 

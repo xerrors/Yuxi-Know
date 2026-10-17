@@ -31,7 +31,7 @@ Web 与 Demo 初始读取最新内容页并显式加载更早内容，刷新合�
 | SSE 断开或 Redis 过期仍能取得目标结果 | 事件、最终结果 | events/turns service、三端观察 | worker/SSE 与客户端恢复测试 | 相邻 Turn 终态不能结算目标 Turn | Passed |
 | 完整三端流程与公开文档一致 | 调用方、OpenAPI | Web、CLI、Demo、公开参考 | 三端 gate、真实页面、HTTP/worker、docs build | 旧入口返回 404 | Passed |
 
-实际证据：真实 PostgreSQL/HTTP 与 OpenAPI 专项 17 passed；worker 生命周期、SSE、配置及附件场景 21 项，修正旧状态断言后相应 3 项重跑通过。后端全量 unit 2571 passed、55 skipped。客户端、浏览器与文档的最终 gate 结果由[对齐计划](../../agents-api-alignment-plan.md)保存。命令使用 `uv run --no-sync --group test`，复用容器已安装测试环境；直接 sync 会触碰只读的 `yuxi.egg-info`。
+实际证据：真实 PostgreSQL/HTTP 与 OpenAPI 专项 17 passed；worker 生命周期、SSE、配置及附件场景 21 项，修正旧状态断言后相应 3 项重跑通过。后端全量 unit 2571 passed、55 skipped。客户端、浏览器与文档的最终 gate 结果由[对齐交付记录](../archived/2026-10-09-agents-api-delivery.md)保存。命令使用 `uv run --no-sync --group test`，复用容器已安装测试环境；直接 sync 会触碰只读的 `yuxi.egg-info`。
 
 ## 后果
 

@@ -10,8 +10,8 @@ Skill 是一个可复用的能力包，通常包含一个 `SKILL.md`、提示词
 
 | 来源 | 位置和事实 | 谁可以安装/管理 |
 | --- | --- | --- |
-| 内置 | 随代码发布，启动时同步索引 | superadmin 可以启用/停用，不能删除或直接编辑 |
-| 共享上传/远程 | Skill 持久目录 + PostgreSQL 索引 | 管理员按共享范围管理 |
+| 内置 | 随代码发布，由 `app-init` 同步文件、元数据和依赖 | superadmin 可以启用/停用，不能删除或直接编辑 |
+| 共享上传/远程 | 不可变 Skill 内容包 + PostgreSQL 当前引用和索引 | 管理员按共享范围管理 |
 | Agent 专属 | Skill 持久目录 + 唯一 Agent 绑定 | 访问与管理权限跟随所属 Agent |
 | 个人 | 当前用户 UserWorkspace 的 `agents/skills/<slug>` | 当前用户；不创建共享 Skill 数据库记录 |
 
@@ -96,7 +96,7 @@ skill_dependencies: []
 
 有管理权限的用户可在 Skill 详情页编辑文本文件。文件和“配置”中的依赖表单共用一份草稿；切换文件或页签保留修改，文件区域或运行依赖区域的“保存修改”一次提交全部内容。根文件的名称、描述及依赖声明同步到数据库索引，依赖选择也回写根文件。保存使用加载完整内容时取得的修订值；其他人修改任何文件后，页面拒绝覆盖并保留全部草稿，需要核对最新内容后重试。离开页面或刷新时，未保存的修改会触发确认。共享范围和启停状态分别保存。
 
-新的内容在后续 Agent Run 准备时生效；已准备 Run 的预加载根文本保留原有快照，脚本和参考文件沿用实时用户投影机制。
+后续 Run 从当前内容引用准备 Skill；运行期间，授权边界也会刷新可见资源、普通 Skill 的预加载说明和用户投影。Agent 专属 Skill 的根说明在本 Run 内保留准备时内容，脚本和参考文件按当前授权投影读取。新增本地工具依赖需要后续 Run 重新构图注册。
 
 ### Agent 专属操作指南
 
@@ -129,9 +129,9 @@ https://modelscope.cn/skills/@anthropics/pdf
 https://modelscope.cn/collections/MiniMax/MiniMax-Office-skills
 ```
 
-除了按仓库或合集拉取，也可以在远程安装对话框切换到“全局搜索发现”，输入关键词检索 `skills.sh` 上的开源 Skills，再选择结果批量拉取和安装。搜索在一次性 Sandbox 中执行；选中结果后的实际拉取仍经过来源白名单和安装确认流程。
+除了按仓库或合集拉取，也可以在远程安装对话框切换到“全局搜索发现”，输入关键词检索 `skills.sh` 上的开源 Skills，再选择结果批量拉取和安装。搜索和拉取使用操作者的持久 Cube VM，在每个请求专属的临时 HOME 与工作目录中运行；请求结束清理该目录，保留用户 VM。选中结果后的实际拉取仍经过来源白名单和安装确认流程。
 
-GitHub 的 `owner/repo` 简写会被转换为 HTTPS 地址。远程来源会在不继承全局或用户环境变量的一次性 Sandbox 中下载和提取，系统会拒绝绝对路径和路径穿越，并限制文件数、目录深度和总大小。来源白名单限制产品允许的地址，不是网络出口防火墙。
+GitHub 的 `owner/repo` 简写会被转换为 HTTPS 地址。远程下载复用用户环境，临时 HOME 只隔离本次 CLI 的配置和文件，不提供一次性虚拟机隔离。宿主安装边界在接收内容时拒绝绝对路径、路径穿越与符号链接，并限制文件数、目录深度和总大小。来源白名单限制产品允许的地址，不充当网络出口防火墙；安装前需审查来源及脚本权限。
 
 ### 新增内置 Skill
 
@@ -139,13 +139,13 @@ GitHub 的 `owner/repo` 简写会被转换为 HTTPS 地址。远程来源会在�
 
 `SKILL.md` frontmatter 唯一拥有名称、描述、版本和依赖。`slug` 必须与目录名一致，省略时使用 `name`；`version` 省略时为 `1.0.0`，建议使用引号包裹版本字符串。工具、MCP、Skill 依赖使用本页定义的字段。缺少根文件或元数据不合法时，启动同步明确失败。
 
-API/worker 启动时同步文件、元数据和依赖，保留数据库中的启停状态。重启后在“扩展 → Skills”核对新增项的说明和依赖；新增脚本或资源也必须随发行包携带。源码目录与共享投影分别拥有发布内容和安装文件，编辑应落在源码目录。
+`app-init` 部署任务同步文件、元数据和依赖，保留数据库中的启停状态；API 与 worker 等待同步成功后启动。发布后在“扩展 → Skills”核对新增项的说明和依赖，新增脚本或资源也必须随发行包携带。内置内容在源码目录维护，用户投影由运行准备按授权刷新。
 
-安装前仍应审查 Skill 的提示词、脚本、依赖和网络行为。不要把数据库密码、云平台密钥或 Cube 控制凭据 放进 Skill 或 Agent 环境。
+安装前仍应审查 Skill 的提示词、脚本、依赖和网络行为。不要把数据库密码、云平台密钥或 Cube 控制凭据放进 Skill 或 Agent 环境。
 
 ## 依赖和加载时机
 
-Agent 的 `skills` 配置语义（`"all"`、固定数组与默认值）由[资源选择契约](./agents-config.md)拥有，本页描述激活时机。每个 Run 准备 Context 时，系统按权限解析共享选择，合并当前用户全部个人 Skill，再展开 `skill_dependencies`；同树会话使用同一规则。`skills=[]` 时个人 Skill 仍进入模型可见的描述列表，只是没有共享选择。个人 Skill 安装不修改 Agent 配置，新增 Skill 在下一次 Run 准备时自动加入，已准备的运行保留快照。
+Agent 的 `skills` 配置语义（`"all"`、固定数组与默认值）由[资源选择契约](./agents-config.md#资源选择语义)拥有，本页描述激活时机。每个 Run 准备 Context 时，系统按权限解析共享选择，合并当前用户全部个人 Skill，再展开 `skill_dependencies`；同树会话使用相同规则。`skills=[]` 时个人 Skill 仍进入模型可见的描述列表。个人安装不修改 Agent 配置，后续 Run 自动发现新增个人 Skill；运行中也在模型和工具边界重新解析当前权限与 Skill 资源，本地工具的执行注册仍由该 Run 构图拥有。
 
 ### 普通渐进加载
 
@@ -202,4 +202,8 @@ Skill 的选择影响 Prompt 和工具激活；共享投影按用户授权集合
 - 脚本按不可信输入处理，不读取或输出运行环境中的秘密。
 - 修改共享 Skill 的依赖、范围或文件后，用一个真实 Agent Run 验证模型可见工具和最终产物。
 
-权限、依赖与带锁读取由 [Skill 访问契约](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/skills/access.py) 拥有，内置文件和索引同步由 [builtin/sync](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/skills/builtin/sync.py) 拥有，安装确认暂存由 install_draft 模块拥有。shared 保留现有扩展与测试使用的显式导出，包内实现直接依赖职责 Owner。实现入口见 [共享 Skill 用例](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/skills/shared.py)、[运行时解析](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/skills/runtime.py) 和 [Skills middleware](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/runtime/middlewares/skills.py)。
+## 源码定位与验证
+
+[Skill 访问契约](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/skills/access.py)拥有权限、依赖与带锁读取，[内容编辑](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/skills/edit.py)拥有修订校验与不可变包发布，[安装草稿](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/skills/install_draft.py)拥有安装确认前的暂存。[内置同步](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/skills/builtin/sync.py)由 `app-init` 调用；[运行时解析](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/skills/runtime.py)和[Skills middleware](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/runtime/middlewares/skills.py)分别拥有资源快照与模型可见性。
+
+[编辑 HTTP 测试](https://github.com/xerrors/Yuxi/blob/main/backend/test/integration/api/test_shared_skill_edit_router.py)覆盖修订冲突和保存结果，[投影集成测试](https://github.com/xerrors/Yuxi/blob/main/backend/test/integration/services/test_user_skill_projection.py)核对授权后的实际文件，[远程安装测试](https://github.com/xerrors/Yuxi/blob/main/backend/test/integration/sandbox/test_remote_skill_install.py)检查个人安装与请求目录清理。源码和固定测试不能证明第三方 Skill 的当前内容安全，安装前仍需审查目标包。

@@ -43,7 +43,7 @@ Content-Type: application/json
 }
 ```
 
-接口返回任务已提交。完成后回读文件记录，确认状态为 `parsed` 或 `indexed`。
+接口返回 `status=queued` 与 `job_id`，表示后台作业已经登记。管理员通过 `GET /api/background-jobs/{job_id}` 观察作业进度，完成后回读文件记录，确认状态为 `parsed` 或 `indexed`；`auto_index=true` 时还需验证目标文件可检索。
 
 ## 分步导入
 
@@ -62,7 +62,7 @@ URL 导入需要管理员身份和目标知识库的管理权限。先调用 `PO
 
 上传入口会检查内容哈希，但数据库没有内容哈希唯一约束。并发请求仍可能产生重复记录；`/documents/add` 和一体化入口会保存调用方提供的哈希，不会替调用方再次完成幂等去重。
 
-Durable Task 的 `success` 只代表 worker 已完成编排，任务状态不拥有文件事实；最终结论要按[知识库机制](../mechanisms/knowledge-base.md#文档状态机)回读文件状态，并在需要时核对 MinIO、chunk 和向量索引。完整请求 Schema 和错误响应以部署实例的 Swagger 页面为准：`<base-url>/docs`。
+后台作业由 PostgreSQL 的 `BackgroundJobRecord`（`background_jobs` 表）保存登记、执行租约、进度和终态。作业的 `success` 表示 worker 已完成编排，文件状态与内容仍由知识库保存；最终结论按[知识库机制](../mechanisms/knowledge-base.md#文档状态机)回读文件状态，并在需要时核对 MinIO、chunk 和向量索引。完整请求 Schema 和错误响应以部署实例的 Swagger 页面为准：`<base-url>/docs`。
 
 ## 飞书只读连接配置
 

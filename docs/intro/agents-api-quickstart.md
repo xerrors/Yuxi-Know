@@ -31,7 +31,7 @@ INPUT_ID=$(printf '%s' "$CREATED" | jq -r '.yuxi.receipt.input_id')
 printf '%s\n' "$CREATED" | jq .
 ```
 
-观察 HTTP `201`、`object=agent.session` 和非空的 Input ID。接收成功后工作异步执行；排队时创建回执的 `yuxi.receipt.turn_id/run_id` 可为空。
+观察 HTTP `201`、`object=agent.session` 和非空的 Input ID。接收成功后工作异步执行；普通消息创建回执的 `yuxi.receipt.turn_id/run_id` 始终为空。
 
 ## 定位本轮并读取结果
 
@@ -100,4 +100,16 @@ FILE_ID=$(curl --fail-with-body "$BASE_URL/api/v1/agents/files" \
   -F 'file=@report.pdf' | jq -r '.id')
 ```
 
-创建时将 FILE_ID 放入顶层 `attachment_file_ids`，后续消息放入事件 `yuxi.attachment_file_ids`。例如后续请求的 yuxi 为 `{"mode":"follow_up","attachment_file_ids":["<file-id>"]}`。接收后通过 Input 的 `attachment_status` 确认文件 ready；准备失败会保留接收事实并恢复同一提交。直接视觉输入在消息 content 中加入 `{"type":"input_image","image_url":"data:image/png;base64,..."}`，保留实际 MIME 与完整 URL。完整规则见[图片与文件附件](../advanced/agents-public-api.md#图片与文件附件)。
+创建时将 FILE_ID 放入请求的 `yuxi.attachment_file_ids`；后续消息放入对应事件的同名字段。创建请求体例如：
+
+```json
+{
+  "agent_id": "default-chatbot",
+  "input": "总结这份报告",
+  "yuxi": {"attachment_file_ids": ["<file-id>"]}
+}
+```
+
+后续消息事件的 `yuxi` 为 `{"mode":"follow_up","attachment_file_ids":["<file-id>"]}`。沿原 Input 查看附件准备状态和消费归属，准备未就绪时不生成正式消息。准备失败保留同一次接收事实，按[附件协议](../advanced/agents-public-api.md#图片与文件附件)恢复，不用新幂等键重复提交文件。
+
+直接视觉输入在消息 `content` 中加入 `{"type":"input_image","image_url":"data:image/png;base64,..."}`，保留实际 MIME 与完整 URL。

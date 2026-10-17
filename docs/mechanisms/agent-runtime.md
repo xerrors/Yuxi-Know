@@ -4,7 +4,7 @@
 
 ## 运行入口
 
-Public Thread 接入把普通消息保存为 Input 与 Receipt，调度器消费时建立 Turn/Run 和正式 Message；审批恢复在同一 Turn 建立下一 Run，协作会话从持久 Input 建立自己的 Thread、Turn、Run，并通过创建者关系关联父执行。worker 只执行已持久化的 Run：
+Public Thread 接入把普通消息保存为 Input 与 Receipt，调度器消费时建立 Turn/Run 和正式 Message；回答或审批恢复在同一 Turn 建立下一 Run。协作工具先创建成员的独立 Thread，再通过相同输入链路提交工作，以创建者关系关联父执行。worker 只执行已持久化的 Run：
 
 ```mermaid
 flowchart LR
@@ -25,9 +25,11 @@ worker 在取得 lease 并校验输入后，从 Input 冻结的可配置 Context
 
 API/worker 不信任浏览器内存中的完整配置。请求可以提供受限的单次覆盖值，例如模型或工具审批模式；配置快照也不能替代实时授权。
 
-状态查询在 Session 与 Workdir 授权后直接读取 PostgreSQL checkpointer 的根 namespace，返回最近完整快照及同批 pending writes 中的中断，仅在最新 Run 为 interrupted 时展示审批。读取不创建 Context 或模型；业务 pending writes 的合并仍由执行图拥有。HTTP 状态查询返回待办、产物、协作树和用量；Turn SSE 提供执行增量与状态，前端通过 `/api/v1/agents/sessions/{thread_id}/cooperation` 轮询完整协作摘要；该入口只读取持久关系，不读取 checkpoint 或结果正文。批量读取全部成员、最新 Turn、执行状态和待处理输入。同一 Thread 在页面与侧栏共享 session runtime 的历史、运行状态、流订阅和恢复请求。Input 队列由一个 Thread 轮询器持有待观察 ID 集合、计时器和请求取消信号；状态、历史和审批恢复只使用 Thread 身份读取；最后一个观察视图卸载才释放订阅，视图可见性与浏览器标签可见性共同约束已读和滚动。终态与 resync 请求读取新历史，不复用较早发出的快照。文件由 Workdir/Sandbox 边界持久化，前端文件面板通过文件系统接口读取当前 Workdir。
+状态查询在 Session 与 Workdir 授权后读取 PostgreSQL checkpointer 的根 namespace，返回最近完整快照及同批 pending writes 中的中断，仅在最新 Run 为 `interrupted` 时展示审批。读取不创建 Context 或模型，业务 pending writes 的合并由执行图完成。文件面板经文件系统接口读取当前 Workdir。
 
-普通来源调用 `modules/agents/services/inputs.py` 接收用例：作用域校验后保存 Input 原始消息、提交级文件引用与幂等 Receipt，附件只绑定 Input；附件准备就绪后，调度器在同一事务消费优先队头并创建 Turn/Run 与正式 Message，每个 Input 的附件挂到自己的最后一条 Message，提交后投递 Run。Input 永久保存来源、优先级、正文、原始文件 ID 和接收时冻结的完整可配置 Context；Message 拥有执行投影及其时间，保留原 Input、消息位置和接收时间。Receipt 的命令目标不会随消费变化，执行归属通过 Input 查询。worker 为冻结配置装配当前身份、Workdir 与授权资源。调度、引导和控制的完整契约见 [Agent 输入队列与调度](./agent-request-queue.md)。
+HTTP 状态查询提供待办、产物和用量，Turn SSE 提供执行增量；`/api/v1/agents/sessions/{thread_id}/cooperation` 从持久关系批量读取成员、最新 Turn 和输入队列，不读取 checkpoint 或结果正文。同一 Thread 的页面与侧栏共享历史、状态、流订阅和 Input 观察器，最后一个观察视图卸载时释放订阅。终态和 resync 触发新的历史读取，结果归属以持久快照为准。
+
+Input 接收、附件就绪、消费与 Run 投递分别拥有明确提交点；worker 使用输入冻结配置，并重新取得当前身份、Workdir 与授权资源。FIFO、steer、安全接管、消息与附件归属、取消和队列恢复的完整契约由[输入队列与调度](./agent-request-queue.md)维护。
 
 断线后调用方从 Public Session、Input、Turn、Run 与 Items 查询读取明确的接收、消费和结果归属。排队 Input 尚无 Turn/Run；最终输出只属于 Turn 的 `result_run_id` 所指顶层 Run。HTTP `202`、SSE 中断和 Run `yielded` 都不是整轮成功证明。
 
@@ -78,7 +80,7 @@ manifest v2 的配置摘要来自准备后的可配置字段，包含模型覆�
 
 ## 文件和 Memory
 
-当前 Project 的 `workdir_path` 决定 Agent 的默认工作目录。同树会话共享 Project Workdir 和根 Session 的真实沙盒；各自拥有 Thread checkpoint、Run lease、heartbeat 和清理责任。父轮次结束保留后代工作；环境由整树空闲回收释放，规则见[会话协作](../agents/session-cooperation.md)。
+当前 Project 的 `workdir_path` 决定 Agent 的默认工作目录。同树会话共享 Project Workdir，各自拥有消息历史、Thread checkpoint、Run lease、heartbeat 和命令清理责任。执行环境属于用户，同用户不同 Project 也共用持久 Cube VM；一个协作树结束不会销毁 VM。用户没有活动 Run、操作和待清理命令时，worker 才按空闲策略休眠环境，详见[沙盒生命周期](./sandbox.md#生命周期与并发)。
 
 `agents/MEMORY.md` 只有在用户配置 `enable_memory=true`，且该文件存在并包含非空内容时，才由 Memory middleware 读取并提供受限的记忆工具。未保存配置的用户默认启用 Memory，已保存的关闭选择继续生效。用户可在账户设置中切换开关，或点击“查看 Memory”进入个人空间并打开该文件。它是用户主动维护的参考资料，不是系统指令。Memory 读取和更新有独立的用户、Run、worker 和文件大小校验。
 
@@ -129,4 +131,4 @@ BaseAgent 保留 LangGraph v3 ProtocolEvent 的通道、顺序、内容块和 na
 
 正常执行由 checkpoint 持久化用例在同一事务形成消息、最终输出归属与 Run/Turn 状态，runner 核对已提交结果后清理执行责任并发布通知。未提交的失败与用户取消由 runner 的共同用例尽力发布已缓冲的公开事件、回读用量并以有效 lease 提交终态；该结果同样只经过一次清理和通知。等待和 yield 保留各自的接续语义，已提交终态的重投递按持久清理标记补做清理、必要通知和后续 Input 调度。原始推理和业务状态使用明确的 yuxi 扩展；官方 item 与 content 事件保持官方结构。详情见 [Agents Public API](../advanced/agents-public-api.md)。
 
-子 Thread 在委派事务中保存实际模型和审批默认值，各 Input 接收时仍冻结本次配置。直接向子 Thread 提交新的 follow-up 会创建独立的用户 Turn，不继承旧 Turn 的 `created_by_run_id`。Thread 委派关系继续证明其用户、APP 和共享 Project 的授权；本轮 Run 的委派身份只用于本轮父子取消与 tracing，不以 Thread 历史委派推断取消范围。附件来源先随 Input 和 Receipt 提交，再写入授权 Workdir 并提交就绪事实；消费时生成 Message 并绑定最终附件。文件准备期间仅通过 Input/queue 查看 preparing 状态，公开用户 item 在消费后出现。模型附件上下文只包含本次 Input 与此前已消费的来源。
+子 Thread 在委派事务中保存配置快照，各 Input 接收时继续冻结本次配置。直接向子 Thread 提交新的 follow-up 会创建独立的用户 Turn，不继承旧 Turn 的 `created_by_run_id`。Thread 委派关系记录其用户、APP 和共享 Project；执行与控制仍复查当前授权，并按本轮明确归属确定取消和 tracing 范围。成员身份、结果读取与停止语义见[会话协作](../agents/session-cooperation.md)。

@@ -18,7 +18,7 @@ Session repository 批量读取当前 Turn、Run、输入数量、已读标记�
 
 Session 默认配置、Input 接收快照和 Run 执行快照分别表达不同时间点；每个时点只有完整快照。普通输入复制默认配置并应用显式覆盖；steer/resume 使用当前 Run 快照。执行拒绝缺失快照，避免逐层回退到最新 Agent。工作状态、waitpoint、未读标记分别拥有各自含义；协作等待公开为执行中，普通客户端直接消费公开工作状态。
 
-本决定部分替换[机制对齐决定](2026-10-09-agents-api-mechanism-alignment.md)、[资源契约决定](2026-10-09-agents-resource-contract.md)及[配置及取消决定](2026-10-09-agents-session-lifecycle.md)的重复事实与状态策略，并替换[附件提交决定](2026-10-09-agents-draft-attachments.md)中的事实副本、锁与恢复编排，并取代[草稿对象扫描决定](../archived/2026-10-09-draft-cleanup-batches.md)。保持用户/APP 隔离、Input FIFO/steer、提交后派发、附件就绪边界和明确 result_run_id。直接在 main 修改；不建立通用任务平台，不迁移历史附件 JSON，不加入旧协议兼容层，也不改变官方 SDK 完整调用的 P1 边界。
+本决定部分替换[机制对齐决定](2026-10-09-agents-api-mechanism-alignment.md)、[资源契约决定](2026-10-09-agents-resource-contract.md)及[配置及取消决定](2026-10-09-agents-session-lifecycle.md)的重复事实与状态策略，并替换[附件提交决定](2026-10-09-agents-draft-attachments.md)中的事实副本、锁与恢复编排，并取代[草稿对象扫描决定](../archived/2026-10-09-draft-cleanup-batches.md)。保持用户/APP 隔离、Input FIFO/steer、提交后派发、附件就绪边界和明确 result_run_id。不建立通用任务平台，不迁移历史附件 JSON，不加入旧协议兼容层，也不改变官方 SDK 完整调用的 P1 边界。
 
 ## 替代方案
 
@@ -62,4 +62,4 @@ docker exec yuxi-owner-api uv run --no-sync --group test pytest test/e2e/test_se
 
 附件表增加明确的 Schema 维护成本，并删除对象 manifest、JSON 归属反查、多处记录补写和文件 advisory lock。准备期间保留临时内容；就绪提交后删除来源，清理失败由现有恢复循环重试。跨存储不具有原子事务，持久准备状态和 ready 消费门禁拥有恢复边界。Workdir 修改不会被重复准备覆盖，草稿不承担正式内容的永久备份。
 
-business Schema 由 schema-init 拥有；当前 Schema 8 只初始化新库并拒绝旧版本，输入投影分离决定撤下 v5→v6 升级入口。不导入历史 JSON，不转换缺失快照。需要历史数据支持时单独进行一次性转换。Session 默认配置更新只影响后续普通输入，已接收配置与当前 Run 保持各自时间快照。协作等待继续执行，人工等待要求响应，未读标记单独展示。
+当前数据库基线由[初始 Schema 决定](2026-10-15-initial-schema-baseline.md)拥有，[app-init](2026-10-18-app-initialization.md) 执行初始化并拒绝不兼容版本；本记录中的 v5→v6 验证只保留为历史证据。不导入历史 JSON，不转换缺失快照。需要历史数据支持时单独进行一次性转换。Session 默认配置更新只影响后续普通输入，已接收配置与当前 Run 保持各自时间快照。协作等待继续执行，人工等待要求响应，未读标记单独展示。

@@ -35,7 +35,8 @@ def example_tool(text: str) -> str:
 | `ocr_parse_file` | 把工作区中受支持的 PDF、Office 或图片转换为 Markdown |
 | `present_artifacts` | 展示当前用户可见的文件产物 |
 | `install_skill` | 从允许的沙盒路径或 Git 来源安装个人 Skill |
-| `web_search` | 使用已配置的豆包或 Tavily 搜索网页 |
+| `web_search` | 使用已配置的 Tavily、DeepSeek 或豆包 Custom 搜索网页 |
+| `web_fetch` | 通过 Tavily Extract 或 DeepSeek Fetch 读取指定网页的 Markdown 正文 |
 
 文件读写和命令执行由 Agent 的 Sandbox backend 提供。Agent 根据用户要求和项目结构选择合适的产物位置，通过 `present_artifacts` 展示结果文件；`large_tool_results` 和会话摘要等内部文件不会作为交付物展示。
 
@@ -104,20 +105,15 @@ kb_tools = get_common_kb_tools()
 
 ## 内置工具：网页搜索
 
-`web_search` 让 Agent 从外部网页获取实时信息，当前支持豆包和 Tavily 两个供应商。搜索结果属于外部来源，不能自动替代知识库或人工核验；对重要结论应回到原网页核实。
+`web_search` 支持 Tavily、DeepSeek 和豆包 Custom，返回标题、URL、短摘要、相关片段和可选正文；`web_fetch` 支持 Tavily Extract 和 DeepSeek Fetch，通过固定的供应商端点读取指定 HTTP(S) 网页的 Markdown 正文。豆包搜索摘要不能作为任意 URL 的抓取结果。分数保留供应商原始量程及 `score_max`，跨供应商比较前需核对含义；重要结论仍需回到来源核实。
 
-供应商在 API/worker 环境中选择并提供凭证：
+超级管理员在“设置 → 网络搜索”分别选择搜索和网页抓取服务，编辑各供应商的 API Key。测试可以使用未保存的 Key 草稿，只影响该次测试；实际保存与环境变量的优先级、生效时机见[网络搜索配置](../advanced/configuration.md#网络搜索与网页正文)。凭据由服务端配置持有，不放进 Agent Context、Skill 或沙盒用户环境。
 
-```bash
-WEB_SEARCH_PROVIDER=doubao
-DOUBAO_SEARCH_API_KEY=<your-doubao-key>
-```
+两个工具的注册名随代码稳定存在。每次构图时，运行时工具装配器读取有效供应商和凭据，只把已配置能力加入本轮 ToolNode；Skill 依赖也遵循这一规则。缺少配置的能力记录 `component=web_search` 或 `component=web_fetch`、原因和 `available=false`，本轮不绑定该工具。目录中出现工具名称只证明已注册，实际对话中的工具 schema 和结果才能证明本轮可用。
 
-或 `WEB_SEARCH_PROVIDER=tavily` 加 `TAVILY_API_KEY=<your-tavily-key>`。`WEB_SEARCH_PROVIDER` 只接受这两个值；留空时按已配置的 API Key 自动选择，两个 Key 都配置时优先豆包，没有有效 Key 时不会注册该工具，并记录 `component=web_search`、缺失凭据或供应商不可用原因及 `available=false`。密钥只放在受保护的环境变量或密钥管理器中，不要写进 Skill、Agent 用户环境、代码或日志。
+每次实际调用重新读取有效配置，页面保存可影响已绑定工具的后续调用；本轮尚未绑定的能力在后续 Run 构图时加入。显式选择的供应商缺少凭据或调用失败时返回工具错误，不跨供应商重试。正常搜索无命中返回成功的空列表；抓取没有可用正文时明确失败。
 
-工具在 API 和 worker 进程加载时注册，修改环境变量后需要 `docker compose up -d --force-recreate api worker`。验证方式：在智能体详情确认工具列表出现「网页搜索」，用一个需要最新信息的问题发起真实对话，并检查工具调用返回的 URL、标题和摘要。没有该工具时检查 `WEB_SEARCH_PROVIDER` 拼写、对应 Key 是否存在以及容器是否已重建。
-
-实现入口：[网页搜索工具](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/tools/builtin/web_search.py)。
+实现由[工具入口](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/tools/builtin/web_search.py)、[网页服务](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/web/services.py)和[运行时装配](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/tools/runtime.py)共同拥有。[配置 HTTP 测试](https://github.com/xerrors/Yuxi/blob/main/backend/test/integration/api/test_web_tools_settings.py)检查权限、持久化与脱敏，[供应商协议测试](https://github.com/xerrors/Yuxi/blob/main/backend/test/integration/services/test_web_provider_protocol.py)核对归一化结果；固定重放不能替代实时供应商探针。
 
 ## 工具组装流程
 

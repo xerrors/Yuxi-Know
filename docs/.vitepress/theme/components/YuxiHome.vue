@@ -10,7 +10,7 @@ const MASCOT_IMAGE = `${OSS_ASSET_BASE}/yuxi-mascot-cutout.png`
 const docPaths = [
   {
     title: '第一次部署 Yuxi',
-    desc: '准备 Docker 与模型 API，启动完整服务并完成第一次登录。',
+    desc: '准备 Docker、Cube 执行节点与模型 API，启动服务并完成首次登录。',
     link: '/intro/quick-start',
     action: '打开快速开始',
     character: `${OSS_ASSET_BASE}/characters/deploy-run.png`,
@@ -31,7 +31,7 @@ const docPaths = [
   },
   {
     title: '编排 Agent 能力',
-    desc: '组合模型、Skills、MCP、Tools 与 SubAgents。',
+    desc: '配置模型、Skills、MCP、工具与协作会话。',
     link: '/agents/agents-config',
     action: '进入智能体开发',
     character: `${OSS_ASSET_BASE}/characters/agent-confident.png`,
@@ -55,7 +55,7 @@ const productScenes = [
   {
     key: 'workbench',
     title: '统一智能体工作台',
-    desc: '在同一条任务链中查看知识引用、执行状态、上下文用量、子智能体和交付文件。',
+    desc: '在会话中查看知识引用、执行状态、上下文用量、协作成员和交付文件。',
     image: `${OSS_ASSET_BASE}/screenshots/workbench.webp`
   },
   {
@@ -67,7 +67,7 @@ const productScenes = [
   {
     key: 'multiagent',
     title: '多智能体与扩展能力',
-    desc: '配置主智能体与 SubAgents，并按任务加载 Skills、MCP 和工具。',
+    desc: '配置智能体与协作成员，并按任务使用 Skills、MCP 和工具。',
     image: `${OSS_ASSET_BASE}/screenshots/multiagent.webp`
   },
   {
@@ -85,16 +85,16 @@ let sceneObserver = null
 
 const workflow = [
   { title: '接入知识', desc: '文档、向量检索与知识图谱保持可追溯来源。' },
-  { title: '组合能力', desc: '模型、Skills、MCP、Tools 与 SubAgents 按需装配。' },
+  { title: '组合能力', desc: '模型、Skills、MCP、工具与协作能力按需装配。' },
   { title: '执行任务', desc: 'LangGraph 与异步 Worker 承载长任务和人工审批。' },
-  { title: '交付结果', desc: '回答、引用与文件产物绑定同一次 Request 和 Run。' }
+  { title: '交付结果', desc: '回答、引用与文件产物绑定明确的 Turn 和 Run。' }
 ]
 
 const capabilityGroups = [
   { label: '知识', value: 'RAG、知识图谱、评估' },
   { label: '执行', value: 'LangGraph、ARQ、Sandbox' },
-  { label: '扩展', value: 'Skills、MCP、SubAgents' },
-  { label: '治理', value: '多租户、部门权限、API Key' }
+  { label: '扩展', value: 'Skills、MCP、会话协作' },
+  { label: '治理', value: '用户、部门共享与 API Key' }
 ]
 
 const providers = [

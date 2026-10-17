@@ -1,6 +1,6 @@
 # 文档处理与 OCR
 
-文档解析生成一个完整目录：`document.md` 与它引用的图片，图片使用相对路径。知识库随后把图片与 Markdown 发布到 MinIO，再使用生成后的内容索引；聊天附件确认时把完整目录保存到当前 Project Workdir，OCR 工具也在 Workdir 中生成完整目录。
+本页供管理员选择 OCR、配置解析服务并排查文档产物。文档解析生成包含 `document.md` 和引用图片的完整目录，图片使用相对路径。知识库把目录发布到 MinIO 后索引；聊天附件随 Input 提交后准备到当前 Project Workdir，Agent 的 OCR 工具也在 Workdir 中生成解析目录。
 
 文件状态和存储归属见[知识库机制详解](../mechanisms/knowledge-base.md)，第一次上传文档见[创建并使用知识库](../intro/knowledge-base.md)。
 
@@ -26,7 +26,9 @@ ZIP 优先选择名为 `full.md` 的文件，否则选择按路径排序的第�
 YUXI_URL_WHITELIST=github.com,docs.example.com,*.wikipedia.org
 ```
 
-列表以逗号分隔；配置的域名及其子域名可以通过校验，空列表表示关闭 URL 导入。抓取器的安全边界由本页拥有：DNS 解析到 loopback、私有网段或 link-local 地址时拒绝请求，并逐跳检查重定向目标，最多跟随 5 次重定向，只接受 HTML，响应体默认不超过 10 MB。DNS 解析失败目前会记录日志后继续请求，因此 URL 白名单和地址检查不能当作网络出口防火墙；生产环境还应在网络层限制出口。
+列表以逗号分隔；配置的域名及其子域名可以通过校验，空列表表示关闭 URL 导入。抓取器逐跳验证重定向白名单，最多跟随 5 次重定向，只接受 HTML，响应体默认不超过 10 MiB。每次连接只解析一次 DNS，拒绝包含非公网地址或已知云元数据地址的解析结果，并连接同一组已校验 IP；DNS 失败或无可用地址时直接失败。生产部署仍需按业务配置网络出口限制，抓取边界由 [url_fetcher.py](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/knowledge/utils/url_fetcher.py)拥有。
+
+这组白名单用于知识库的 `/api/knowledge/files/fetch-url` 导入。Agent 的 `web_fetch` 通过 Tavily 或 DeepSeek 的固定官方接口读取网页，使用独立的[网络搜索配置](./configuration.md#网络搜索与网页正文)，不经过知识库导入抓取器。
 
 ## 选择 OCR 方案
 
@@ -115,11 +117,13 @@ PADDLEOCR_API_URL=https://paddleocr.aistudio-app.com/api/v2/ocr/jobs
 
 知识库发布阶段把图片保存到私有 `kb-images` bucket，通过带知识库权限校验的后端路径访问。图片与 Markdown 按文档和解析尝试归属，持久化新结果后回收旧产物；失败只回收本次尝试，删除文档回收该文档的全部解析资源。不要把 MinIO 对象地址直接写成公开 URL，也不要为方便预览而开放整个 MinIO 管理端口。头像等公开图片使用 `/minio/public/...` 同源只读代理，二者边界不同。
 
-聊天解析产物保存在用户隔离的本地目录，确认后连同图片复制到 Project Workdir。预览图片通过当前 Thread 的鉴权 artifact 接口读取，删除附件同时删除整个解析目录。
+Web 的 PDF/图片预解析先保存在用户隔离的临时目录，原文件草稿保存在 MinIO。发送时在 Input 接收事务绑定草稿，随后把原文件及已有解析目录准备到 Project Workdir；就绪提交后回收草稿来源，消费时再绑定正式 Message。未就绪输入不能开始执行。正式图片通过当前 Thread 的鉴权 artifact 接口读取，完整时序和调用格式见[图片与文件附件](./agents-public-api.md#图片与文件附件)。
+
+草稿删除只清理尚未绑定的来源；正式附件在输入已消费或取消、文件已就绪且会话没有活动 Run 时才允许删除。正式删除先提交记录删除，再清理原文件和该附件的解析目录；清理失败时记录已删除，需要按日志处理剩余文件。
 
 ## 文件限制与排查
 
-- 知识库和工作区单个上传文件最大 100 MB。
+- 知识库和工作区单个上传文件最大 100 MiB；聊天文件草稿使用独立的 5 MiB 上限，不适用工作区上传上限。
 - 工作区一次最多上传 50 个文件；知识库批量处理使用任务和页面限制。
 - Agent 的 `read_file` 直接读取 UTF-8 文本和图片；PDF、Office 或其他二进制文件先用 `ocr_parse_file` 生成 Markdown。
 - OCR 服务不可用时，先在 OCR 配置页查看健康状态，再检查容器日志、API 地址和凭证。

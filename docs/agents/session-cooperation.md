@@ -1,6 +1,6 @@
 # 会话协作
 
-本页说明模型的协作工具及用户的会话操作。Agent 保存可复用配置；Session 保存独立上下文和输入队列。创建关系组成协作树，树内会话共享同一 Project 工作目录；同一用户的所有会话共用一个持久 Cube 环境。
+本页面向使用或配置协作的用户，说明模型工具、会话操作和等待结果。Agent 保存可复用配置；每个协作成员拥有独立 Thread、Input 队列、Turn/Run、消息历史和 checkpoint。创建关系组成协作树，树内成员共享同一 Project Workdir；同一用户的所有会话共用一个持久 Cube VM。输入调度的底层契约见[输入队列与调度](../mechanisms/agent-request-queue.md)。
 
 ## 身份与创建
 

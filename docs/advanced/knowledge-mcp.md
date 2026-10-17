@@ -12,7 +12,7 @@ docker compose up -d api
 
 默认本机地址为 `http://127.0.0.1:5050/api/mcp`。MCP 会话管理器随 API lifespan 启动和关闭，启动失败会阻止 API 接流量。`/api/system/health` 只证明 API 进程存活，`/api/system/ready` 检查系统就绪；真实检索仍需调用工具并核对片段与来源。
 
-API 读取 `YUXI_MCP_ALLOWED_HOSTS`，默认 `localhost:*,127.0.0.1:*,api:*`。该值是逗号分隔的 HTTP Host 白名单，支持 `:*` 端口匹配；修改后重启 API。通过既有 HTTPS 代理对外提供 MCP 时，保留 `Authorization` 请求头与 `/api/mcp` 路径，并将代理传递的 Host 加入白名单。服务拒绝带浏览器 Origin 的请求，适用客户端是 OpenCode 等服务端 MCP 客户端。
+API 启动时读取 `YUXI_MCP_ALLOWED_HOSTS`，默认 `localhost:*,127.0.0.1:*,api:*`。该值是逗号分隔的 HTTP Host 白名单，支持 `:*` 端口匹配；修改环境文件后重新创建 API 容器，并保留部署原有的 Compose 覆盖。通过既有 HTTPS 代理对外提供 MCP 时，保留 `Authorization` 请求头与 `/api/mcp` 路径，并将代理传递的 Host 加入白名单。服务拒绝带浏览器 Origin 的请求，适用客户端是 OpenCode 等服务端 MCP 客户端。
 
 ## 配置 OpenCode
 

@@ -16,7 +16,7 @@ Owner：backend/yuxi/migrations/main.py
 
 业务域与知识域的版本由 `infrastructure/postgres/schema.py` 拥有，当前 ORM、索引及触发器直接定义完整基线。工作区清理与工具执行收敛删除旧回收列和独立工具表，工具结果单一持久表示增加数据库约束后，业务域使用版本 4，知识域保留版本 1；工作区与工具事实的不兼容边界分别见[工作区路径清理](./2026-10-15-workspace-path-cleanup.md)、[工具执行收敛](./2026-10-15-tool-execution-convergence.md)和[工具结果表示](./2026-10-15-session-item-input-ownership.md)。删除全部 Yuxi 历史升级函数和入口分支，保留 `migrations` 包作为唯一 DDL 入口、版本记录、advisory lock、失败重试与 API/worker 只读校验。LangGraph 自有的 checkpoint setup 仍负责其初始表结构。本决定取代[沙盒环境](2026-10-15-sandbox-environment.md)、[模块审计修复](2026-10-12-module-audit-defects.md)和[远程 MCP](2026-10-03-remote-mcp-manifest.md)中的历史 Schema 升级或版本编号约定。
 
-应用不新增通用迁移框架，也不在 schema-init 中保留历史版本迁移入口。本部署现有 business=1、knowledge=1 数据库已由部署侧直接调整到当前版本，数据处置见[数据库调整记录](./2026-10-16-business-schema-v1-to-v4-migration.md)；其余旧版本仍由 schema-init 明确拒绝。全新部署直接建立当前基线。
+应用不新增通用迁移框架，也不在 app-init 中保留历史版本迁移入口。本部署现有 business=1、knowledge=1 数据库已由部署侧直接调整到当前版本，数据处置见[数据库调整记录](./2026-10-16-business-schema-v1-to-v4-migration.md)；其余旧版本由 app-init 明确拒绝。全新部署直接建立当前基线。
 
 ## 替代方案
 
@@ -44,7 +44,7 @@ Owner：backend/yuxi/migrations/main.py
 - 容器 `uv run ruff check` 因未安装 Ruff 无法执行；host `uv tool run ruff check` 对修改源码及入口 unit 通过，`ruff format --check` 对全部修改 Python 通过。Schema integration 文件完整 lint 仍有 9 处原有 E501；忽略 E501 后其余规则通过，新增代码无 E501。
 - 已在保留现有代码的实际部署数据库执行一次性 business v1→v4 迁移，回读归档行数、工具结果、约束和退役列；API/Worker 重启后 `/api/system/ready` 为 `ready`。数据处置和备份校验详见[迁移决策](./2026-10-16-business-schema-v1-to-v4-migration.md)。
 
-旧能力不存在：应用 schema-init 不包含历史版本迁移脚本，只初始化空库或校验当前版本。
+旧能力不存在：应用初始化不包含历史版本迁移脚本，只初始化空库或校验当前版本。
 
 重新引入条件：新增来源版本时，先定义具体数据转换、失败边界和真实 PostgreSQL 证据；不得扩展为未经需求支撑的通用 migration 框架。
 

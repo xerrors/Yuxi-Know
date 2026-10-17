@@ -72,7 +72,7 @@ Yuxi 采用 [Diátaxis](https://diataxis.fr/) 的四类文档思路。现有目�
 中文是正文语言；代码、配置和行业名称保留原文。第一次出现时给出中文和英文名称，之后保持一种写法：
 
 - 智能体（Agent）：面向用户的正文优先写“智能体”，代码标识保留 ``Agent``。
-- Skill、MCP、Sandbox、Workdir、Run、Request、SSE：首次解释用途，后续保留项目约定的英文名称。
+- Skill、MCP、Sandbox、Workdir、Input、Receipt、Turn、Run、SSE：首次解释用途，后续保留项目约定的英文名称。
 - Embedding、Rerank：分别写“嵌入模型”和“重排模型”，需要对应源码字段时保留 ``embedding``、``rerank``。
 - 知识库与数据库分开使用；只有 PostgreSQL 等持久化组件才称为数据库。
 

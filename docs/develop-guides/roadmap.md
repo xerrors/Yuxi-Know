@@ -20,10 +20,5 @@
 ## 其他
 
 - 继续完善基于 DeepAgents 文件后端的 Memory 方案，并明确它与现有用户级 Memory 的边界。
-- 改进 `ask_user_question`：支持较长文本回答，并让流式输出期间的聊天区域保持跟随最新内容（[#753](https://github.com/xerrors/Yuxi/issues/753)）。
 
-## 已知问题
-
-- 打开历史对话时自动滚动到消息末尾。
-
-协作会话、成员干预和会话间通信的候选实现见[会话协作](../agents/session-cooperation.md)。已发布的功能和修复见[版本变更记录](./changelog.md)。
+协作会话、成员干预和会话间通信的当前用法见[会话协作](../agents/session-cooperation.md)。已发布的功能和修复见[版本变更记录](./changelog.md)。

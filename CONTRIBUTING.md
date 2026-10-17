@@ -13,7 +13,7 @@
 
 ## 开发环境
 
-Yuxi 使用 Docker Compose 管理开发环境：
+先按[快速开始](docs/intro/quick-start.md)准备环境配置与 Cube 执行节点，再用 Docker Compose 启动开发环境：
 
 ```bash
 docker compose up -d
@@ -21,7 +21,7 @@ docker compose ps
 docker compose logs --tail=100 api
 ```
 
-API 和 Web 默认支持热重载；完整服务拓扑以 `docker-compose.yml` 为准。
+前端保留 Vite 热更新。API 与 worker 挂载源码，修改后执行 `docker compose restart api worker` 生效；环境变量变化需要重新创建容器。共享定义与数据库初始化按[开发贡献指南](docs/develop-guides/contributing.md#_2-开发环境)处理，完整服务拓扑以 `docker-compose.yml` 为准。
 
 ## 常用检查
 

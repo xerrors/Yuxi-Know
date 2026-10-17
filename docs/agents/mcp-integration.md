@@ -82,7 +82,7 @@ BUILTIN_MCP_MANIFEST = {
 
 清单连接字段支持 `type`（`http`、`sse`）或 `transport`（`streamable_http`、`sse`）、HTTP URL、headers、timeout 和 sse_read_timeout。同时声明 type 与 transport 时必须一致。展示字段 name、description、icon 和 tags 放在 `extra_data`，名称缺省时使用清单键。管理表单使用相同清单结构解析，再转换为上面的平铺管理接口字段；`extra_data` 不发送给远端 MCP 客户端。
 
-API/worker 启动时只同步当前内置定义到数据库；运行时直接读取代码中的连接字段。新内置 MCP 默认未添加，管理员需要启用；连接配置不可通过页面修改。管理员的启停与禁用工具列表在同步后保留。全新部署不提供 stdio 数据迁移或退役配置清理。
+`app-init` 部署任务把当前内置定义同步到 PostgreSQL，该阶段只处理本地定义；远端建连和工具发现由测试或运行时加载触发。运行时从代码读取内置连接字段，从数据库读取启停与禁用工具状态。新内置 MCP 默认未添加，管理员启用后才参与运行；页面不能修改其连接配置。同步保留管理员的启停与禁用工具列表，失败会阻止部署初始化完成。
 
 ## 常用管理接口
 
@@ -98,3 +98,9 @@ API/worker 启动时只同步当前内置定义到数据库；运行时直接读
 接口字段和错误响应以实例 Swagger 为准。
 
 已启用 MCP 的建连或工具发现失败时，管理检查、Agent 配置工具装配与 Skill 依赖加载均明确失败，运行不会把故障当作成功的空工具列表继续执行。服务器正常返回零个工具仍是合法结果；未启用服务器不参与运行加载。运行日志包含组件、服务器标识、错误类型与不可用状态。
+
+## 源码定位与验证
+
+[MCP service](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/mcp/service.py)拥有配置用例、内置同步与启用状态，[客户端运行时](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/mcp/runtime.py)拥有工具发现和缓存，[授权中间件](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/runtime/middlewares/authorization.py)在实际调用边界复查服务器与单工具状态。连接成功只证明当时可发现工具，远端资源权限仍由远程服务执行。
+
+[HTTP 集成测试](https://github.com/xerrors/Yuxi/blob/main/backend/test/integration/api/test_mcp_router.py)覆盖管理权限和配置，[MCP service 单测](https://github.com/xerrors/Yuxi/blob/main/backend/test/unit/services/test_mcp_service.py)覆盖内置同步与加载错误；外部服务器的当前可用性需在目标部署中另行测试。

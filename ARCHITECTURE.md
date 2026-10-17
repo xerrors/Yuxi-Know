@@ -12,8 +12,6 @@ Yuxi 是一个面向 RAG、知识图谱和多智能体工作流的知识库平�
 
 核心开发服务包括：
 
-API 在 `/api/mcp` 提供只读知识库 MCP，与 HTTP API 共用进程和端口。`api/routers/public_v1/knowledge_mcp.py` 与 Knowledge Public HTTP 入口并列，适配协议并复用 Key 认证、Knowledge Schema 与查询服务，MCP manager 随 API lifespan 启停；资源可见性仍由知识库服务拥有。
-
 - `frontend`：Vue 3 / Vite 前端，挂载 `frontend/src` 并热更新。
 - `api`：FastAPI API 服务，挂载 `backend/yuxi` 和测试目录；API 与 worker 的源码修改通过显式重启生效。
 - `worker`：ARQ worker，执行已经派发的 AgentRun 与注册的 后台作业，并周期触发用户自建 Agent 定时任务；三者分别使用 PostgreSQL 中的运行租约、任务租约和调度锁闭合并发与恢复。
@@ -26,6 +24,8 @@ API 在 `/api/mcp` 提供只读知识库 MCP，与 HTTP API 共用进程和端�
 - `milvus`、`etcd`：向量检索及其元数据协调。
 - `graph`：Neo4j 知识图谱。
 - `mineru-api`、`paddlex`：通过 `all` profile 可选启动的文档解析和 OCR 服务。
+
+API 在 `/api/mcp` 提供只读知识库 MCP，与 HTTP API 共用进程和端口。`api/routers/public_v1/knowledge_mcp.py` 与 Knowledge Public HTTP 入口并列，适配协议并复用 Key 认证、Knowledge Schema 与查询服务，MCP manager 随 API lifespan 启停；资源可见性仍由知识库服务拥有。
 
 ## 后端代码地图
 
@@ -47,6 +47,8 @@ Yuxi 始终交付完整知识能力。API 注册知识库、图谱、评估、Da
 - `modules/workspace` 拥有 UserWorkspace 的路径映射、no-follow 文件操作、Workdir 和预览；Agent 沙盒与 Viewer 共用的 runtime 虚拟路径映射由 `modules/workspace/runtime_paths.py` 拥有。
 - `modules/identity` 拥有用户、部门、权限、凭据与 OIDC 账号用例，以及 Public API 的 Key 校验与 App/end_user 身份解析；`modules/extensions` 拥有 Skills、MCP 与工具目录；`modules/models` 拥有模型适配和供应商配置。
 - `modules/schedules` 拥有用户定时 Agent 定义和 occurrence；`modules/background_jobs` 拥有任务登记、执行方上报的观察记录和取消意图；后台作业模块的 dispatch 与 registry 拥有提交和定义，`workers` 拥有领取、执行和失联维护；`modules/system` 拥有系统配置、Dashboard 与跨域共享资源所有权治理。
+
+`modules/extensions/web` 拥有网络搜索、网页抓取与供应商适配；工具和管理员测试复用同一服务，每次调用读取当前有效配置，未配置的能力不进入运行工具集合。凭据与默认供应商复用 system 的持久设置和脱敏边界。
 
 `modules/extensions/skills` 按共享索引、个人来源、草稿、文件编辑和投影组织用例。共享编辑通过文件修订值拒绝过期保存，读取、运行快照与投影复制持有共享行锁；授权变更按共享行锁、用户投影锁的顺序提交并刷新投影。个人 Skill 文件由 `personal.py` 在 UserWorkspace 边界访问。
 

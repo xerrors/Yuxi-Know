@@ -4,7 +4,7 @@ API Key 适合服务之间调用 Yuxi。它绑定到一个具体的 Yuxi 用户�
 
 ## 创建 API Key
 
-登录 Web 后，进入“设置 → API Keys”，点击“创建 API Key”。创建时填写名称、权限、可选的 APP 标识与过期时间。Web 默认选择 `agents`；管理 API 省略 `access_level` 时仍默认 `full`。`agents` 权限必须绑定 `app_id`，只允许访问 [Agents Public API](./agents-public-api.md)；`knowledge` 权限只允许访问版本化的 [external 知识库查询接口](./knowledge-base-api.md#外部查询接口)，不要求 `app_id`；`full` 权限保留绑定用户可访问的产品接口。
+登录 Web 后，进入“设置 → API Keys”，点击“创建 API Key”。创建时填写名称、权限、可选的 APP 标识与过期时间。Web 默认选择 `agents`；管理 API 省略 `access_level` 时仍默认 `full`。`agents` 权限必须绑定 `app_id`，只允许访问 [Agents Public API](./agents-public-api.md)；`knowledge` 权限只允许访问版本化的[知识库 HTTP 查询](./knowledge-base-api.md#外部查询接口)和[知识库 MCP](./knowledge-mcp.md)，不要求 `app_id`。`full` Key 受绑定用户权限及各入口的认证要求约束，产品 JWT 专用接口仍会拒绝 API Key。
 
 也可以调用管理接口：
 
@@ -52,7 +52,7 @@ Content-Type: application/json
 | `PUT` | `/api/user/apikey/{api_key_id}` | 修改名称、过期时间、启用状态、权限或 APP 来源 |
 | `DELETE` | `/api/user/apikey/{api_key_id}` | 撤销 Key |
 
-`superadmin` 可以查看和管理全局可见的 Key；其他用户只能操作自己有权限的 Key。管理接口也支持修改 `access_level` 与 `app_id`。删除用户或撤销 Key 后，旧 secret 不能继续使用，也不会因为重复提交旧的创建请求而复活。列表和详情响应还包含 `last_used_at`：它表示最近一次成功认证时间，`null` 表示尚未使用；`key_prefix` 只用于识别 Key，服务端不会再次返回完整 secret。
+`superadmin` 可以查看和管理全局可见的 Key；其他用户只能操作自己有权限的 Key。管理接口也支持修改 `access_level` 与 `app_id`。删除用户或撤销 Key 后，旧 secret 不能继续使用，也不会因为重复提交旧的创建请求而复活。列表和详情响应还包含 `last_used_at`：它表示最近一次成功认证时间，`null` 表示尚未使用；这些读取接口只返回 `key_prefix`，完整 secret 仅通过创建及其幂等重放返回。
 
 ## 选择调用地址
 
@@ -85,7 +85,7 @@ Agent 对话统一使用 [Agents Public API](./agents-public-api.md)。`agents` 
 
 ```bash
 BASE_URL=https://yuxi.example.com
-API_KEY=yxkey_<your-secret>
+API_KEY='yxkey_<your-secret>'
 
 curl --fail "$BASE_URL/api/v1/agents/sessions" \
   -H "Authorization: Bearer $API_KEY" \
@@ -95,9 +95,9 @@ curl --fail "$BASE_URL/api/v1/agents/sessions" \
   -d '{"agent_id":"default-chatbot","input":[{"role":"user","content":[{"type":"input_text","text":"请总结资料"}]}]}'
 ```
 
-响应中的 `id` 标识公开 Session，`yuxi.receipt.input_id` 标识已接收输入，`yuxi.receipt.turn_id/run_id` 仅在已经领取时非空。HTTP 接收成功不表示执行完成。用 `GET /api/v1/agents/sessions/{session_id}/turns/{turn_id}` 读取整轮状态与明确结果，或用 `GET /api/v1/agents/sessions/{session_id}/events` 订阅 Session SSE；断线后带 `Last-Event-ID` 续订，并回读持久快照。排队输入可用 `/queue` 与 `/inputs/{input_id}` 查询。
+响应中的 `id` 标识公开 Session，`yuxi.receipt.input_id` 标识已接收输入；普通消息接收回执的 `turn_id/run_id` 始终为空。用 `GET /api/v1/agents/sessions/{session_id}/inputs/{input_id}` 等待消费并取得实际 Turn/Run，再通过 `/turns/{turn_id}` 读取整轮状态与明确结果。`/queue` 查看待处理输入，`/events` 订阅 Session SSE；断线后带 `Last-Event-ID` 续订，并回读持久快照。
 
-继续对话时向 `POST /api/v1/agents/sessions/{session_id}/events` 提交 `agent.session.input.message`；明确排队使用 `yuxi.mode=follow_up`，修正当前轮使用 `yuxi.mode=steer`。未指定 mode 时，服务在 Thread 锁内选择：运行中 steer，空闲时 follow-up，等待或取消中拒绝普通消息。等待问题或审批时，通过 Turn 快照获取等待点，并提交结构化 `yuxi.session.input.resume`。取消当前轮和继续暂停队列是两个独立控制事件。字段和示例见 [Public 协议参考](./agents-public-api.md)。
+继续对话时向 `POST /api/v1/agents/sessions/{session_id}/events` 提交 `agent.session.input.message`；明确排队使用 `yuxi.mode=follow_up`，修正当前轮使用 `yuxi.mode=steer`。未指定 mode 时，服务在 Thread 锁内选择：运行中 steer，空闲时 follow-up；等待回答、审批或取消清理时拒绝普通消息，协作等待只接收 FIFO 输入。等待问题或审批时，通过 Turn 快照获取等待点，并提交结构化 `yuxi.session.input.resume`。取消当前轮和继续暂停队列是两个独立控制事件。字段和示例见 [Public 协议参考](./agents-public-api.md)。
 
 ## 排查
 

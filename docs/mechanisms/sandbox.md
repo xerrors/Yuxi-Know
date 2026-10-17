@@ -34,3 +34,9 @@ Run 取消监听直接清理所属命令，超时与 lease 失效清理由持久
 单节点部署要求见[沙盒配置与运维](../advanced/sandbox-operations.md)。当前验证使用嵌套 KVM 节点，原生节点重启恢复和资源压力隔离尚未验证。后台进程在休眠恢复后的连续运行不是产品承诺。
 
 用户环境变量由 `services/environment.py` 保存和验证，runner 在开始执行流时使用已有数据库 session 读取一次快照，普通 shell 命令通过执行上下文复用。快照不进入运行清单或 checkpoint，退出后释放，重试 attempt 重新读取。无 Run 操作及手动验证读取最新配置，文件及清理进程使用独立干净环境。`POST /api/user/agent-env/verify` 通过同一持久命令执行器访问当前用户 VM，不改变当前 Run 或已有进程的环境变量；生效时机、结果边界与页面操作见[用户 Agent 环境变量](../advanced/configuration.md#用户-agent-环境变量)。
+
+## 源码定位与验证
+
+[Sandbox provider](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/runtime/sandbox/provider.py)协调用户锁、环境代次、命令登记与清理，[Cube adapter](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/runtime/sandbox/cube.py)执行远端普通账号协议，[Sandbox repository](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/repositories/sandbox.py)保存环境与命令事实。[Workspace 路径契约](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/workspace/runtime_paths.py)和[文件边界](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/workspace/runtime_files.py)决定访问宿主共享文件还是 VM 文件。
+
+[用户环境集成测试](https://github.com/xerrors/Yuxi/blob/main/backend/test/integration/sandbox/test_cube_user_environment.py)覆盖环境复用与生命周期，[文件边界测试](https://github.com/xerrors/Yuxi/blob/main/backend/test/integration/sandbox/test_cube_shared_mount_fuzz.py)检查共享挂载的路径约束，[Agent E2E](https://github.com/xerrors/Yuxi/blob/main/backend/test/e2e/test_cube_agent_execution_e2e.py)核对执行、产物和取消。命令返回成功后仍需读取目标文件及持久命令状态；Cube 节点不可用时，明确记录未执行范围。

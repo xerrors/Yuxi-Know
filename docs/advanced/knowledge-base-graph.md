@@ -29,7 +29,7 @@
 
 ## 失败和修复
 
-图谱任务把可序列化 payload 持久化到 PostgreSQL，再由 ARQ worker 领取。Task 行的 attempt owner 与 lease 拒绝重复执行和迟到写入；所有 Durable Task 在 owner 中断或 lease 过期后都会明确失败，不在未知 Neo4j 或 Milvus 副作用上自动重放。任务失败或取消后：
+图谱后台作业把可序列化 payload 保存在 PostgreSQL 的 `BackgroundJobRecord`（`background_jobs` 表），提交后交给 ARQ worker。`BackgroundJobRepository` 使用 attempt owner 与 lease 拒绝重复执行和迟到写入；worker 中断或租约过期时，作业收敛为 `failed`，保留错误供管理员检查外部副作用。任务失败或取消后：
 
 1. 先保留任务错误和失败 chunk；
 2. 检查 PostgreSQL 的 chunk 与处理状态；
@@ -37,7 +37,7 @@
 4. 检查 Milvus 的图向量索引；
 5. 再决定重试、修复向量索引或重置图谱。
 
-Durable Task 的 `success` 只表示 worker 已完成编排，不能单独证明三类存储已经一致。
+后台作业的 `success` 表示 worker 已完成编排，三类存储的一致性需分别回读。图谱状态接口把最近成功作业投影为 `build_job_status=completed`，失败或取消作业投影为 `failed`；同时检查抽取、结构和向量计数以及失败 chunk，不能只根据该概览判断所有 chunk 已成功。
 
 ## API 入口
 
@@ -55,5 +55,6 @@ Durable Task 的 `success` 只表示 worker 已完成编排，不能单独证明
 
 - [知识库路由](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/api/routers/knowledge/management.py)
 - [图谱服务](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/knowledge/graphs/service.py)
+- [后台作业执行与故障收敛](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/workers/background_jobs.py)
 - [知识库 unit tests](https://github.com/xerrors/Yuxi/tree/main/backend/test/unit/knowledge)
 - [图谱和知识库 integration](https://github.com/xerrors/Yuxi/tree/main/backend/test/integration/api)

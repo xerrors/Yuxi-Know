@@ -64,7 +64,9 @@ Thread SSE 把输入接收、Input 消费、Run 结束、Turn 结束和短期增
 
 [Message 仓储](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/repositories/messages.py)拥有正式消息的共同写入和读取，工具执行只保存在 `tool_audit` Message 中；Input 消费、模型/工具审计与公开 item 仓储分别拥有原始来源投影、执行事实与公开快照的原子更新。[checkpoint 消息结算](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/services/checkpoint_messages.py)显式接收 AsyncSession，在同一事务对账这些事实并结算 Run/Turn。完成路径在 Thread/Turn 锁后锁定并裁决待处理 steer，再取得 Run 锁；其他终态保留各自锁定位置。终态服务消费调用方在同一事务锁定的对象与 steer 就绪裁决，继续检查 current Run 与 lease。最终回答由 `result_run_id` 明确绑定。终态提交后释放运行清理责任，再发布公开事件；协作通知与业务状态在同一 PG 事务写入，观察与恢复可补读。[事件订阅](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/services/subscriptions.py)消费持久生命周期和 Redis 投影，[审计读取](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/services/message_audits.py)只组装已授权持久事实。
 
-Memory 历史仓储负责用户与消息可见性查询，历史服务负责输入范围、预览、工具数量与 UTF-8 响应预算。重复默认定义和环境内容读取保持持久身份与修订时间，重复查看同一终态 Run 不再次提交。execution 主流程在进入模型流前提交 runtime、附件与追踪准备事务，禁用追踪时也经过此提交点；准备或提交失败会回滚、结束 observation 并进入失败收敛，图不执行。协作树和用户环境维护使用[运行锁键](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/runtime_locks.py)；行锁次序由消费、输出和恢复仓储拥有，Input 行锁先于 Run 终态更新。
+执行服务在进入模型流前提交 runtime、附件与追踪准备事务，禁用追踪时也经过此提交点；准备或提交失败会回滚、结束 observation 并进入失败收敛，图不执行。
+
+协作树和用户环境维护使用[运行锁键](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/runtime_locks.py)。消费、输出和恢复仓储各自维护行锁次序，Input 行锁先于 Run 终态更新；新增路径需沿相同 owning transaction 检查锁序。
 
 ## 工具声明与执行事实
 
@@ -83,7 +85,7 @@ flowchart LR
 
 审批拒绝生成没有执行开始时间的工具结果，并记录拒绝来源。恢复后的执行通过同 Session、同 Turn 的明确 resume 来源链关联模型声明。Memory 显式请求工具详情时，只读取已授权模型消息关联的同会话、同 Turn 工具事实；Dashboard 执行统计仅计已经开始的操作，失败、中断与运行中分别按真实状态读取。
 
-公开 item 保留分页、断线恢复与公开范围所需的稳定身份及快照。执行事实先提交，公开投影随后提交并发布；投影失败不会改写已完成的工具事实，恢复可重放补齐同一 item。独立 ToolCall 表和同步结果副本不参与该链路。
+公开 item 保留分页、断线恢复与公开范围所需的稳定身份及快照。执行事实先提交，公开投影随后提交并发布；投影失败保留已完成的工具事实，恢复可重放补齐同一 item。工具结果的唯一持久来源是对应工具 Message 的 `extra_metadata.output`，公开投影与审计读取复用这一来源。
 
 ## 权限、源码与验证
 

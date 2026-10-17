@@ -8,9 +8,9 @@ Owner：backend/yuxi/api/routers/public_v1/agents/threads.py
 
 外部集成者需要用接近 OpenAI Agents API 的方式创建会话、提交消息、观察工作和读取结果。资源形状、工作状态、配置生效、文件提交与恢复需要共同收敛为容易正确消费的机制。已经生效的统一资源与客户端直接消费由[公开资源决定](2026-10-09-agents-resource-contract.md)拥有，本记录保留整体机制选择，专项实现和证据由对应决定拥有。
 
-读者为 API、运行时和客户端维护者。目标是逐项比较官方与 Yuxi 的实际机制，优先采用更容易正确使用、失败时可恢复且维护成本合理的方案；同等条件下采用官方契约。保留差异需要明确的业务场景和验证，已有实现不构成保留理由。当前资源事实与第一步证据由[公开资源决定](2026-10-09-agents-resource-contract.md)拥有，保留的核心子集边界见[原决定](2026-10-09-agents-session-protocol.md)，实施顺序与工作量只在[对齐计划](../../agents-api-alignment-plan.md)维护。
+读者为 API、运行时和客户端维护者。目标是逐项比较官方与 Yuxi 的实际机制，优先采用更容易正确使用、失败时可恢复且维护成本合理的方案；同等条件下采用官方契约。保留差异需要明确的业务场景和验证，已有实现不构成保留理由。当前资源事实与第一步证据由[公开资源决定](2026-10-09-agents-resource-contract.md)拥有，保留的核心子集边界见[原决定](2026-10-09-agents-session-protocol.md)，历史实施顺序与验收范围见[对齐交付记录](../archived/2026-10-09-agents-api-delivery.md)，当前维护入口见[维护索引](../../agents-api-alignment-plan.md)。
 
-统一资源、会话配置快照与取消专项已生效，分别见[公开资源决定](2026-10-09-agents-resource-contract.md)与[配置及取消决定](2026-10-09-agents-session-lifecycle.md)。draft 附件专项也已生效，见[附件提交决定](2026-10-09-agents-draft-attachments.md)；查询与恢复由[查询恢复决定](2026-10-09-agents-query-recovery.md)拥有。范围包含公开协议、必要的配置和查询机制，以及 Web、CLI、Agent Demo 的同步消费。内部 Thread、Input、Turn、Run 继续承担持久化和执行职责；历史数据迁移、旧接口兼容、部署平台兼容和官方全部托管能力不在范围内。官方 SDK 是否能够结束调用和收集结果须独立验证，不作为设计前提。开发沿用 main，不创建分支或工作树。
+统一资源、会话配置快照与取消专项已生效，分别见[公开资源决定](2026-10-09-agents-resource-contract.md)与[配置及取消决定](2026-10-09-agents-session-lifecycle.md)。draft 附件专项也已生效，见[附件提交决定](2026-10-09-agents-draft-attachments.md)；查询与恢复由[查询恢复决定](2026-10-09-agents-query-recovery.md)拥有。范围包含公开协议、必要的配置和查询机制，以及 Web、CLI、Agent Demo 的同步消费。内部 Thread、Input、Turn、Run 继续承担持久化和执行职责；历史数据迁移、旧接口兼容、部署平台兼容和官方全部托管能力不在范围内。官方 SDK 是否能够结束调用和收集结果须独立验证，不作为设计前提。
 
 ## 决策
 

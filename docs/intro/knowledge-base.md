@@ -8,7 +8,7 @@
 - 一份不含敏感信息的测试文档；
 - 一个管理员账号。
 
-Dify、Notion 连接器见[知识库管理 API](../advanced/knowledge-base-api.md)，图谱运维见[知识图谱](../advanced/knowledge-base-graph.md)。
+飞书、Dify、Notion 的只读连接方式见[知识库管理 API](../advanced/knowledge-base-api.md)，图谱运维见[知识图谱](../advanced/knowledge-base-graph.md)。
 
 ## 你会得到什么
 
@@ -19,10 +19,11 @@ Dify、Notion 连接器见[知识库管理 API](../advanced/knowledge-base-api.m
 | 类型 | 能做什么 | 适用场景 |
 | --- | --- | --- |
 | Milvus | 上传、解析、索引和检索文档；支持知识图谱 | 自建文档知识库 |
+| 飞书 | 搜索指定知识空间，在线阅读受支持的新版普通文档 | 复用已有飞书知识库 |
 | Dify | 调用 Dify Dataset 的检索接口 | 复用已有 Dify 数据集 |
 | Notion | 调用 Notion Data Source 的检索接口 | 复用已有 Notion 内容 |
 
-Dify 和 Notion 是只读连接器，不能在 Yuxi 中上传、解析、索引或预览文档全文。本教程使用 Milvus。
+三种外部连接器按管理员配置的凭据在线读取，不把资料同步为本地向量索引，也不支持在 Yuxi 中上传或修改源文档。飞书提供在线正文阅读入口，Dify、Notion 的 Web 检索展示返回的证据片段。本教程使用 Milvus。
 
 ## 1. 创建知识库
 
@@ -70,7 +71,7 @@ Dify 和 Notion 是只读连接器，不能在 Yuxi 中上传、解析、索引�
 
 关键词查询与正向文本筛选默认显示命中词高亮，展开“查看完整片段”可以读取完整正文。界面按检索类型显示原始分数：BM25、混合和图谱融合分数不能理解为相似度百分比；向量相似度阈值只作用于纯向量检索。
 
-点击 Milvus 结果片段或文件名，右侧打开完整解析 Markdown，定位并高亮该片段的原文行范围。点击预览顶部的“Markdown 源码”图标可查看逐行行号与高亮，再切回“Markdown 预览”继续阅读。搜索框和结果默认居中且最大宽度为 800px，打开原文后等分左右两栏。片段无法定位时，按侧栏提示完成入库或重新检索；文档重索引导致原片段失效时，侧栏提示重新检索。
+点击 Milvus 结果片段或文件名，右侧打开完整解析 Markdown，并高亮片段的原文行范围。“Markdown 源码”入口可查看行号；文档重索引后原定位失效时，重新检索再打开来源。
 
 没有结果时，依次检查文件是否为 `indexed`、嵌入模型是否可用、分块参数是否合适，以及检索配置是否返回了足够的候选结果。
 
@@ -94,7 +95,7 @@ Dify 和 Notion 是只读连接器，不能在 Yuxi 中上传、解析、索引�
 ## 下一步
 
 - [文档处理与 OCR](../advanced/document-processing.md)：调整解析器、OCR 和分块参数。
-- [知识库管理 API](../advanced/knowledge-base-api.md)：用 HTTP 或 CLI 批量导入和查询。
+- [知识库管理 API](../advanced/knowledge-base-api.md)：用 HTTP 导入文档，通过公开 API 或 CLI 查询。
 - [知识图谱](../advanced/knowledge-base-graph.md)：构建和修复图谱。
 - [知识库评估](./evaluation.md)：建立检索质量基准。
 - [知识库机制详解](../mechanisms/knowledge-base.md)：理解状态、存储、权限和恢复。

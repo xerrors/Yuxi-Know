@@ -2,6 +2,8 @@
 
 Yuxi Public v1 command-line client. Requires Node.js 22 or newer.
 
+Install a published package with npm, or follow the [CLI installation guide](../../docs/intro/cli.md#安装) to build and install from this checkout:
+
 ```bash
 npm install --global @xerrors/yuxi
 yuxi remote add production https://example.com
@@ -12,7 +14,7 @@ yuxi chat --agent default-chatbot
 yuxi kb query --kb-id <id> "your question"
 ```
 
-Configuration is stored at `~/.yuxi/config.json` with restrictive file permissions. The first release focuses on authentication, Public Agent/Thread APIs, terminal chat, SSE observation, and knowledge-base retrieval. Eval, Langfuse, and administration APIs are not included.
+Configuration is stored at `~/.yuxi/config.json` with restrictive file permissions. The CLI supports authentication, Public Agent/Session APIs, terminal chat, attachments, SSE observation, and knowledge-base retrieval. The `thread` commands operate on Public Sessions. Eval, Langfuse, and administration APIs are not included.
 
 Upload a draft before sending a file attachment. Uploading does not create a Session or write to its Workdir. Read the returned `id` and pass it with a message:
 

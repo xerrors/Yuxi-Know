@@ -1,6 +1,6 @@
 # 使用命令行工具
 
-`@xerrors/yuxi` 是 Yuxi 的 npm 命令行客户端，要求 Node.js 22 或更高版本。它通过 Public v1 查看智能体、进行纯文本终端对话和查询知识库，并保存多个远程实例。完成本页后，可以在终端连续对话并读取知识库检索结果。
+`@xerrors/yuxi` 是 Yuxi 的 npm 命令行客户端，要求 Node.js 22 或更高版本。它通过 Public v1 查看智能体、对话、发送附件与图片、查询知识库，并保存多个远程实例。开始前需要一套已启动、配置好模型和智能体的 Yuxi。完成本页后，可以在终端对话并核对持久结果。
 
 ## 安装
 
@@ -34,7 +34,7 @@ yuxi remote ping
 
 配置保存在 `~/.yuxi/config.json`，API Key 以明文保存，POSIX 文件权限为 `0600`。实例地址会去掉末尾 `/api` 并在请求时派生 API 路径；不要填写具体接口地址。修改已有 remote 的 URL 会清除该 remote 的登录凭据。
 
-命令默认使用 `remote use` 选择的实例。`--remote <name>`（简写 `-r`）只覆盖本次命令的选择；`remote ping <name>` 用位置参数指定实例。JSON 配置不读取 Python CLI 的 `config.toml`，需要重新添加实例并登录。
+命令默认使用 `remote use` 选择的实例。`--remote <name>`（简写 `-r`）只覆盖本次命令的选择；`remote ping <name>` 用位置参数指定实例。CLI 配置格式由当前 npm 包维护，连接新实例后先登录再调用需要身份的接口。
 
 ## 登录和退出
 
@@ -83,11 +83,11 @@ Agent 目录和详情展示 Public v1 的公开字段：ID、名称、描述；�
 > /exit
 ```
 
-`/exit` 或 `/quit` 退出终端交互，Thread 历史保留在服务端。失败、取消或事件流在终态前断开时，CLI 返回非零退出码。审批和回答等待点需要在 Yuxi 网页继续；CLI 不提供附件、图片、工具审批或等待点恢复命令。
+`/exit` 或 `/quit` 退出终端交互，Thread 历史保留在服务端。对话会尝试通过 SSE cursor 和持久 Turn 结果恢复断流；运行失败、取消或恢复失败时，CLI 返回非零退出码。审批和回答等待点需要在 Yuxi 网页继续。交互式 `chat` 接收文本，附件和图片通过下面的 `thread send` 提交。
 
 ## 查看 Thread
 
-使用 Chat 打印的 Thread ID 读取状态、历史或提交后续消息：
+CLI 的 `thread` 命令操作 Public API 的 Session，使用 Chat 打印的 Thread ID 读取状态、历史或提交后续消息：
 
 ```bash
 yuxi thread list --agent default-chatbot
@@ -99,12 +99,48 @@ yuxi thread watch <thread-id>
 
 `thread send` 输出持久 Input 回执，接收成功不代表运行完成。`thread watch` 持续输出逐条事件 JSON，在标准错误流中显示恢复 cursor；使用 `--cursor <cursor>` 从该位置订阅，按 `Ctrl+C` 停止观察。Thread、Turn 和 Input 的语义见[智能体 Public API](../advanced/agents-public-api.md)。
 
+`send` 在提交前打印幂等键。响应丢失时，先按该键查询回执；仍未找到接收记录时，使用原消息和原键重试。通过 Input 的 `turn_id` 找到本次工作，再读取对应 Turn 的 `yuxi.output`：
+
+```bash
+yuxi thread receipt <thread-id> <saved-key>
+yuxi thread send <thread-id> "继续解释第二点" --idempotency-key <saved-key>
+yuxi thread input <thread-id> <input-id>
+yuxi thread turn <thread-id> <turn-id>
+```
+
+列表和历史使用游标分页；`has_more=true` 时，将返回的 `last_id` 传给下一页的 `--after`。Turn 列表也包含尚未生成消息的工作：
+
+```bash
+yuxi thread history <thread-id> --limit 20 --order asc --after <last-id>
+yuxi thread turns <thread-id> --limit 20
+```
+
 查询命令可以加 `--json`，供脚本读取原始响应：
 
 ```bash
 yuxi agent list --json
 yuxi thread show <thread-id> --json
 ```
+
+## 发送附件和图片
+
+先上传文件草稿，读取返回的 `id`，再随消息提交：
+
+```bash
+yuxi file upload ./report.pdf --mime-type application/pdf
+yuxi file show <draft-id>
+yuxi thread send <thread-id> "总结这份报告" --file-id <draft-id>
+```
+
+上传草稿不会创建 Session 或写入 Workdir。接收消息后文件才绑定到 Input，准备就绪后随输入消费进入对话。尚未提交的草稿可以用 `yuxi file delete <draft-id>` 删除；已提交文件的归属、有效期与重试规则见[附件协议](../advanced/agents-public-api.md#图片与文件附件)。
+
+`thread send --image-url` 接收完整的 `data:image/...;base64,...` URL，需保留实际 MIME；例如下面的 `IMAGE_DATA_URL` 由调用方提供：
+
+```bash
+yuxi thread send <thread-id> "描述这张图片" --image-url "$IMAGE_DATA_URL"
+```
+
+图片会作为视觉输入发送，能否识别取决于所选模型；文件附件由智能体按需读取或解析。CLI 不调用产品私有的图片预处理或手动 OCR 接口。
 
 ## 查询知识库
 
@@ -126,17 +162,16 @@ yuxi kb find --kb-id <kb-id> --file-id <file-id> --pattern "年假"
 
 `kb files --query` 只匹配文件名；`kb query` 返回检索结果；`kb open` 返回内容窗口；`kb find` 使用 Public v1 文件查找接口。命令只读，不创建、上传、解析或索引文件。需要脚本处理原始响应时，给这些命令加 `--json`。
 
-## 第一阶段的边界
+## 能力边界 {#第一阶段的边界}
 
-npm CLI 第一阶段不包含以下能力：
+当前 npm CLI 不包含以下能力：
 
 - Agent eval、Langfuse Dataset experiment；
 - 知识库上传、解析、索引和管理；
-- 旧的本地 HTML Chat；
 - MCP、Skill、模型和系统配置管理；
-- 附件、图片、工具审批和等待点恢复。
+- 工具审批和等待点恢复。
 
-这些能力仍由 Web 界面或各自的后端接口拥有。不要把未列出的管理接口当作 CLI 已支持能力。
+管理能力和等待交互使用 Web 界面或对应后端接口。完整智能体评估由调用方通过公开 API 构建，见[智能体评估](../agents/agent-evaluation.md)。
 
 ## 排查
 

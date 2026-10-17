@@ -47,9 +47,9 @@ Skills middleware 将 Skill 说明按模型请求注入：预加载 Skill 从首
 
 ## 文件和附件
 
-附件确认后写入当前 Project Workdir。每次 Run 会把线程历史附件的文件名和实时路径加入本轮用户消息，让模型按需调用 `read_file`；持久化 Message 仍保存原始文本，不会把这段模型专用路径混进用户可见消息。
+上传先保存隔离的附件草稿；提交消息时，接收事务把附件绑定到 Input，再由附件准备流程写入当前 Project Workdir。文件就绪后，消费事务创建 Message 并绑定最终附件，提交后才投递 Run。模型输入使用本次 Input 及此前已消费输入的附件上下文，按需提供文件名和当前路径；持久 Message 保留原始文本。状态与恢复边界见[输入队列与调度](../mechanisms/agent-request-queue.md#状态与故障恢复)。
 
-普通 Agent 和子 Agent 使用根 Session 的同一个 `runtime_scope_id` 和 Workdir。子 Agent 的 child thread 只隔离 LangGraph checkpoint，不隔离共享文件。Viewer、附件和 artifact API 直接访问 UserWorkspace 的持久文件，不需要创建 file-bridge Sandbox。
+协作成员各自拥有 Thread、Input、Turn、Run、消息历史和 PostgreSQL checkpoint，共享同一 Project Workdir；同用户所有会话共用持久 Cube VM。共享文件的修改对其他成员可见，消息与执行归属仍由各自持久记录隔离。Viewer、附件和 artifact API 直接读取授权的 Workspace/Workdir 文件，文件访问与执行环境边界见[沙盒机制](../mechanisms/sandbox.md)。
 
 ## 会话协作
 

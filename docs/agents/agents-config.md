@@ -12,7 +12,7 @@
 | `config_json.context` | 当前 Agent 保存的配置值 |
 | Graph / middleware | 根据 Context 组合模型、工具、文件和扩展能力 |
 
-内置 `ChatbotAgent` 供所有会话使用；[协作会话](./session-cooperation.md)沿用派发方的 Agent 配置并独立保存上下文。
+内置会话使用 `ChatbotAgent` 执行后端。[协作会话](./session-cooperation.md)默认继承派发方配置，也可以显式选择另一个获授权的 Agent；每个成员独立保存消息历史与执行状态。
 
 ## 创建智能体
 

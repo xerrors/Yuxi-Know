@@ -80,7 +80,7 @@ YUXI_ENV_FILE=.env.staging docker compose --env-file .env.staging -f docker-comp
 YUXI_ENV_FILE=.env.staging docker compose --env-file .env.staging -f docker-compose.prod.yml up -d --build
 ```
 
-同机并行部署时，在各自的环境文件中设置不同的 `COMPOSE_PROJECT_NAME` 和 `YUXI_STATE_DIR`；项目名隔离容器、镜像、Compose 网络和动态沙盒名称，数据目录隔离持久文件。默认数据目录仍是 `./docker/volumes`，同一目录只允许一套运行中的环境写入。已有部署更换项目名或从固定容器名切换前，先结束任务和沙盒会话，用旧配置执行 `docker compose down`（保留数据，不加 `-v`），再用新配置启动；复用数据时保持状态目录和密钥不变。
+同机并行部署时，在各自的环境文件中设置不同的 `COMPOSE_PROJECT_NAME` 和 `YUXI_STATE_DIR`；项目名隔离应用容器、镜像与 Compose 网络，数据目录隔离持久文件。Cube 用户 VM 的引用保存在各自 PostgreSQL，节点共享路径需要另行隔离；Compose 项目名不会创建隔离的执行节点或共享挂载。默认数据目录为 `./docker/volumes`，同一目录只允许一套运行中的环境写入。已有部署更换项目名前，先停止接收任务、等待 Run 和命令清理并核对原 VM，再用旧配置执行 `docker compose down`（保留数据，不加 `-v`），用新配置启动；复用数据时保持状态目录、节点挂载、实例身份和密钥不变。
 
 生产 Web 端口通过 `YUXI_FRONTEND_PORT` 设置，默认 80；API 默认发布到 `127.0.0.1:6050`，管理服务端口也只绑定回环地址。具体默认值由 `docker-compose.prod.yml` 的 `ports` 定义；多套生产环境还需分别设置端口，启用 `all` profile 时包括 `YUXI_MINERU_PORT` 和 `YUXI_PADDLEX_PORT`。开发环境的端口隔离示例见[并行工作树与隔离运行环境](../develop-guides/parallel-worktree-environments.md)。
 
@@ -197,7 +197,7 @@ YUXI_CORS_ORIGINS=https://frontend.example.com
 YUXI_CORS_ORIGINS=https://a.example.com,https://b.example.com
 ```
 
-前端与 API 同源时留空即可。设置为 `*` 会关闭 credentials，浏览器不会携带登录态，因此不适合需要 JWT Cookie/凭证的前端。开发环境在 `YUXI_ENV=development` 且未设置该变量时，默认允许 `http://localhost:5173` 和 `http://127.0.0.1:5173`；生产环境不会采用这个默认值。修改后重启 API。
+前端与 API 同源时留空即可。设置为 `*` 会关闭 CORS credentials 支持，依赖跨域 Cookie 的请求无法携带该登录状态；生产浏览器入口应列出明确来源。开发环境在 `YUXI_ENV=development` 且未设置该变量时，默认允许 `http://localhost:5173` 和 `http://127.0.0.1:5173`；生产环境不会采用这个默认值。修改环境文件后重新创建 API 容器。
 
 ## 维护与故障排查
 

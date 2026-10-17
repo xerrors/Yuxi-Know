@@ -6,7 +6,7 @@ import markdownItTaskCheckbox from 'markdown-it-task-checkbox'
 export default defineConfig({
   lang: 'zh-CN',
   title: "Yuxi",
-  description: "Yuxi 是一个可私有部署的多租户知识智能体平台，统一 RAG、知识图谱、LangGraph 多智能体、MCP/Skills、沙盒与权限管理。",
+  description: "Yuxi 是一个可私有部署的知识智能体平台，支持文档检索、知识图谱、协作会话、MCP/Skills、持久执行环境与团队权限管理。",
   base: '/Yuxi/',
   srcExclude: ['vibe/**'],
   sitemap: {
@@ -20,7 +20,7 @@ export default defineConfig({
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:site_name', content: 'Yuxi' }],
     ['meta', { property: 'og:title', content: 'Yuxi · 让知识真正参与每一次行动' }],
-    ['meta', { property: 'og:description', content: '可私有部署的多租户知识智能体平台，统一知识、工具、多智能体执行与团队治理。' }],
+    ['meta', { property: 'og:description', content: '可私有部署的知识智能体平台，统一文档检索、工具执行、文件产物与团队权限。' }],
     ['meta', { property: 'og:image', content: 'https://xerrors.oss-cn-shanghai.aliyuncs.com/github/yuxi/docs/home/yuxi-web-og-1200x630-v1.0.0.png' }],
     ['meta', { property: 'og:image:width', content: '1200' }],
     ['meta', { property: 'og:image:height', content: '630' }],
@@ -53,11 +53,11 @@ export default defineConfig({
         items: [
           { text: '认识 Yuxi', link: '/intro/project-overview' },
           { text: '快速开始', link: '/intro/quick-start' },
-          { text: '命令行工具', link: '/intro/cli' },
-          { text: '公开 Agent API 接入', link: '/intro/agents-api-quickstart' },
           { text: '模型配置', link: '/intro/model-config' },
           { text: '知识库入门', link: '/intro/knowledge-base' },
-          { text: '知识库评估', link: '/intro/evaluation' }
+          { text: '知识库评估', link: '/intro/evaluation' },
+          { text: '命令行工具', link: '/intro/cli' },
+          { text: '公开 Agent API 接入', link: '/intro/agents-api-quickstart' }
         ]
       },
       {
@@ -117,7 +117,7 @@ export default defineConfig({
         items: [
           { text: '参与贡献', link: '/develop-guides/contributing' },
           { text: '测试规范', link: '/develop-guides/testing-guidelines' },
-          { text: 'Agents API 对齐计划', link: '/develop-guides/agents-api-alignment-plan' },
+          { text: 'Agents API 维护索引', link: '/develop-guides/agents-api-alignment-plan' },
           { text: 'Yuxi Spec Loop', link: '/develop-guides/spec-loop' },
           { text: '工程信任系统', link: '/develop-guides/engineering-trust' },
           { text: '并行 worktree 环境', link: '/develop-guides/parallel-worktree-environments' },

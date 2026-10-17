@@ -8,7 +8,7 @@ Owner：backend/yuxi/api/routers/public_v1/agents/schemas.py
 
 同一 Session 的创建、列表、更新和展示操作使用不同响应形状，接收回执覆盖业务状态，HTTP 与 SSE 的 Turn 字段不同。客户端在 HTTP 边界把 Session 扩展还原为旧 Thread，增加了需要记忆和维护的解析规则。
 
-本记录拥有[机制对齐方案](2026-10-09-agents-api-mechanism-alignment.md)第一步已生效的资源决定，部分取代[核心子集决定](2026-10-09-agents-session-protocol.md)。配置完整快照与取消清理由[配置及取消决定](2026-10-09-agents-session-lifecycle.md)拥有；附件由[附件提交决定](2026-10-09-agents-draft-attachments.md)、分页与恢复由[查询恢复决定](2026-10-09-agents-query-recovery.md)拥有；整体验收见[实施计划](../../agents-api-alignment-plan.md)。
+本记录拥有[机制对齐方案](2026-10-09-agents-api-mechanism-alignment.md)第一步已生效的资源决定，部分取代[核心子集决定](2026-10-09-agents-session-protocol.md)。配置完整快照与取消清理由[配置及取消决定](2026-10-09-agents-session-lifecycle.md)拥有；附件由[附件提交决定](2026-10-09-agents-draft-attachments.md)、分页与恢复由[查询恢复决定](2026-10-09-agents-query-recovery.md)拥有；整体验收见[对齐交付记录](../archived/2026-10-09-agents-api-delivery.md)。
 
 ## 决策
 

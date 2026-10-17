@@ -6,9 +6,10 @@
 | --- | --- |
 | [认识 Yuxi](./project-overview.md) | Yuxi 适合什么场景，三个核心概念是什么 |
 | [快速开始](./quick-start.md) | 从克隆到一套可用开发环境 |
-| [命令行工具](./cli.md) | 用 npm CLI 连接实例、对话和查询知识库 |
 | [配置模型](./model-config.md) | 接入聊天、嵌入和重排模型 |
 | [知识库入门](./knowledge-base.md) | 创建知识库并让智能体检索文档 |
 | [知识库评估](./evaluation.md) | 量化检索质量，决定是否调整分块或参数 |
+| [命令行工具](./cli.md) | 用 npm CLI 对话、发送附件和查询知识库 |
+| [公开 Agent API 接入](./agents-api-quickstart.md) | 用 cURL 创建会话、提交输入并读取指定轮次的结果 |
 
-配置字段的运行时语义属于[智能体配置](../agents/agents-config.md)，部署与生产环境属于[高级配置](../advanced/deployment.md)；遇到配置不生效时，先确认改动是否落在对应 Owner 页面描述的范围内。
+第一次使用时按前五页完成环境、模型和知识库验证；已有实例的集成开发者可直接阅读 CLI 或公开 API 教程。智能体字段见[智能体配置](../agents/agents-config.md)，正式环境见[生产部署](../advanced/deployment.md)。

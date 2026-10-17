@@ -362,3 +362,5 @@ Agent 与 User 使用共享 [FallbackAvatar](https://github.com/xerrors/Yuxi/blo
 图片加载或本地生成失败时，Agent 使用 Lucide Bot、User 使用 Lucide User，浅色背景 token 在深浅主题下保持相同。组件通过 fallback 事件提供 image 或 generation 原因。图片地址改变后重新加载；网络恢复只重试失败图片。装饰头像传 decorative，独立头像使用 alt 或 name 提供可访问名称。
 
 Glyphs 使用 Matt Houser 原作的 CC BY 4.0 授权，组件保留 SVG 署名与许可元数据，应用配色、夜间底纸及画布裁切适配；发布包含 [头像第三方声明](https://github.com/xerrors/Yuxi/blob/main/frontend/public/avatar-licenses.txt)。Clay、Shape Grid、Gaze 美术为 CC0 1.0，DiceBear 核心为 MIT。固定依赖与色卡更新需要核验输出和许可。
+
+知识库、Skill 和工具的图标色由 `shared/lib/extensionIconColor.js` 按稳定资源身份从预设色卡中选择；浅色底使用当前主题背景混色。知识库使用 `kb_id`，Skill 使用 `slug`，图标与颜色在目录卡片和 @ 候选中保持一致。飞书使用本地品牌图标。

@@ -24,11 +24,11 @@ branding:
 
 footer:
   copyright: "© Example App"
-  user_agreement_url: "/protocols/user-agreement.html"
-  privacy_policy_url: "/protocols/privacy-policy.html"
+  user_agreement_url: "/protocols/user-agreement.template.html"
+  privacy_policy_url: "/protocols/privacy-policy.template.html"
 ```
 
-产品名称和 Logo 统一由 `branding.name`、`branding.logo` 拥有，首页、登录页和侧栏共用这两个字段。`title` 用于首页主标题，`login_bg` 用于登录背景。旧配置须把 `organization` 中的名称、Logo、登录背景合并到 `branding`，删除 `avatar`、`subtitle` 和 `subtitles`；名称只保留最终产品名称，不拼接组织名称。
+产品名称和 Logo 统一由 `branding.name`、`branding.logo` 拥有，首页、登录页和侧栏共用这两个字段。`title` 用于首页主标题，`login_bg` 用于登录背景。页面直接读取 `branding`，名称填写最终产品名称；`organization`、`avatar`、`subtitle` 和 `subtitles` 不属于当前品牌字段。
 
 图片和协议页面放在 `frontend/public` 下，路径从网站根目录开始写，例如 `/logo.svg`。Compose 中 API 的工作目录是 `/app`，因此默认配置路径可以写成：
 
@@ -36,7 +36,7 @@ footer:
 YUXI_BRAND_FILE_PATH=yuxi/modules/system/static/info.local.yaml
 ```
 
-也可以在 `.env` 中设置绝对路径，但文件必须挂载到 API 容器中。路径不存在时，API 会回退到 `info.template.yaml`；它不会把两个 YAML 文件合并。
+也可以在环境文件中指定 API 容器内的绝对路径，并通过 Compose 只读挂载该文件。路径不存在时读取 `info.template.yaml`，两个 YAML 文件不合并；YAML 读取或解析失败时接口返回空配置。修改后既要核对 `/api/system/info` 的实际字段，也要刷新页面检查名称、图片和协议链接。
 
 ### 2. 重新加载
 

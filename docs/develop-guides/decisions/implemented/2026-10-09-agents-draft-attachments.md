@@ -56,4 +56,4 @@ docker compose exec -T api uv run --no-sync --group test pytest test/e2e/test_re
 
 Web lint、全量 unit **515 passed**、发送专项 **8 passed**、类型检查及 build 通过；CLI typecheck、**11 passed** 与 pack dry-run 通过；Demo lint、**13 passed**、build 和浏览器 **16 passed**。真实 Web 的上传与拒绝重试截图保存在开发机临时目录，不提交截图、Token 或运行数据。工程信任检查、检查器 **64 tests**、文档 build 与 diff check 通过，独立 Reviewer 已检查功能与证据边界。三端没有 confirm 调用或 JPEG/base64 旧形状包装。
 
-外部 `E2E_VISION_MODEL` / `E2E_NON_VISION_MODEL` 未配置，read_file 真实模型探针 **2 skipped**；不能据此宣称外部视觉能力、非视觉模型拒绝后的 OCR fallback 或所有外部 OCR 服务已校准。MinerU replay 证明资源协议，真实 OCR 默认配置场景证明现有私有解析链路。当前查询/断线恢复已完成，见[查询恢复决定](2026-10-09-agents-query-recovery.md)；官方 SDK 完整调用仍按[路线](../../agents-api-alignment-plan.md)的 P1 范围安排。
+外部 `E2E_VISION_MODEL` / `E2E_NON_VISION_MODEL` 未配置，read_file 真实模型探针 **2 skipped**；不能据此宣称外部视觉能力、非视觉模型拒绝后的 OCR fallback 或所有外部 OCR 服务已校准。MinerU replay 证明资源协议，真实 OCR 默认配置场景证明现有私有解析链路。当前查询/断线恢复已完成，见[查询恢复决定](2026-10-09-agents-query-recovery.md)；官方 SDK 完整调用的当前边界见[公开 API 参考](../../../advanced/agents-public-api.md)。

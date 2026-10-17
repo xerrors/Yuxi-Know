@@ -33,7 +33,7 @@ flowchart LR
     MilvusKB --> PG[("PostgreSQL")]
     MilvusKB --> Object[("MinIO")]
     MilvusKB --> Vector[("Milvus")]
-    MilvusKB --> Graph[("Neo4j，可选")]
+    MilvusKB --> Graph[("Neo4j，图谱操作")]
     Connector --> External["外部检索与阅读 API"]
 
     Context["Agent Context.knowledges"] --> Visible["用户权限 ∩ Agent 选择"]
@@ -95,7 +95,7 @@ stateDiagram-v2
 | PostgreSQL | 知识库配置、权限、文件元数据和状态、chunk 正文与原文行号、图谱处理状态、BackgroundJob 执行意图与 lease | 原文件字节、向量索引 |
 | MinIO | 上传原件、解析 Markdown、解析图片 | 文件当前状态、用户权限 |
 | Milvus | chunk 向量、BM25/混合检索字段、图实体和关系向量 | 权限、文件状态 |
-| Neo4j | 可选的实体、关系和 chunk 关联 | 原文件、权限和检索排序 |
+| Neo4j | 图谱实体、关系和 chunk 关联 | 原文件、权限和检索排序 |
 | Redis / ARQ | BackgroundJob 投递与 worker 唤醒、知识库最小运行配置缓存 | BackgroundJob 最终状态、配置最终值、文件状态 |
 
 知识库解析先生成本地 Markdown 目录，再将图片和 Markdown 写入该文档本次解析的独占 MinIO 前缀。文件记录提交 `parsed` 与新 Markdown 路径后，服务回收旧尝试；失败或 owner 丢失只回收未发布的当前尝试，旧产物保持可读。取消发生在结果发布后的旧资源回收阶段时，已发布结果仍然有效。删除文档按文档前缀回收解析资源，其他文档的资源保留。
@@ -122,14 +122,9 @@ JobTracker 保存任务登记、执行方上报的进度与结果摘要，并提
 
 知识库 service 按当前用户的读取权限查询资源，再与调用方的全部或显式选择求交集。Agent 准备阶段只保存归一化后的 `Context.knowledges` ID 列表；知识工具每次执行时重新解析当前权限与该列表的交集，配置列表不作为执行授权。Public API 使用同一 service，按本次请求的用户身份解析全部可读知识库。工具目标必须属于本次解析的范围，文档归属由知识库查询实现校验。撤销读取权限后，后续工具调用拒绝该资源；权限查询失败向调用边界传播，不返回空列表掩盖存储故障。授权查询与实际数据读取遵循各自事务边界。
 
-知识库工具由内置 `knowledge-base` Skill 提供。模型读取该 Skill 的 `SKILL.md` 后，才会看到：
+知识库工具由内置 `knowledge-base` Skill 提供。预加载时从首轮开放；渐进加载时在模型读取 `SKILL.md` 后开放。工具职责由[工具系统](../agents/tools-system.md#知识库工具)维护，选择和激活仍受当前资源权限约束。
 
-```text
-list_kbs、query_kb、find_kb_document、open_kb_document、
-search_file、download_kb_file
-```
-
-推荐顺序是：列出可见知识库 → 检索候选片段 → 用 `file_id` 打开或定位原文。`download_kb_file` 会把有权访问的原始二进制写入当前 Project 的 `outputs`，供后续工具处理。知识库不会映射为 `/home/gem/kbs` 沙盒目录。
+推荐顺序是：列出可见知识库 → 检索候选片段 → 用 `file_id` 打开或定位原文。`download_kb_file` 将获授权的原始二进制写入当前 Project 的 `outputs`，供后续工具处理。知识库内容通过授权工具读取，不挂载为 Agent 可直接遍历的沙盒目录。
 
 ## 权限
 
@@ -140,7 +135,7 @@ search_file、download_kb_file
 - 原文件上传入口要求管理员，并在传入 `kb_id` 时继续检查该知识库的 manage 权限；
 - 前端守卫、按钮隐藏、Agent 配置和提示词只控制呈现或缩小范围，不能授予权限。
 
-Agent 的 `knowledges` 只能缩小用户已有权限。协作会话继承派发方的配置并沿用发起用户的身份，每次执行仍复查资源可见性。私有解析图片通过带知识库权限校验的 API 读取，MinIO 对象 URL 不是授权凭证。
+Agent 的 `knowledges` 只能缩小用户已有权限。协作成员沿用执行用户与 APP 作用域，使用继承或显式选择的 Agent 配置，每次执行仍复查资源可见性。私有解析图片通过带知识库权限校验的 API 读取，MinIO 对象 URL 不是授权凭证。角色与共享范围规则见[资源权限](./resource-permissions.md)。
 
 ## 失败和重试
 

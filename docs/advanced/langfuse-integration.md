@@ -44,7 +44,7 @@ docker compose up -d --force-recreate api worker
 
 ## 验证是否生效
 
-1. 重启 API 和 worker。
+1. 重新创建读取了新配置的 API 和 worker，确认 `/api/system/ready` 已恢复。
 2. 用测试账号发起一次真实对话，记录线程和大致时间。
 3. 在 Langfuse 控制台按 `session_id`、`agent_id` 或时间筛选 trace。
 4. 核对 trace 中的模型调用、工具调用、metadata 和耗时。
@@ -58,7 +58,7 @@ Yuxi 在 PostgreSQL 保存本地 Model/Tool 审计事实，调试面板按 Turn 
 
 ## 常见问题
 
-- **看不到 trace**：检查 API/worker 是否读取到两组密钥、Langfuse SDK 是否安装，以及 `LANGFUSE_BASE_URL` 是否可访问。
+- **看不到 trace**：检查 API/worker 是否都读取到公钥与密钥、Langfuse SDK 是否安装，以及 `LANGFUSE_BASE_URL` 是否可访问。
 - **反馈无法打开 Trace**：确认反馈所属 Turn 已持久化 Trace 关联，并检查当前账号具有对应 Langfuse 项目的访问权限。
 - **控制台显示旧数据**：Langfuse 客户端有缓冲，运行结束后会刷新；业务结果仍以 Yuxi 的 PostgreSQL 记录为准。
 

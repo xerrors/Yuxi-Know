@@ -10,7 +10,7 @@ Yuxi 的配置分成两类：启动进程时读取的环境变量，以及运行
 代码默认值 < 环境变量 < PostgreSQL 中保存的系统配置
 ```
 
-数据库中保存的非空值优先于环境变量；布尔值和列表即使是 `false` 或空列表，也会被视为管理员明确保存的值。没有数据库值时，系统才读取对应环境变量或代码默认值。
+字符串字段使用数据库非空值，保存为空会恢复环境变量或默认值。列表字段保留明确保存的空列表；整数按字段定义校验并保留合法的 `0`。各字段的类型、默认值与可选项由所属模块的 `Option` 定义，不把所有字段都按字符串的空值规则处理。
 
 启动期环境变量由 Docker Compose 注入 API、worker 和依赖服务。它们决定服务地址、密钥、存储位置和沙盒承载方式。修改环境变量后需要重新创建读取它的容器；只执行 `docker compose restart` 不会更新容器环境：
 
@@ -22,11 +22,11 @@ Cube 连接参数供 API/worker 使用，节点挂载目录必须与 Yuxi 共享
 
 ## 管理员系统配置
 
-管理员在“设置 → 基本设置”中修改系统配置。当前配置项由 [`options.py`](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/system/options.py) 定义，包含默认对话模型、快速响应模型、嵌入模型、重排模型和默认 OCR 解析引擎。
+超级管理员在设置中维护系统级配置：基本设置选择默认模型和协作深度，OCR 配置选择解析引擎及服务，网络搜索选择 Search/Fetch 供应商及凭证。系统字段由 [`options.py`](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/system/options.py) 汇总，各业务模块拥有自己的配置定义；普通管理员不能调用系统配置写入接口。
 
-系统配置保存到 PostgreSQL 的 `config_options` 表。API 和 worker 通过 Redis 保存短期缓存；保存成功后缓存会失效，下一次读取从数据库取得新值。Redis 不可用时，读取路径回源 PostgreSQL，不把缓存当作最终事实。
+系统配置保存到 PostgreSQL 的 `config_options` 表。非敏感 Option 使用 Redis 短期缓存，提交后执行缓存失效；带敏感字段的 Option 每次回源 PostgreSQL，密钥不进入 Redis 配置缓存。读取缓存失败时回源数据库；提交后的缓存失效失败会记录日志，已有非敏感缓存最长保留到其 300 秒 TTL 到期。事务内读取直接使用数据库值。
 
-运行中的已初始化组件不保证热更新。例如模型供应商使用的 API Key 环境变量、OCR 服务地址、沙盒连接和数据库地址变化后，应重新创建实际读取这些变量的 API 或 worker。
+页面保存的运行时配置按各模块的读取时机生效；已经冻结的 Input Context 或已初始化组件仍遵循自身生命周期。环境变量只随进程启动环境更新，修改模型 Key、OCR 地址、沙盒连接或数据库地址等环境变量后，重新创建实际读取这些变量的 API/worker。模型供应商的页面保存与刷新规则见[模型配置](../intro/model-config.md)。
 
 ## 用户 Agent 环境变量
 

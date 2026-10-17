@@ -26,35 +26,17 @@ docker compose up -d --force-recreate api worker
 
 ## 内置供应商
 
-系统启动时会同步内置供应商模板。模板提供供应商 ID、API 地址、凭证变量名和模型发现地址；是否可用取决于凭证、供应商状态和已启用模型。页面列出的内容是当前实例的实际配置，完整模板由 [`builtin.py`](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/models/providers/builtin.py) 维护。
+`app-init` 同步代码拥有的供应商模板，提供供应商 ID、API 地址、凭证变量名和模型发现地址。管理员在页面查看当前实例的配置；完整模板由 [`builtin.py`](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/models/providers/builtin.py) 维护，更新流程见[共享内容更新](../advanced/deployment.md#共享内容更新与失败重试)。
 
-| 展示名称 | Provider ID | 常见类型 | 凭证环境变量 |
-| --- | --- | --- | --- |
-| OpenAI | `openai` | chat | `OPENAI_API_KEY` |
-| DeepSeek | `deepseek` | chat | `DEEPSEEK_API_KEY` |
-| DashScope（中国站） | `alibaba-cn` | chat、embedding、rerank | `DASHSCOPE_API_KEY` |
-| DashScope（国际站） | `alibaba` | chat | `DASHSCOPE_API_KEY` |
-| Aliyun Coding Plan（中国站） | `alibaba-coding-plan-cn` | chat | `DASHSCOPE_API_KEY` |
-| Aliyun Coding Plan（国际站） | `alibaba-coding-plan` | chat | `DASHSCOPE_API_KEY` |
-| Zhipu（BigModel） | `zhipuai` | chat | `ZHIPUAI_API_KEY` |
-| Zhipu Coding Plan（BigModel） | `zhipuai-coding-plan` | chat | `ZHIPUAI_API_KEY` |
-| Zhipu（Z.AI） | `zai` | chat | `ZAI_API_KEY` |
-| Zhipu Coding Plan（Z.AI） | `zai-coding-plan` | chat | `ZAI_API_KEY` |
-| XiaomiMiMo Token Plan | `xiaomi-token-plan-cn` | chat | `XIAOMI_MIMO_TOKEN_PLAN_API_KEY` |
-| XiaomiMiMo | `xiaomi` | chat | `XIAOMI_MIMO_API_KEY` |
-| Kimi Code | `kimi-for-coding` | chat | `KIMI_CODE_API_KEY` |
-| Moonshot（中国站） | `moonshotai-cn` | chat | `MOONSHOT_API_KEY` |
-| Moonshot（国际站） | `moonshotai` | chat | `MOONSHOT_API_KEY` |
-| MiniMax（中国站） | `minimax-cn` | chat | `MINIMAX_API_KEY` |
-| MiniMax（国际站） | `minimax` | chat | `MINIMAX_API_KEY` |
-| OpenRouter | `openrouter` | chat、embedding | `OPENROUTER_API_KEY` |
-| ModelScope | `modelscope` | chat | `MODELSCOPE_ACCESS_TOKEN` |
-| OpenCode | `opencode` | chat | `OPENCODE_API_KEY` |
-| OpenCode Go | `opencode-go` | chat | `OPENCODE_GO_API_KEY` |
-| SiliconFlow（中国站） | `siliconflow-cn` | chat、embedding、rerank | `SILICONFLOW_API_KEY` |
-| SiliconFlow（国际站） | `siliconflow` | chat、embedding、rerank | `SILICONFLOW_GLOBAL_API_KEY` |
+接入时先按用途选择供应商能力：
 
-表中「常见类型」是模板预置或当前常见用途；模型仍需在供应商中启用，实际可用性以当前实例配置和供应商接口为准。`alibaba-cn`、`openrouter`、`siliconflow-cn` 和 `siliconflow` 的模板明确包含嵌入或重排能力，其他供应商能否添加某类模型取决于当前供应商配置的能力和接口。不要把 `alibaba` 和 `alibaba-cn` 混用：前者是 DashScope 国际站模板，后者带有内置的嵌入和重排配置。
+| 用途 | 需要配置什么 |
+| --- | --- |
+| 聊天与工具调用 | `chat` 能力、聊天 API 地址和可用模型 |
+| 文档向量化 | `embedding` 能力、嵌入 API 地址、模型和向量维度 |
+| 检索重排 | `rerank` 能力、重排 API 地址和模型 |
+
+例如，`siliconflow-cn` 使用 `SILICONFLOW_API_KEY`，`alibaba-cn` 使用 `DASHSCOPE_API_KEY`，两者模板都包含聊天、嵌入和重排配置。中国站、国际站与 Coding Plan 使用不同模板，应按账号所属服务选择。模板存在不代表模型已可用，还需要有效凭证、启用的供应商和模型，以及实际连接测试。
 
 ## 添加和启用模型
 

@@ -12,7 +12,7 @@ Owner：backend/yuxi/api/routers/public_v1/agents/threads.py
 
 资源结构、更新方法、列表 cursor 和客户端消费由[公开资源决定](2026-10-09-agents-resource-contract.md)部分取代；本记录继续拥有 Session 路径、初始输入、持久 Items 与长期 SSE 的核心子集边界。当前公开行为以[API 参考](../../../advanced/agents-public-api.md)和后续决定为准。
 
-公开资源使用 Session，ID 沿用 Thread UUID。HTTP 实现 OpenAI Agents 核心会话契约的显式子集：创建与详情返回 `agent.session`，支持字符串初始输入、普通消息和取消事件、持久 Session Items 及 SSE。FIFO、Input/Run、等待点和协作树属于 Yuxi 扩展。范围与后续优先级见[对齐清单](../../agents-api-alignment-plan.md)，客户端限制由[公开 API 参考](../../../advanced/agents-public-api.md)维护。
+公开资源使用 Session，ID 沿用 Thread UUID。HTTP 实现 OpenAI Agents 核心会话契约的显式子集：创建与详情返回 `agent.session`，支持字符串初始输入、普通消息和取消事件、持久 Session Items 及 SSE。FIFO、Input/Run、等待点和协作树属于 Yuxi 扩展。当前维护入口见[维护索引](../../agents-api-alignment-plan.md)，客户端限制由[公开 API 参考](../../../advanced/agents-public-api.md)维护。
 
 ### 实现方案
 
@@ -30,7 +30,7 @@ agents services/repositories 继续拥有权限、持久输入、回执、FIFO�
 
 公开路径和响应要求外部调用方同步。Session 资源、POST 更新、列表 cursor、独立回执和归档标记采用[公开资源决定](2026-10-09-agents-resource-contract.md)。`agent.model` 返回会话快照中的有效模型，创建时解析 Agent 或系统默认值；配置生效时机由[配置及取消决定](2026-10-09-agents-session-lifecycle.md)拥有。官方 SDK 自动结束调用和最终结果收集不属于兼容承诺。
 
-附件和完整查询/恢复的后续取舍见[机制对齐决定](2026-10-09-agents-api-mechanism-alignment.md)，优先级由[对齐计划](../../agents-api-alignment-plan.md)维护。资源统一与直接消费、会话配置与取消生命周期已分别由对应决定生效；附件与完整查询恢复分别由[附件提交决定](2026-10-09-agents-draft-attachments.md)和[查询恢复决定](2026-10-09-agents-query-recovery.md)提供独立证据；本记录的验证范围限于保留的核心子集。
+附件和完整查询/恢复的后续取舍见[机制对齐决定](2026-10-09-agents-api-mechanism-alignment.md)，当前协议范围由[公开 API 参考](../../../advanced/agents-public-api.md)维护。资源统一与直接消费、会话配置与取消生命周期已分别由对应决定生效；附件与完整查询恢复分别由[附件提交决定](2026-10-09-agents-draft-attachments.md)和[查询恢复决定](2026-10-09-agents-query-recovery.md)提供独立证据；本记录的验证范围限于保留的核心子集。
 
 原核心子集阶段只验证响应 limit；[查询与恢复决定](2026-10-09-agents-query-recovery.md)与[事实归一决定](2026-10-09-agents-owner-simplification.md)拥有当前 repository 的有界数据库分页及真实 PostgreSQL 证据。历史数据迁移与部署平台兼容不在范围内。
 

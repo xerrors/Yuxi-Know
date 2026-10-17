@@ -39,11 +39,12 @@ Windows PowerShell：
 脚本会读取或生成以下内容，并写入项目根目录的 `.env`：
 
 - 必填的 `SILICONFLOW_API_KEY`。
-- 网页搜索与正文抓取在登录后由超级管理员进入「设置 → 网络搜索」配置；初始化无需填写搜索凭据，也可通过环境变量预配置。
 - `JWT_SECRET_KEY` 和 `API_KEY_DERIVATION_SECRET` 两个相互独立的随机密钥，每个至少 32 个字符。
 - `YUXI_INSTANCE_ID`，用于标识这套部署。
 
-脚本还会拉取基础镜像并构建 MinIO。镜像加速站失败时，Linux/macOS 脚本会提示并尝试原仓库；两处都失败时退出，可在网络恢复后重新运行。它不会把密钥打印到终端，Linux/macOS 下会把环境文件权限设为 `600`。已有配置中的安全密钥在未显式覆盖时保留；升级时请保留 `JWT_SECRET_KEY` 和 `API_KEY_DERIVATION_SECRET`。
+脚本还会拉取基础镜像并构建 MinIO 与 `storage-init`。镜像加速站失败时，Linux/macOS 脚本会提示并尝试原仓库；两处都失败时退出，可在网络恢复后重新运行。它不会把密钥打印到终端，Linux/macOS 下会把环境文件权限设为 `600`。已有配置中的安全密钥在未显式覆盖时保留；升级时请保留 `JWT_SECRET_KEY` 和 `API_KEY_DERIVATION_SECRET`。
+
+网页搜索与正文抓取在登录后由超级管理员进入「设置 → 网络搜索」配置；初始化无需填写搜索凭据，也可通过环境变量预配置。
 
 Linux/macOS 上的 Agent 或 CI 可以先通过安全的环境注入机制提供 `SILICONFLOW_API_KEY`，再关闭交互：
 
@@ -51,7 +52,7 @@ Linux/macOS 上的 Agent 或 CI 可以先通过安全的环境注入机制提供
 YUXI_INIT_NON_INTERACTIVE=1 ./scripts/init.sh
 ```
 
-环境变量优先于文件。`SILICONFLOW_API_KEY`、搜索供应商及对应密钥、两个应用安全密钥和 `YUXI_INSTANCE_ID` 都支持覆盖；完整输入范围由 [初始化脚本](https://github.com/xerrors/Yuxi/blob/main/scripts/init.sh) 的配置循环维护。未提供的应用密钥和实例标识自动生成，缺少模型 Key 时明确失败；非空非法安全密钥不会自动轮换。环境变量中的配置值必须为单行，脚本会保留美元符等字面值。PowerShell 入口使用交互式流程。
+环境变量优先于文件，完整输入范围由[初始化脚本](https://github.com/xerrors/Yuxi/blob/main/scripts/init.sh)的配置循环维护。未提供的应用密钥和实例标识自动生成，缺少模型 Key 时明确失败；非空非法安全密钥不会自动轮换。环境变量中的配置值必须为单行，脚本保留美元符等字面值。PowerShell 入口使用交互式流程。
 
 `YUXI_ENV_FILE` 选择目标文件，默认 `.env`；`YUXI_INIT_SKIP_IMAGES=1` 只准备配置，稍后仍需构建镜像。开关只接受 `0` 或 `1`。生产部署使用[独立生产配置](../advanced/deployment.md#_1-准备生产配置)。
 
@@ -95,7 +96,9 @@ curl --fail http://localhost:5050/api/system/ready
 | API 存活检查 | <http://localhost:5050/api/system/health> |
 | API 就绪检查 | <http://localhost:5050/api/system/ready> |
 
-首次打开 Web 界面时，按页面提示初始化超级管理员账号。登录成功后，可以从“智能体”页面配置模型，从“知识库”页面创建文档知识库。
+首次打开 Web 界面时，按页面提示初始化超级管理员账号。登录成功后，在“智能体 → 模型供应商”配置模型，再创建对话并发送测试消息。收到该轮的最终回答后，再按[知识库入门](./knowledge-base.md)添加文档。
+
+在对话输入区点击「+」或输入「@」，可从同一个菜单上传附件、添加图片或引用可用资源。附件与图片的用途和处理方式见[文档处理](../advanced/document-processing.md)。
 
 ## 常见问题
 

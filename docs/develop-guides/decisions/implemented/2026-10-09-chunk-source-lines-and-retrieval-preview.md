@@ -16,7 +16,7 @@ Owner：backend/yuxi/modules/knowledge/chunking/dispatcher.py
 
 MarkdownPreview 增加块级原文行映射与高亮定位；MarkdownDocumentPreview 提供 Markdown/源码视图，源码显示逐行行号和高亮。文件详情弹窗及检索侧栏复用该组件。页面默认 800px 居中，选中 Chunk 后 Flex 等分两栏，窄屏纵向排列。侧栏加载完整解析原文，文档内容接口用 line_location 标识全文、已入库状态与快照代次是否自洽；不可定位时显示原因并清空高亮。新查询、清空结果与切库均使旧检索请求失效并清理选择，过期请求不得覆盖新结果或新文件。检索方式及文本过滤统一使用已有检索配置面板保存的参数，移除检索页内的重复入口。
 
-新增行号列进入 Knowledge schema v3；schema-init 只在空库建立当前结构，API/worker 只读校验版本。部署接受停机清库和重新导入文档，旧版本数据库不提供升级或回填路径；清库需要明确的数据删除授权。
+行号列由[当前知识域基线](2026-10-15-initial-schema-baseline.md)直接建立；[app-init](2026-10-18-app-initialization.md) 在空库建立当前结构，API/worker 只读校验版本。部署接受停机清库和重新导入文档，旧版本数据库不提供升级或回填路径；清库需要明确的数据删除授权。
 
 ## 替代方案
 

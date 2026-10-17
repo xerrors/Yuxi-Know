@@ -8,7 +8,7 @@ Owner：backend/yuxi/modules/agents/services/inputs.py
 
 普通输入只保存模型和审批模式，提示词、资源选择与执行限制在 worker 启动时读取 Agent 定义。同一会话或已排队输入因此可能随外部配置变化。并行工具等待的取消清理假定末条消息为 AIMessage，并可能丢弃尚在 pending writes 中的已完成工具结果。
 
-本记录拥有[机制对齐方案](2026-10-09-agents-api-mechanism-alignment.md)第 2 步的配置与取消决定，补充[公开资源决定](2026-10-09-agents-resource-contract.md)。附件/OCR 与分页恢复分别由[附件提交决定](2026-10-09-agents-draft-attachments.md)、[查询恢复决定](2026-10-09-agents-query-recovery.md)拥有；整体验收见[实施计划](../../agents-api-alignment-plan.md)。
+本记录拥有[机制对齐方案](2026-10-09-agents-api-mechanism-alignment.md)第 2 步的配置与取消决定，补充[公开资源决定](2026-10-09-agents-resource-contract.md)。附件/OCR 与分页恢复分别由[附件提交决定](2026-10-09-agents-draft-attachments.md)、[查询恢复决定](2026-10-09-agents-query-recovery.md)拥有；整体验收见[对齐交付记录](../archived/2026-10-09-agents-api-delivery.md)。
 
 ## 决策
 

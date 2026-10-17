@@ -14,7 +14,7 @@
 
 SSE 是覆盖多轮工作的长期订阅，单轮终态后保持连接。调用方按 Turn ID 观察 `completed/failed/cancelled`，回读持久结果并主动关闭连接；不承诺官方 SDK 自动结束调用或收集最终结果。创建流先返回 `agent.session.created`，其 `session` 为同一 Session 响应。
 
-Yuxi 要求创建与提交携带幂等键，每次仅接收一个事件，图片只接受内联 data URL。创建仅支持已保存的 `agent_id` 与 `agent.model` 覆盖；环境配置、内联完整 Agent、外部 `tool_result` 和 computer-use approval 未实现，返回 `422`。FIFO、显式 steer、人工回答/通用工具审批、回执和 Run/Input 查询、协作控制属于 Yuxi 扩展。对齐边界与后续 SDK 验证范围见[对齐计划](../develop-guides/agents-api-alignment-plan.md)。
+Yuxi 要求创建与提交携带幂等键，每次仅接收一个事件，图片只接受内联 data URL。创建仅支持已保存的 `agent_id` 与 `agent.model` 覆盖；环境配置、内联完整 Agent、外部 `tool_result` 和 computer-use approval 未实现，返回 `422`。FIFO、显式 steer、人工回答/通用工具审批、回执和 Run/Input 查询、协作控制属于 Yuxi 扩展。客户端按本页协议和部署实例的 OpenAPI 集成；上游 SDK 对其他能力的支持不构成 Yuxi 的接口承诺。
 
 ```json
 {
@@ -33,15 +33,15 @@ Yuxi 要求创建与提交携带幂等键，每次仅接收一个事件，图片
       "event_id": "<receipt-id>",
       "session_id": "<session-id>",
       "input_id": "<input-id>",
-      "turn_id": "<turn-id>",
-      "run_id": "<run-id>",
+      "turn_id": null,
+      "run_id": null,
       "status": "accepted"
     }
   }
 }
 ```
 
-示例省略部分展示与队列字段，完整响应以 OpenAPI 的 `SessionResponse` 为准。`yuxi.receipt.status=accepted` 只表达该次持久接收；工作结果由目标 Turn 查询拥有。
+示例省略部分展示与队列字段，完整响应以 OpenAPI 的 `SessionResponse` 为准。`yuxi.receipt.status=accepted` 只表达该次持久接收；普通消息回执始终保留空的 Turn/Run，消费归属从 Input 查询，工作结果从目标 Turn 读取。
 
 ## 身份与作用域
 
@@ -180,7 +180,7 @@ Turn 等待用户回答或审批时普通消息被拒绝，协作等待时 follo
 
 ## 读取与事件
 
-Session、Turn 和 Items 列表均返回 `{object:"list", data, first_id, last_id, has_more}`，使用 `after/limit/order`。Session 默认每页 50 条，Turn 与 Items 默认 20 条，limit 为 1–100。默认 `order=desc`，传上一页 `last_id` 为 `after` 读取更早内容；`order=asc` 从最早内容开始。同一消息的多个公开 item 可分在不同页。Items 的游标必须属于当前 Session，指定 Turn 的 Items 游标还必须属于该 Turn；否则返回 `400`。排队用户输入的 `turn_id` 可空，消费状态见 `yuxi.delivery_status`；内部 prompt、checkpoint 和未登记的助手审计不进入 Items。
+Session、Turn 和 Items 列表均返回 `{object:"list", data, first_id, last_id, has_more}`，使用 `after/limit/order`。Session 默认每页 50 条，Turn 与 Items 默认 20 条，limit 为 1–100。默认 `order=desc`，传上一页 `last_id` 为 `after` 读取更早内容；`order=asc` 从最早内容开始。同一消息的多个公开 item 可分在不同页。Items 的游标必须属于当前 Session，指定 Turn 的 Items 游标还必须属于该 Turn；否则返回 `400`。排队和已取消的未消费 Input 从 `/queue` 或 `/inputs/{input_id}` 读取，只有消费后的正式 Message 才进入 Items；内部 prompt、checkpoint 和未登记的助手审计不进入 Items。
 
 Items 页面另含 `yuxi.runs`，仅返回当前页内容引用的轻量 Run，使用 `id` 标识执行段，提供状态、时间和错误。Turn 列表是摘要，包含核心状态和 `yuxi.current_run_id/result_run_id/waitpoint`；完整执行段、用量和输出通过指定 Turn 的详情读取。数据库先按作用域、游标和页大小选择公开内容，查询不会先装载全部历史再截页。
 

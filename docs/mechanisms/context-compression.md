@@ -56,7 +56,7 @@ checkpoint 只拥有模型继续运行所需的压缩视图；PostgreSQL Message
 
 服务从检查空闲到 checkpoint 更新期间持有 Session 行锁。线程存在运行中 Run、等待交互的 Run 或排队 Input 时返回 `409 thread_busy`；普通输入接入使用同一把锁，因此不会与主动压缩并发修改同一线程。
 
-服务通过当前 Agent 的 canonical compiled graph 读取和更新 state，不直接操作 checkpoint 表。压缩期间创建或复用的 Sandbox 在请求结束时释放。成功后前端重新读取 Agent state；由于这次维护请求没有完整主模型请求形状，上一次 system/tool 压力估算会失效，下一次主模型调用重新生成完整压力数据。
+服务通过会话冻结配置准备 Context，使用当前后端的 canonical compiled graph 读取和更新 state。历史文件写入授权的 Project Workdir，该操作不创建或销毁用户 Cube VM。成功后前端重新读取 Agent state；由于维护请求没有完整主模型请求形状，上一次 system/tool 压力估算会失效，下一次主模型调用重新生成完整压力数据。
 
 ## 事件和状态提示
 
@@ -66,7 +66,7 @@ checkpoint 只拥有模型继续运行所需的压缩视图；PostgreSQL Message
 - `completed`：压缩处理后的主模型调用成功；
 - `failed`：压缩过程中出现未处理异常。
 
-执行器将它们映射为 SSE 的 `context_compression` 事件。SSE 只负责实时提示；可恢复的摘要状态以对应 Run 的 checkpoint 为准，历史内容以 Workdir 文件为准。内部摘要模型带有 `TAG_NOSTREAM`，不会作为用户可见的助手消息流出。
+执行器把它们映射为公开 SSE 的 `yuxi.session.turn.context_compression` 事件，压缩状态位于事件的 `compression` 字段。SSE 负责实时提示；可恢复的摘要状态从该 Thread 的 PostgreSQL checkpoint 读取，历史内容从 Workdir 文件读取。内部摘要模型带有 `TAG_NOSTREAM`，不会作为用户可见的助手消息流出。
 
 状态面板使用下一轮模型输入的近似 token 与 `summary_threshold` 计算压力。达到阈值的 85% 时显示手动压缩建议；85% 只影响提示，不参与自动压缩。
 
@@ -116,4 +116,4 @@ Summary 触发使用近似 token 统计；主模型返回的 `usage_metadata` �
 - [主动压缩 service tests](https://github.com/xerrors/Yuxi/blob/main/backend/test/unit/services/test_context_compression_service.py)
 - [真实模型 integration test](https://github.com/xerrors/Yuxi/blob/main/backend/test/integration/services/test_summary_middleware_real_model.py)
 
-修改压缩逻辑时，至少验证低于阈值、确定性压缩后低于同一阈值、进入摘要、结构化检索预览、历史写入失败、摘要模型失败、主动压缩 busy 拒绝、Sandbox 回收和 overflow 尾部裁剪；oracle 应读取消息视图、state update、Workdir 文件或协议结果。
+修改压缩逻辑时，至少验证低于阈值、确定性压缩后低于同一阈值、进入摘要、结构化检索预览、历史写入失败、摘要模型失败、主动压缩 busy 拒绝和 overflow 尾部裁剪；oracle 应读取消息视图、state update、Workdir 文件或协议结果。
