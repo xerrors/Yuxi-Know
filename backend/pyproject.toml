@@ -32,7 +32,6 @@ dependencies = [
     "langchain-core>=1.6.0",
     "langchain-mcp-adapters>=0.1.9",
     "langchain-openai>=1.0.2",
-    "langchain-tavily>=0.2.13",
     "langfuse>=4.0.0",
     "langgraph>=1.0.1",
     "langgraph-checkpoint-postgres>=2.0.0",
@@ -62,7 +61,6 @@ dependencies = [
     "requests>=2.34.0",
     "rich>=13.7.1",
     "sqlalchemy[asyncio]>=2.0.0",
-    "tavily-python>=0.7.0",
     # Markdown 解析语义切分相关依赖
     "markdown-it-py>=3.0.0",
     "mdit-py-plugins>=0.4.0",

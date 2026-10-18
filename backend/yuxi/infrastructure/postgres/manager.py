@@ -78,13 +78,6 @@ class PostgresManager(metaclass=SingletonMeta):
         except Exception as e:
             logger.error(f"Failed to initialize PostgreSQL manager: {e}")
 
-    @property
-    def is_postgresql(self) -> bool:
-        """检查是否是 PostgreSQL 数据库"""
-        if not self._initialized:
-            return False
-        return self.async_engine.dialect.name == "postgresql"
-
     @asynccontextmanager
     async def schema_migration_lock(self):
         """为测试与迁移调用方提供统一的 Schema advisory lock。"""
@@ -92,11 +85,6 @@ class PostgresManager(metaclass=SingletonMeta):
 
         async with schema_migration_lock(self):
             yield
-
-    async def get_async_session(self) -> AsyncSession:
-        """获取异步数据库会话"""
-        self.initialize()  # 确保已初始化
-        return self.AsyncSession()
 
     @asynccontextmanager
     async def get_async_session_context(self):
@@ -128,24 +116,6 @@ class PostgresManager(metaclass=SingletonMeta):
         self.langgraph_checkpointer = None
         self._langgraph_checkpointer_setup = False
         self._initialized = False
-
-    async def async_check_first_run(self):
-        """检查是否首次运行（异步版本）- 检查用户表是否有数据"""
-        from sqlalchemy import func, select
-
-        self._check_initialized()
-        async with self.get_async_session_context() as session:
-            from yuxi.modules.identity.models import User
-
-            result = await session.execute(select(func.count(User.id)))
-            count = result.scalar()
-            return count == 0
-
-    async def commit(self):
-        """提交当前会话"""
-        self._check_initialized()
-        async with self.get_async_session_context():
-            pass  # commit is automatic in context manager
 
     def _check_initialized(self):
         """检查是否已初始化"""

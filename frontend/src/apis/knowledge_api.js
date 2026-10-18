@@ -163,20 +163,6 @@ export const documentApi = {
   },
 
   /**
-   * 将已上传文件添加为知识库文档记录（不解析、不入库）
-   * @param {string} kbId - 知识库ID
-   * @param {Array} items - 已上传文件的 MinIO URL 列表
-   * @param {Object} params - 添加参数
-   * @returns {Promise} - 添加结果
-   */
-  addUploadedDocuments: async (kbId, items, params = {}) => {
-    return apiAdminPost(`/api/knowledge/knowledge-bases/${kbId}/documents/add`, {
-      items,
-      params
-    })
-  },
-
-  /**
    * 获取文档信息
    * @param {string} kbId - 知识库ID
    * @param {string} docId - 文档ID
@@ -350,20 +336,6 @@ export const queryApi = {
   },
 
   /**
-   * 查询知识库
-   * @param {string} kbId - 知识库ID
-   * @param {string} query - 查询文本
-   * @param {Object} meta - 查询参数
-   * @returns {Promise} - 查询结果
-   */
-  queryKnowledgeBase: async (kbId, query, meta = {}) => {
-    return apiAdminPost(`/api/knowledge/knowledge-bases/${kbId}/query`, {
-      query,
-      meta
-    })
-  },
-
-  /**
    * 测试查询知识库
    * @param {string} kbId - 知识库ID
    * @param {string} query - 查询文本
@@ -480,45 +452,6 @@ export const fileApi = {
    */
   getSupportedFileTypes: async () => {
     return apiAdminGet('/api/knowledge/files/supported-types')
-  },
-
-  /**
-   * 上传文件夹（zip格式）
-   * @param {File} file - zip文件
-   * @param {string} kbId - 知识库ID
-   * @returns {Promise} - 上传结果
-   */
-  uploadFolder: async (file, kbId) => {
-    const formData = new FormData()
-    formData.append('file', file)
-
-    // 使用 apiRequest 直接发送 FormData，但使用统一的错误处理
-    return apiRequest(
-      `/api/knowledge/files/upload-folder?kb_id=${kbId}`,
-      {
-        method: 'POST',
-        body: formData
-        // 不设置 Content-Type，让浏览器自动设置 boundary
-      },
-      true,
-      'json'
-    ) // 需要认证，期望JSON响应
-  },
-
-  /**
-   * 处理文件夹（异步处理zip文件）
-   * @param {Object} data - 处理参数
-   * @param {string} data.file_path - 已上传的zip文件路径
-   * @param {string} data.kb_id - 知识库ID
-   * @param {string} data.content_hash - 文件内容哈希
-   * @returns {Promise} - 处理任务结果
-   */
-  processFolder: async ({ file_path, kb_id, content_hash }) => {
-    return apiAdminPost('/api/knowledge/files/process-folder', {
-      file_path,
-      kb_id,
-      content_hash
-    })
   }
 }
 
@@ -541,14 +474,6 @@ export const typeApi = {
    */
   getChunkPresets: async () => {
     return apiAdminGet('/api/knowledge/chunk-presets')
-  },
-
-  /**
-   * 获取知识库统计信息
-   * @returns {Promise} - 统计信息
-   */
-  getStatistics: async () => {
-    return apiAdminGet('/api/knowledge/stats')
   }
 }
 

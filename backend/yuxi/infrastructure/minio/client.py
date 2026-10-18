@@ -6,7 +6,6 @@ MinIO 存储客户端
 import asyncio
 import json
 import os
-from contextlib import asynccontextmanager
 from datetime import timedelta
 from io import BytesIO
 from urllib.parse import quote, urlsplit
@@ -174,19 +173,6 @@ class MinIOClient:
         )
         return result
 
-    def upload_file_from_path(self, bucket_name: str, object_name: str, file_path: str) -> UploadResult:
-        """从文件路径上传文件"""
-        try:
-            with open(file_path, "rb") as file_data:
-                data = file_data.read()
-
-            return self.upload_file(bucket_name, object_name, data)
-
-        except FileNotFoundError:
-            raise StorageError(f"文件 '{file_path}' 不存在")
-        except Exception as e:
-            raise StorageError(f"从路径上传文件失败: {e}")
-
     def download_file(self, bucket_name: str, object_name: str, *, max_bytes: int | None = None) -> bytes:
         """读取对象；指定上限时最多读取上限加一字节以判断超限。"""
         if max_bytes is not None and max_bytes < 0:
@@ -306,29 +292,6 @@ class MinIOClient:
 
         return await asyncio.to_thread(list_metadata)
 
-    async def adelete_bucket(self, bucket_name: str) -> bool:
-        """
-        删除 bucket（先删除所有对象，再删除 bucket）
-
-        Args:
-            bucket_name: bucket 名称
-
-        Returns:
-            是否成功
-        """
-        try:
-            # 先删除所有对象
-            await self.adelete_objects_by_prefix(bucket_name, "")
-            # 再删除 bucket
-            await asyncio.to_thread(self.client.remove_bucket, bucket_name)
-            logger.info(f"成功删除 bucket: {bucket_name}")
-            return True
-        except S3Error as e:
-            if e.code == "NoSuchBucket":
-                logger.warning(f"bucket 不存在: {bucket_name}")
-                return False
-            raise StorageError(f"删除 bucket 失败: {e}")
-
     def file_exists(self, bucket_name: str, object_name: str) -> bool:
         """检查文件是否存在"""
         try:
@@ -375,88 +338,6 @@ class MinIOClient:
         except S3Error as e:
             logger.warning(f"设置存储桶 '{bucket_name}' 公共读取策略失败: {e}")
             raise StorageError(f"无法设置存储桶公共访问策略: {e}")
-
-    @asynccontextmanager
-    async def temp_file_from_url(
-        self,
-        url: str,
-        allowed_extensions: list[str] | None = None,
-    ):
-        """
-        异步上下文管理器：从 MinIO URL 下载文件到临时文件，使用后自动清理
-
-        Args:
-            url: MinIO 文件 URL
-            allowed_extensions: 允许的文件扩展名列表（可选）
-
-        Yields:
-            str: 临时文件路径
-
-        Raises:
-            StorageError: 如果 URL 无效或下载失败
-        """
-        import tempfile
-        from urllib.parse import urlparse
-
-        # 验证 URL
-        if not url or not isinstance(url, str):
-            raise StorageError("URL 不能为空")
-
-        url = url.strip()
-
-        if not url.startswith(("http://", "https://")):
-            raise StorageError("无效的 MinIO URL，只允许 http/https")
-
-        parsed = urlparse(url)
-
-        # 验证主机
-        endpoint_host = self.endpoint.split("://")[-1].split(":")[0]
-        url_host = parsed.netloc.split(":")[0]
-
-        if endpoint_host != url_host and url_host != os.environ.get("HOST_IP", "localhost"):
-            raise StorageError(f"不允许的外部 URL: {url_host}")
-
-        # 检查路径遍历
-        if ".." in url or "\\" in url:
-            raise StorageError("URL 包含路径遍历字符")
-
-        # 验证扩展名
-        if allowed_extensions and not any(url.endswith(ext) for ext in allowed_extensions):
-            raise StorageError(f"文件扩展名不符合要求，允许: {', '.join(allowed_extensions)}")
-
-        # 解析 bucket 和 object name
-        path_parts = parsed.path.lstrip("/").split("/", 1)
-        if len(path_parts) != 2:
-            raise StorageError("无法解析 MinIO URL")
-
-        bucket_name, object_name = path_parts
-
-        # 下载文件
-        file_data = await self.adownload_file(bucket_name, object_name)
-        logger.info(f"成功从 MinIO 下载文件: {object_name} ({len(file_data)} bytes)")
-
-        # 创建临时文件
-        if allowed_extensions:
-            suffix = next((ext for ext in allowed_extensions if url.endswith(ext)), ".tmp")
-        else:
-            suffix = f".{object_name.split('.')[-1]}"
-
-        temp_path = None
-        try:
-            with tempfile.NamedTemporaryFile(mode="wb", suffix=suffix, delete=False) as temp_file:
-                temp_file.write(file_data)
-                temp_path = temp_file.name
-
-            logger.info(f"文件已下载到临时路径: {temp_path}")
-            yield temp_path
-
-        finally:
-            if temp_path and os.path.exists(temp_path):
-                try:
-                    os.unlink(temp_path)
-                    logger.info(f"已删除临时文件: {temp_path}")
-                except Exception as e:
-                    logger.warning(f"删除临时文件失败: {e}")
 
 
 # 全局客户端实例

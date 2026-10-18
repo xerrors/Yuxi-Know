@@ -183,32 +183,6 @@ def _extract_data_url_base64(url: str) -> str | None:
     return url.split(marker, 1)[1]
 
 
-def extract_image_contents(raw_message: dict[str, Any] | None) -> list[str]:
-    """从 `raw_message` 的 content parts 取出内联图片的 base64，供历史回显用。
-
-    只收内联 data URL；外部 http(s) 图与纯文本消息都返回空列表——历史 DTO 是 wire
-    契约，不该把 LangChain 的 `HumanMessage` 形状透传给浏览器，所以投影在服务端完成。
-    """
-    if not isinstance(raw_message, dict):
-        return []
-    content = raw_message.get("content")
-    if not isinstance(content, list):
-        return []
-
-    images: list[str] = []
-    for part in content:
-        if not isinstance(part, dict) or part.get("type") != "image_url":
-            continue
-        image_url = part.get("image_url")
-        url = image_url.get("url") if isinstance(image_url, dict) else image_url
-        if not isinstance(url, str):
-            continue
-        base64_content = _extract_data_url_base64(url)
-        if base64_content:
-            images.append(base64_content)
-    return images
-
-
 def restore_chat_input_message(*, content: str, image_content: str | None, metadata: dict) -> AgentRunInputMessage:
     """从持久内容与元数据恢复可执行输入消息。"""
     raw_message = metadata.get("raw_message")

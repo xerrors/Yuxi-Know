@@ -544,102 +544,52 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
   }
 
   async function parseFiles(fileIds, params = {}) {
-    const registerJob = createFileJobRegistration()
     if (fileIds.length === 0) return
-    state.chunkLoading = true
-    try {
-      const data = await documentApi.parseDocuments(kbId.value, fileIds, params)
-      if (data.status === 'success' || data.status === 'queued') {
-        enableAutoRefresh('auto')
-        message.success(data.message || '解析任务已提交')
-        if (data.job_id) {
-          registerJob({ job_id: data.job_id })
-        }
-        await delayedRefresh() // 延迟1秒后刷新
-        return true
-      } else {
-        message.error(data.message || '提交失败')
-        return false
-      }
-    } catch (error) {
-      console.error(error)
-      message.error(error.message || '请求失败')
-      return false
-    } finally {
-      state.chunkLoading = false
-    }
+    return submitFileJob(
+      () => documentApi.parseDocuments(kbId.value, fileIds, params),
+      '解析任务已提交'
+    )
   }
 
   async function parsePendingFiles(params = {}) {
-    const registerJob = createFileJobRegistration()
-    state.chunkLoading = true
-    try {
-      const data = await documentApi.parsePendingDocuments(kbId.value, params)
-      if (data.status === 'success' || data.status === 'queued') {
-        enableAutoRefresh('auto')
-        message.success(data.message || '解析任务已提交')
-        if (data.job_id) {
-          registerJob({ job_id: data.job_id })
-        }
-        await delayedRefresh()
-        return true
-      } else {
-        message.error(data.message || '提交失败')
-        return false
-      }
-    } catch (error) {
-      console.error(error)
-      message.error(error.message || '请求失败')
-      return false
-    } finally {
-      state.chunkLoading = false
-    }
+    return submitFileJob(
+      () => documentApi.parsePendingDocuments(kbId.value, params),
+      '解析任务已提交'
+    )
   }
 
   async function indexFiles(fileIds, params = {}) {
-    const registerJob = createFileJobRegistration()
     if (fileIds.length === 0) return
-    state.chunkLoading = true
-    try {
-      const data = await documentApi.indexDocuments(kbId.value, fileIds, params)
-      if (data.status === 'success' || data.status === 'queued') {
-        enableAutoRefresh('auto')
-        message.success(data.message || '入库任务已提交')
-        if (data.job_id) {
-          registerJob({ job_id: data.job_id })
-        }
-        await delayedRefresh() // 延迟1秒后刷新
-        return true
-      } else {
-        message.error(data.message || '提交失败')
-        return false
-      }
-    } catch (error) {
-      console.error(error)
-      message.error(error.message || '请求失败')
-      return false
-    } finally {
-      state.chunkLoading = false
-    }
+    return submitFileJob(
+      () => documentApi.indexDocuments(kbId.value, fileIds, params),
+      '入库任务已提交'
+    )
   }
 
   async function indexPendingFiles(params = {}) {
+    return submitFileJob(
+      () => documentApi.indexPendingDocuments(kbId.value, params),
+      '入库任务已提交'
+    )
+  }
+
+  /** 提交解析或入库作业，共用反馈、登记与刷新时序。 */
+  async function submitFileJob(submit, successMessage) {
     const registerJob = createFileJobRegistration()
     state.chunkLoading = true
     try {
-      const data = await documentApi.indexPendingDocuments(kbId.value, params)
-      if (data.status === 'success' || data.status === 'queued') {
-        enableAutoRefresh('auto')
-        message.success(data.message || '入库任务已提交')
-        if (data.job_id) {
-          registerJob({ job_id: data.job_id })
-        }
-        await delayedRefresh()
-        return true
-      } else {
+      const data = await submit()
+      if (data.status !== 'success' && data.status !== 'queued') {
         message.error(data.message || '提交失败')
         return false
       }
+      enableAutoRefresh('auto')
+      message.success(data.message || successMessage)
+      if (data.job_id) {
+        registerJob({ job_id: data.job_id })
+      }
+      await delayedRefresh()
+      return true
     } catch (error) {
       console.error(error)
       message.error(error.message || '请求失败')

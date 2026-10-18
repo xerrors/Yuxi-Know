@@ -89,14 +89,6 @@ class BackgroundJobRepository:
             return list(result.scalars().all())
 
     @staticmethod
-    async def create_in_session(session, job_id: str, data: dict[str, Any]) -> BackgroundJobRecord:
-        """在调用方拥有的事务中创建尚未发布的 Job intent。"""
-        record = BackgroundJobRecord(id=job_id, **data)
-        session.add(record)
-        await session.flush()
-        return record
-
-    @staticmethod
     async def create_or_get_in_session(session, job_id: str, data: dict[str, Any]) -> tuple[BackgroundJobRecord, bool]:
         """在调用方事务中按 active dedupe 原子创建或返回现有 Job。"""
         try:

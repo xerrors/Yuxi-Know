@@ -17,30 +17,6 @@ export const dashboardApi = {
   /** 读取执行节点当前运行与全部 VM 数量。 */
   getVmStats: () => apiAdminGet('/api/dashboard/stats/vms'),
 
-  /**
-   * 获取用户活跃度统计
-   * @returns {Promise<Object>} - 用户活跃度统计信息
-   */
-  getUserStats: () => {
-    return apiAdminGet('/api/dashboard/stats/users')
-  },
-
-  /**
-   * 获取工具调用统计
-   * @returns {Promise<Object>} - 工具调用统计信息
-   */
-  getToolStats: () => {
-    return apiAdminGet('/api/dashboard/stats/tools')
-  },
-
-  /**
-   * 获取知识库统计
-   * @returns {Promise<Object>} - 知识库统计信息
-   */
-  getKnowledgeStats: () => {
-    return apiAdminGet('/api/dashboard/stats/knowledge')
-  },
-
   /** 按创建范围读取智能体会话分布及平均消息数。 */
   getAgentSessionDistribution: (timeRange = 'all') =>
     apiAdminGet(

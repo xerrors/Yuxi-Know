@@ -16,6 +16,87 @@ globalThis.localStorage = {
   clear: () => storageValues.clear()
 }
 
+test('解析和入库动作保留参数、结果反馈与 loading 生命周期', async (t) => {
+  const server = await createServer({
+    server: { middlewareMode: true, hmr: false },
+    appType: 'custom'
+  })
+  const pinia = createPinia()
+  const app = createApp({})
+  app.use(pinia)
+  app.use(createRouter({ history: createMemoryHistory(), routes: [] }))
+  setActivePinia(pinia)
+  const { documentApi, knowledgeBaseApi } = await server.ssrLoadModule('/src/apis/knowledge_api.js')
+  const { useKnowledgeBaseStore } = await server.ssrLoadModule(
+    '/src/modules/knowledge/model/knowledgeBase.js'
+  )
+  const store = app.runWithContext(() => useKnowledgeBaseStore())
+  store.kbId = 'kb-submit'
+  const feedback = []
+  t.mock.method(message, 'success', (text) => feedback.push(text))
+  t.mock.method(message, 'error', (text) => feedback.push(text))
+  t.mock.method(console, 'error', () => {})
+  t.mock.method(knowledgeBaseApi, 'getKnowledgeBaseInfo', async () => ({
+    stats: { processing_count: 0 }
+  }))
+  t.mock.method(documentApi, 'listDocuments', async () => ({
+    items: [{ file_id: 'file-result', status: 'indexed' }],
+    stats: { processing_count: 0 }
+  }))
+
+  try {
+    for (const [action, apiMethod, selected, successText] of [
+      ['parseFiles', 'parseDocuments', true, '解析任务已提交'],
+      ['parsePendingFiles', 'parsePendingDocuments', false, '解析任务已提交'],
+      ['indexFiles', 'indexDocuments', true, '入库任务已提交'],
+      ['indexPendingFiles', 'indexPendingDocuments', false, '入库任务已提交']
+    ]) {
+      await t.test(action, async () => {
+        const params = { batch_size: 2 }
+        const args = selected ? [['file-selected'], params] : [params]
+        let respond
+        const request = t.mock.method(documentApi, apiMethod, (...received) => {
+          assert.deepEqual(received, ['kb-submit', ...args])
+          assert.equal(store.state.chunkLoading, true)
+          return new Promise((resolve, reject) => {
+            respond = (result) => result instanceof Error ? reject(result) : resolve(result)
+          })
+        })
+        if (selected) {
+          assert.equal(await store[action]([]), undefined)
+          assert.equal(request.mock.callCount(), 0)
+          assert.equal(store.state.chunkLoading, false)
+        }
+        for (const [response, expected, expectedText] of [
+          [{ status: 'queued' }, true, successText],
+          [{ status: 'success', message: '服务端确认' }, true, '服务端确认'],
+          [{ status: 'failed' }, false, '提交失败'],
+          [{ status: 'failed', message: '资源被锁定' }, false, '资源被锁定'],
+          [new Error('连接中断'), false, '连接中断'],
+          [new Error(), false, '请求失败']
+        ]) {
+          feedback.length = 0
+          store.documentFiles = []
+          const pending = store[action](...args)
+          assert.equal(store.state.chunkLoading, true)
+          respond(response)
+          assert.equal(await pending, expected)
+          assert.equal(store.state.chunkLoading, false)
+          assert.deepEqual(feedback, [expectedText])
+          assert.deepEqual(
+            store.documentFiles,
+            expected ? [{ file_id: 'file-result', status: 'indexed' }] : []
+          )
+        }
+      })
+    }
+  } finally {
+    store.stopAutoRefresh()
+    store.$dispose()
+    await server.close()
+  }
+})
+
 test('从二级目录点击全部文件会清空 parent_id 并返回根目录', async (t) => {
   const server = await createServer({
     server: { middlewareMode: true, hmr: false },

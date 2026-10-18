@@ -1,4 +1,4 @@
-"""聊天输入（文本 + 图片列表）的构造、归一与历史投影。"""
+"""聊天输入（文本 + 图片列表）的构造、归一与持久消息恢复。"""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ import yuxi.modules.agents.input_messages as input_messages
 from yuxi.modules.agents.input_messages import (
     MAX_CHAT_IMAGES,
     build_chat_input_message,
-    extract_image_contents,
     normalize_image_contents,
     restore_chat_input_message,
 )
@@ -78,27 +77,10 @@ def test_十张图全部进入模型输入且顺序保持():
     assert len(message.raw_message()["content"]) == MAX_CHAT_IMAGES + 1
 
 
-def test_历史投影只取内联图片并跳过外部链接():
-    raw_message = {
-        "content": [
-            {"type": "text", "text": "x"},
-            {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAA"}},
-            {"type": "image_url", "image_url": {"url": "https://example.test/a.png"}},
-            {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,BBB"}},
-        ]
-    }
-
-    assert extract_image_contents(raw_message) == ["AAA", "BBB"]
-    assert extract_image_contents(None) == []
-    assert extract_image_contents({}) == []
-    assert extract_image_contents({"content": "纯文本"}) == []
-
-
-def test_纯文本的_raw_message_投影为空():
-    """有 raw_message 但没有 image part 的消息，投影必须为空且仍是文本类型。"""
+def test_纯文本的_raw_message_恢复为文本类型():
+    """有 raw_message 但没有 image part 的消息仍恢复为文本类型。"""
     raw_message = build_chat_input_message("只有文字").raw_message()
 
-    assert extract_image_contents(raw_message) == []
     restored = restore_chat_input_message(content="只有文字", image_content=None, metadata={"raw_message": raw_message})
     assert restored.message_type == "text"
 
