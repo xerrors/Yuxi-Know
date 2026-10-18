@@ -167,9 +167,9 @@ class ChatCompletionsAdapter(ChatOpenAI):
         if "messages" not in payload:
             return payload
         originals = self._convert_input(input_).to_messages()
-        _sanitize_wire_invalid_tool_calls(payload["messages"], originals)
         if self.preserve_reasoning:
             self._restore_wire_reasoning(originals, payload["messages"])
+        _sanitize_wire_invalid_tool_calls(payload["messages"], originals)
         return payload
 
     def _restore_wire_reasoning(self, originals: list, wire_messages: list[dict]) -> None:
@@ -341,16 +341,24 @@ def _sanitize_wire_invalid_tool_calls(messages: list[dict], originals: list) -> 
 
     langchain_openai 把 AIMessage.invalid_tool_calls 序列化成 type:"function"、
     arguments 为截断 JSON 的 tool_call，DeepSeek 等接口因此报参数解析失败。这里在
-    发送边界按 tool_call id 移除这些截断调用，并在 content 里给模型明确的 text 反馈，
-    而不是发出畸形参数。原始 checkpoint（LangChain 消息对象）不动。
+    发送边界移除截断调用及同批补齐结果，在 content 中保留失败反馈。
+    合法调用、其它孤儿结果和原始 checkpoint（LangChain 消息对象）不动。
     """
+    filtered = []
+    invalid_ids: set[str] = set()
     for wire, original in zip(messages, originals, strict=True):
+        # 只过滤同批已删除调用的补齐结果，后续 AI 复用相同 ID 仍是独立调用。
+        if wire.get("role") == "tool" and wire.get("tool_call_id") in invalid_ids:
+            continue
+        filtered.append(wire)
         if not isinstance(original, AIMessage):
+            if wire.get("role") != "tool":
+                invalid_ids = set()
             continue
         invalid = list(original.invalid_tool_calls or [])
+        invalid_ids = {call.get("id") for call in invalid if call.get("id")}
         if not invalid:
             continue
-        invalid_ids = {call.get("id") for call in invalid if call.get("id")}
         tool_calls = wire.get("tool_calls")
         if isinstance(tool_calls, list):
             kept = [call for call in tool_calls if call.get("id") not in invalid_ids]
@@ -368,3 +376,4 @@ def _sanitize_wire_invalid_tool_calls(messages: list[dict], originals: list) -> 
             wire["content"] = [{"type": "text", "text": content}, {"type": "text", "text": feedback}]
         else:
             wire["content"] = [{"type": "text", "text": feedback}]
+    messages[:] = filtered

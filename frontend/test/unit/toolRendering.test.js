@@ -118,6 +118,36 @@ test('知识库专用模板保留错误详情，不把错误渲染成空检索�
   assert.doesNotMatch(html, /未找到相关内容|未找到结果/)
 })
 
+test('历史搜索额度失败的卡片与汇总均显示失败，真实零结果保留空状态', async () => {
+  for (const name of ['web_search', 'tavily_search', 'doubao_search']) {
+    const toolCall = {
+      id: 'search-quota', name, args: { query: '官方资料' }, status: 'completed',
+      tool_call_result: {
+        status: 'success',
+        content: JSON.stringify({ query: '官方资料', results: [], error: 'Daily search package quota has been exhausted.' })
+      }
+    }
+    const html = await render(ToolCallRenderer, { toolCall, defaultExpanded: true })
+    assert.match(html, /tool-error/)
+    assert.match(html, /quota has been exhausted/)
+    assert.doesNotMatch(html, /未找到相关搜索结果|tool-success/)
+    const group = await render(ToolCallsGroup, { toolCalls: [toolCall], isActive: false })
+    assert.match(group, /1 失败/)
+  }
+  const empty = await render(ToolCallRenderer, {
+    toolCall: { name: 'web_search', result: { query: '官方资料', results: [], error: null } },
+    defaultExpanded: true
+  })
+  assert.match(empty, /未找到相关搜索结果/)
+  assert.match(empty, /tool-success/)
+  assert.doesNotMatch(empty, /tool-error/)
+  const ordinary = await render(BaseToolCall, {
+    toolCall: { name: 'unknown_tool', result: { error: '业务数据中的字段' } },
+    defaultExpanded: true
+  })
+  assert.match(ordinary, /tool-success/)
+})
+
 test('有效的 0 和 false 结果可见，普通结果文本中的 error 不冒充状态', async () => {
   for (const content of [0, false, 'status: error', { rows: [{ status: 'error' }] }]) {
     const html = await render(BaseToolCall, {

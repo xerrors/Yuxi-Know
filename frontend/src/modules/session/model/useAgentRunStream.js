@@ -10,6 +10,7 @@ export const processRunSseResponse = async (response, onEvent) => {
   let eventType = 'message'
   let eventId = null
   let dataLines = []
+  let idleTimer = null
 
   const dispatch = async () => {
     if (dataLines.length === 0) return
@@ -26,7 +27,14 @@ export const processRunSseResponse = async (response, onEvent) => {
 
   try {
     while (true) {
-      const { done, value } = await reader.read()
+      // 服务每 15 秒发送空闲心跳；半开连接失去字节后进入既有对账和重连。
+      const { done, value } = await Promise.race([
+        reader.read(),
+        new Promise((_, reject) => {
+          idleTimer = setTimeout(() => reject(new Error('会话事件连接超时')), 60000)
+        })
+      ])
+      clearTimeout(idleTimer)
       if (done) break
       buffer += decoder.decode(value, { stream: true })
       const lines = buffer.split('\n')
@@ -55,6 +63,7 @@ export const processRunSseResponse = async (response, onEvent) => {
       }
     }
   } finally {
+    clearTimeout(idleTimer)
     try {
       await reader.cancel()
       reader.releaseLock()

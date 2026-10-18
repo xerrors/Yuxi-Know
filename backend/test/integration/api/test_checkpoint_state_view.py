@@ -9,9 +9,9 @@ from langchain.messages import HumanMessage
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import END, START, StateGraph
 
-from test.live_api_cleanup import make_test_session_title
+from test.live_api_cleanup import delete_test_session_rows, make_test_session_title
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
+pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
 
 class DisplayState(TypedDict):
@@ -57,7 +57,6 @@ async def test_state_view_reads_postgres_snapshot_and_rejects_other_users(test_c
             state = empty.json()["agent_state"]
             assert len(state.pop("cooperation")["sessions"]) == 1
             assert state == {
-                "todos": [],
                 "artifacts": [],
                 "token_usage": None,
             }
@@ -80,7 +79,7 @@ async def test_state_view_reads_postgres_snapshot_and_rejects_other_users(test_c
             assert response.status_code == 200, response.text
             state = response.json()["agent_state"]
             assert [member["session_id"] for member in state.pop("cooperation")["sessions"]] == [thread_id]
-            assert state == {key: payload[key] for key in ("todos", "artifacts", "token_usage")}
+            assert state == {key: payload[key] for key in ("artifacts", "token_usage")}
             assert "items" not in response.json()  # 可见消息来自持久Message，不能从checkpoint伪造。
             assert "interrupt" not in response.json()
             assert (await test_client.get(url)).status_code == 401
@@ -90,11 +89,14 @@ async def test_state_view_reads_postgres_snapshot_and_rejects_other_users(test_c
             assert archived.status_code == 200, archived.text
             preserved = await test_client.get(url, headers=admin_headers)
             assert preserved.status_code == 200, preserved.text
-            assert preserved.json()["agent_state"]["todos"] == payload["todos"]
+            assert preserved.json()["agent_state"]["artifacts"] == payload["artifacts"]
+            assert "todos" not in preserved.json()["agent_state"]
         finally:
             if thread_id:
                 await saver.adelete_thread(thread_id)
                 archived = await test_client.post(f"/api/v1/agents/sessions/{thread_id}/archive", headers=admin_headers)
                 assert archived.status_code in (200, 404), archived.text
+                # 空会话未执行工具或写入文件；共享 Workspace 的目录仍由用户 Project 持有。
+                await delete_test_session_rows({thread_id})
             deleted_agent = await test_client.delete(f"/api/agent/{slug}", headers=admin_headers)
             assert deleted_agent.status_code in (200, 404), deleted_agent.text

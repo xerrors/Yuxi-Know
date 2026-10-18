@@ -147,7 +147,7 @@ async function fixture() {
     } else if (url.pathname === "/api/v1/agents/sessions/thread-1" && req.method === "GET") {
       json(structuredClone(state.snapshot));
     } else if (url.pathname.endsWith("/state")) {
-      json({ agent_state: { artifacts: state.artifacts, todos: [] } });
+      json({ agent_state: { artifacts: state.artifacts } });
     } else if (url.pathname.endsWith("/events") && req.method === "GET") {
       state.subscriptionCount += 1;
       res.writeHead(200, { "Content-Type": "text/event-stream" });

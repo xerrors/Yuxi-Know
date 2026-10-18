@@ -5,8 +5,10 @@ from unittest.mock import AsyncMock
 
 import httpx
 import pytest
+from langchain_core.messages import ToolMessage
 from pydantic import ValidationError
 
+from yuxi.modules.agents.tool_results import normalize_tool_result
 from yuxi.modules.extensions.options import WEB_PROVIDER_OPTIONS
 from yuxi.modules.extensions.tools.builtin.web_search import web_fetch, web_search
 from yuxi.modules.extensions.tools.registry import get_all_tool_instances
@@ -129,6 +131,32 @@ async def test_empty_search_is_success_and_raw_body_is_opt_in(configured, httpx_
     result = await services.search_web(SearchInput(query="none"))
     assert result["results"][0]["raw_content"] == ""
     assert result["results"][0]["relevant_content"] == ""
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("provider", ["tavily", "deepseek", "doubao"])
+async def test_registered_search_quota_failure_is_error_tool_message(configured, httpx_mock, provider):
+    """额度失败通过真实注册工具保留错误结局，不能伪装为空列表。"""
+    configured["search"] = provider
+    httpx_mock.add_response(status_code=432, json={"error": "private-provider-response"})
+    result = await web_search.ainvoke({"type": "tool_call", "id": "quota-failure", "name": "web_search", "args": {"query": "q"}})
+    assert isinstance(result, ToolMessage)
+    assert result.status == "error"
+    normalized = normalize_tool_result({"content": result.content, "status": result.status})
+    assert normalized.error == "供应商额度已用尽"
+    assert normalized.public_content == "供应商额度已用尽"
+    assert "private-provider-response" not in normalized.audit_content
+
+
+@pytest.mark.asyncio
+async def test_registered_search_empty_results_remain_success(configured, httpx_mock):
+    """成功零结果与失败的 ToolMessage 和公开结局可区分。"""
+    httpx_mock.add_response(json={"Result": {"WebResults": []}})
+    result = await web_search.ainvoke({"type": "tool_call", "id": "empty-search", "name": "web_search", "args": {"query": "q"}})
+    assert result.status == "success"
+    normalized = normalize_tool_result({"content": result.content, "status": result.status})
+    assert normalized.error is None
+    assert json.loads(normalized.public_content)["results"] == []
 
 
 @pytest.mark.asyncio

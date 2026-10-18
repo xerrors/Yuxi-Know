@@ -133,14 +133,12 @@
                       v-else-if="displayItem.type === 'tool-group'"
                       :tool-calls="displayItem.toolCalls"
                       :entries="displayItem.entries"
-                      :open-task-panel="props.embedded ? null : openTaskStatePanel"
                       :cooperation-view="props.embedded ? null : cooperationToolView"
                       :is-active="isToolGroupActive(row.group, itemIndex, row.displayItems)"
                     />
                     <RunProcessGroupComponent
                       v-else
                       :items="displayItem.items"
-                      :open-task-panel="props.embedded ? null : openTaskStatePanel"
                       :cooperation-view="props.embedded ? null : cooperationToolView"
                       :message-count="displayItem.messageCount"
                       :tool-call-count="displayItem.toolCallCount"
@@ -450,66 +448,6 @@
               :compression-disabled="isProcessing || hasQueuedInputs || isWaitingForUserAction"
               @compress="handleContextCompression"
             />
-
-            <section
-              v-if="currentTodos.length"
-              class="state-section"
-              :class="{ 'is-collapsed': !isStateSectionExpanded('todos') }"
-            >
-              <button
-                type="button"
-                class="state-section-header"
-                :aria-expanded="isStateSectionExpanded('todos')"
-                aria-controls="state-section-todos"
-                @click="toggleStateSection('todos')"
-              >
-                <span class="state-section-label">
-                  <span class="state-section-title">待办</span>
-                  <ChevronDown
-                    :size="15"
-                    class="state-section-chevron"
-                    :class="{ 'is-collapsed': !isStateSectionExpanded('todos') }"
-                  />
-                </span>
-                <span v-if="totalTodoCount" class="state-section-meta">
-                  {{ completedTodoCount }}/{{ totalTodoCount }}
-                </span>
-              </button>
-              <div
-                class="state-collapse-panel"
-                :class="{ 'is-expanded': isStateSectionExpanded('todos') }"
-              >
-                <div class="state-collapse-inner">
-                  <div id="state-section-todos" class="state-section-content">
-                    <div class="todo-panel-list">
-                      <div
-                        v-for="(todo, index) in currentTodos"
-                        :key="`${todo.fullContent}-${index}`"
-                        class="todo-item"
-                        :class="{ completed: todo.status === 'completed' }"
-                      >
-                        <span
-                          class="todo-status-indicator"
-                          :class="`is-${todo.status || 'pending'}`"
-                          role="img"
-                          :aria-label="getTodoStatusLabel(todo.status)"
-                        >
-                          <span
-                            v-if="todo.status === 'in_progress'"
-                            class="todo-status-indicator__pulse"
-                          ></span>
-                        </span>
-                        <div class="todo-item-body">
-                          <span class="todo-item-text" :title="todo.fullContent">
-                            {{ todo.displayContent }}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
 
             <section
               v-if="currentStateFiles.length"
@@ -960,7 +898,6 @@ const approvalSubmitting = computed(() =>
   Boolean(getThreadState(currentThreadId.value)?.approvalSubmitting)
 )
 const collapsedStateSections = reactive({
-  todos: false,
   files: false,
   artifacts: false
 })
@@ -1068,17 +1005,10 @@ const agentPanelFilesystemRefreshVersion = ref(0)
 const pageVisible = ref(typeof document === 'undefined' || document.visibilityState === 'visible')
 const chatContentContainerRef = ref(null)
 const panelWrapperRef = ref(null) // 直接操作 DOM
-const TODO_NAME_MAX_LENGTH = 20
 let resizeStartX = 0
 let resizeStartWidth = 0
 let panelContainerWidth = 0
 let streamingStateRefreshTimer = null
-
-const formatTodoName = (content) => {
-  return Array.from(String(content || ''))
-    .slice(0, TODO_NAME_MAX_LENGTH)
-    .join('')
-}
 
 const getPanelContainerWidth = () => {
   const container = chatContentContainerRef.value || panelWrapperRef.value?.parentElement
@@ -1225,6 +1155,7 @@ const openPanelPreview = (file, keepTreeOpen = false) => {
   if (existingIndex >= 0) {
     const existingTab = agentPanelPreviewTabs.value[existingIndex]
     if (
+      (!tab.workdir && !tab.workspace && tab.modified_at == null && tab.size == null) ||
       existingTab.modified_at !== tab.modified_at ||
       existingTab.size !== tab.size ||
       Boolean(existingTab.workdir) !== Boolean(tab.workdir) ||
@@ -1446,25 +1377,6 @@ const currentArtifactFiles = computed(() =>
     name: getPanelFileName({ path })
   }))
 )
-/** 返回待办状态的无障碍文案。 */
-const getTodoStatusLabel = (status) => {
-  if (status === 'completed') return '已完成'
-  if (status === 'in_progress') return '进行中'
-  if (status === 'cancelled') return '已取消'
-  return '未完成'
-}
-const currentTodos = computed(() => {
-  const todos = currentAgentState.value?.todos
-  if (!Array.isArray(todos)) return []
-  return todos.map((todo) => {
-    const fullContent = String(todo?.content || '')
-    return {
-      ...todo,
-      fullContent,
-      displayContent: formatTodoName(fullContent)
-    }
-  })
-})
 const cooperationObservationEnabled = ref(!props.embedded)
 const {
   sessions: cooperationSessions,
@@ -1618,16 +1530,11 @@ const currentStateFiles = computed(() => {
 
   return files
 })
-const totalTodoCount = computed(() => currentTodos.value.length)
-const completedTodoCount = computed(
-  () => currentTodos.value.filter((todo) => todo?.status === 'completed').length
-)
 const showStateEntry = computed(() => !props.embedded && Boolean(currentChatId.value))
 const showFileEntry = computed(() => Boolean(currentChatId.value))
 const hasVisibleStateSections = computed(
   () =>
     Boolean(currentTokenUsage.value) ||
-    currentTodos.value.length > 0 ||
     currentStateFiles.value.length > 0 ||
     currentArtifactFiles.value.length > 0 ||
     cooperationSessions.value.length > 1
@@ -2418,9 +2325,11 @@ const runtimeView = {
   },
   onTerminalDetected: ({ threadId, runId }) => {
     if (approvalState.threadId === threadId) hideApprovalState()
+    if (runId && threadId === currentThreadId.value) {
+      agentPanelFilesystemRefreshVersion.value += 1
+    }
     if (workspaceActive.value && pageVisible.value && runId && threadId === currentThreadId.value) {
       void chatThreadsStore.markThreadViewed(threadId)
-      agentPanelFilesystemRefreshVersion.value += 1
     }
   }
 }
@@ -2924,13 +2833,6 @@ const handleAgentStateRefresh = async (threadId = null) => {
   } finally {
     isRefreshingState.value = false
   }
-}
-
-/** 从主对话任务入口打开当前状态清单。 */
-const openTaskStatePanel = async () => {
-  statePanelOpen.value = true
-  collapsedStateSections.todos = false
-  if (currentChatId.value) await handleAgentStateRefresh()
 }
 
 const toggleStatePanel = async () => {
@@ -4306,87 +4208,6 @@ watch(currentChatId, (threadId, oldThreadId) => {
   .state-collapse-inner {
     transition: none;
   }
-
-  .todo-status-indicator__pulse {
-    animation: none;
-  }
-}
-
-.todo-panel-list {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.todo-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 0;
-}
-
-.todo-item:last-child {
-  border-bottom: none;
-}
-
-.todo-status-indicator {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  box-sizing: border-box;
-  border: 1.5px solid var(--gray-400);
-  background: transparent;
-
-  &.is-completed {
-    border-color: var(--gray-400);
-    background: var(--gray-100);
-  }
-
-  &.is-cancelled {
-    border-color: var(--gray-400);
-    border-style: dashed;
-    background: var(--gray-50);
-  }
-}
-
-.todo-status-indicator__pulse {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--second-500);
-  animation: todoStatusPulse 1.2s ease-in-out infinite;
-}
-
-@keyframes todoStatusPulse {
-  0%,
-  100% {
-    opacity: 0.35;
-    transform: scale(0.78);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-.todo-item-body {
-  min-width: 0;
-}
-
-.todo-item-text {
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--gray-700);
-  word-break: break-word;
-}
-
-.todo-item.completed .todo-item-text {
-  color: var(--gray-500);
-  text-decoration: line-through;
 }
 
 .state-list {

@@ -21,11 +21,6 @@ PROMPT = """
 保持专业严谨，减少使用 Emoji，减少 bullet points，尽量使用完整的句子和段落。对于复杂问题，尽量提供详细的解释和背景信息。
 """
 
-TODO_MID_PROMPT = """
-你需要根据任务的复杂程度来使用 write_todos 来记录规划和待办事项，确保任务的每个步骤都被记录和跟踪。
-每个待办任务名称必须简短，控制在 20 个中文汉字以内。
-"""
-
 
 def build_prompt_with_context(context):
     current_date = f"当前日期：{shanghai_now().strftime('%Y-%m-%d')}"

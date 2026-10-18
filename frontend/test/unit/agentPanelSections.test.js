@@ -92,20 +92,6 @@ test('normalizePreviewResponse 不支持格式时标记 status 为 unsupported',
   assert.equal(parsed.supported, false)
 })
 
-test('状态面板保留 cancelled 待办的已取消语义', () => {
-  const source = readFileSync(
-    new URL('../../src/modules/session/ui/SessionWorkspace.vue', import.meta.url),
-    'utf8'
-  )
-  const statusLabel = source.slice(
-    source.indexOf('const getTodoStatusLabel'),
-    source.indexOf('const currentTodos')
-  )
-
-  assert.match(statusLabel, /status === 'cancelled'\) return '已取消'/)
-  assert.match(source, /&\.is-cancelled\s*{[^}]*border-style:\s*dashed;/s)
-})
-
 test('暂停队列仍有请求时禁用上下文压缩', () => {
   const source = readFileSync(
     new URL('../../src/modules/session/ui/SessionWorkspace.vue', import.meta.url),

@@ -3,7 +3,7 @@
     :is="currentRenderer"
     v-if="currentRenderer"
     :tool-call="toolCall"
-    v-bind="toolId === 'write_todos' ? { openTaskPanel } : cooperationView && toolId in COOPERATION_ACTIONS ? { cooperationView } : {}"
+    v-bind="cooperationView && toolId in COOPERATION_ACTIONS ? { cooperationView } : {}"
     :appearance="appearance"
     :default-expanded="defaultExpanded"
     ref="toolRendererRef"
@@ -40,7 +40,6 @@ const QueryKbTool = createRenderer(() => import('./renderers/QueryKbTool.vue'))
 const FindKbDocumentTool = createRenderer(() => import('./renderers/FindKbDocumentTool.vue'))
 const OpenKbDocumentTool = createRenderer(() => import('./renderers/OpenKbDocumentTool.vue'))
 const CalculatorTool = createRenderer(() => import('./renderers/CalculatorTool.vue'))
-const TodoListTool = createRenderer(() => import('./renderers/TodoListTool.vue'))
 const ImageTool = createRenderer(() => import('./renderers/ImageTool.vue'))
 const WriteFileTool = createRenderer(() => import('./renderers/WriteFileTool.vue'))
 const ReadFileTool = createRenderer(() => import('./renderers/ReadFileTool.vue'))
@@ -60,7 +59,6 @@ const RememberMemoryTool = createRenderer(() => import('./renderers/RememberMemo
 
 const props = defineProps({
   cooperationView: { type: Object, default: null },
-  openTaskPanel: { type: Function, default: null },
   toolCall: {
     type: Object,
     required: true
@@ -107,8 +105,7 @@ const TOOL_RENDERERS = {
   tavily_search: WebSearchTool,
   doubao_search: WebSearchTool,
   text_to_img_qwen_image: ImageTool,
-  write_file: WriteFileTool,
-  write_todos: TodoListTool
+  write_file: WriteFileTool
 }
 
 const currentRenderer = computed(() =>

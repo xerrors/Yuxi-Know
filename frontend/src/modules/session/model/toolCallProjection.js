@@ -21,7 +21,6 @@ export const TOOL_NAME_MAP = {
   replace: '编辑文件',
   search_file: '搜索知识库文件',
   search_file_content: '搜索文件内容',
-  write_todos: '更新任务清单',
   text_to_img_qwen_image: '生成图片',
   query_kb: '搜索知识库',
   list_kbs: '查看知识库列表',
@@ -109,12 +108,17 @@ export function getToolResultParts(content, { imageUrls = false } = {}) {
 
 /** 以调用、ToolMessage 和结果顶层的错误状态优先决定工具展示状态。 */
 export const getToolCallStatus = (toolCall) => {
-  const statuses = [
-    toolCall?.status,
-    toolCall?.tool_call_result?.status,
-    parseToolCallResult(toolCall)?.status
-  ]
+  const result = parseToolCallResult(toolCall)
+  const statuses = [toolCall?.status, toolCall?.tool_call_result?.status, result?.status]
   if (statuses.some((status) => status === 'error' || status === 'failed')) return 'error'
+  // 已保存的旧搜索失败只有 error 正文，没有错误状态。
+  if (
+    ['web_search', 'tavily_search', 'doubao_search'].includes(getToolCallId(toolCall)) &&
+    typeof result?.error === 'string' &&
+    result.error.trim()
+  ) {
+    return 'error'
+  }
   if (statuses.includes('waiting')) return 'waiting'
   if (statuses.includes('incomplete')) return 'incomplete'
   if (

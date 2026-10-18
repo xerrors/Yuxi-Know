@@ -477,3 +477,62 @@ test('协作等待保留 SSE，自动恢复的 Run 重新允许 steer 并接收�
   assert.equal(h.delivered.find((value) => value.delta)?.delta, 'result')
   assert.equal(h.terminal.length, 1)
 })
+
+test('静默断线超过一分钟后从持久 Turn 收尾并读取最终产物', async (t) => {
+  const h = harness(t, [], { status: 'completed', snapshot: async () => { h.delivered.push('final-artifacts') } })
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  let cancelled = false
+  t.mock.method(api, 'streamThreadEvents', async () => new Response(new ReadableStream({
+    cancel() { cancelled = true }
+  })))
+  const running = h.stream.startRunStream('thread', 'run', null, { turnId: 'turn' })
+  await tick()
+  t.mock.timers.tick(60001)
+  await tick()
+  assert.equal(h.state.turnStatus, 'completed')
+  assert.equal(h.state.isStreaming, false)
+  assert.deepEqual(h.delivered, ['final-artifacts'])
+  assert.equal(h.terminal.length, 1)
+  assert.equal(cancelled, true)
+  await running
+})
+
+test('正常心跳字节持续重置超时，长任务不因没有正文而断开', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  let source
+  const reading = processRunSseResponse(new Response(new ReadableStream({ start(c) { source = c } })), async () => {})
+  let finished = false
+  reading.finally(() => { finished = true })
+  for (let i = 0; i < 6; i++) {
+    t.mock.timers.tick(15000)
+    source.enqueue(new TextEncoder().encode(': heartbeat\n\n'))
+    await tick()
+    assert.equal(finished, false)
+  }
+  source.close()
+  await reading
+})
+
+test('静默断线时任务仍在运行则按原游标重连，停止订阅后不再重连', async (t) => {
+  const h = harness(t, [])
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const cursors = []
+  t.mock.method(api, 'streamThreadEvents', async (_threadId, cursor) => {
+    cursors.push(cursor)
+    return new Response(new ReadableStream())
+  })
+  const running = h.stream.startRunStream('thread', 'run', null, { turnId: 'turn' })
+  await tick()
+  h.state.threadCursor = '2.0.1.19-0.3'
+  t.mock.timers.tick(60001)
+  await running
+  assert.equal(h.state.isStreaming, true)
+  assert.equal(h.terminal.length, 0)
+  t.mock.timers.tick(5000)
+  await tick()
+  assert.deepEqual(cursors, [undefined, '2.0.1.19-0.3'])
+  h.stream.stopRunStreamSubscription('thread')
+  t.mock.timers.tick(65000)
+  await tick()
+  assert.equal(cursors.length, 2)
+})

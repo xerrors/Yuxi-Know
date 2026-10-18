@@ -17,13 +17,12 @@ const ARG_PARSER_CONSUMERS = [
   'ReadFileTool.vue',
   'SearchFileContentTool.vue',
   'SearchFileTool.vue',
-  'TodoListTool.vue',
   'WebSearchTool.vue',
   'WriteFileTool.vue'
 ]
 
 const COMPONENTS_WITHOUT_OTHER_JSON_PARSING = ARG_PARSER_CONSUMERS.filter(
-  (component) => !['AskUserQuestionTool.vue', 'TodoListTool.vue', 'WebSearchTool.vue'].includes(component)
+  (component) => !['AskUserQuestionTool.vue', 'WebSearchTool.vue'].includes(component)
 )
 
 test('parseToolCallArgs 以显式 args 值为准并支持对象参数', () => {

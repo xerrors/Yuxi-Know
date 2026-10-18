@@ -21,6 +21,7 @@ LIFECYCLE_E2E_TESTS=(
     test/e2e/test_agent_lifecycle_key_scope_e2e.py
     test/e2e/test_openai_events_e2e.py
     test/e2e/test_agent_feedback_e2e.py
+    test/e2e/test_malformed_tool_recovery_e2e.py
 )
 
 check_server() {

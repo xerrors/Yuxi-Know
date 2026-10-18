@@ -19,6 +19,8 @@
 
 共享 Workspace 是用户工作文件，不是 Home 的备份。成果登记、预览和下载继续读取 Workspace 的最新文件；Home 中的成果需要先复制到 Workspace。个人 Skills 位于 Workspace 的 `agents/skills`，共享投影只包含用户获授权的来源。远程 Skill CLI 在操作者 VM 的请求专属目录中运行，宿主安装边界校验发布文件，只清理该请求目录。
 
+收到当前线程的轮次终态通知时，文件面板使该线程的预览缓存失效，并重新读取正在展示的产物。面板关闭或切到其它标签期间也保留此失效结果，返回产物时读取最新内容；重复打开缺少修改时间和大小信息的交付卡片也重新读取。运行期间从文件树打开的 Workdir 文件继续按元数据变化刷新。预览读取失败时显示文件错误，重新打开或手动刷新可再次读取。当前预览读取实时文件，保留历史版本需要另存文件，缓存不提供历史快照。前端行为由[文件面板](https://github.com/xerrors/Yuxi/blob/main/frontend/src/modules/session/ui/workspace/AgentPanel.vue)与[会话工作区](https://github.com/xerrors/Yuxi/blob/main/frontend/src/modules/session/ui/SessionWorkspace.vue)拥有。
+
 ## 生命周期与并发
 
 超级管理员的系统概览显示执行节点当前活跃 VM 数量与 VM 总数。`GET /api/dashboard/stats/vms` 只读配置节点的全部实例列表，运行中的实例计为活跃，休眠等其他实例计入总数；不会连接或唤醒 VM。数量在进入概览或点击 VM 总数旁的刷新按钮时更新，控制面不可用时显示未知值并提供重试，其他业务统计继续展示。

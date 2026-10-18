@@ -908,7 +908,7 @@ div.header,
       border: 0;
       border-radius: 0;
       background: transparent;
-      box-shadow: inset 0 1px var(--gray-150);
+      box-shadow: none;
 
       &:hover,
       &:focus-within,

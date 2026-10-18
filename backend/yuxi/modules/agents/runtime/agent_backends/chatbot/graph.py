@@ -1,11 +1,10 @@
 from deepagents.middleware.patch_tool_calls import PatchToolCallsMiddleware
 from langchain.agents import create_agent
-from langchain.agents.middleware import TodoListMiddleware
 
 from yuxi.infrastructure.postgres.checkpointer import get_langgraph_checkpointer
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.agents.runtime.agent_backends.chatbot.context import ChatBotContext
-from yuxi.modules.agents.runtime.agent_backends.chatbot.prompt import TODO_MID_PROMPT, build_prompt_with_context
+from yuxi.modules.agents.runtime.agent_backends.chatbot.prompt import build_prompt_with_context
 from yuxi.modules.agents.runtime.agent_backends.chatbot.state import ChatBotState
 from yuxi.modules.agents.runtime.base import BaseAgent
 from yuxi.modules.agents.runtime.checkpoint_cleanup import CheckpointCleanupModel
@@ -54,7 +53,6 @@ async def _build_middlewares(context, backend, *, cleanup_model=None):
             create_summary_middleware_from_context(context, backend=backend, model=cleanup_model)
             if cleanup_model
             else create_summary_middleware_from_context(context, backend=backend),
-            TodoListMiddleware(system_prompt=TODO_MID_PROMPT),
             PatchToolCallsMiddleware(),
             # 网络类错误(断网/连接抖动)按预算(默认600s)持续重试，非网络错误按 max_retries
             # 次数重试——两者合并进 NetworkRetryMiddleware，避免拆成两个中间件后因装配顺序

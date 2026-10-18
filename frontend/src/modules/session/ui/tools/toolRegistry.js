@@ -8,7 +8,6 @@ import {
   Square,
   Brain,
   Calculator,
-  CheckSquare,
   Database,
   FileEdit,
   FilePen,
@@ -61,8 +60,7 @@ export const TOOL_ICON_MAP = {
   tavily_search: Globe,
   doubao_search: Globe,
   text_to_img_qwen_image: Image,
-  write_file: FileEdit,
-  write_todos: CheckSquare
+  write_file: FileEdit
 }
 
 export {

@@ -44,7 +44,6 @@ async def _resolve_test_workdir(**_kwargs):
     return "projects/11111111-1111-4111-8111-111111111111"
 
 
-
 class _EmptyModelAuditRepo:
     def __init__(self, _db):
         pass
@@ -961,3 +960,57 @@ async def test_execution_does_not_rebuild_missing_snapshot_context(monkeypatch, 
             thread_id="thread-1",
             prepared_execution=snapshot,
         )
+
+
+@pytest.mark.asyncio
+async def test_malformed_final_call_cannot_complete(monkeypatch):
+    """最终畸形调用没有执行，结算必须回滚且不能发布成功。"""
+    invalid = AIMessage(
+        id="bad-final", content="", invalid_tool_calls=[{"id": "bad", "name": "write_file", "args": '{"path":', "error": "invalid JSON"}]
+    )
+    db = _FakeDBBase()
+    db.rollback = AsyncMock()
+    db.commit = AsyncMock()
+    repo = _FakeConvRepo(db)
+    audit = SimpleNamespace(
+        id=42, operation_id="bad-final", content="", extra_metadata={}, execution_status="completed", message_type="model_audit"
+    )
+
+    class AuditRepo(_EmptyModelAuditRepo):
+        """提供当前模型生命周期事实。"""
+
+        async def list_for_run(self, _run_id):
+            """返回当前 Run 审计。"""
+            return [audit]
+
+        async def get(self, **_kwargs):
+            """返回同一模型消息。"""
+            return audit
+
+    class RunRepo(_FakeRunRepoBase):
+        """允许旧结算逻辑完成，隔离目标缺陷。"""
+
+        async def lock_output_persistence(self, *_args, **_kwargs):
+            """保留有效执行 Owner。"""
+            return SimpleNamespace(id="run-1")
+
+        async def set_terminal_status(self, *_args, **_kwargs):
+            """模拟合法的完成事务。"""
+            return SimpleNamespace(status="completed"), True
+
+    monkeypatch.setattr(message_svc, "AgentRunRepository", RunRepo)
+    monkeypatch.setattr(message_svc, "ModelMessageAuditRepository", AuditRepo)
+    monkeypatch.setattr(message_svc, "ToolMessageAuditRepository", _EmptyToolAuditRepo)
+    with pytest.raises(ValueError, match="工具调用参数无效.*write_file"):
+        await message_svc.save_messages_from_langgraph_state(
+            state=SimpleNamespace(values={"messages": [invalid]}),
+            thread_id="thread-1",
+            db=db,
+            run_id="run-1",
+            turn_id="turn-1",
+            worker_id="worker-1",
+            complete_run=True,
+        )
+    db.rollback.assert_awaited_once()
+    db.commit.assert_not_awaited()
+    assert repo.published_message_ids == []

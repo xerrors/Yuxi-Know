@@ -134,7 +134,8 @@ async def test_state_view_reads_persisted_fields_without_agent_runtime(checkpoin
         db=None,
         include_relations=include_relations,
     )
-    assert response["agent_state"] == {key: payload[key] for key in ("todos", "artifacts", "cooperation", "token_usage")}
+    assert response["agent_state"] == {key: payload[key] for key in ("artifacts", "cooperation", "token_usage")}
+    assert "todos" not in response["agent_state"]
     assert "items" not in response
     assert "saved message" not in str(response)
     assert "interrupt" not in response

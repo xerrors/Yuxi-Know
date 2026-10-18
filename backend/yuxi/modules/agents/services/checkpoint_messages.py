@@ -88,6 +88,7 @@ async def save_messages_from_langgraph_state(
         state_model_messages: dict[str, dict[str, Any]] = {}
         state_tool_messages: dict[str, dict[str, Any]] = {}
         last_state_ai_id: str | None = None
+        last_state_ai: dict | None = None
         last_ai_message = None
         for message in state.values.get("messages", []) or []:
             if hasattr(message, "model_dump"):
@@ -108,6 +109,7 @@ async def save_messages_from_langgraph_state(
                     msg_type = "tool"
             msg_id = getattr(message, "id", None) or msg_dict.get("id")
             if msg_type == "ai":
+                last_state_ai = msg_dict
                 last_state_ai_id = str(msg_id) if msg_id else None
                 if msg_id and str(msg_id) in model_operation_ids:
                     # Checkpoint 包含完整历史；相同来源键只对账最后一条 AIMessage。
@@ -141,6 +143,10 @@ async def save_messages_from_langgraph_state(
                     tool_audits_by_operation[tool_call_id] = audit
                 if tool_call_id in tool_audits_by_operation:
                     state_tool_messages[tool_call_id] = msg_dict
+
+        if complete_run and pending_steer is None and last_state_ai and last_state_ai.get("invalid_tool_calls"):
+            names = ", ".join(call.get("name") or "unknown" for call in last_state_ai["invalid_tool_calls"])
+            raise ValueError(f"工具调用参数无效，任务未完成：{names}。请继续输入并分段重试。")
 
         reconciled_audits: dict[str, Any] = {}
         for operation_id, msg_dict in state_model_messages.items():

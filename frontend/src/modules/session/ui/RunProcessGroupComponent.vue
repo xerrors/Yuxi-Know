@@ -20,7 +20,7 @@
               :widget-action="widgetAction"
               :widgets-disabled="widgetsDisabled"
             />
-            <ToolCallsGroupComponent v-else :cooperation-view="cooperationView" :open-task-panel="openTaskPanel" :tool-calls="item.toolCalls" :entries="item.entries" />
+            <ToolCallsGroupComponent v-else :cooperation-view="cooperationView" :tool-calls="item.toolCalls" :entries="item.entries" />
           </template>
         </div>
       </div>
@@ -38,7 +38,6 @@ const props = defineProps({
   widgetAction: { type: Function, default: null },
   widgetsDisabled: Boolean,
   cooperationView: { type: Object, default: null },
-  openTaskPanel: { type: Function, default: null },
   items: { type: Array, default: () => [] },
   messageCount: { type: Number, default: 0 },
   toolCallCount: { type: Number, default: 0 },

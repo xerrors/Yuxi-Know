@@ -21,6 +21,5 @@ class BaseState(AgentState):
 class AgentStatePayload(TypedDict):
     """Serialized agent state payload consumed by the frontend."""
 
-    todos: list
     artifacts: list[str]
     token_usage: dict | None

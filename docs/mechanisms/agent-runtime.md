@@ -29,6 +29,8 @@ API/worker 不信任浏览器内存中的完整配置。请求可以提供受限
 
 HTTP 状态查询提供待办、产物和用量，Turn SSE 提供执行增量；`/api/v1/agents/sessions/{thread_id}/cooperation` 从持久关系批量读取成员、最新 Turn 和输入队列，不读取 checkpoint 或结果正文。同一 Thread 的页面与侧栏共享历史、状态、流订阅和 Input 观察器，最后一个观察视图卸载时释放订阅。终态和 resync 触发新的历史读取，结果归属以持久快照为准。
 
+前端 SSE 连续 60 秒没有收到字节时关闭失效读流，回读当前 Turn；仍在运行时按原 cursor 重连，已经终止时加载最终历史并刷新产物。服务器默认空闲心跳为 15 秒；超时只恢复订阅，不取消任务。
+
 Input 接收、附件就绪、消费与 Run 投递分别拥有明确提交点；worker 使用输入冻结配置，并重新取得当前身份、Workdir 与授权资源。FIFO、steer、安全接管、消息与附件归属、取消和队列恢复的完整契约由[输入队列与调度](./agent-request-queue.md)维护。
 
 断线后调用方从 Public Session、Input、Turn、Run 与 Items 查询读取明确的接收、消费和结果归属。排队 Input 尚无 Turn/Run；最终输出只属于 Turn 的 `result_run_id` 所指顶层 Run。HTTP `202`、SSE 中断和 Run `yielded` 都不是整轮成功证明。
@@ -101,6 +103,8 @@ Web 附件上传框在打开时固定目标会话草稿；上传期间切换会�
 worker 读取 Input 的完整配置快照，为当前 Run 重新准备工作区提示词与授权资源；动态文件与权限在各自读取或执行边界生效。等待恢复和 steer 接管复制原 Run 的配置；Run 与生命周期事件通过有序 `input_ids` 表达合批来源，消息通过 `source_input_id` 表达单条来源，执行归属由 `turn_id` 与 `run_id` 固定。
 
 准备期间收到取消时，worker 使用已提交的取消状态完成取消收尾；manifest 失败不能把取消请求留待 lease 超时。manifest 使用 write-once 指纹，已有旧版 manifest 的 Run 重试若与新准备结果不一致会显式失败；历史 manifest 保留原记录。
+
+最终 AI 包含无法解析的工具调用时，checkpoint 结算拒绝正常完成，由既有失败通道保存原因。用户继续输入后，Chat Completions 发送边界将历史畸形调用转为失败文本，并移除同批补齐结果；合法调用与结果、原始 checkpoint 保留。参数不会被猜测修复后执行。
 
 ## 源码和验证入口
 

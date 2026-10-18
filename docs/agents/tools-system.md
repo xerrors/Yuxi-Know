@@ -113,6 +113,8 @@ kb_tools = get_common_kb_tools()
 
 每次实际调用重新读取有效配置，页面保存可影响已绑定工具的后续调用；本轮尚未绑定的能力在后续 Run 构图时加入。显式选择的供应商缺少凭据或调用失败时返回工具错误，不跨供应商重试。正常搜索无命中返回成功的空列表；抓取没有可用正文时明确失败。
 
+对话中的失败搜索显示失败图标、汇总和错误详情；成功的空列表显示“未找到相关搜索结果”。历史搜索结果只有非空顶层 `error`、外层仍标记完成时，页面也按失败展示，数据库历史内容保持原样。展示状态由[工具结果投影](https://github.com/xerrors/Yuxi/blob/main/frontend/src/modules/session/model/toolCallProjection.js)拥有，额度失败与正常零结果通过注册工具回归和真实组件渲染分别验证。
+
 实现由[工具入口](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/tools/builtin/web_search.py)、[网页服务](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/web/services.py)和[运行时装配](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/tools/runtime.py)共同拥有。[配置 HTTP 测试](https://github.com/xerrors/Yuxi/blob/main/backend/test/integration/api/test_web_tools_settings.py)检查权限、持久化与脱敏，[供应商协议测试](https://github.com/xerrors/Yuxi/blob/main/backend/test/integration/services/test_web_provider_protocol.py)核对归一化结果；固定重放不能替代实时供应商探针。
 
 ## 工具组装流程

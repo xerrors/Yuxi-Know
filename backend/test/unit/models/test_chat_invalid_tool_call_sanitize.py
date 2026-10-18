@@ -4,7 +4,7 @@ langchain_openai 把 AIMessage.invalid_tool_calls 序列化成 type:"function"�
 为截断 JSON 的 tool_call，DeepSeek 等接口因此报参数解析失败。窄方案在
 ChatCompletionsAdapter._get_request_payload 里按 id 移除这些截断调用，并在 content
 里给模型明确的 text 反馈，覆盖同步/异步/流式/非流式四条路径；不改 Anthropic/Gemini，
-不删孤儿 ToolMessage（按根因单独处理），原始 checkpoint 消息对象不动。
+仅过滤同批已移除无效调用的补齐结果，保留真实孤儿 ToolMessage，原始 checkpoint 消息对象不动。
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from langchain_core.messages import AIMessage, HumanMessage, InvalidToolCall
+from langchain_core.messages import AIMessage, HumanMessage, InvalidToolCall, SystemMessage, ToolMessage
 from pydantic import SecretStr
 
 
@@ -35,6 +35,7 @@ def _messages_with_invalid() -> list:
     return [
         HumanMessage(content="hi"),
         AIMessage(content="", invalid_tool_calls=[_invalid_call()]),
+        ToolMessage(content="patched error", tool_call_id="call-bad"),
     ]
 
 
@@ -168,3 +169,50 @@ async def test_adapter_entrypoints_sanitize_request_body(httpx_mock, monkeypatch
             pass
 
     _assert_body_has_no_invalid_tool_call(httpx_mock.get_request())
+
+
+@pytest.mark.parametrize("reasoning", [False, True])
+def test_patched_invalid_result_is_removed_without_losing_valid_pairs(monkeypatch, reasoning):
+    """补齐的无效结果与被删除调用一起过滤，合法结果及后续复用 ID 保留。"""
+    from copy import deepcopy
+
+    adapter = _adapter(monkeypatch)
+    adapter.preserve_reasoning = reasoning
+    original = AIMessage(
+        content="",
+        tool_calls=[{"id": "good", "name": "read", "args": {}}],
+        invalid_tool_calls=[_invalid_call()],
+        additional_kwargs={"reasoning_content": "原始推理"},
+    )
+    messages = [
+        HumanMessage(content="hi"),
+        original,
+        ToolMessage(content="invalid result", tool_call_id="call-bad"),
+        ToolMessage(content="valid result", tool_call_id="good"),
+        AIMessage(content="", tool_calls=[{"id": "call-bad", "name": "read", "args": {}}]),
+        ToolMessage(content="reused valid result", tool_call_id="call-bad"),
+        ToolMessage(content="unrelated orphan", tool_call_id="orphan"),
+        HumanMessage(content="继续"),
+    ]
+    before = deepcopy(messages)
+    payload = adapter._get_request_payload(messages)["messages"]
+    assert [m["content"] for m in payload if m["role"] == "tool"] == ["valid result", "reused valid result", "unrelated orphan"]
+    assert [c["id"] for c in payload[1]["tool_calls"]] == ["good"]
+    assert "工具调用失败" in str(payload[1]["content"])
+    if reasoning:
+        assert payload[1]["reasoning_content"] == "原始推理"
+    assert messages == before
+
+
+@pytest.mark.parametrize("boundary", [HumanMessage(content="下一轮"), SystemMessage(content="边界")])
+def test_invalid_call_filter_stops_at_non_tool_boundary(monkeypatch, boundary):
+    """同 ID 出现在用户或系统消息之后的孤儿结果不能被静默删除。"""
+
+    payload = _adapter(monkeypatch)._get_request_payload(
+        [
+            AIMessage(content="", invalid_tool_calls=[_invalid_call()]),
+            boundary,
+            ToolMessage(content="true orphan", tool_call_id="call-bad"),
+        ]
+    )
+    assert payload["messages"][-1] == {"role": "tool", "content": "true orphan", "tool_call_id": "call-bad"}

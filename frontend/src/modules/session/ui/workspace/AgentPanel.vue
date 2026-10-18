@@ -252,6 +252,7 @@ import {
   onMounted,
   onUnmounted,
   ref,
+  toRaw,
   watch
 } from 'vue'
 import {
@@ -863,9 +864,10 @@ const loadActivePreview = async ({ baseFileOverride = null } = {}) => {
     try {
       const cachedFile = await cachedEntry.promise
       const currentEntry = props.previewCache.get(cacheKey)
+      // reactive Map 包装了 file，归属比较需还原实际响应对象。
       const cacheStillOwnsFile =
         currentEntry === cachedEntry ||
-        (currentEntry?.status === 'ready' && currentEntry.file === cachedFile)
+        (currentEntry?.status === 'ready' && toRaw(currentEntry.file) === cachedFile)
       if (requestIsCurrent() && cacheStillOwnsFile) {
         currentFile.value = { ...cachedFile, loading: false }
       }
@@ -1074,19 +1076,23 @@ const releaseWorkspacePreviewCache = () => {
   }
 }
 
+const releaseThreadPreviewCache = () => {
+  for (const [key, entry] of props.previewCache) {
+    if (!key.startsWith(`${props.threadId}:`)) continue
+    if (entry.file?.previewUrl) window.URL.revokeObjectURL(entry.file.previewUrl)
+    props.previewCache.delete(key)
+  }
+}
+
 const emitRefresh = async () => {
-  if (activeTreeScope.value === 'workspace') {
+  const previewActive = activeSection.value?.type === 'file'
+  if (previewActive ? activePreviewTab.value?.workspace : activeTreeScope.value === 'workspace') {
     releaseWorkspacePreviewCache()
     await refreshWorkspaceTree({ force: true, refreshPreview: true })
     return
   }
-  for (const [key, entry] of props.previewCache) {
-    if (key.startsWith(`${props.threadId}:`) && entry.file?.previewUrl) {
-      window.URL.revokeObjectURL(entry.file.previewUrl)
-    }
-    if (key.startsWith(`${props.threadId}:`)) props.previewCache.delete(key)
-  }
-  await refreshFileSystem()
+  releaseThreadPreviewCache()
+  if (!previewActive) await refreshFileSystem()
   if (props.activePreviewPath) await loadActivePreview()
   emit('refresh', props.threadId)
 }
@@ -1163,7 +1169,9 @@ onMounted(() => {
 onActivated(() => {
   const wasInactive = !componentActive.value
   componentActive.value = true
-  if (wasInactive && activeTreeScope.value === 'workspace') {
+  if (wasInactive && props.visible && activeSection.value?.type === 'file') {
+    void emitRefresh()
+  } else if (wasInactive && activeTreeScope.value === 'workspace') {
     void refreshWorkspaceTree({ force: true, refreshPreview: true })
   } else if (wasInactive && props.filesystemVisible) {
     void refreshFileSystem({ silent: true })
@@ -1214,8 +1222,7 @@ watch(
   [
     () => props.threadId,
     () => props.activePreviewPath,
-    () => activePreviewTab.value?.workdir,
-    () => activePreviewTab.value?.workspace
+    () => activePreviewTab.value
   ],
   loadActivePreview,
   { immediate: true }
@@ -1231,13 +1238,28 @@ watch(
   }
 )
 
+watch(
+  () => props.visible,
+  (visible) => {
+    if (visible && componentActive.value && activeSection.value?.type === 'file') {
+      void loadActivePreview()
+    }
+  }
+)
+
 watch([() => props.filesystemPollingActive, componentActive], syncFilesystemRefreshPolling)
 
 watch(
   () => props.filesystemRefreshVersion,
   () => {
-    if (!props.filesystemVisible || !componentActive.value) return
-    if (activeTreeScope.value === 'workspace') {
+    releaseThreadPreviewCache()
+    if (!props.visible || !componentActive.value) return
+    if (activeSection.value?.type === 'file') {
+      if (activePreviewTab.value?.workspace) releaseWorkspacePreviewCache()
+      void loadActivePreview()
+    } else if (!props.filesystemVisible) {
+      return
+    } else if (activeTreeScope.value === 'workspace') {
       void refreshWorkspaceTree({ force: true, refreshPreview: true })
     } else {
       void refreshFileSystem({ silent: true, ensure: true })
@@ -1261,6 +1283,8 @@ watch(
       const entry = props.previewCache.get(cacheKey)
       if (entry?.file?.previewUrl) window.URL.revokeObjectURL(entry.file.previewUrl)
       props.previewCache.delete(cacheKey)
+      void loadActivePreview()
+    } else if (activeSection.value?.type === 'file' && props.visible && componentActive.value) {
       void loadActivePreview()
     }
     if (

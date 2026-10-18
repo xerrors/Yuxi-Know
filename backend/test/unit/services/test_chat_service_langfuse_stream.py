@@ -247,7 +247,7 @@ async def test_cancelled_steer_continuation_keeps_extension_event_ids_unique(mon
         async def stream_messages_with_state(self, value, **kwargs):
             """返回不同业务状态及可复现的源序号冲突。"""
             self.calls += 1
-            state = {"todos": [{"content": f"segment-{self.calls}", "status": "pending"}]}
+            state = {"artifacts": [f"segment-{self.calls}"]}
             yield {"method": "values", "seq": 1, "params": {"data": state, "namespace": []}}
             yield {
                 "method": "custom",
@@ -263,7 +263,7 @@ async def test_cancelled_steer_continuation_keeps_extension_event_ids_unique(mon
     events = [event async for event in execute() if isinstance(event, dict)]
     assert len(events) == 4
     assert len({event["event_id"] for event in events}) == 4
-    states = [event["agent_state"]["todos"][0]["content"] for event in events if "agent_state" in event]
+    states = [event["agent_state"]["artifacts"][0] for event in events if "agent_state" in event]
     assert states == ["segment-1", "segment-2"]
 
 
@@ -505,7 +505,7 @@ async def test_cancel_close_preserves_only_owned_requested_partial(monkeypatch, 
 async def test_values_and_custom_events_use_explicit_extensions(monkeypatch):
     """状态白名单与压缩通知保持来源顺序，不泄漏 checkpoint 内容。"""
     events = [
-        native(1, {"todos": [{"task": "work"}], "messages": ["private prompt"]}, "values"),
+        native(1, {"artifacts": ["result.txt"], "todos": [{"task": "legacy"}], "messages": ["private prompt"]}, "values"),
         native(2, {"type": "yuxi.context_compression", "status": "started"}, "custom"),
     ]
     events[0]["params"]["namespace"] = []
@@ -516,7 +516,8 @@ async def test_values_and_custom_events_use_explicit_extensions(monkeypatch):
         "yuxi.session.turn.state",
         "yuxi.session.turn.context_compression",
     ]
-    assert output[0]["agent_state"]["todos"] == [{"task": "work"}]
+    assert output[0]["agent_state"]["artifacts"] == ["result.txt"]
+    assert "todos" not in output[0]["agent_state"]
     assert "private prompt" not in str(output[:-1])
 
 

@@ -45,7 +45,6 @@
             <ToolCallRenderer
               v-else
               :tool-call="entry.toolCall"
-              :open-task-panel="openTaskPanel"
               :cooperation-view="cooperationView"
               appearance="timeline"
               :default-expanded="false"
@@ -78,7 +77,6 @@ const { availableTools, toolMetadata } = storeToRefs(agentStore)
 
 const props = defineProps({
   cooperationView: { type: Object, default: null },
-  openTaskPanel: { type: Function, default: null },
   toolCalls: {
     type: Array,
     default: () => []

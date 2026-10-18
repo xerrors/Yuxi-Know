@@ -97,6 +97,9 @@ test('隐藏成员标签继续接收终态，但不标已读或滚动；显示�
   complete()
   assert.deepEqual(viewed, ['child'], 'KeepAlive 后台页面也不能标记已读')
   assert.equal(scrolls, 1)
+  assert.equal(dependencies.agentPanelFilesystemRefreshVersion.value, 4, '终态即使在后台也必须使当前线程预览失效')
+  handlers.onTerminalDetected({ threadId: 'other-thread', runId: 'other-run' })
+  assert.equal(dependencies.agentPanelFilesystemRefreshVersion.value, 4, '其它线程终态不得刷新当前线程预览')
 })
 
 test('另一视图完成审批后，本视图立即解除旧等待点的输入遮罩', () => {

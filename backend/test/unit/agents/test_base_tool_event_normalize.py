@@ -61,12 +61,12 @@ async def test_final_checkpoint_belongs_to_each_executed_graph():
 
 
 def _command_tool_finished(tool_call_id: str) -> dict:
-    """模拟 write_todos / task 这类返回 Command 的工具的 tool-finished 事件。"""
+    """模拟交付物工具返回 Command 的 tool-finished 事件。"""
     tool_message = ToolMessage(
-        content="Updated todo list to [{'content': '步骤一', 'status': 'in_progress'}]",
+        content="已生成步骤一的交付物 result.txt",
         tool_call_id=tool_call_id,
     )
-    command = Command(update={"todos": [{"content": "步骤一", "status": "in_progress"}], "messages": [tool_message]})
+    command = Command(update={"artifacts": ["result.txt"], "messages": [tool_message]})
     return {"event": "tool-finished", "tool_call_id": tool_call_id, "output": command}
 
 
