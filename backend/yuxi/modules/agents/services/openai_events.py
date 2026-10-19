@@ -182,8 +182,8 @@ class OpenAIEventAdapter:
                 )
             return events
         if kind == "message-finish" and model["item"] is not None:
-            model["item"]["status"] = "completed"
-            model["item"] = await self._save(model["operation_id"], "assistant", "message", model["item"])
+            # 提交失败仍保留 in_progress，让取消收敛保存已展示正文。
+            model["item"] = await self._save(model["operation_id"], "assistant", "message", {**model["item"], "status": "completed"})
         return events
 
     async def _tool(self, event: dict, data: dict) -> list[dict]:

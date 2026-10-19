@@ -15,4 +15,4 @@ PY
 docker compose pause worker
 restore_worker() { docker compose unpause worker >/dev/null; }
 trap restore_worker EXIT
-docker compose exec -T -e CUBE_TEST_OWN_WORKERS=1 api uv run --group test pytest test/e2e/test_cube_agent_execution_e2e.py -q
+docker compose exec -T -e CUBE_TEST_OWN_WORKERS=1 api uv run --no-sync --no-dev pytest test/e2e/test_cube_agent_execution_e2e.py -q

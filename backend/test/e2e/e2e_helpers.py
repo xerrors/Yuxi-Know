@@ -9,6 +9,8 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+from io import BytesIO
+from zipfile import ZipFile
 import uuid
 
 import httpx
@@ -75,37 +77,49 @@ async def create_lifecycle_agent(
     slug_prefix: str = "ci-lifecycle-",
     model_spec: str = DETERMINISTIC_MODEL,
     summary_prompt: str | None = None,
+    bound_skill: bool = False,
 ) -> str:
     """创建含预加载技能且只向指定用户共享的测试 Agent。"""
     slug = f"{slug_prefix}{uuid.uuid4().hex[:8]}"
-    response = await client.post(
-        "/api/agent",
-        headers=headers,
-        json={
-            "name": f"Lifecycle {slug[-8:]}",
-            "slug": slug,
-            "backend_id": "ChatbotAgent",
-            "description": "生命周期 E2E",
-            "config_json": {
-                "context": {
-                    "model": model_spec,
-                    "system_prompt": f"不要调用工具，只输出 {DETERMINISTIC_OUTPUT}。{system_prompt_suffix}",
-                    "tools": tools or [],
-                    "knowledges": [],
-                    "mcps": [],
-                    "skills": ["image-gen"],
-                    "preload_skills": ["image-gen"],
-                    **({"summary_prompt": summary_prompt} if summary_prompt else {}),
-                }
-            },
-            "visibility": "shared",
-            "share_config": {
-                "version": 2,
-                "read_scope": {"access_level": "user", "department_ids": [], "user_uids": [uid]},
-                "manage_scope": None,
-            },
+    payload = {
+        "name": f"Lifecycle {slug[-8:]}",
+        "slug": slug,
+        "backend_id": "ChatbotAgent",
+        "description": "生命周期 E2E",
+        "config_json": {
+            "context": {
+                "model": model_spec,
+                "system_prompt": f"不要调用工具，只输出 {DETERMINISTIC_OUTPUT}。{system_prompt_suffix}",
+                "tools": tools or [],
+                "knowledges": [],
+                "mcps": [],
+                "skills": [] if bound_skill else ["image-gen"],
+                "preload_skills": [] if bound_skill else ["image-gen"],
+                **({"summary_prompt": summary_prompt} if summary_prompt else {}),
+            }
         },
-    )
+        "visibility": "shared",
+        "share_config": {
+            "version": 2,
+            "read_scope": {"access_level": "user", "department_ids": [], "user_uids": [uid]},
+            "manage_scope": None,
+        },
+    }
+    if bound_skill:
+        # 跨用户与 Key 的 fixture 只能依赖 Agent 自己授权的真实 Skill。
+        package = BytesIO()
+        with ZipFile(package, "w") as archive:
+            archive.writestr(
+                "SKILL.md",
+                "---\nslug: lifecycle-fixture\nname: Lifecycle fixture\ndescription: CI fixture\n"
+                "tool_dependencies:\n- present_artifacts\n---\n\n# 图片生成技能\n",
+            )
+        response = await client.post(
+            "/api/agent/with-skill", headers=headers, data={"agent": json.dumps(payload)},
+            files={"file": ("lifecycle-fixture.zip", package.getvalue(), "application/zip")},
+        )
+    else:
+        response = await client.post("/api/agent", headers=headers, json=payload)
     assert response.status_code == 200, response.text
     return slug
 

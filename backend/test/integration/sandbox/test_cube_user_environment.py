@@ -276,7 +276,7 @@ def test_http_env_verification_uses_new_values_preserves_existing_process_and_wa
             future = executor.submit(
                 provider.execute,
                 uid,
-                'printf %s "$LAB_ENV" > before-env.txt; '
+                'printf %s "$LAB_ENV" > before-env.tmp && mv before-env.tmp before-env.txt; '
                 'while [ ! -f env-release ]; do sleep .1; done; printf %s "$LAB_ENV" > after-env.txt',
                 WORKSPACE_PATH,
                 30,
@@ -359,7 +359,9 @@ def test_http_env_verification_rejects_configuration_changed_during_probe(resour
                 [
                     (
                         "/home/user/.bash_profile",
-                        b"printf ready > ~/workspace/probe-started.txt; while [ ! -f ~/workspace/probe-release ]; do sleep .1; done\n",
+                        b"printf ready > ~/workspace/probe-started.tmp && "
+                        b"mv ~/workspace/probe-started.tmp ~/workspace/probe-started.txt; "
+                        b"while [ ! -f ~/workspace/probe-release ]; do sleep .1; done\n",
                     )
                 ]
             )[0].error

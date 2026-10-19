@@ -18,6 +18,7 @@ import pytest
 from test.support.postgres import postgres_dsn
 from PIL import Image
 
+from test.e2e.e2e_helpers import archive_public_thread, wait_for_terminal_turn
 from test.integration.api.helpers import delete_created_threads
 from test.live_api_cleanup import make_test_session_title
 from yuxi.infrastructure.minio import get_minio_client
@@ -405,35 +406,44 @@ async def test_thread_artifact_uses_image_signature_for_content_type(test_client
 
     assert upload_response.status_code == 201, upload_response.text
     uploaded = upload_response.json()
-    conn = await asyncpg.connect(postgres_dsn())
+    accepted = None
     try:
-        await conn.execute("UPDATE sessions SET queue_paused=true WHERE thread_id=$1", thread_id)
+        accepted = await test_client.post(
+            f"/api/v1/agents/sessions/{thread_id}/events",
+            headers={**admin_headers, "Idempotency-Key": str(uuid.uuid4())},
+            json={
+                "events": [
+                    {
+                        "type": "agent.session.input.message",
+                        "input": [{"role": "user", "content": [{"type": "input_text", "text": "保存附件"}]}],
+                        "yuxi": {"mode": "follow_up", "attachment_file_ids": [uploaded["id"]]},
+                    }
+                ]
+            },
+        )
+        assert accepted.status_code == 202, accepted.text
+        listed = await test_client.get(f"/api/v1/agents/sessions/{thread_id}/attachments", headers=admin_headers)
+        assert listed.status_code == 200, listed.text
+        attachment = listed.json()["attachments"][0]
+        assert any(item["file_id"] == attachment["file_id"] for item in listed.json()["attachments"])
+
+        artifact_response = await test_client.get(attachment["original_artifact_url"], headers=admin_headers)
+
+        assert artifact_response.status_code == 200, artifact_response.text
+        assert artifact_response.headers["content-type"].startswith("image/png")
+        assert artifact_response.content.startswith(b"\x89PNG\r\n\x1a\n")
+
     finally:
-        await conn.close()
-    accepted = await test_client.post(
-        f"/api/v1/agents/sessions/{thread_id}/events",
-        headers={**admin_headers, "Idempotency-Key": str(uuid.uuid4())},
-        json={
-            "events": [
-                {
-                    "type": "agent.session.input.message",
-                    "input": [{"role": "user", "content": [{"type": "input_text", "text": "保存附件"}]}],
-                    "yuxi": {"mode": "follow_up", "attachment_file_ids": [uploaded["id"]]},
-                }
-            ]
-        },
-    )
-    assert accepted.status_code == 202, accepted.text
-    attachment = (await test_client.get(f"/api/v1/agents/sessions/{thread_id}/attachments", headers=admin_headers)).json()["attachments"][0]
-    listed = await test_client.get(f"/api/v1/agents/sessions/{thread_id}/attachments", headers=admin_headers)
-    assert listed.status_code == 200, listed.text
-    assert any(item["file_id"] == attachment["file_id"] for item in listed.json()["attachments"])
-
-    artifact_response = await test_client.get(attachment["original_artifact_url"], headers=admin_headers)
-
-    assert artifact_response.status_code == 200, artifact_response.text
-    assert artifact_response.headers["content-type"].startswith("image/png")
-    assert artifact_response.content.startswith(b"\x89PNG\r\n\x1a\n")
+        turn_id = None
+        if accepted is not None and accepted.status_code == 202:
+            conn = await asyncpg.connect(postgres_dsn())
+            try:
+                turn_id = await conn.fetchval("SELECT turn_id FROM agent_inputs WHERE id=$1", accepted.json()["input_id"])
+            finally:
+                await conn.close()
+            assert turn_id is not None
+        await archive_public_thread(test_client, admin_headers, thread_id, turn_id=turn_id)
+        await delete_created_threads(thread_id)
 
 
 async def test_thread_artifact_preview_http_preserves_raw_download(test_client, standard_user):
@@ -886,12 +896,12 @@ async def test_public_input_rejects_unbound_attachment_without_persisting_receip
     thread_id = created.json()["id"]
     file_id = uuid.uuid4().hex
     accepted = None
+    owner_thread_id = None
     uploaded = None
     event_key = str(uuid.uuid4())
     conn = await asyncpg.connect(os.environ["POSTGRES_URL"].replace("+asyncpg", ""))
     response = None
     try:
-        await conn.execute("UPDATE sessions SET queue_paused = TRUE WHERE thread_id = $1", thread_id)
         body = {
             "events": [
                 {
@@ -913,12 +923,16 @@ async def test_public_input_rejects_unbound_attachment_without_persisting_receip
             assert uploaded.status_code == 201, uploaded.text
             file_id = uploaded.json()["id"]
             body["events"][0]["yuxi"]["attachment_file_ids"] = [file_id]
+            owner_thread_id = await _create_thread_for_user(test_client, admin_headers)
             accepted = await test_client.post(
-                f"/api/v1/agents/sessions/{thread_id}/events",
+                f"/api/v1/agents/sessions/{owner_thread_id}/events",
                 json=body,
                 headers={**admin_headers, "Idempotency-Key": str(uuid.uuid4())},
             )
             assert accepted.status_code == 202, accepted.text
+            assert await conn.fetchval(
+                "SELECT i.thread_id FROM agent_attachments a JOIN agent_inputs i ON i.id = a.input_id WHERE a.id = $1", file_id
+            ) == owner_thread_id
 
         response = await test_client.post(
             f"/api/v1/agents/sessions/{thread_id}/events",
@@ -939,22 +953,31 @@ async def test_public_input_rejects_unbound_attachment_without_persisting_receip
         )
         assert dict(facts) == {
             "receipts": 0,
-            "inputs": int(accepted is not None),
+            "inputs": 0,
             "runs": 0,
             "messages": 0,
         }
     finally:
-        if accepted is not None:
-            input_id = accepted.json().get("input_id")
-            if input_id:
+        if accepted is not None and accepted.status_code == 202:
+            turn_id = await conn.fetchval("SELECT turn_id FROM agent_inputs WHERE id = $1", accepted.json()["input_id"])
+            assert turn_id is not None
+            owner_turn = await test_client.get(
+                f"/api/v1/agents/sessions/{owner_thread_id}/turns/{turn_id}", headers=admin_headers
+            )
+            assert owner_turn.status_code == 200, owner_turn.text
+            if owner_turn.json()["status"] not in {"completed", "failed", "cancelled"}:
                 cancelled = await test_client.post(
-                    f"/api/v1/agents/sessions/{thread_id}/events",
-                    json={"events": [{"type": "yuxi.session.input.cancel_input", "input_id": input_id}]},
+                    f"/api/v1/agents/sessions/{owner_thread_id}/events",
+                    json={"events": [{"type": "agent.session.input.cancel", "yuxi": {"turn_id": turn_id}}]},
                     headers={**admin_headers, "Idempotency-Key": str(uuid.uuid4())},
                 )
-                assert cancelled.status_code == 202, cancelled.text
-        archived = await test_client.post(f"/api/v1/agents/sessions/{thread_id}/archive", headers=admin_headers)
-        assert archived.status_code == 200, archived.text
+                # 取消请求与自然终态可以竞争；最终必须回读到该 Turn 的终态。
+                assert cancelled.status_code in {202, 409}, cancelled.text
+            await wait_for_terminal_turn(test_client, admin_headers, owner_thread_id, turn_id)
+        for target in (owner_thread_id, thread_id):
+            if target is not None:
+                archived = await test_client.post(f"/api/v1/agents/sessions/{target}/archive", headers=admin_headers)
+                assert archived.status_code == 200, archived.text
         await conn.close()
         if uploaded is not None and uploaded.status_code == 201:
             uid = str((await test_client.get("/api/auth/me", headers=admin_headers)).json()["uid"])

@@ -30,6 +30,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             "frontend",
             "ruff",
             "system-tests",
+            "service-integration",
             "dependency-audit",
             "deploy",
         ):
@@ -117,6 +118,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             "frontend",
             "ruff",
             "system-tests",
+            "service-integration",
             "dependency-audit",
             "deploy",
         ):
@@ -129,7 +131,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
     def test_narrow_development_branch_trigger_is_rejected(self) -> None:
         """写死单个版本或漏掉嵌套开发分支时拒绝交付。"""
         workflows = {path.stem: path.read_text() for path in WORKFLOWS.glob("*.yml")}
-        for name in ("trust", "test", "frontend", "ruff", "system-tests", "dependency-audit"):
+        for name in ("trust", "test", "frontend", "ruff", "system-tests", "service-integration", "dependency-audit"):
             for replacement in ("develop/0-8-0", "develop/1.0", "develop/*", "feature/**"):
                 with (
                     self.subTest(workflow=name, replacement=replacement),

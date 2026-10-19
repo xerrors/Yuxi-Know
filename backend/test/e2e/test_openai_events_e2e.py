@@ -188,12 +188,9 @@ async def test_default_cancel_target_is_fixed_for_idempotent_retry(e2e_client, e
             assert cancelled.status_code == 202 and cancelled.json()["turn_id"] == turn_id, cancelled.text
             await replay.get("/release-blocking", params={"token": gate})
             assert (await _turn(e2e_client, e2e_headers, thread_id, turn_id))["status"] == "cancelled"
-            continued = await e2e_client.post(
-                url,
-                headers={**e2e_headers, "Idempotency-Key": f"continue-{gate}"},
-                json={"events": [{"type": "yuxi.session.input.continue"}]},
-            )
-            assert continued.status_code == 202, continued.text
+            queue = await e2e_client.get(f"/api/v1/agents/sessions/{thread_id}/queue", headers=e2e_headers)
+            assert queue.status_code == 200, queue.text
+            assert queue.json()["inputs"] == [] and queue.json()["queue_paused"] is False
             second = await e2e_client.post(
                 url,
                 headers={**e2e_headers, "Idempotency-Key": f"second-{gate}"},

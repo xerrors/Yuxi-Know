@@ -282,12 +282,10 @@ async def test_killed_fresh_initializer_is_recoverable_without_adopting_old_data
         manager = PostgresManager()
         manager.async_engine = create_async_engine(os.environ['POSTGRES_URL'], connect_args={'server_settings': {'search_path': os.environ['INITIALIZER_TEST_SCHEMA']}})
         manager._initialized = True
-        manager.initialize = lambda: None
-        main.pg_manager = manager
         async def stop_after_tables(manager):
             os._exit(23)
         main.setup_langgraph_checkpointer = stop_after_tables
-        asyncio.run(main.main())
+        asyncio.run(main.initialize_schema(manager))
     """)
     try:
         process = await asyncio.create_subprocess_exec(
@@ -304,15 +302,12 @@ async def test_killed_fresh_initializer_is_recoverable_without_adopting_old_data
         async with engine.connect() as conn:
             assert await conn.scalar(text("SELECT to_regclass('agent_runs') IS NOT NULL"))
         manager.AsyncSession = async_sessionmaker(engine, expire_on_commit=False)
-        monkeypatch.setattr(migration, "pg_manager", manager)
-        monkeypatch.setattr(manager, "initialize", lambda: None)
-        monkeypatch.setattr(manager, "close", lambda: asyncio.sleep(0))
 
         async def checkpoint_setup(manager):
             """本例只验证初始化进程恢复；checkpoint 装配由真实 E2E 覆盖。"""
 
         monkeypatch.setattr(migration, "setup_langgraph_checkpointer", checkpoint_setup)
-        await migration.main()
+        await migration.initialize_schema(manager)
         assert await get_schema_versions(manager) == {
             "business": BUSINESS_SCHEMA_VERSION,
             "knowledge": KNOWLEDGE_SCHEMA_VERSION,

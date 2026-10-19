@@ -1,0 +1,66 @@
+name: Hosted Cube Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['develop/**']
+    paths:
+      - '.github/workflows/cube-hosted-probe.yml'
+      - 'scripts/ci_probe_kvm.py'
+      - 'scripts/ci_probe_hosted_cube.sh'
+      - 'scripts/ci_probe_cube_workspace.py'
+      - 'docker/cube/Dockerfile.user'
+      - 'docker/cube/build-template.sh'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hosted-cube-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cube:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+      - name: Inspect resources and install QEMU
+        run: |
+          uname -a
+          nproc
+          free -h
+          df -h /
+          ls -l /dev/kvm
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 xfsprogs
+      - name: Execute real KVM guest
+        run: python3 scripts/ci_probe_kvm.py
+      - name: Install Cube and build shipping user template
+        timeout-minutes: 25
+        run: bash scripts/ci_probe_hosted_cube.sh
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: '0.12.6'
+      - name: Execute sandbox and reread shared workspace
+        env:
+          PYTHONPATH: backend
+          CUBE_API_URL: http://127.0.0.1:3000
+          CUBE_PROXY_NODE_IP: 127.0.0.1
+          CUBE_PROXY_PORT_HTTP: '80'
+          CUBE_TEMPLATE_ID: yuxi-user
+        run: uv run --project backend --locked --no-dev python scripts/ci_probe_cube_workspace.py
+      - name: Inspect final resources
+        if: always()
+        run: |
+          docker ps -a --format 'table {{.Names}}\t{{.Status}}'
+          df -h /
+          free -h
+      - name: Read template build diagnostics
+        if: failure()
+        run: |
+          for log in /opt/yuxi-cube/template-image.log /opt/yuxi-cube/template-push.log; do
+            if sudo test -f "$log"; then
+              sudo tail -100 "$log"
+            fi
+          done

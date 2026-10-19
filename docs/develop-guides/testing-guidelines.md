@@ -102,7 +102,7 @@ Compose API 容器只挂载后端目录时，部署配置测试会因缺少仓�
 uv run --project backend --no-sync --group test pytest backend/test/unit/config -q
 ```
 
-应用共享初始化使用真实 PostgreSQL 隔离 Schema 和临时 Skill 目录验证首次部署、当前版本重跑、管理员值保留、阶段失败重试与并发锁。独立子进程覆盖已有 Schema 的冷启动，并用缺少 ORM 注册的负控复现失败；这些用例接入 `system-tests.yml`：
+应用共享初始化使用真实 PostgreSQL 隔离 Schema 和临时 Skill 目录验证首次部署、当前版本重跑、管理员值保留、阶段失败重试与并发锁。独立子进程覆盖已有 Schema 的冷启动，并用缺少 ORM 注册的负控复现失败；这些用例接入 `service-integration.yml`：
 
 ```bash
 docker compose exec api uv run --group test pytest test/integration/services/test_app_initialization.py test/integration/services/test_schema_migration_version.py -q
@@ -174,6 +174,24 @@ pwsh -NoProfile -File scripts/test_init_security.ps1
 ```
 
 这些命令的实际 workflow 和 selector 由仓库 `.github/workflows` 与 `Makefile` 维护；文档不复制一份会漂移的 CI 配置。
+
+## CI 环境与依赖
+
+常规质量检查和独立服务集成测试使用 GitHub 托管执行器，无需维护公网服务器。测试选择器由对应 workflow 和脚本拥有：
+
+| 检查范围 | 实际依赖 | 执行入口 |
+|---|---|---|
+| 工程契约、Ruff、后端 unit、前端、文档、依赖审计 | 执行器上的语言工具链 | `.github/workflows` 中对应质量工作流 |
+| 初始化、Schema/关系约束、Input/FIFO、Run lease、反馈、协作持久化、OAuth 和局部 HTTP | 临时 PostgreSQL、Redis、文件与测试自建 HTTP 服务 | `service-integration.yml` → `scripts/ci_run_service_integration.sh` |
+| 附件服务持久化与对象读写 | PostgreSQL、MinIO 与文件系统；测试主体无需 VM | `system-tests.yml` 中附件服务步骤，随完整拓扑执行 |
+| 完整 API readiness、正式 worker 启动恢复、Agent E2E 和沙盒隔离 | 完整 Compose 拓扑与 Cube | `system-tests.yml` 的两个 ubuntu-24.04 job，各自安装本机 Cube 和正式模板 |
+| GitHub 托管机器的 KVM/Cube 兼容性探针 | KVM、临时 XFS、Cube 安装、正式模板和共享挂载 | `cube-hosted-probe.yml`，仅相关探针路径修改或手动运行 |
+
+独立服务 job 使用一次性数据库，运行应用初始化并创建基线测试管理员后执行已有集成测试；共享 API 与 Cube 地址固定为不可达，用真实数据库结果证明独立性。该入口会写入数据库及 Skill 目录，本地复用时必须提供独立的 `POSTGRES_URL`、`REDIS_URL` 与 `YUXI_SKILL_DATA_DIR`，并使用没有 `backend/.env` 的干净 checkout，禁止指向运行中的业务环境。基线管理员保留在临时库中，测试账号的创建、修改和清理继续受数据库的最后管理员约束保护。
+
+公开附件 HTTP 用例中的待消费快照、取消与删除边界使用真实 worker 和阻塞模型重放，随完整 Cube 拓扑执行；模型重放服务在这些用例之前启动。它们与仅验证持久化和对象读写的附件服务测试具有不同依赖。
+
+`self_managed_resources` 只描述 fixture 清理责任。正式 API 与 worker 在启动时检查 Cube，后台恢复用例即使声明该 marker，也需要真实 Cube 环境。托管探针在 GitHub 的 ubuntu-24.04 执行器上自动安装 Cube、构建正式模板并验证普通用户执行与共享文件回读，无需外部 Cube 配置或公网服务器。成功结果只证明该次执行器的兼容性，完整运行链路仍以对应 E2E 结果为准。两个系统 job 使用独立托管机器，通过 Docker bridge 访问本机 Cube，Compose 与 Cube 的状态目录统一位于 `/data/shared/`，项目 Redis、MinIO 及 Milvus 健康接口的宿主端口与 Cube 隔离，无需配置仓库的 Cube 地址或密钥。
 
 ## 网络搜索与正文工具
 

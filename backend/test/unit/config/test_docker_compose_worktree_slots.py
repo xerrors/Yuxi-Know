@@ -141,7 +141,34 @@ def test_host_test_runner_probes_current_compose_slot(tmp_path, monkeypatch, bas
     commands = [shlex.split(line) for line in commands_file.read_text().splitlines()]
     assert commands[0] == ["compose", "exec", "-T", "api", "curl", "-fsS", f"{base_url or 'http://localhost:5050'}/api/system/ready"]
     assert len([command for command in commands if "pytest" in command]) == (2 if ready else 0)
+    for command in commands:
+        if "pytest" in command:
+            assert command[command.index("uv"):command.index("pytest") + 1] == ["uv", "run", "--no-sync", "--no-dev", "pytest"]
     assert result.returncode == (0 if ready else 1)
+
+
+@pytest.mark.parametrize("pytest_exit", [0, 23])
+def test_cube_worker_runner_uses_installed_dependencies_and_restores_worker(tmp_path, monkeypatch, pytest_exit):
+    """真实 shell 入口不重装只读项目，失败仍恢复被暂停的 worker。"""
+    commands_file = tmp_path / "commands"
+    docker = tmp_path / "docker"
+    docker.write_text(
+        '#!/bin/sh\nprintf "%s\\n" "$*" >> "$DOCKER_ARGS_LOG"\n'
+        'case " $* " in *" pytest "*) exit "$PYTEST_EXIT_CODE";; esac\n'
+    )
+    docker.chmod(0o700)
+    monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
+    monkeypatch.setenv("DOCKER_ARGS_LOG", str(commands_file))
+    monkeypatch.setenv("PYTEST_EXIT_CODE", str(pytest_exit))
+    monkeypatch.setenv("CUBE_TEST_ISOLATED_TOPOLOGY", "1")
+    result = subprocess.run(
+        ["bash", str(project_root() / "scripts/test_cube_worker_recovery.sh")], capture_output=True, text=True,
+    )
+    commands = [shlex.split(line) for line in commands_file.read_text().splitlines()]
+    [command] = [command for command in commands if "pytest" in command]
+    assert command[command.index("uv"):command.index("pytest") + 1] == ["uv", "run", "--no-sync", "--no-dev", "pytest"]
+    assert commands[-1] == ["compose", "unpause", "worker"]
+    assert result.returncode == pytest_exit
 
 
 def test_production_api_only_publishes_on_loopback() -> None:

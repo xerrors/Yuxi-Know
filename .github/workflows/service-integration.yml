@@ -1,0 +1,71 @@
+name: Service Integration Tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, 'develop/**']
+    tags: ['v[0-9]*']
+    paths:
+      - '.env.template'
+      - 'backend/**'
+      - 'scripts/ci_run_service_integration.sh'
+      - '.github/workflows/service-integration.yml'
+  pull_request:
+    paths:
+      - '.env.template'
+      - 'backend/**'
+      - 'scripts/ci_run_service_integration.sh'
+      - '.github/workflows/service-integration.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: service-integration-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  service-integration:
+    name: PostgreSQL and Redis without Cube
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: yuxi_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d yuxi_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+      redis:
+        image: redis:7.4.10-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      POSTGRES_URL: postgresql+asyncpg://ci:ci@127.0.0.1:5432/yuxi_ci
+      REDIS_URL: redis://127.0.0.1:6379/0
+      JWT_SECRET_KEY: ci-jwt-secret-at-least-thirty-two-characters
+      API_KEY_DERIVATION_SECRET: ci-api-key-derivation-secret-at-least-32-chars
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: '0.12.6'
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - name: Install locked test dependencies
+        run: uv sync --project backend --locked --group test
+      - name: Run independent service integration inventory
+        env:
+          YUXI_SKILL_DATA_DIR: ${{ runner.temp }}/service-integration-skills
+        run: bash scripts/ci_run_service_integration.sh

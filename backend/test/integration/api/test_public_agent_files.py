@@ -1,26 +1,49 @@
 """真实 HTTP 验证文件草稿、私有预处理与隔离。"""
 
+import asyncio
 import io
 import os
 import uuid
 
 import asyncpg
+import httpx
 import pytest
 from PIL import Image
 
+from test.e2e.e2e_helpers import (
+    DETERMINISTIC_OUTPUT,
+    archive_public_thread,
+    create_lifecycle_agent,
+    delete_agent,
+    public_message,
+    register_replay_provider,
+    wait_for_consumed_input,
+    wait_for_terminal_turn,
+)
+from test.live_api_cleanup import make_test_session_title
 from yuxi.infrastructure.minio import get_minio_client
 from test.integration.api.helpers import delete_created_threads
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
 
-async def test_submission_files_snapshot_idempotency_cancel_and_delete(test_client, standard_user):
+async def test_submission_files_snapshot_idempotency_cancel_and_delete(test_client, standard_user, admin_headers):
     """真实 HTTP 回读提交级文件、原始引用和不可变取消回执。"""
     headers = standard_user["headers"]
     conn = await asyncpg.connect(os.environ["POSTGRES_URL"].replace("+asyncpg", ""))
     thread_id = None
+    turn_id = input_id = slug = None
+    gate = uuid.uuid4().hex
+    replay = httpx.AsyncClient(base_url=os.environ["OPENAI_REPLAY_URL"].removesuffix("/v1"), timeout=5)
     files = []
     try:
+        await register_replay_provider(test_client, admin_headers)
+        slug = await create_lifecycle_agent(
+            test_client,
+            admin_headers,
+            str(standard_user["user"]["uid"]),
+            bound_skill=True,
+        )
         for name in ("first.txt", "second.txt"):
             response = await test_client.post("/api/v1/agents/files", headers=headers, files={"file": (name, name.encode(), "text/plain")})
             assert response.status_code == 201, response.text
@@ -33,11 +56,21 @@ async def test_submission_files_snapshot_idempotency_cancel_and_delete(test_clie
         assert invalid.status_code == 422, invalid.text
         assert await conn.fetchval("SELECT count(*) FROM agent_attachments WHERE id=ANY($1::text[]) AND input_id IS NOT NULL", files) == 0
         created = await test_client.post(
-            "/api/v1/agents/sessions", headers={**headers, "Idempotency-Key": uuid.uuid4().hex}, json={"agent_id": "default-chatbot"}
+            "/api/v1/agents/sessions",
+            headers={**headers, "Idempotency-Key": uuid.uuid4().hex},
+            json={
+                "agent_id": slug,
+                "title": make_test_session_title("file-snapshot"),
+                "input": [public_message(f"{DETERMINISTIC_OUTPUT} DETERMINISTIC_BLOCK_BEFORE_RESPONSE:{gate}")],
+            },
         )
         assert created.status_code == 201, created.text
         thread_id = created.json()["id"]
-        await conn.execute("UPDATE sessions SET queue_paused=true WHERE thread_id=$1", thread_id)
+        consumed = await wait_for_consumed_input(test_client, headers, created.json()["yuxi"]["receipt"])
+        turn_id = consumed["turn_id"]
+        async with asyncio.timeout(30):
+            while not (await replay.get("/blocking-started", params={"token": gate})).json()["started"]:
+                await asyncio.sleep(0.1)
         url = f"/api/v1/agents/sessions/{thread_id}/events"
         key_headers = {**headers, "Idempotency-Key": uuid.uuid4().hex}
         messages = [{"role": "user", "content": [{"type": "input_text", "text": text}]} for text in ("one", "two")]
@@ -49,6 +82,7 @@ async def test_submission_files_snapshot_idempotency_cancel_and_delete(test_clie
         response = await test_client.post(url, headers=key_headers, json={"events": [event]})
         assert response.status_code == 202, response.text
         receipt = response.json()
+        input_id = receipt["input_id"]
         assert receipt["turn_id"] is None and receipt["run_id"] is None
         repeated = await test_client.post(url, headers=key_headers, json={"events": [event]})
         assert repeated.json() == receipt
@@ -68,6 +102,17 @@ async def test_submission_files_snapshot_idempotency_cancel_and_delete(test_clie
             json={"events": [{"type": "yuxi.session.input.cancel_input", "input_id": receipt["input_id"]}]},
         )
         assert cancelled.status_code == 202, cancelled.text
+        blocked = await test_client.delete(f"/api/v1/agents/sessions/{thread_id}/attachments/{files[0]}", headers=headers)
+        assert blocked.status_code == 409, blocked.text
+        await replay.get("/release-blocking", params={"token": gate})
+        assert (await wait_for_terminal_turn(test_client, headers, thread_id, turn_id))["status"] == "completed"
+        async with asyncio.timeout(30):
+            while True:
+                run = await conn.fetchrow("SELECT status, runtime_cleanup_pending FROM agent_runs WHERE id=$1", consumed["run_id"])
+                assert run is not None and run["status"] == "completed"
+                if not run["runtime_cleanup_pending"]:
+                    break
+                await asyncio.sleep(0.1)
         for file_id in files:
             deleted = await test_client.delete(f"/api/v1/agents/sessions/{thread_id}/attachments/{file_id}", headers=headers)
             assert deleted.status_code == 200, deleted.text
@@ -80,10 +125,22 @@ async def test_submission_files_snapshot_idempotency_cancel_and_delete(test_clie
         assert recovered.json() == receipt
         assert await conn.fetchval("SELECT count(*) FROM messages WHERE source_input_id=$1", receipt["input_id"]) == 0
     finally:
+        if thread_id and input_id and await conn.fetchval("SELECT status FROM agent_inputs WHERE id=$1", input_id) == "pending":
+            cancelled = await test_client.post(
+                f"/api/v1/agents/sessions/{thread_id}/events",
+                headers={**headers, "Idempotency-Key": uuid.uuid4().hex},
+                json={"events": [{"type": "yuxi.session.input.cancel_input", "input_id": input_id}]},
+            )
+            assert cancelled.status_code == 202, cancelled.text
+        await replay.get("/release-blocking", params={"token": gate})
         if thread_id:
+            await archive_public_thread(test_client, headers, thread_id, turn_id=turn_id)
             await delete_created_threads(thread_id)
         for file_id in files:
             await test_client.delete(f"/api/v1/agents/files/{file_id}", headers=headers)
+        if slug:
+            await delete_agent(test_client, admin_headers, slug)
+        await replay.aclose()
         await conn.close()
 
 
@@ -137,9 +194,7 @@ async def test_draft_upload_does_not_create_session_and_deletes_original(test_cl
 
 
 @pytest.mark.parametrize("level", ["full", "agents"])
-async def test_public_keys_cannot_use_private_preprocessing_or_cross_app_drafts(
-    test_client, admin_headers, api_key_factory, level
-):
+async def test_public_keys_cannot_use_private_preprocessing_or_cross_app_drafts(test_client, admin_headers, api_key_factory, level):
     """Full Key 也不能绕过产品 JWT 边界；可信 APP 前缀隔离文件。"""
     files = []
     try:

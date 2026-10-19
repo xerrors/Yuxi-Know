@@ -55,12 +55,14 @@ async def files_env(sessions, tmp_path, monkeypatch):  # noqa: F811
         return result
 
     async def submit(file, key, thread_id="input-thread", mode="follow_up"):
+        """以队列测试来源接收，保留暂停状态直到显式消费。"""
         async with sessions() as db:
             return await inputs.accept_message(
                 db=db,
                 scope=SCOPE,
                 thread_id=thread_id,
                 idempotency_key=key,
+                source="test_queue",
                 mode=mode,
                 messages=[build_chat_input_message("保留附件")],
                 attachment_file_ids=[file["id"]],
@@ -92,6 +94,7 @@ async def test_multi_message_files_bind_last_projection_and_receipt_stays_unchan
             scope=SCOPE,
             thread_id="input-thread",
             idempotency_key="two-messages",
+            source="test_queue",
             mode="follow_up",
             messages=[
                 build_chat_input_message("first"),
@@ -139,6 +142,7 @@ async def test_multi_message_files_bind_last_projection_and_receipt_stays_unchan
                 scope=SCOPE,
                 thread_id="input-thread",
                 idempotency_key="duplicate-file",
+                source="test_queue",
                 mode="follow_up",
                 messages=[build_chat_input_message(text) for text in ("A", "B")],
                 attachment_file_ids=[draft["id"], draft["id"]],
@@ -188,6 +192,7 @@ async def test_steer_batch_anchors_each_input_and_rolls_back_all_projections(fil
                     scope=SCOPE,
                     thread_id="input-thread",
                     idempotency_key=label,
+                    source="test_queue",
                     mode="steer",
                     messages=[build_chat_input_message(f"{label}{position}") for position in (1, 2)],
                     attachment_file_ids=[file["id"]],
@@ -404,6 +409,7 @@ async def test_same_draft_cannot_be_received_by_two_threads(files_env, monkeypat
                     scope=SCOPE,
                     thread_id=thread_id,
                     idempotency_key=thread_id,
+                    source="test_queue",
                     mode="follow_up",
                     messages=[build_chat_input_message(item["filename"]) for item in files],
                     attachment_file_ids=[item["id"] for item in files],

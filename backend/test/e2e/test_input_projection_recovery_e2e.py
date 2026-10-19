@@ -11,6 +11,11 @@ import asyncpg
 import pytest
 from PIL import Image
 
+from yuxi.api.routers.public_v1.agents.schemas import InputMessage, input_messages_to_domain
+from yuxi.bootstrap.models import load_models
+from yuxi.infrastructure.postgres.manager import pg_manager
+from yuxi.modules.agents.scope import ActorScope
+from yuxi.modules.agents.services.inputs import accept_message
 from test.e2e.e2e_helpers import archive_public_thread, delete_agent, postgres_dsn
 from test.e2e.e2e_helpers import (
     DETERMINISTIC_OUTPUT as OUTPUT,
@@ -99,22 +104,25 @@ async def test_process_loss_preserves_consumed_projection(e2e_client, e2e_header
                         "image_url": "data:image/png;base64," + base64.b64encode(png.getvalue()).decode(),
                     }
                 )
-            response = await e2e_client.post(
-                f"/api/v1/agents/sessions/{thread_id}/events",
-                headers={**e2e_headers, "Idempotency-Key": str(uuid.uuid4())},
-                json={
-                    "events": [
-                        {
-                            "type": "agent.session.input.message",
-                            "input": messages,
-                            "yuxi": {"mode": "steer" if batch else "follow_up", "attachment_file_ids": attachment_ids},
-                        }
-                    ]
-                },
-            )
-            assert response.status_code == 202, response.text
-            input_ids.append(response.json()["input_id"])
-            assert response.json()["run_id"] is None
+            # 故障窗口从接收完成开始；公开用户恢复暂停队列由独立 HTTP E2E 验证。
+            load_models()
+            pg_manager.initialize()
+            try:
+                async with pg_manager.get_async_session_context() as db:
+                    receipt = await accept_message(
+                        db=db,
+                        scope=ActorScope(uid=str(me.json()["uid"]), app_id=None),
+                        thread_id=thread_id,
+                        idempotency_key=str(uuid.uuid4()),
+                        source="test_queue",
+                        mode="steer" if batch else "follow_up",
+                        messages=input_messages_to_domain([InputMessage.model_validate(item) for item in messages]),
+                        attachment_file_ids=attachment_ids,
+                    )
+            finally:
+                await pg_manager.close()
+            input_ids.append(receipt["input_id"])
+            assert receipt["run_id"] is None
         assert await conn.fetchval("SELECT count(*) FROM messages WHERE source_input_id=ANY($1::varchar[])", input_ids) == 0
 
         process = multiprocessing.get_context("spawn").Process(target=_consume_and_exit, args=(thread_id, claim_lease))
@@ -163,7 +171,8 @@ async def test_process_loss_preserves_consumed_projection(e2e_client, e2e_header
             assert turn["status"] == "failed", turn
             assert turn["yuxi"]["result_run_id"] is None
             assert await conn.fetchval("SELECT error_type FROM agent_runs WHERE id=$1", run_id) == "worker_lease_expired"
-            assert await conn.fetchval("SELECT queue_paused FROM sessions WHERE thread_id=$1", thread_id)
+            assert await conn.fetchval("SELECT count(*) FROM agent_inputs WHERE thread_id=$1 AND status='pending'", thread_id) == 0
+            assert not await conn.fetchval("SELECT queue_paused FROM sessions WHERE thread_id=$1", thread_id)
         else:
             assert turn["status"] == "completed", turn
             assert turn["yuxi"]["result_run_id"] == run_id

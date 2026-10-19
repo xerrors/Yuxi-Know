@@ -15,6 +15,8 @@ on:
       - 'docker-compose.yml'
       - 'docker-compose.prod.yml'
       - 'scripts/ci_prepare_system_tests_env.sh'
+      - 'scripts/ci_probe_kvm.py'
+      - 'scripts/ci_probe_hosted_cube.sh'
       - 'scripts/ci_build_topology_images.sh'
       - 'scripts/test_cube_worker_recovery.sh'
       - '.github/workflows/system-tests.yml'
@@ -34,6 +36,8 @@ on:
       - 'docker-compose.yml'
       - 'docker-compose.prod.yml'
       - 'scripts/ci_prepare_system_tests_env.sh'
+      - 'scripts/ci_probe_kvm.py'
+      - 'scripts/ci_probe_hosted_cube.sh'
       - 'scripts/ci_build_topology_images.sh'
       - 'scripts/test_cube_worker_recovery.sh'
       - '.github/workflows/system-tests.yml'
@@ -49,10 +53,6 @@ concurrency:
 env:
   JWT_SECRET_KEY: ci-jwt-secret-at-least-thirty-two-characters
   API_KEY_DERIVATION_SECRET: ci-api-key-derivation-secret-at-least-32-chars
-  CUBE_API_URL: ${{ vars.CUBE_API_URL }}
-  CUBE_API_KEY: ${{ secrets.CUBE_API_KEY }}
-  CUBE_PROXY_NODE_IP: ${{ vars.CUBE_PROXY_NODE_IP }}
-  CUBE_PROXY_PORT_HTTP: ${{ vars.CUBE_PROXY_PORT_HTTP || '80' }}
   CUBE_TEMPLATE_ID: yuxi-user
   OPENAI_REPLAY_URL: http://api:8765/v1
   COOPERATION_REPLAY_URL: http://api:8766/v1
@@ -64,23 +64,33 @@ jobs:
   # 单独成 job 与主链路并行；两个 job 共享层缓存，各自持有完整拓扑。
   background-job-worker-path:
     name: 后台作业 worker path
-    runs-on: [self-hosted, linux, x64, yuxi-cube]
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+      - name: Prepare hosted KVM
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 xfsprogs
+          python3 scripts/ci_probe_kvm.py
+      - name: Install local Cube and shipping user template
+        timeout-minutes: 25
+        run: bash scripts/ci_probe_hosted_cube.sh
       - name: Prepare Compose environment
         run: bash scripts/ci_prepare_system_tests_env.sh
       - name: Restore api image layer cache
-        uses: actions/cache@v4
+        id: api-cache
+        uses: actions/cache/restore@v4
         with:
           path: /tmp/yuxi-buildkit-cache/api
           key: buildkit-api-${{ runner.os }}-${{ hashFiles('backend/uv.lock', 'backend/pyproject.toml', 'docker/api.Dockerfile') }}
           restore-keys: |
             buildkit-api-${{ runner.os }}-
       - name: Restore minio image layer cache
-        uses: actions/cache@v4
+        id: minio-cache
+        uses: actions/cache/restore@v4
         with:
           path: /tmp/yuxi-buildkit-cache/minio
           key: buildkit-minio-${{ runner.os }}-${{ hashFiles('docker/minio/Dockerfile', 'docker/minio/docker-entrypoint.sh') }}
@@ -88,6 +98,18 @@ jobs:
             buildkit-minio-${{ runner.os }}-
       - name: Build topology images with cached layers
         run: bash scripts/ci_build_topology_images.sh /tmp/yuxi-buildkit-cache/api /tmp/yuxi-buildkit-cache/minio
+      - name: Save successful api build before runtime tests
+        if: steps.api-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: /tmp/yuxi-buildkit-cache/api
+          key: ${{ steps.api-cache.outputs.cache-primary-key }}
+      - name: Save successful minio build before runtime tests
+        if: steps.minio-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: /tmp/yuxi-buildkit-cache/minio
+          key: ${{ steps.minio-cache.outputs.cache-primary-key }}
       - name: Prepare isolated storage for runtime identity
         run: |
           docker compose run --rm --no-deps --user 0:0 api \
@@ -119,17 +141,10 @@ jobs:
           curl -fsS -X POST http://localhost:5050/api/auth/initialize \
             -H 'Content-Type: application/json' \
             --data "{\"uid\":\"${E2E_USERNAME}\",\"password\":\"${E2E_PASSWORD}\"}" >/dev/null
-      - name: Verify app initialization against isolated PostgreSQL schemas
-        run: |
-          docker compose exec -T api uv run --no-sync --no-dev pytest \
-            test/integration/services/test_app_initialization.py \
-            test/integration/services/test_schema_migration_version.py -q
       - name: Verify 后台作业 worker path
         run: |
           docker compose stop api worker
           docker compose run --rm app-init
-          docker compose run --rm --no-deps api \
-            uv run --no-sync --no-dev pytest test/integration/services/test_background_job_repository.py -q
           docker compose run --rm --no-deps \
             -e BACKGROUND_JOB_GATE_ID=${{ github.run_id }} api \
             uv run --no-sync --no-dev pytest \
@@ -168,30 +183,50 @@ jobs:
               test/integration/api/test_background_jobs_router.py::test_enqueue_document_creates_job -q
       - name: Runtime logs on failure
         if: failure() || cancelled()
-        run: docker compose logs api worker --tail 300
+        run: |
+          docker compose logs api worker milvus graph --tail 200
+          docker ps -a --format 'table {{.Names}}\t{{.Status}}'
+          docker stats --no-stream
+          sudo ss -lntup
+          free -h
+          df -h / /data/cubelet
+          sudo dmesg | tail -60
+          for log in /opt/yuxi-cube/template-image.log /opt/yuxi-cube/template-push.log; do
+            if sudo test -f "$log"; then sudo tail -80 "$log"; fi
+          done
       - name: Stop runtime topology
         if: always()
         run: docker compose down -v
 
   system-tests:
     name: PostgreSQL, readiness and Agent lifecycle
-    runs-on: [self-hosted, linux, x64, yuxi-cube]
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+      - name: Prepare hosted KVM
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 xfsprogs
+          python3 scripts/ci_probe_kvm.py
+      - name: Install local Cube and shipping user template
+        timeout-minutes: 25
+        run: bash scripts/ci_probe_hosted_cube.sh
       - name: Prepare Compose environment
         run: bash scripts/ci_prepare_system_tests_env.sh
       - name: Restore api image layer cache
-        uses: actions/cache@v4
+        id: api-cache
+        uses: actions/cache/restore@v4
         with:
           path: /tmp/yuxi-buildkit-cache/api
           key: buildkit-api-${{ runner.os }}-${{ hashFiles('backend/uv.lock', 'backend/pyproject.toml', 'docker/api.Dockerfile') }}
           restore-keys: |
             buildkit-api-${{ runner.os }}-
       - name: Restore minio image layer cache
-        uses: actions/cache@v4
+        id: minio-cache
+        uses: actions/cache/restore@v4
         with:
           path: /tmp/yuxi-buildkit-cache/minio
           key: buildkit-minio-${{ runner.os }}-${{ hashFiles('docker/minio/Dockerfile', 'docker/minio/docker-entrypoint.sh') }}
@@ -199,6 +234,18 @@ jobs:
             buildkit-minio-${{ runner.os }}-
       - name: Build topology images with cached layers
         run: bash scripts/ci_build_topology_images.sh /tmp/yuxi-buildkit-cache/api /tmp/yuxi-buildkit-cache/minio
+      - name: Save successful api build before runtime tests
+        if: steps.api-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: /tmp/yuxi-buildkit-cache/api
+          key: ${{ steps.api-cache.outputs.cache-primary-key }}
+      - name: Save successful minio build before runtime tests
+        if: steps.minio-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: /tmp/yuxi-buildkit-cache/minio
+          key: ${{ steps.minio-cache.outputs.cache-primary-key }}
       - name: Prepare isolated storage for runtime identity
         run: |
           docker compose run --rm --no-deps --user 0:0 api \
@@ -245,8 +292,6 @@ jobs:
           exit 1
       - name: Verify worker shipping health
         run: docker compose exec -T worker uv run --no-sync --no-dev arq --check yuxi.workers.main.WorkerSettings
-      - name: Verify local job filtering preserves ARQ dispatch and retry
-        run: docker compose exec -T api uv run --no-sync --no-dev pytest test/integration/services/test_arq_worker_dispatch.py -q
       - name: Verify worker can write personal Skill UserWorkspace
         run: |
           docker compose exec -T -e E2E_USERNAME worker uv run --no-sync --no-dev python - <<'PY'
@@ -294,16 +339,15 @@ jobs:
           exit 1
       - name: Verify readiness API
         run: docker compose exec -T api uv run --no-sync --no-dev pytest test/integration/api/test_system_router_api.py::test_health_endpoint_is_public test/integration/api/test_system_router_api.py::test_readiness_endpoint_proves_core_runtime_dependencies test/integration/api/test_system_router_api.py::test_discovery_and_openapi_declare_full_knowledge_capabilities -q
+      - name: Verify attachment HTTP and object contract
+        timeout-minutes: 3
+        run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_chat_router.py::test_thread_artifact_uses_image_signature_for_content_type test/integration/api/test_public_agent_files.py -q
       - name: Verify MCP management connection contract
         run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_mcp_router.py -q
-      - name: Verify MCP OAuth isolation and temporary record cleanup
-        run: docker compose exec -T api uv run --no-sync --no-dev pytest test/integration/services/test_mcp_oauth.py -q
       - name: Verify knowledge MCP authentication and persisted documents
         run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_knowledge_mcp.py -q
       - name: Verify module failure and permission boundaries
         run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_module_failure_boundaries.py -q
-      - name: Verify chunk configuration before persistence and job registration
-        run: docker compose exec -T -e TEST_USERNAME= -e TEST_PASSWORD= api uv run --no-sync --no-dev pytest test/integration/services/test_chunk_config_boundary.py -q
       - name: Verify roles, grants and private Agent HTTP boundaries
         run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_permission_convergence.py test/integration/identity/test_identity_permission_constraints.py -q
       - name: Verify private owner fields and shared manager resource patches
@@ -316,22 +360,12 @@ jobs:
         run: docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_agent_bound_skill_e2e.py -q
       - name: Verify atomic Agent creation with Skill and MCP
         run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_agent_create_resources.py -q
-      - name: Verify current Schema initialization contract
-        run: docker compose exec -T api uv run --no-sync --no-dev pytest test/integration/services/test_schema_migration_version.py -q
-      - name: Verify fresh relations, indexes and knowledge cleanup negative controls
-        run: docker compose exec -T api uv run --no-sync --no-dev pytest test/integration/services/test_knowledge_projection_integrity.py test/integration/services/test_database_relation_integrity.py test/integration/services/test_database_access_paths.py -q
       - name: Verify Milvus 3 text retrieval through worker
         run: docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_milvus_text_retrieval_e2e.py -q --durations=10
-      - name: Verify knowledge statistics projection
-        run: docker compose exec -T api uv run --no-sync --no-dev pytest test/integration/services/test_knowledge_stats_refresh.py -q
-      - name: Verify Input FIFO transaction and recovery
-        run: docker compose exec -T -e TEST_BASE_URL=http://127.0.0.1:1 -e CUBE_API_URL=http://127.0.0.1:1 -e TEST_USERNAME=fixture-probe -e TEST_PASSWORD=fixture-probe api uv run --no-sync --no-dev pytest test/integration/services/test_agent_input_concurrency.py test/integration/services/test_thread_priority_inputs.py test/integration/services/test_input_attachments.py test/integration/services/test_session_title_generation.py -q
-      - name: Verify Run lease ownership
-        run: docker compose exec -T api uv run --no-sync --no-dev pytest test/integration/services/test_agent_run_lease.py -q
+      - name: Verify Input attachment persistence and object storage
+        run: docker compose exec -T -e TEST_BASE_URL=http://127.0.0.1:1 -e CUBE_API_URL=http://127.0.0.1:1 -e TEST_USERNAME=fixture-probe -e TEST_PASSWORD=fixture-probe api uv run --no-sync --no-dev pytest test/integration/services/test_input_attachments.py -q
       - name: Verify Turn result causality
         run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_turn_result_causality.py -q
-      - name: Verify feedback persistence and execution boundary
-        run: docker compose exec -T api uv run --no-sync --no-dev pytest test/integration/services/test_agent_feedback.py -q
       - name: Verify feedback HTTP access
         timeout-minutes: 5
         run: |
@@ -362,22 +396,13 @@ jobs:
       - name: Verify Message audit HTTP contract
         timeout-minutes: 3
         run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_chat_router.py::test_thread_message_audits_return_persisted_facts_without_leaking_into_history test/integration/api/test_chat_router.py::test_debug_messages_follow_database_sequence_and_include_unassigned_inputs -q --setup-show -o faulthandler_timeout=60
-      - name: Verify Session cooperation persistence and capacity
-        run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/services/test_session_cooperation.py -q
-      - name: Verify attachment HTTP and object contract
-        timeout-minutes: 3
-        run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_chat_router.py::test_thread_artifact_uses_image_signature_for_content_type test/integration/api/test_public_agent_files.py -q
       - name: Verify deterministic Agent lifecycle
         timeout-minutes: 25
         run: TEST_USERNAME="$E2E_USERNAME" TEST_PASSWORD="$E2E_PASSWORD" bash backend/test/run_tests.sh e2e
       - name: Verify identity transaction and replayable secret publication
         run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/services/test_identity_admin_service.py test/integration/services/test_api_key_user_lifecycle.py test/integration/api/test_apikey_router.py -q
-      - name: Verify atomic OIDC login on isolated PostgreSQL schema
-        run: docker compose exec -T -e TEST_USERNAME= -e TEST_PASSWORD= api uv run --no-sync --no-dev pytest test/integration/services/test_oidc_login_transaction.py -q
       - name: Verify OIDC and MCP OAuth proxy log and cache boundaries
         run: python3 scripts/verify_oidc_proxy.py
-      - name: Verify password login state and HTTP contract
-        run: docker compose exec -T -e TEST_USERNAME= -e TEST_PASSWORD= api uv run --no-sync --no-dev pytest test/integration/services/test_password_login_boundary.py -q
       - name: Verify Workdir and Skill authorization
         run: |
           docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest \
@@ -405,7 +430,17 @@ jobs:
           docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_web_tools_e2e.py -q
       - name: Runtime logs on failure
         if: failure() || cancelled()
-        run: docker compose logs api worker --tail 300
+        run: |
+          docker compose logs api worker milvus graph --tail 200
+          docker ps -a --format 'table {{.Names}}\t{{.Status}}'
+          docker stats --no-stream
+          sudo ss -lntup
+          free -h
+          df -h / /data/cubelet
+          sudo dmesg | tail -60
+          for log in /opt/yuxi-cube/template-image.log /opt/yuxi-cube/template-push.log; do
+            if sudo test -f "$log"; then sudo tail -80 "$log"; fi
+          done
       - name: Stop runtime topology
         if: always()
         run: docker compose -f docker-compose.yml -f backend/test/e2e/web-tools.compose.yml down -v --remove-orphans

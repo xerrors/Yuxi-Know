@@ -132,9 +132,7 @@ WORKFLOW_CONTRACTS = (
         path=".github/workflows/system-tests.yml",
         commands=(
             "docker compose exec -T api uv run --no-sync --no-dev pytest test/integration/api/test_system_router_api.py::test_health_endpoint_is_public test/integration/api/test_system_router_api.py::test_readiness_endpoint_proves_core_runtime_dependencies test/integration/api/test_system_router_api.py::test_discovery_and_openapi_declare_full_knowledge_capabilities -q",
-            "docker compose exec -T api uv run --no-sync --no-dev pytest test/integration/services/test_schema_migration_version.py -q",
-            "docker compose exec -T -e TEST_BASE_URL=http://127.0.0.1:1 -e CUBE_API_URL=http://127.0.0.1:1 -e TEST_USERNAME=fixture-probe -e TEST_PASSWORD=fixture-probe api uv run --no-sync --no-dev pytest test/integration/services/test_agent_input_concurrency.py test/integration/services/test_thread_priority_inputs.py test/integration/services/test_input_attachments.py test/integration/services/test_session_title_generation.py -q",
-            "docker compose exec -T api uv run --no-sync --no-dev pytest test/integration/services/test_agent_run_lease.py -q",
+            "docker compose exec -T -e TEST_BASE_URL=http://127.0.0.1:1 -e CUBE_API_URL=http://127.0.0.1:1 -e TEST_USERNAME=fixture-probe -e TEST_PASSWORD=fixture-probe api uv run --no-sync --no-dev pytest test/integration/services/test_input_attachments.py -q",
             'docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_turn_result_causality.py -q',
             'docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_chat_router.py::test_public_thread_endpoints_require_authentication test/integration/api/test_chat_router.py::test_public_create_rejects_empty_input test/integration/api/test_chat_router.py::test_public_missing_thread_and_turn_return_not_found test/integration/api/test_chat_router.py::test_public_input_rejects_unbound_attachment_without_persisting_receipt test/integration/api/test_removed_api_endpoints.py::test_removed_agent_session_entrypoints_are_unreachable test/integration/api/test_public_agents_key_boundary.py test/integration/services/test_agent_input_schema.py test/integration/services/test_project_thread_archive.py test/integration/services/test_run_stream_redis.py -q',
             'docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_public_knowledge_tools.py::test_knowledge_key_tool_route_boundary_without_kb test/integration/api/test_public_knowledge_tools.py::test_agents_key_cannot_access_public_knowledge_api test/integration/api/test_removed_api_endpoints.py::test_public_knowledge_does_not_expose_management_routes -q',
@@ -154,9 +152,20 @@ WORKFLOW_CONTRACTS = (
             "backend/test/run_tests.sh",
             "docker/**",
             "scripts/ci_prepare_system_tests_env.sh",
+            "scripts/ci_probe_kvm.py",
+            "scripts/ci_probe_hosted_cube.sh",
             "scripts/ci_build_topology_images.sh",
             "scripts/test_cube_worker_recovery.sh",
             ".github/workflows/system-tests.yml",
+        ),
+    ),
+    WorkflowContract(
+        path=".github/workflows/service-integration.yml",
+        commands=("bash scripts/ci_run_service_integration.sh",),
+        required_paths=(
+            "backend/**",
+            "scripts/ci_run_service_integration.sh",
+            ".github/workflows/service-integration.yml",
         ),
     ),
     WorkflowContract(

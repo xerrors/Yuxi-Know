@@ -10,7 +10,7 @@ PYTEST_CMD=(
     -e TEST_BASE_URL -e TEST_USERNAME -e TEST_PASSWORD
     -e E2E_USERNAME -e E2E_PASSWORD
     -e OPENAI_REPLAY_URL -e COOPERATION_REPLAY_URL
-    api uv run --group test pytest
+    api uv run --no-sync --no-dev pytest
 )
 LIFECYCLE_E2E_TESTS=(
     test/e2e/test_agent_lifecycle_e2e.py

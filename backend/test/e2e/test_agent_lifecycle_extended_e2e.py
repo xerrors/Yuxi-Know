@@ -209,7 +209,7 @@ async def test_standard_user_run_uses_admin_execution_limit(e2e_client, e2e_head
         assert login.status_code == 200, login.text
         user_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
         provider_created = await _provider(e2e_client, e2e_headers)
-        slug = await _agent(e2e_client, e2e_headers, str(user["uid"]))
+        slug = await _agent(e2e_client, e2e_headers, str(user["uid"]), bound_skill=True)
 
         for limit, expected_status in ((1, "failed"), (42, "completed")):
             updated = await e2e_client.put(
@@ -472,7 +472,7 @@ async def test_standard_user_restores_visible_function_items_without_internal_au
         assert login.status_code == 200, login.text
         user_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
         provider_created = await _provider(e2e_client, e2e_headers)
-        slug = await _agent(e2e_client, e2e_headers, str(user["uid"]))
+        slug = await _agent(e2e_client, e2e_headers, str(user["uid"]), bound_skill=True)
 
         created = await e2e_client.post(
             "/api/v1/agents/sessions",

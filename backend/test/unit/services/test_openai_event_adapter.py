@@ -197,6 +197,33 @@ async def test_failure_preserves_completed_commentary_and_only_saves_active_part
     ]
 
 
+@pytest.mark.asyncio
+async def test_rejected_message_finish_keeps_displayed_text_available_for_cancel_snapshot(adapter, monkeypatch):
+    """完成快照被取消拒绝时，未提交的 completed 不能阻止部分正文收敛。"""
+    await collect(
+        adapter,
+        [
+            native(0, {"event": "message-start", "id": "model"}),
+            native(1, {"event": "content-block-delta", "delta": {"type": "text-delta", "text": "shown"}}),
+        ],
+    )
+    save = adapter._save
+
+    async def reject_completed(operation, role, key, item, content_index=None):
+        """模拟真实 Run 已进入 cancel_requested 后拒绝普通输出写入。"""
+        if item["status"] == "completed":
+            raise ValueError("输出已被取消")
+        return await save(operation, role, key, item, content_index)
+
+    monkeypatch.setattr(adapter, "_save", reject_completed)
+    with pytest.raises(ValueError, match="输出已被取消"):
+        await adapter.consume(native(2, {"event": "message-finish"}))
+    await adapter.persist_incomplete()
+    item = next(iter(adapter.models.values()))["item"]
+    assert item["status"] == "incomplete"
+    assert item["content"] == [{"type": "output_text", "text": "shown"}]
+
+
 @pytest.mark.parametrize(
     "name,status",
     [

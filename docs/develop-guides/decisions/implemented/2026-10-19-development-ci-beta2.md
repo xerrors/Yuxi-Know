@@ -36,4 +36,6 @@ Owner：.github/workflows/trust.yml
 
 ## 后果
 
-开发分支 CI 增加相应路径变更的运行次数，`develop/**` 包含嵌套分支。规则随工作流所在提交生效，已有其他开发分支仍需合入该配置。运行链路需要带 `yuxi-cube` 标签的 self-hosted runner 和既有节点配置；本次不注册新执行器，不创建 tag、Release 或发布 npm。
+开发分支 CI 增加相应路径变更的运行次数，`develop/**` 包含嵌套分支。规则随工作流所在提交生效，已有其他开发分支仍需合入该配置。运行链路使用托管执行器与本机 Cube，环境与验证由[完整系统测试决定](2026-10-19-hosted-runtime-system-tests.md)维护。
+
+独立服务测试的执行环境与托管 Cube 兼容性验证由[后续决定](2026-10-19-hosted-ci-resource-boundaries.md)维护；完整运行链路的 runner 约束仍由实际 workflow 拥有。

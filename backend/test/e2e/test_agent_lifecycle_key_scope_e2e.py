@@ -76,7 +76,7 @@ async def test_private_agent_key_run_uses_end_user_workspace_and_app_scope(e2e_c
     assert me.status_code == 200, me.text
     owner_uid = str(me.json()["uid"])
     await _provider(e2e_client, e2e_headers)
-    slug = await _agent(e2e_client, e2e_headers, owner_uid)
+    slug = await _agent(e2e_client, e2e_headers, owner_uid, bound_skill=True)
     app_id = f"ci-key-{uuid.uuid4().hex[:12]}"
     end_user_id = f"visitor-{uuid.uuid4().hex}"
     other_end_user_id = f"other-{uuid.uuid4().hex}"
