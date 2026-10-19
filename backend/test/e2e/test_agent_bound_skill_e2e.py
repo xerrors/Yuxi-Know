@@ -21,6 +21,8 @@ from e2e_helpers import (
     iter_public_thread_events,
     postgres_dsn,
     wait_for_consumed_input,
+    wait_for_blocked_response,
+    wait_model_provider_cache,
 )
 
 from test.live_api_cleanup import make_test_session_title
@@ -76,8 +78,7 @@ async def test_preloaded_skill_edit_is_loaded_by_the_worker(
         )
         assert provider.status_code == 200, provider.text
         provider_created = True
-        # Worker 的模型本地缓存有 5 秒 TTL，新测试 provider 在过期后进入真实构图。
-        await asyncio.sleep(6)
+        await wait_model_provider_cache()
         if skill_source == "shared":
             original = f"---\nname: {slug}\nslug: {slug}\ndescription: before\n---\n# Before\n"
             prepared = await e2e_client.post(
@@ -230,9 +231,7 @@ async def test_preloaded_skill_edit_is_loaded_by_the_worker(
         run_id, turn_id = consumed["run_id"], consumed["turn_id"]
         if edit_during_run:
             async with httpx.AsyncClient(base_url=os.environ["OPENAI_REPLAY_URL"].removesuffix("/v1"), timeout=10) as replay:
-                async with asyncio.timeout(30):
-                    while not (await replay.get("/blocking-started", params={"token": gate})).json()["started"]:
-                        await asyncio.sleep(0.1)
+                await wait_for_blocked_response(replay, gate)
                 changed = updated.replace(marker, f"BOUND_SKILL_{uuid.uuid4().hex}")
                 edited = await e2e_client.put(
                     f"/api/system/skills/{slug}/file",

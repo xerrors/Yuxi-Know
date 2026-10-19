@@ -8,7 +8,7 @@ import threading
 import uuid
 
 import pytest
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 import yuxi.modules.workspace.services.projects as project_service
@@ -405,8 +405,13 @@ async def test_run_guard_waits_for_interrupted_history_runtime_cleanup(postgres_
                 await db.commit()
 
         release = asyncio.create_task(release_runtime())
-        await validate_test_runs_terminal({target["thread_id"]})
-        await release
+        try:
+            await validate_test_runs_terminal({target["thread_id"]})
+            async with session_factory() as db:
+                old_run = await db.get(AgentRun, target["run_id"])
+                assert old_run.runtime_cleanup_pending is False, "Turn 已完成仍须等待旧 Run 清理提交"
+        finally:
+            await release
     finally:
         await _cleanup_seed(session_factory, [target])
 
@@ -443,6 +448,30 @@ async def test_run_guard_rejects_unreleased_runtime_after_deadline(postgres_sess
 
         with pytest.raises(RuntimeError, match="runtime cleanup did not finish"):
             await validate_test_runs_terminal({target["thread_id"]})
+    finally:
+        await _cleanup_seed(session_factory, [target])
+
+
+async def test_run_guard_deadline_covers_blocked_database_query(postgres_sessions, monkeypatch):
+    """真实表锁阻塞查询时，总期限仍需生效，锁由独立连接释放。"""
+    session_factory = postgres_sessions
+    target = await _seed_thread(session_factory, thread_prefix="pytest-query-guard")
+    monkeypatch.setattr(cleanup_module, "RUN_CLEANUP_WAIT_SECONDS", 0.1)
+    try:
+        async with session_factory() as locker:
+            await locker.execute(text("LOCK TABLE agent_runs IN ACCESS EXCLUSIVE MODE"))
+
+            async def release_lock():
+                """使缺少总期限的实现也能结束并暴露未抛错，而非挂死测试。"""
+                await asyncio.sleep(0.4)
+                await locker.rollback()
+
+            release = asyncio.create_task(release_lock())
+            try:
+                with pytest.raises(RuntimeError, match="runtime cleanup did not finish"):
+                    await validate_test_runs_terminal({target["thread_id"]})
+            finally:
+                await release
     finally:
         await _cleanup_seed(session_factory, [target])
 

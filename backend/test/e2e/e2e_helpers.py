@@ -124,16 +124,38 @@ async def create_lifecycle_agent(
     return slug
 
 
-async def wait_for_terminal_turn(client: httpx.AsyncClient, headers: dict, thread_id: str, turn_id: str) -> dict:
+async def wait_for_terminal_turn(client: httpx.AsyncClient, headers: dict, thread_id: str, turn_id: str, *, timeout: float = 30) -> dict:
     """以 Public 持久 Turn 快照等待终态。"""
-    for _ in range(150):
-        response = await client.get(f"/api/v1/agents/sessions/{thread_id}/turns/{turn_id}", headers=headers)
-        assert response.status_code == 200, response.text
-        turn = response.json()
-        if turn["status"] in {"completed", "failed", "cancelled"}:
-            return turn
-        await asyncio.sleep(0.2)
-    pytest.fail(f"Turn 未在 30 秒内终结: {turn_id}")
+    last = None
+    try:
+        async with asyncio.timeout(timeout):
+            while True:
+                response = await client.get(f"/api/v1/agents/sessions/{thread_id}/turns/{turn_id}", headers=headers)
+                assert response.status_code == 200, f"Turn 查询失败: thread={thread_id}, turn={turn_id}, HTTP={response.status_code}"
+                turn = response.json()
+                assert (turn["session_id"], turn["id"]) == (thread_id, turn_id), "Turn 查询返回了其他执行的归属"
+                last = {"status": turn["status"], "current_run_id": turn["yuxi"]["current_run_id"]}
+                if turn["status"] in {"completed", "failed", "cancelled"}:
+                    return turn
+                await asyncio.sleep(0.2)
+    except TimeoutError:
+        pytest.fail(f"Turn 未在 {timeout:g} 秒内终结: thread={thread_id}, turn={turn_id}, last={last}")
+
+
+async def wait_for_blocked_response(replay: httpx.AsyncClient, token: str, *, timeout: float = 30) -> None:
+    """等待本例模型请求进入阻塞点，不把提交成功当作执行已开始。"""
+    started = None
+    try:
+        async with asyncio.timeout(timeout):
+            while True:
+                response = await replay.get("/blocking-started", params={"token": token})
+                assert response.status_code == 200, f"模型阻塞点查询失败: token={token}, HTTP={response.status_code}"
+                started = response.json()["started"]
+                if started is True:
+                    return
+                await asyncio.sleep(0.1)
+    except TimeoutError:
+        pytest.fail(f"模型请求未在 {timeout:g} 秒内进入阻塞点: token={token}, started={started}")
 
 
 async def create_public_agent(
@@ -232,20 +254,28 @@ async def cleanup_uploaded_chat_attachment(uid: str, file_id: str) -> None:
         pass
 
 
-async def wait_for_consumed_input(client: httpx.AsyncClient, headers: dict, receipt: dict) -> dict:
+async def wait_for_consumed_input(client: httpx.AsyncClient, headers: dict, receipt: dict, *, timeout: float = 60) -> dict:
     """校验接收回执不带执行归属，再从真实 Input 查询领取结果。"""
     assert receipt["input_id"] and receipt["turn_id"] is None and receipt["run_id"] is None, receipt
     session_id = receipt["session_id"]
-    async with asyncio.timeout(60):
-        while True:
-            response = await client.get(f"/api/v1/agents/sessions/{session_id}/inputs/{receipt['input_id']}", headers=headers)
-            assert response.status_code == 200, response.text
-            snapshot = response.json()
-            assert snapshot["status"] != "cancelled", snapshot
-            if snapshot["status"] == "consumed":
-                assert snapshot["run_id"] and snapshot["turn_id"] and snapshot["items"], snapshot
-                return {**snapshot, "session_id": session_id}
-            await asyncio.sleep(0.1)
+    last = None
+    try:
+        async with asyncio.timeout(timeout):
+            while True:
+                response = await client.get(f"/api/v1/agents/sessions/{session_id}/inputs/{receipt['input_id']}", headers=headers)
+                assert response.status_code == 200, (
+                    f"Input 查询失败: thread={session_id}, input={receipt['input_id']}, HTTP={response.status_code}"
+                )
+                snapshot = response.json()
+                assert (snapshot["thread_id"], snapshot["input_id"]) == (session_id, receipt["input_id"]), "Input 查询返回了其他提交的归属"
+                last = {key: snapshot[key] for key in ("status", "turn_id", "run_id")}
+                assert snapshot["status"] != "cancelled", f"待消费 Input 被取消: {last}"
+                if snapshot["status"] == "consumed":
+                    assert snapshot["run_id"] and snapshot["turn_id"] and snapshot["items"], f"消费投影不完整: {last}"
+                    return {**snapshot, "session_id": session_id}
+                await asyncio.sleep(0.1)
+    except TimeoutError:
+        pytest.fail(f"Input 未在 {timeout:g} 秒内消费: thread={session_id}, input={receipt['input_id']}, last={last}")
 
 
 async def iter_public_thread_events(client: httpx.AsyncClient, headers: dict[str, str], thread_id: str):

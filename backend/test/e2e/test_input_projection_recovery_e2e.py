@@ -23,6 +23,7 @@ from test.e2e.e2e_helpers import (
     output_text,
     public_message as _message,
     register_replay_provider as _provider,
+    wait_for_terminal_turn,
 )
 from test.live_api_cleanup import make_test_session_title
 
@@ -159,14 +160,7 @@ async def test_process_loss_preserves_consumed_projection(e2e_client, e2e_header
                 assert [file["file_id"] for file in items[1]["yuxi"]["attachments"]] == [file_id]
 
         # 恢复本身按 30 秒周期触发，不能复用普通执行的 30 秒总等待。
-        async with asyncio.timeout(90):
-            while True:
-                response = await e2e_client.get(f"/api/v1/agents/sessions/{thread_id}/turns/{turn_id}", headers=e2e_headers)
-                assert response.status_code == 200, response.text
-                turn = response.json()
-                if turn["status"] in {"completed", "failed", "cancelled"}:
-                    break
-                await asyncio.sleep(0.2)
+        turn = await wait_for_terminal_turn(e2e_client, e2e_headers, thread_id, turn_id, timeout=90)
         if claim_lease:
             assert turn["status"] == "failed", turn
             assert turn["yuxi"]["result_run_id"] is None

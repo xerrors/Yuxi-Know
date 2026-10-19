@@ -54,6 +54,14 @@ test_agent_bubble_sort_run_creates_expected_artifacts
 - E2E fixture 负责真实入口、账号和资源清理；测试结束后删除自己创建的对话、文件、Run 和外部对象。
 - 不在测试或文档中写真实账号、密码、Token、用户数据和本地绝对路径。
 
+### 核心输入链路的前提与等待
+
+输入队列、附件、Skill 授权、取消和恢复用例在准备代码旁明确初始状态、建立入口、回读事实和清理 Owner。公开输入通过 HTTP 建立真实消费前提；需要停在消费前故障窗口的服务测试使用自己的隔离 Schema。普通用户和 Key 使用本例明确授权的 Agent 与 bound Skill；内置发布内容测试以正式 app-init 产物为对象。
+
+复用 `e2e_helpers.py` 的 Input 消费、Turn 终态与 replay 阻塞点等待。Turn 的 `completed`、`failed`、`cancelled` 都是等待结果，由调用方断言本场景预期；删除资源前另用 `live_api_cleanup.py` 的 `validate_test_runs_terminal` 检查历史 Run 的运行时清理。等待总预算覆盖 HTTP 和数据库请求，超时只报告目标 ID 与最后状态。
+
+跨进程文件先写同目录临时文件，完成后原子改名；存在性信号只证明标记已经发布。模型阻塞点使用 replay 的 started/release 协议，解除本例阻塞放在 `finally`。固定 sleep 仅用于轮询间隔或明确验证的缓存 TTL、空闲暂停、取消后持续无写入等时间性质。业务结果继续从 HTTP 投影、数据库、文件或对象字节独立断言。
+
 ## skip 规则
 
 只在以下情况使用 `pytest.skip`：

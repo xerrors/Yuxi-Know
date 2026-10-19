@@ -1,6 +1,5 @@
 """真实 HTTP 验证文件草稿、私有预处理与隔离。"""
 
-import asyncio
 import io
 import os
 import uuid
@@ -18,9 +17,10 @@ from test.e2e.e2e_helpers import (
     public_message,
     register_replay_provider,
     wait_for_consumed_input,
+    wait_for_blocked_response,
     wait_for_terminal_turn,
 )
-from test.live_api_cleanup import make_test_session_title
+from test.live_api_cleanup import make_test_session_title, validate_test_runs_terminal
 from yuxi.infrastructure.minio import get_minio_client
 from test.integration.api.helpers import delete_created_threads
 
@@ -68,9 +68,7 @@ async def test_submission_files_snapshot_idempotency_cancel_and_delete(test_clie
         thread_id = created.json()["id"]
         consumed = await wait_for_consumed_input(test_client, headers, created.json()["yuxi"]["receipt"])
         turn_id = consumed["turn_id"]
-        async with asyncio.timeout(30):
-            while not (await replay.get("/blocking-started", params={"token": gate})).json()["started"]:
-                await asyncio.sleep(0.1)
+        await wait_for_blocked_response(replay, gate)
         url = f"/api/v1/agents/sessions/{thread_id}/events"
         key_headers = {**headers, "Idempotency-Key": uuid.uuid4().hex}
         messages = [{"role": "user", "content": [{"type": "input_text", "text": text}]} for text in ("one", "two")]
@@ -106,16 +104,16 @@ async def test_submission_files_snapshot_idempotency_cancel_and_delete(test_clie
         assert blocked.status_code == 409, blocked.text
         await replay.get("/release-blocking", params={"token": gate})
         assert (await wait_for_terminal_turn(test_client, headers, thread_id, turn_id))["status"] == "completed"
-        async with asyncio.timeout(30):
-            while True:
-                run = await conn.fetchrow("SELECT status, runtime_cleanup_pending FROM agent_runs WHERE id=$1", consumed["run_id"])
-                assert run is not None and run["status"] == "completed"
-                if not run["runtime_cleanup_pending"]:
-                    break
-                await asyncio.sleep(0.1)
+        await validate_test_runs_terminal({thread_id})
+        run = await conn.fetchrow("SELECT status, runtime_cleanup_pending FROM agent_runs WHERE id=$1", consumed["run_id"])
+        assert run is not None and (run["status"], run["runtime_cleanup_pending"]) == ("completed", False)
         for file_id in files:
             deleted = await test_client.delete(f"/api/v1/agents/sessions/{thread_id}/attachments/{file_id}", headers=headers)
             assert deleted.status_code == 200, deleted.text
+            assert await conn.fetchval("SELECT count(*) FROM agent_attachments WHERE id=$1", file_id) == 0
+            storage = get_minio_client()
+            prefix = f"tmp/chat_attachments/{standard_user['user']['uid']}/{file_id}/"
+            assert await storage.alist_object_metadata(storage.KB_BUCKETS["documents"], prefix) == []
         snapshot = (await test_client.get(input_url, headers=headers)).json()
         assert snapshot["status"] == "cancelled" and snapshot["items"] == [] and snapshot["attachments"] == []
         assert snapshot["attachment_file_ids"] == files and snapshot["messages"] == pending["messages"]

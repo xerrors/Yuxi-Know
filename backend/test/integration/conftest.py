@@ -24,7 +24,6 @@ if str(PROJECT_ROOT) not in sys.path:
 from test.live_api_cleanup import (  # noqa: E402
     cleanup_pytest_knowledge_resources,
     cleanup_test_chat_resources,
-    list_test_session_resources,
 )
 
 load_dotenv(PROJECT_ROOT / ".env", override=False)
@@ -184,70 +183,6 @@ def cleanup_test_knowledge_resources(request: pytest.FixtureRequest):
     anyio.run(run_cleanup)
     yield
     anyio.run(run_cleanup)
-
-
-@pytest_asyncio.fixture(scope="function")
-async def standard_user(test_client: httpx.AsyncClient, admin_headers: dict[str, str]) -> AsyncGenerator[dict, None]:
-    username = f"pytest_user_{uuid.uuid4().hex[:8]}"
-    password = f"Pw!{uuid.uuid4().hex[:8]}"
-
-    # 用户隔离重构后所有登录用户必须绑定部门，创建时显式指定一个已存在部门
-    dept_response = await test_client.get("/api/departments", headers=admin_headers)
-    if dept_response.status_code != 200 or not dept_response.json():
-        pytest.fail(f"No department available to bind standard user: {dept_response.text}")
-    department_id = dept_response.json()[0]["id"]
-
-    response = await test_client.post(
-        "/api/auth/users",
-        json={"username": username, "password": password, "role": "user", "department_id": department_id},
-        headers=admin_headers,
-    )
-    if response.status_code != 200:
-        pytest.fail(f"Failed to create standard user (status={response.status_code}): {response.text}")
-
-    user_payload = response.json()
-    login_response = await test_client.post(
-        "/api/auth/token",
-        data={"username": user_payload["uid"], "password": password},
-    )
-    if login_response.status_code != 200:
-        pytest.fail(f"Failed to authenticate as standard user (status={login_response.status_code}): {login_response.text}")
-
-    access_token = login_response.json().get("access_token")
-    if not access_token:
-        pytest.fail("Standard user login succeeded but no access token was returned.")
-
-    try:
-        yield {
-            "user": user_payload,
-            "password": password,
-            "headers": {"Authorization": f"Bearer {access_token}"},
-        }
-    finally:
-        auth_check = await test_client.get("/api/auth/me", headers={"Authorization": f"Bearer {access_token}"})
-        if auth_check.status_code == 200:
-            await cleanup_test_chat_resources(
-                test_client,
-                {"Authorization": f"Bearer {access_token}"},
-                owner_uid=str(user_payload["uid"]),
-            )
-        elif auth_check.status_code in {401, 403, 423}:
-            # 锁定或删除用户的令牌已失效，确认无持久对话后再由管理员清理用户。
-            remaining = await list_test_session_resources(str(user_payload["uid"]))
-            if remaining:
-                raise RuntimeError("Cannot clean test sessions with a revoked standard-user token")
-        else:
-            raise RuntimeError(f"Cannot verify standard-user cleanup access: {auth_check.status_code}")
-        cleanup_error = None
-        for _ in range(3):
-            response = await test_client.delete(f"/api/auth/users/{user_payload['id']}", headers=admin_headers)
-            if response.status_code in (200, 404):
-                cleanup_error = None
-                break
-            cleanup_error = response
-            await anyio.sleep(0.3)
-        if cleanup_error is not None:
-            assert cleanup_error.status_code == 200, f"Failed to cleanup test user {user_payload['uid']}: {cleanup_error.text}"
 
 
 @pytest_asyncio.fixture(scope="function")

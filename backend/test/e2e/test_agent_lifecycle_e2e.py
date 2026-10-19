@@ -26,6 +26,7 @@ from test.e2e.e2e_helpers import (
     output_text,
     postgres_dsn,
     wait_for_consumed_input,
+    wait_for_blocked_response,
 )
 from test.e2e.e2e_helpers import (
     public_message as _message,
@@ -46,23 +47,17 @@ from yuxi.modules.workspace.paths import user_workspace_dir
 pytestmark = [pytest.mark.asyncio, pytest.mark.e2e, pytest.mark.slow, pytest.mark.timeout(240)]
 
 
-async def _continue_queued_input(client, headers, thread_id: str, input_id: str, request_tag: str) -> dict:
+async def _continue_queued_input(client, headers, receipt: dict, request_tag: str) -> dict:
     """显式继续暂停队列，等待唯一队头输入完成。"""
+    thread_id = receipt["session_id"]
     continued = await client.post(
         f"/api/v1/agents/sessions/{thread_id}/events",
         headers={**headers, "Idempotency-Key": f"{request_tag}-{uuid.uuid4().hex}"},
         json={"events": [{"type": "yuxi.session.input.continue"}]},
     )
     assert continued.status_code == 202, continued.text
-    for _ in range(100):
-        consumed = await client.get(f"/api/v1/agents/sessions/{thread_id}/inputs/{input_id}", headers=headers)
-        assert consumed.status_code == 200, consumed.text
-        if consumed.json()["status"] == "consumed":
-            break
-        await asyncio.sleep(0.2)
-    else:
-        pytest.fail("显式继续后队头未领取")
-    turn = await _turn(client, headers, thread_id, consumed.json()["turn_id"])
+    consumed = await wait_for_consumed_input(client, headers, receipt, timeout=20)
+    turn = await _turn(client, headers, thread_id, consumed["turn_id"])
     assert turn["status"] == "completed", turn
     assert OUTPUT in output_text(turn["yuxi"]["output"])
     return turn
@@ -331,14 +326,7 @@ async def test_first_input_and_follow_up_fifo_cross_worker(e2e_client, e2e_heade
         assert replay.json()["id"] == thread_id
 
         async with httpx.AsyncClient(base_url=os.environ["OPENAI_REPLAY_URL"].removesuffix("/v1"), timeout=5) as replay_client:
-            for _ in range(100):
-                started = await replay_client.get("/blocking-started", params={"token": gate})
-                assert started.status_code == 200
-                if started.json()["started"]:
-                    break
-                await asyncio.sleep(0.1)
-            else:
-                pytest.fail("模型重放服务未收到第一段请求")
+            await wait_for_blocked_response(replay_client, gate, timeout=10)
 
             queued = await e2e_client.post(
                 f"/api/v1/agents/sessions/{thread_id}/events",
@@ -413,17 +401,7 @@ async def test_first_input_and_follow_up_fifo_cross_worker(e2e_client, e2e_heade
         assert model_facts[-1]["id"] == output_message_id
         assert model_facts[0]["operation_id"] != model_facts[1]["operation_id"]
         assert first_turn["yuxi"]["usage"]["operations"] == len(model_facts)
-        for _ in range(100):
-            input_response = await e2e_client.get(
-                f"/api/v1/agents/sessions/{thread_id}/inputs/{next_input['input_id']}", headers=e2e_headers
-            )
-            assert input_response.status_code == 200, input_response.text
-            consumed = input_response.json()
-            if consumed["status"] == "consumed":
-                break
-            await asyncio.sleep(0.2)
-        else:
-            pytest.fail("FIFO 队头未被领取")
+        consumed = await wait_for_consumed_input(e2e_client, e2e_headers, next_input, timeout=20)
         second_turn = await _turn(e2e_client, e2e_headers, thread_id, consumed["turn_id"])
         assert second_turn["status"] == "completed", second_turn
         assert second_turn["yuxi"]["result_run_id"] == consumed["run_id"]
@@ -516,6 +494,8 @@ async def test_first_input_and_follow_up_fifo_cross_worker(e2e_client, e2e_heade
         finally:
             await pg.close()
     finally:
+        async with httpx.AsyncClient(base_url=os.environ["OPENAI_REPLAY_URL"].removesuffix("/v1"), timeout=5) as replay_client:
+            await replay_client.get("/release-blocking", params={"token": gate})
         await delete_agent(e2e_client, e2e_headers, slug)
         deleted = await e2e_client.delete("/api/system/model-providers/ci-replay", headers=e2e_headers)
         assert deleted.status_code in {200, 404}, deleted.text
@@ -611,14 +591,7 @@ async def test_steer_aggregates_and_yields_into_same_turn(e2e_client, e2e_header
         initial = await wait_for_consumed_input(e2e_client, e2e_headers, created.json()["yuxi"]["receipt"])
         thread_id = initial["session_id"]
         async with httpx.AsyncClient(base_url=os.environ["OPENAI_REPLAY_URL"].removesuffix("/v1"), timeout=5) as replay_client:
-            for _ in range(100):
-                started = await replay_client.get("/blocking-started", params={"token": gate})
-                assert started.status_code == 200
-                if started.json()["started"]:
-                    break
-                await asyncio.sleep(0.1)
-            else:
-                pytest.fail("首段模型未进入阻塞位置")
+            await wait_for_blocked_response(replay_client, gate, timeout=10)
 
             follow_up = await e2e_client.post(
                 f"/api/v1/agents/sessions/{thread_id}/events",
@@ -708,30 +681,16 @@ async def test_steer_aggregates_and_yields_into_same_turn(e2e_client, e2e_header
         assert turn["status"] == "completed", turn
         assert turn["yuxi"]["result_run_id"] == replacement_id
         assert OUTPUT in output_text(turn["yuxi"]["output"])
-        for _ in range(100):
-            next_input = await e2e_client.get(f"/api/v1/agents/sessions/{thread_id}/inputs/{follow_up_id}", headers=e2e_headers)
-            assert next_input.status_code == 200, next_input.text
-            if next_input.json()["status"] == "consumed":
-                break
-            await asyncio.sleep(0.2)
-        else:
-            pytest.fail("Steer 完成后未领取已排队 follow-up")
-        assert next_input.json()["turn_id"] != initial["turn_id"]
-        next_turn = await _turn(e2e_client, e2e_headers, thread_id, next_input.json()["turn_id"])
+        next_input = await wait_for_consumed_input(e2e_client, e2e_headers, follow_up.json(), timeout=20)
+        assert next_input["turn_id"] != initial["turn_id"]
+        next_turn = await _turn(e2e_client, e2e_headers, thread_id, next_input["turn_id"])
         assert next_turn["status"] == "completed", next_turn
-        assert next_turn["yuxi"]["result_run_id"] == next_input.json()["run_id"]
+        assert next_turn["yuxi"]["result_run_id"] == next_input["run_id"]
         assert OUTPUT in output_text(next_turn["yuxi"]["output"])
-        async with asyncio.timeout(30):
-            while True:
-                last_input = (
-                    await e2e_client.get(f"/api/v1/agents/sessions/{thread_id}/inputs/{second_follow_id}", headers=e2e_headers)
-                ).json()
-                if last_input["status"] == "consumed":
-                    break
-                await asyncio.sleep(0.1)
+        last_input = await wait_for_consumed_input(e2e_client, e2e_headers, second_follow_up.json(), timeout=30)
         last_turn = await _turn(e2e_client, e2e_headers, thread_id, last_input["turn_id"])
         assert last_turn["status"] == "completed"
-        assert last_input["turn_id"] not in {initial["turn_id"], next_input.json()["turn_id"]}
+        assert last_input["turn_id"] not in {initial["turn_id"], next_input["turn_id"]}
         conn = await asyncpg.connect(postgres_dsn())
         try:
             projected = await conn.fetch(
@@ -1014,13 +973,7 @@ async def test_cancel_waiting_turn_pauses_queue_until_continue(e2e_client, e2e_h
         initial = await wait_for_consumed_input(e2e_client, e2e_headers, created.json()["yuxi"]["receipt"])
         thread_id, turn_id = initial["session_id"], initial["turn_id"]
         async with httpx.AsyncClient(base_url=os.environ["OPENAI_REPLAY_URL"].removesuffix("/v1"), timeout=5) as replay_client:
-            async with asyncio.timeout(30):
-                while True:
-                    started = await replay_client.get("/blocking-started", params={"token": gate})
-                    assert started.status_code == 200
-                    if started.json()["started"]:
-                        break
-                    await asyncio.sleep(0.1)
+            await wait_for_blocked_response(replay_client, gate)
             queued = await e2e_client.post(
                 f"/api/v1/agents/sessions/{thread_id}/events",
                 headers={**e2e_headers, "Idempotency-Key": f"cancel-followup-{uuid.uuid4().hex}"},
@@ -1086,7 +1039,7 @@ async def test_cancel_waiting_turn_pauses_queue_until_continue(e2e_client, e2e_h
         )
         assert late.status_code == 409, late.text
 
-        await _continue_queued_input(e2e_client, e2e_headers, thread_id, queued_id, "cancel-continue")
+        await _continue_queued_input(e2e_client, e2e_headers, queued.json(), "cancel-continue")
     finally:
         try:
             async with httpx.AsyncClient(base_url=os.environ["OPENAI_REPLAY_URL"].removesuffix("/v1"), timeout=5) as replay_client:
@@ -1135,14 +1088,7 @@ async def test_cancel_running_model_closes_audit_without_foreign_output(e2e_clie
         consumed = await wait_for_consumed_input(e2e_client, e2e_headers, created.json()["yuxi"]["receipt"])
         thread_id, turn_id, run_id = consumed["session_id"], consumed["turn_id"], consumed["run_id"]
         async with httpx.AsyncClient(base_url=os.environ["OPENAI_REPLAY_URL"].removesuffix("/v1"), timeout=5) as replay:
-            for _ in range(100):
-                started = await replay.get("/blocking-started", params={"token": token})
-                assert started.status_code == 200, started.text
-                if started.json()["started"]:
-                    break
-                await asyncio.sleep(0.1)
-            else:
-                pytest.fail("模型重放没有进入阻塞阶段")
+            await wait_for_blocked_response(replay, token, timeout=10)
 
         conn = await asyncpg.connect(postgres_dsn())
         try:
@@ -1182,8 +1128,7 @@ async def test_cancel_running_model_closes_audit_without_foreign_output(e2e_clie
             json={"events": [{"type": "agent.session.input.cancel", "yuxi": {"turn_id": turn_id}}]},
         )
         assert cancelled.status_code == 202, cancelled.text
-        async with asyncio.timeout(10):
-            terminal = await _turn(e2e_client, e2e_headers, thread_id, turn_id)
+        terminal = await _turn(e2e_client, e2e_headers, thread_id, turn_id, timeout=10)
         assert terminal["status"] == "cancelled", terminal
         conn = await asyncpg.connect(postgres_dsn())
         try:
@@ -1228,9 +1173,7 @@ async def test_cancel_running_model_closes_audit_without_foreign_output(e2e_clie
         resumed = await _turn(e2e_client, e2e_headers, thread_id, consumed["turn_id"])
         assert resumed["status"] == "completed" and consumed["turn_id"] != turn_id
         if queued_id:
-            old = await wait_for_consumed_input(
-                e2e_client, e2e_headers, {"session_id": thread_id, "input_id": queued_id, "turn_id": None, "run_id": None}
-            )
+            old = await wait_for_consumed_input(e2e_client, e2e_headers, queued.json())
             assert old["turn_id"] != consumed["turn_id"], "新用户消息不能与旧引导合批"
             assert (await _turn(e2e_client, e2e_headers, thread_id, old["turn_id"]))["status"] == "completed"
             conn = await asyncpg.connect(postgres_dsn())
@@ -1568,14 +1511,7 @@ async def test_thread_sse_releases_validation_transaction(e2e_client, e2e_header
         consumed = await wait_for_consumed_input(e2e_client, e2e_headers, created.json()["yuxi"]["receipt"])
         thread_id, turn_id = consumed["session_id"], consumed["turn_id"]
         async with httpx.AsyncClient(base_url=os.environ["OPENAI_REPLAY_URL"].removesuffix("/v1"), timeout=5) as replay:
-            for _ in range(100):
-                started = await replay.get("/blocking-started", params={"token": token})
-                assert started.status_code == 200, started.text
-                if started.json()["started"]:
-                    break
-                await asyncio.sleep(0.1)
-            else:
-                pytest.fail("模型没有进入 SSE 观察窗口")
+            await wait_for_blocked_response(replay, token, timeout=10)
 
         conn = await asyncpg.connect(postgres_dsn())
         try:

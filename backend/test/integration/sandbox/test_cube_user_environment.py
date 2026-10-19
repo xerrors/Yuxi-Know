@@ -276,24 +276,35 @@ def test_http_env_verification_uses_new_values_preserves_existing_process_and_wa
             future = executor.submit(
                 provider.execute,
                 uid,
+                ': > before-env.tmp; touch env-writing-started; '
+                'while [ ! -f env-write-release ]; do sleep .1; done; '
                 'printf %s "$LAB_ENV" > before-env.tmp && mv before-env.tmp before-env.txt; '
                 'while [ ! -f env-release ]; do sleep .1; done; printf %s "$LAB_ENV" > after-env.txt',
                 WORKSPACE_PATH,
                 30,
             )
             workspace = user_workspace_dir(uid)
-            deadline = time.monotonic() + 20
-            while not (workspace / "before-env.txt").exists() and time.monotonic() < deadline:
-                time.sleep(0.05)
-            assert (workspace / "before-env.txt").read_text() == first
-            saved = client.put(path, headers=headers, json={"env": {"LAB_ENV": latest}})
-            assert saved.status_code == 200
-            verified = client.post(path + "/verify", headers=headers)
-            assert verified.status_code == 200, verified.text
-            assert verified.json()["variables"] == [{"key": "LAB_ENV", "matches": True}]
-            assert verified.json()["updated_at"] == saved.json()["updated_at"]
-            assert first not in verified.text and latest not in verified.text
-            (workspace / "env-release").touch()
+            try:
+                deadline = time.monotonic() + 20
+                while not (workspace / "env-writing-started").exists() and time.monotonic() < deadline:
+                    time.sleep(0.05)
+                assert (workspace / "env-writing-started").exists(), f"环境写入未开始: uid={uid}, state={provider.status(uid)}"
+                assert not (workspace / "before-env.txt").exists(), "未写完的文件不能发布为就绪"
+                (workspace / "env-write-release").touch()
+                while not (workspace / "before-env.txt").exists() and time.monotonic() < deadline:
+                    time.sleep(0.05)
+                assert (workspace / "before-env.txt").exists(), f"环境文件未发布: uid={uid}, state={provider.status(uid)}"
+                assert (workspace / "before-env.txt").read_text() == first
+                saved = client.put(path, headers=headers, json={"env": {"LAB_ENV": latest}})
+                assert saved.status_code == 200
+                verified = client.post(path + "/verify", headers=headers)
+                assert verified.status_code == 200, verified.text
+                assert verified.json()["variables"] == [{"key": "LAB_ENV", "matches": True}]
+                assert verified.json()["updated_at"] == saved.json()["updated_at"]
+                assert first not in verified.text and latest not in verified.text
+            finally:
+                (workspace / "env-write-release").touch()
+                (workspace / "env-release").touch()
             assert future.result(timeout=10)[1] == 0
             assert (workspace / "after-env.txt").read_text() == first
         assert run(backend, 'printf %s "$LAB_ENV"') == latest
@@ -370,12 +381,15 @@ def test_http_env_verification_rejects_configuration_changed_during_probe(resour
         workspace = user_workspace_dir(uid)
         with ThreadPoolExecutor(1) as executor:
             future = executor.submit(client.post, path + "/verify", headers=headers)
-            deadline = time.monotonic() + 15
-            while not (workspace / "probe-started.txt").exists() and time.monotonic() < deadline:
-                time.sleep(0.05)
-            assert (workspace / "probe-started.txt").read_text() == "ready"
-            assert client.put(path, headers=headers, json={"env": {"LAB_ENV": "after"}}).status_code == 200
-            (workspace / "probe-release").touch()
+            try:
+                deadline = time.monotonic() + 15
+                while not (workspace / "probe-started.txt").exists() and time.monotonic() < deadline:
+                    time.sleep(0.05)
+                assert (workspace / "probe-started.txt").exists(), f"环境探针未开始: uid={uid}, state={provider.status(uid)}"
+                assert (workspace / "probe-started.txt").read_text() == "ready"
+                assert client.put(path, headers=headers, json={"env": {"LAB_ENV": "after"}}).status_code == 200
+            finally:
+                (workspace / "probe-release").touch()
             response = future.result(timeout=10)
         assert response.status_code == 409, response.text
         assert "验证期间环境变量已修改" in response.text

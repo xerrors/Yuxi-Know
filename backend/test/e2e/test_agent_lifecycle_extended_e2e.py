@@ -183,31 +183,14 @@ async def test_public_run_persists_preloaded_tool_and_model_audit(e2e_client, e2
         await _delete_provider(e2e_client, e2e_headers, provider_created)
 
 
-async def test_standard_user_run_uses_admin_execution_limit(e2e_client, e2e_headers):
+async def test_standard_user_run_uses_admin_execution_limit(e2e_client, e2e_headers, standard_user):
     """普通用户的失败与成功执行都使用管理员配置的步数上限。"""
-    departments = await e2e_client.get("/api/departments", headers=e2e_headers)
-    assert departments.status_code == 200, departments.text
-    password = f"Pw!{uuid.uuid4().hex}"
-    created = await e2e_client.post(
-        "/api/auth/users",
-        headers=e2e_headers,
-        json={
-            "username": f"pytest_limit_{uuid.uuid4().hex[:6]}",
-            "password": password,
-            "role": "user",
-            "department_id": departments.json()[0]["id"],
-        },
-    )
-    assert created.status_code == 200, created.text
-    user = created.json()
+    user = standard_user["user"]
+    user_headers = standard_user["headers"]
     slug = None
     threads: list[tuple[str, str]] = []
     provider_created = False
-    user_headers = None
     try:
-        login = await e2e_client.post("/api/auth/token", data={"username": user["uid"], "password": password})
-        assert login.status_code == 200, login.text
-        user_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
         provider_created = await _provider(e2e_client, e2e_headers)
         slug = await _agent(e2e_client, e2e_headers, str(user["uid"]), bound_skill=True)
 
@@ -242,14 +225,11 @@ async def test_standard_user_run_uses_admin_execution_limit(e2e_client, e2e_head
             finally:
                 await conn.close()
     finally:
-        if user_headers:
-            for thread_id, turn_id in threads:
-                await archive_public_thread(e2e_client, user_headers, thread_id, turn_id=turn_id)
+        for thread_id, turn_id in threads:
+            await archive_public_thread(e2e_client, user_headers, thread_id, turn_id=turn_id)
         if slug:
             await delete_agent(e2e_client, e2e_headers, slug)
         await _delete_provider(e2e_client, e2e_headers, provider_created)
-        deleted = await e2e_client.delete(f"/api/auth/users/{user['id']}", headers=e2e_headers)
-        assert deleted.status_code in {200, 404}, deleted.text
 
 
 async def test_scheduled_task_run_now_reaches_exact_thread_and_turn(e2e_client, e2e_headers):
@@ -447,30 +427,13 @@ async def _create_thread(client: httpx.AsyncClient, headers: dict[str, str], slu
     return await wait_for_consumed_input(client, headers, response.json()["yuxi"]["receipt"])
 
 
-async def test_standard_user_restores_visible_function_items_without_internal_audit(e2e_client, e2e_headers):
+async def test_standard_user_restores_visible_function_items_without_internal_audit(e2e_client, e2e_headers, standard_user):
     """真实 worker 生成工具过程；普通用户回读可见 item，同时仍无审计权限。"""
-    departments = await e2e_client.get("/api/departments", headers=e2e_headers)
-    assert departments.status_code == 200, departments.text
-    password = f"Pw!{uuid.uuid4().hex}"
-    created_user = await e2e_client.post(
-        "/api/auth/users",
-        headers=e2e_headers,
-        json={
-            "username": f"visible_{uuid.uuid4().hex[:8]}",
-            "password": password,
-            "role": "user",
-            "department_id": departments.json()[0]["id"],
-        },
-    )
-    assert created_user.status_code == 200, created_user.text
-    user = created_user.json()
-    user_headers = None
+    user = standard_user["user"]
+    user_headers = standard_user["headers"]
     provider_created = False
     slug = thread_id = turn_id = None
     try:
-        login = await e2e_client.post("/api/auth/token", data={"username": user["uid"], "password": password})
-        assert login.status_code == 200, login.text
-        user_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
         provider_created = await _provider(e2e_client, e2e_headers)
         slug = await _agent(e2e_client, e2e_headers, str(user["uid"]), bound_skill=True)
 
@@ -503,10 +466,8 @@ async def test_standard_user_restores_visible_function_items_without_internal_au
         private_fields = ("system_prompt", "checkpoint", "manifest_fingerprint", "source_model_operation_id")
         assert all(field not in history.text for field in private_fields)
     finally:
-        if thread_id and user_headers:
+        if thread_id:
             await archive_public_thread(e2e_client, user_headers, thread_id, turn_id=turn_id)
         if slug:
             await delete_agent(e2e_client, e2e_headers, slug)
         await _delete_provider(e2e_client, e2e_headers, provider_created)
-        deleted = await e2e_client.delete(f"/api/auth/users/{user['id']}", headers=e2e_headers)
-        assert deleted.status_code in {200, 404}, deleted.text

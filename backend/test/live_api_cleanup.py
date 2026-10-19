@@ -295,36 +295,41 @@ async def validate_test_runs_terminal(thread_ids: set[str]) -> None:
 
     if not thread_ids:
         return
-    conn = await asyncpg.connect(postgres_dsn())
+    conn = None
+    last = []
     try:
-        deadline = asyncio.get_running_loop().time() + RUN_CLEANUP_WAIT_SECONDS
-        target_ids = sorted(thread_ids)
-        while True:
-            turns = await conn.fetch(
-                "SELECT id, status FROM agent_turns WHERE thread_id = ANY($1::text[]) AND status IN ('running', 'waiting', 'cancelling')",
-                target_ids,
-            )
-            if turns:
-                details = ", ".join(f"{row['id']}={row['status']}" for row in turns)
-                raise RuntimeError(f"test Turn is not terminal: {details}")
+        async with asyncio.timeout(RUN_CLEANUP_WAIT_SECONDS):
+            conn = await asyncpg.connect(postgres_dsn())
+            target_ids = sorted(thread_ids)
+            while True:
+                turns = await conn.fetch(
+                    "SELECT id, status FROM agent_turns WHERE thread_id = ANY($1::text[]) "
+                    "AND status IN ('running', 'waiting', 'cancelling')",
+                    target_ids,
+                )
+                if turns:
+                    details = ", ".join(f"{row['id']}={row['status']}" for row in turns)
+                    raise RuntimeError(f"test Turn is not terminal: {details}")
 
-            rows = await conn.fetch(
-                "SELECT id, status, runtime_cleanup_pending FROM agent_runs WHERE thread_id = ANY($1::text[]) AND (status <> ALL($2::text[]) OR runtime_cleanup_pending)",
-                target_ids,
-                list(AGENT_RUN_TERMINAL_STATUSES),
-            )
-            nonterminal = [row for row in rows if row["status"] not in AGENT_RUN_TERMINAL_STATUSES]
-            if nonterminal:
-                details = ", ".join(f"{row['id']}={row['status']}" for row in nonterminal)
-                raise RuntimeError(f"test Run is not terminal: {details}")
-            if not rows:
-                return
-            if asyncio.get_running_loop().time() >= deadline:
-                details = ", ".join(str(row["id"]) for row in rows)
-                raise RuntimeError(f"test Run runtime cleanup did not finish: {details}")
-            await asyncio.sleep(0.2)
+                rows = await conn.fetch(
+                    "SELECT id, status, runtime_cleanup_pending FROM agent_runs WHERE thread_id = ANY($1::text[]) "
+                    "AND (status <> ALL($2::text[]) OR runtime_cleanup_pending)",
+                    target_ids,
+                    list(AGENT_RUN_TERMINAL_STATUSES),
+                )
+                last = [dict(row) for row in rows]
+                nonterminal = [row for row in rows if row["status"] not in AGENT_RUN_TERMINAL_STATUSES]
+                if nonterminal:
+                    details = ", ".join(f"{row['id']}={row['status']}" for row in nonterminal)
+                    raise RuntimeError(f"test Run is not terminal: {details}")
+                if not rows:
+                    return
+                await asyncio.sleep(0.2)
+    except TimeoutError:
+        raise RuntimeError(f"test Run runtime cleanup did not finish: threads={sorted(thread_ids)}, last={last}") from None
     finally:
-        await conn.close()
+        if conn is not None:
+            await conn.close()
 
 
 async def list_test_pending_inputs(thread_ids: set[str]) -> list[tuple[str, str]]:

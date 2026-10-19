@@ -17,7 +17,7 @@ from test.e2e.e2e_helpers import (
     register_replay_provider as _provider,
     wait_for_terminal_turn as _turn,
 )
-from test.e2e.e2e_helpers import wait_for_consumed_input
+from test.e2e.e2e_helpers import wait_for_consumed_input, wait_for_blocked_response
 from test.live_api_cleanup import make_test_session_title
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.e2e, pytest.mark.slow, pytest.mark.timeout(180)]
@@ -58,9 +58,7 @@ async def test_default_message_keeps_batch_across_concurrent_steer_and_retry(e2e
             )
             assert started.status_code == 202, started.text
             turn_id = (await wait_for_consumed_input(e2e_client, e2e_headers, started.json()))["turn_id"]
-            async with asyncio.timeout(30):
-                while not (await replay.get("/blocking-started", params={"token": gate})).json()["started"]:
-                    await asyncio.sleep(0.1)
+            await wait_for_blocked_response(replay, gate)
             requests = [
                 (
                     {"events": [{"type": "agent.session.input.message", "input": [_message(f"steer {index}")]}]},
@@ -94,17 +92,7 @@ async def test_default_message_keeps_batch_across_concurrent_steer_and_retry(e2e
             assert unsupported.status_code == 422, unsupported.text
             await replay.get("/release-blocking", params={"token": gate})
             assert (await _turn(e2e_client, e2e_headers, thread_id, turn_id))["status"] == "completed"
-            async with asyncio.timeout(45):
-                while True:
-                    input_result = (
-                        await e2e_client.get(
-                            f"/api/v1/agents/sessions/{thread_id}/inputs/{queued.json()['input_id']}",
-                            headers=e2e_headers,
-                        )
-                    ).json()
-                    if input_result["run_id"]:
-                        break
-                    await asyncio.sleep(0.2)
+            input_result = await wait_for_consumed_input(e2e_client, e2e_headers, queued.json(), timeout=45)
             assert input_result["turn_id"] != turn_id
             assert (await _turn(e2e_client, e2e_headers, thread_id, input_result["turn_id"]))["status"] == "completed"
             for (body, headers), receipt in zip(requests, receipts):
@@ -178,9 +166,7 @@ async def test_default_cancel_target_is_fixed_for_idempotent_retry(e2e_client, e
             assert created.status_code == 201, created.text
             consumed = await wait_for_consumed_input(e2e_client, e2e_headers, created.json()["yuxi"]["receipt"])
             thread_id, turn_id = consumed["session_id"], consumed["turn_id"]
-            async with asyncio.timeout(30):
-                while not (await replay.get("/blocking-started", params={"token": gate})).json()["started"]:
-                    await asyncio.sleep(0.1)
+            await wait_for_blocked_response(replay, gate)
             url = f"/api/v1/agents/sessions/{thread_id}/events"
             headers = {**e2e_headers, "Idempotency-Key": f"cancel-{gate}"}
             body = {"events": [{"type": "agent.session.input.cancel"}]}
