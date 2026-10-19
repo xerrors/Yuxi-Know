@@ -198,7 +198,7 @@
                   <span>发送结果待确认，重试会确认同一条消息。</span>
                   <button
                     class="queued-request-continue"
-                    :disabled="sendCooldownActive || pendingSends[currentChatId]?.submitting"
+                    :disabled="!agentExecutionAvailable || sendCooldownActive || pendingSends[currentChatId]?.submitting"
                     @click="handleSendMessage({ retry: true })"
                   >
                     重试发送
@@ -228,7 +228,7 @@
                     <button
                       type="button"
                       class="queued-request-continue"
-                      :disabled="currentThreadState?.continueQueueInFlight"
+                      :disabled="!agentExecutionAvailable || currentThreadState?.continueQueueInFlight"
                       @click="handleContinueQueue"
                     >
                       <Play :size="14" fill="currentColor" />
@@ -303,7 +303,16 @@
                   class="message-input-stage"
                   :class="{ 'has-tool-approval': currentToolApprovalVisible }"
                 >
+                  <div v-if="currentChatId && !agentExecutionAvailable" class="agent-availability-notice" role="status">
+                    <span v-if="sessionAgentStatus === 'unavailable'">智能体当前不可用</span>
+                    <template v-else-if="sessionAgentStatus === 'error'">
+                      <span>智能体加载失败，请重试</span>
+                      <a-button type="link" size="small" @click="retrySessionAgent">重试</a-button>
+                    </template>
+                    <span v-else>正在加载智能体...</span>
+                  </div>
                   <HumanApprovalModal
+                    v-if="agentExecutionAvailable"
                     :visible="currentApprovalModalVisible"
                     :processing="approvalSubmitting"
                     :questions="currentApprovalQuestions"
@@ -314,6 +323,7 @@
                   />
 
                   <div
+                    v-if="!currentChatId || agentExecutionAvailable"
                     class="message-input-surface"
                     :inert="currentToolApprovalVisible"
                     :aria-hidden="currentToolApprovalVisible ? 'true' : undefined"
@@ -445,7 +455,7 @@
             <ContextUsagePanel
               :usage="currentTokenUsage"
               :compressing="isContextCompressionPending"
-              :compression-disabled="isProcessing || hasQueuedInputs || isWaitingForUserAction"
+              :compression-disabled="!agentExecutionAvailable || isProcessing || hasQueuedInputs || isWaitingForUserAction"
               @compress="handleContextCompression"
             />
 
@@ -667,6 +677,7 @@
 </template>
 
 <script setup>
+import { useSessionAgentAvailability } from '@/modules/session/model/sessionAgentAvailability'
 import {
   ref,
   reactive,
@@ -1243,6 +1254,18 @@ const currentAgentId = computed(() => {
   return currentThread.value?.agent.id || props.agentId || selectedAgentId.value
 })
 
+const { status: sessionAgentStatus, refresh: refreshSessionAgent } = useSessionAgentAvailability(
+  currentThreadId, (agentId) => agentStore.fetchAgentDetail(agentId, true, { notify: false })
+)
+const agentExecutionAvailable = computed(() =>
+  currentChatId.value ? sessionAgentStatus.value === 'ready' : Boolean(currentAgent.value?.can_run !== false && currentAgent.value)
+)
+
+/** 重用对话加载入口重试，临时错误不改变对话身份。 */
+const retrySessionAgent = async () => {
+  if (currentChatId.value) await selectChat(currentChatId.value)
+}
+
 const currentAgentName = computed(() => {
   const agent = currentAgent.value
   return agent ? agent.name : '智能体'
@@ -1731,6 +1754,7 @@ const shouldShowStopButton = computed(
 )
 const canSubmitSteer = computed(
   () =>
+    agentExecutionAvailable.value &&
     isStreaming.value &&
     currentThreadState.value?.activeRunSteerable === true &&
     (Boolean(String(userInput.value || '').trim()) || agentInputAreaRef.value?.hasImages) &&
@@ -1739,6 +1763,7 @@ const canSubmitSteer = computed(
 )
 const canCancelQueuedInput = (input) => input?.status !== 'sending'
 const canPromoteQueuedInput = (input) =>
+  agentExecutionAvailable.value &&
   input?.status === 'pending' &&
   input.kind === 'follow_up' &&
   input.attachment_status !== 'preparing' &&
@@ -1806,7 +1831,7 @@ const isSendButtonDisabled = computed(() => {
     isWaitingForUserAction.value ||
     !!pendingSends.value[currentChatId.value] ||
     (!userInput.value && !isProcessing.value) ||
-    !currentAgent.value
+    !agentExecutionAvailable.value
   )
 })
 
@@ -2249,6 +2274,7 @@ const createActiveThread = async () => {
       attachmentUploadThreadKey.value = thread.id
     }
     setCurrentThreadId(thread.id, { force: true })
+    await refreshSessionAgent(thread.id, selectedAgent)
     return thread.id
   } catch (error) {
     if (error.status >= 400 && error.status < 500 && error.status !== 429)
@@ -2372,6 +2398,7 @@ const handleCancelQueuedInput = async (inputId) => {
 }
 
 const handleContinueQueue = async () => {
+  if (!agentExecutionAvailable.value) return
   const threadId = currentChatId.value
   if (!threadId || currentThreadState.value?.continueQueueInFlight) return
 
@@ -2386,6 +2413,8 @@ const resumeCurrentRunForVisiblePage = async () => {
   const threadId = currentChatId.value
   if (!threadId) return
 
+  await refreshSessionAgent(threadId, currentAgentId.value)
+  if (!agentExecutionAvailable.value) return
   try {
     await resumeActiveRunForThread(threadId)
     await resumeQueuedInputs(threadId)
@@ -2431,22 +2460,8 @@ const selectChat = async (chatId) => {
     resetAgentPanelState()
   }
 
-  try {
-    await withConfigNoticeSync(async () => {
-      // 先更新当前线程，确保底部智能体名称与选中项即时同步。
-      setCurrentThreadId(chatId)
-
-      if (targetChat?.agent.id) {
-        await agentStore.fetchAgentDetail(targetChat.agent.id)
-      }
-
-      syncThreadConfigSnapshot(chatId)
-    })
-  } catch (error) {
-    setCurrentThreadId(previousThreadId)
-    handleChatError(error, 'load')
-    return
-  }
+  setCurrentThreadId(chatId)
+  const availability = refreshSessionAgent(chatId, targetAgentId)
 
   isLoadingMessages.value = true
   try {
@@ -2460,8 +2475,12 @@ const selectChat = async (chatId) => {
     isLoadingMessages.value = false
   }
 
+  await availability
+  if (currentChatId.value !== chatId) return false
   await nextTick()
   await scrollController.scrollToBottomStaticForce()
+  if (!agentExecutionAvailable.value) return true
+  await withConfigNoticeSync(async () => syncThreadConfigSnapshot(chatId))
   await handleAgentStateRefresh(chatId)
   syncThreadConfigSnapshot(chatId, { overwrite: false })
   await resumeActiveRunForThread(chatId)
@@ -2554,6 +2573,7 @@ const sessionInput = createSessionInput({
 
 const widgetActionsDisabled = computed(
   () =>
+    !agentExecutionAvailable.value ||
     props.sendDisabled ||
     isLoadingMessages.value ||
     isProcessing.value ||
@@ -2575,7 +2595,7 @@ const handleSendMessage = async ({
   const text = original?.text ?? submittedText ?? userInput.value.trim()
   if (
     (!text && !images.length && !original?.images.length) ||
-    !currentAgent.value ||
+    !agentExecutionAvailable.value ||
     sendCooldownActive.value ||
     props.sendDisabled ||
     isLoadingMessages.value ||
@@ -2617,6 +2637,7 @@ const handleDirectSteer = async () => {
 }
 
 const handleContextCompression = async () => {
+  if (!agentExecutionAvailable.value) return
   const threadId = currentChatId.value
   const threadState = getThreadState(threadId)
   if (
@@ -3113,6 +3134,16 @@ watch(currentChatId, (threadId, oldThreadId) => {
 </script>
 
 <style lang="less" scoped>
+.agent-availability-notice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 64px;
+  padding: 16px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
 @import '@/assets/css/animations.less';
 @import '@/modules/session/ui/composerStyles.less';
 

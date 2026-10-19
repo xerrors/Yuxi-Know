@@ -123,6 +123,8 @@ worker 读取 Input 的完整配置快照，为当前 Run 重新准备工作区�
 
 公开内容通过 Session 或指定 Turn 的 `/items` 分页读取，数据库按授权作用域、公开身份和稳定顺序执行 limit+1，包含已消费的用户输入和已经公开的正文、工具参数及结果；pending/cancelled 输入仅保留于 Input，不进入正式历史。页面 `yuxi.runs` 只投影该页引用的执行段身份、状态与耗时。公开 item 身份与 output_index 保存于 Message 元数据，Turn 锁分配递增索引；实时与历史复用同一 serializer。Session 提供当前概览，Turn 列表发现零消息轮次，指定 Turn 的详情按 result_run_id 读取最终输出。完整 Model/Tool 审计由独立管理员接口读取。
 
+智能体删除或当前用户失去执行权限后，已有 Session 和消息保留，历史读取仍按用户与 APP 归属授权。页面独立加载历史和智能体详情，在原输入区显示“智能体当前不可用”，隐藏输入与审批入口，关闭消息交互、继续队列和压缩动作，标题保持原样。403/404 或详情 `can_run=false` 表示当前不可用；网络及服务错误显示独立的加载失败与重试。打开或重新激活会话时复核智能体详情，后端发送、恢复与压缩仍校验当前执行权限。状态由 [SessionWorkspace](https://github.com/xerrors/Yuxi/blob/main/frontend/src/modules/session/ui/SessionWorkspace.vue) 派生，不写入 Session。
+
 调试面板通过 `/api/v1/agents/sessions/{thread_id}/audits` 读取所属 Thread 的持久 Message 和 Run，仅允许没有 API Key、没有 APP 作用域的超级管理员使用。消息包含用户、系统、模型和工具记录；工具结果唯一保存在 `extra_metadata.output`，工具 Message 的 `content` 固定为空，接口文本和 Memory 由同一工具结果转换器派生。Repository 按 Run 创建时间、Run ID、操作 sequence、Message ID 返回最新 500 条的正序窗口，并用 `truncated` 标明截断。Run 内用户输入排在操作前，其他无 sequence 消息排在操作后并按 Message ID 排列；无 Run 消息使用自身创建时间。面板直接使用数据库响应，不合并普通历史或 SSE 正文，读取失败保留上次快照并提示重试。顺序与展示取舍见[调试数据库投影决策](../develop-guides/decisions/implemented/2026-10-10-debug-database-projection.md)。
 
 History 读取不改变已读标记。页面加载后以 `POST /api/v1/agents/sessions/{thread_id}/viewed` 显式标记已查看；未知、跨 APP 或跨用户的 Thread 返回 404。多个查询遵循数据库事务隔离，运行中变化通过 Thread SSE 与持久快照重读收敛。

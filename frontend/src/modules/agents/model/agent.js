@@ -171,7 +171,7 @@ export const useAgentStore = defineStore(
       return loadedConfig
     }
 
-    async function fetchAgentDetail(agentId, forceRefresh = false) {
+    async function fetchAgentDetail(agentId, forceRefresh = false, { notify = true } = {}) {
       const currentGeneration = generation
       if (!agentId) return null
       if (!forceRefresh && agentDetails.value[agentId]) return agentDetails.value[agentId]
@@ -187,7 +187,7 @@ export const useAgentStore = defineStore(
       } catch (err) {
         if (currentGeneration !== generation) return null
         console.error(`Failed to fetch agent detail for ${agentId}:`, err)
-        handleChatError(err, 'fetch')
+        if (notify) handleChatError(err, 'fetch')
         error.value = err.message
         throw err
       } finally {

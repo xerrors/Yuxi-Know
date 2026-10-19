@@ -27,6 +27,7 @@ function setupSender() {
     pendingSends: ref({}),
     currentChatId: ref('thread'),
     currentAgent: ref({ id: 'agent' }),
+    agentExecutionAvailable: ref(true),
     userInput: ref('尚未发送的草稿'),
     currentPendingThreadAttachments: ref([{ id: 'attachment' }]),
     currentModelSpec: ref('model'),
@@ -204,4 +205,14 @@ test('合法字段名 reportValidity 遮蔽表单属性时仍使用原生校验�
   submit({ currentTarget: form })
   assert.equal(formError.value, '请填写验证结果')
   assert.equal(actions.length, 1)
+})
+
+
+test('智能体不可用时，历史 widget 和直接发送均不创建输入', async () => {
+  const view = setupSender()
+  view.agentExecutionAvailable.value = false
+  assert.equal(view.widgetActionsDisabled.value, true)
+  assert.equal(await view.handleSendMessage({ text: '继续', fromWidget: true }), false)
+  assert.equal(await view.handleSendMessage(), false)
+  assert.deepEqual(view.sent, [])
 })

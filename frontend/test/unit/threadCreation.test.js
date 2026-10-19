@@ -21,7 +21,7 @@ test('首次发送在创建 Thread 前冻结附件、图片和配置，后来草
   let resolveCreation, submitted
   const dependencies = {
     pendingSends: { value: {} }, currentChatId: { value: null }, userInput: { value: '原始输入' },
-    currentAgent: { value: {} }, sendCooldownActive: { value: false }, props: { sendDisabled: false },
+    currentAgent: { value: {} }, agentExecutionAvailable: ref(true), sendCooldownActive: { value: false }, props: { sendDisabled: false },
     isLoadingMessages: { value: false }, isWaitingForUserAction: { value: false },
     currentPendingThreadAttachments: files, currentModelSpec: model, currentToolApprovalMode: approval,
     startSendCooldown() {}, selectedModelByThread: {}, promoteDraftSelection() {},
@@ -86,7 +86,8 @@ for (const uploadTarget of ['__draft__', 'thread-a']) {
       threadMessages: { value: {} },
       getThreadState: () => ({}), threadAttachmentsMap: { value: {} }, draftFilesByThread: { value: {} },
       attachmentUploadThreadKey: ref(uploadTarget), DRAFT_MODEL_KEY: '__draft__',
-      promoteDraftSelection() {}, setCurrentThreadId: (id) => { currentChatId.value = id }
+      promoteDraftSelection() {}, setCurrentThreadId: (id) => { currentChatId.value = id },
+      async refreshSessionAgent(threadId, agentId) { calls.push({ refreshed: [threadId, agentId] }) }
     }
     const create = workspaceLogic('const createActiveThread =', 'const ensureActiveThread =', dependencies, 'createActiveThread')
     await assert.rejects(create(), /response lost/)
@@ -95,6 +96,7 @@ for (const uploadTarget of ['__draft__', 'thread-a']) {
     assert.deepEqual(calls[1], calls[0])
     assert.equal(calls[1][1], null)
     assert.equal(calls[1][2].tool_approval_mode, 'default')
+    assert.deepEqual(calls[2], { refreshed: ['same-session', 'agent'] })
     assert.equal(request.value, null)
     assert.equal(dependencies.attachmentUploadThreadKey.value, uploadTarget === '__draft__' ? 'same-session' : uploadTarget)
   })
@@ -167,3 +169,37 @@ test('附件上传固定打开时的目标，切换会话和再次打开分别�
   assert.deepEqual(draftFilesByThread.value['thread-b'], [{ id: 'file-b' }])
   assert.deepEqual(draftFilesByThread.value['thread-a'], [{ id: 'file-a' }])
 })
+
+for (const status of [403, 404, 503]) {
+  test(`打开历史对话时详情 ${status} 不阻断消息读取，也不恢复执行`, async () => {
+    const { useSessionAgentAvailability } = await import('../../src/modules/session/model/sessionAgentAvailability.js')
+    const currentThreadId = ref('previous')
+    const currentChatId = computed(() => currentThreadId.value)
+    const availability = useSessionAgentAvailability(currentThreadId, async () => { throw { status } })
+    const history = []
+    const execution = []
+    const dependencies = {
+      currentThreadId, currentChatId, currentAgentId: ref('agent'),
+      threadCreationInFlight: ref(false), threads: ref([{ id: 'history', agent: { id: 'agent' } }]),
+      handleValidationError() {}, AgentValidator: { validateAgentIdWithError: () => true }, resetAgentPanelState() {},
+      setCurrentThreadId: value => { currentThreadId.value = value },
+      refreshSessionAgent: availability.refresh,
+      agentExecutionAvailable: computed(() => availability.status.value === 'ready'),
+      isLoadingMessages: ref(false), workspaceActive: ref(true), pageVisible: ref(true),
+      fetchThreadMessages: async ({ threadId }) => history.push(threadId),
+      chatThreadsStore: { markThreadViewed() {} }, nextTick: async () => {},
+      scrollController: { scrollToBottomStaticForce: async () => {} },
+      handleAgentStateRefresh: async () => execution.push('state'),
+      resumeActiveRunForThread: async () => execution.push('resume'),
+      resumeQueuedInputs: async () => execution.push('queue'),
+      restorePendingInterruptForThread: () => execution.push('approval'),
+      handleChatError: () => { throw Error('Expected detail failure must not emit duplicate toast') }
+    }
+    const select = workspaceLogic('const selectChat =', 'const selectThreadFromRoute =', dependencies, 'selectChat')
+    assert.equal(await select('history'), true)
+    assert.deepEqual(history, ['history'])
+    assert.equal(currentThreadId.value, 'history')
+    assert.deepEqual(execution, [])
+    assert.equal(availability.status.value, status === 503 ? 'error' : 'unavailable')
+  })
+}
