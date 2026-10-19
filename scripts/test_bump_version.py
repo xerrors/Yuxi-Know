@@ -16,10 +16,9 @@ class BumpVersionScriptTests(unittest.TestCase):
 
         fixtures = {
             "backend/pyproject.toml": 'version = "0.7.2.beta1"\n',
-            "backend/uv.lock": (
-                'name = "yuxi"\nversion = "0.7.2b1"\n'
-            ),
+            "backend/uv.lock": ('name = "yuxi"\nversion = "0.7.2b1"\n'),
             "frontend/package.json": '{\n  "version": "0.7.2.beta1"\n}\n',
+            "backend/test/e2e/web-tools.compose.yml": "image: ${COMPOSE_PROJECT_NAME:-yuxi}-api:${YUXI_VERSION:-0.7.2.beta1}\n",
             "docker-compose.yml": "\n".join(
                 f"image: ${{COMPOSE_PROJECT_NAME:-yuxi}}-{name}:${{YUXI_VERSION:-0.7.2.beta1}}"
                 for name in (
@@ -37,23 +36,26 @@ class BumpVersionScriptTests(unittest.TestCase):
             + "\n",
             "README.md": (
                 "当前仓库默认配置对应 `v0.7.2.beta1`。\n"
+                "当前候选源码版本为 `v0.7.2.beta1`。\n"
                 "git clone --branch v0.7.2.beta1 --depth 1 https://github.com/xerrors/Yuxi.git\n"
             ),
             "README.en.md": (
+                "The candidate source version is `v0.7.2.beta1`.\n"
                 "git clone --branch v0.7.2.beta1 --depth 1 https://github.com/xerrors/Yuxi.git\n"
             ),
             "docs/intro/quick-start.md": (
                 "仓库当前默认配置对应 `v0.7.2.beta1`。\n"
+                "当前候选源码版本为 `v0.7.2.beta1`。\n"
                 "git clone --branch v0.7.2.beta1 --depth 1 https://github.com/xerrors/Yuxi.git\n"
             ),
             "docs/advanced/deployment.md": (
-                "从 v0.7.1 升级到当前 `v0.7.2.beta1`。\n"
-                "git checkout v0.7.2.beta1\n"
+                "从 v0.7.1 升级到当前 `v0.7.2.beta1`。\n当前候选为 `0.7.2.beta1`。\ngit checkout v0.7.2.beta1\n"
             ),
             "docs/.vitepress/theme/components/YuxiHome.vue": (
-                "git clone --branch v0.7.2.beta1 --depth 1 https://github.com/xerrors/Yuxi.git\n"
+                "获取 0.7.2.beta1 候选源码\ngit clone --branch v0.7.2.beta1 --depth 1 https://github.com/xerrors/Yuxi.git\n"
             ),
-            "docs/develop-guides/changelog.md": "## v0.7.2.beta1 (历史记录)\n",
+            "docs/develop-guides/releases/0.7.2.md": "当前候选版本为 `0.7.2.beta1`。\n",
+            "docs/develop-guides/changelog.md": "当前候选为 `0.7.2.beta1`。\n\n## v0.7.2.beta1 (历史记录)\n",
         }
         for relative_path, content in fixtures.items():
             path = root / relative_path
@@ -76,8 +78,8 @@ class BumpVersionScriptTests(unittest.TestCase):
 
             current_paths = [
                 "backend/pyproject.toml",
-                "backend/uv.lock",
                 "frontend/package.json",
+                "backend/test/e2e/web-tools.compose.yml",
                 "docker-compose.yml",
                 "docker-compose.prod.yml",
                 "README.md",
@@ -85,6 +87,7 @@ class BumpVersionScriptTests(unittest.TestCase):
                 "docs/intro/quick-start.md",
                 "docs/advanced/deployment.md",
                 "docs/.vitepress/theme/components/YuxiHome.vue",
+                "docs/develop-guides/releases/0.7.2.md",
             ]
             for relative_path in current_paths:
                 content = (root / relative_path).read_text()
@@ -92,15 +95,13 @@ class BumpVersionScriptTests(unittest.TestCase):
                 self.assertNotIn("0.7.2.beta1", content, relative_path)
                 self.assertNotIn("0.7.2b1", content, relative_path)
 
-            self.assertEqual(
-                (root / "docker-compose.yml").read_text().count("0.7.2.beta2"), 4
-            )
-            self.assertEqual(
-                (root / "docker-compose.prod.yml").read_text().count("0.7.2.beta2"), 4
-            )
+            self.assertEqual((root / "docker-compose.yml").read_text().count("0.7.2.beta2"), 4)
+            self.assertEqual((root / "docker-compose.prod.yml").read_text().count("0.7.2.beta2"), 4)
             changelog = (root / "docs/develop-guides/changelog.md").read_text()
+            self.assertIn('version = "0.7.2b2"', (root / "backend/uv.lock").read_text())
             self.assertIn("v0.7.2.beta1", changelog)
-            self.assertNotIn("v0.7.2.beta2", changelog)
+            self.assertIn("当前候选为 `0.7.2.beta2`", changelog)
+            self.assertNotIn("## v0.7.2.beta2", changelog)
 
     def test_dev_bump_keeps_release_document_references(self) -> None:
         """开发版本升级不得移动公开发布文档的稳定目标。"""
@@ -125,6 +126,8 @@ class BumpVersionScriptTests(unittest.TestCase):
                 "docs/intro/quick-start.md",
                 "docs/advanced/deployment.md",
                 "docs/.vitepress/theme/components/YuxiHome.vue",
+                "docs/develop-guides/releases/0.7.2.md",
+                "docs/develop-guides/changelog.md",
             ):
                 self.assertIn("0.7.2.beta1", (root / relative_path).read_text())
                 self.assertNotIn("0.7.2.dev2", (root / relative_path).read_text())

@@ -101,6 +101,7 @@ echo "  - backend/pyproject.toml"
 echo "  - frontend/package.json"
 echo "  - docker-compose.yml"
 echo "  - docker-compose.prod.yml"
+echo "  - backend/test/e2e/web-tools.compose.yml"
 echo "  - backend/uv.lock"
 if [ "$DEV_MODE" = false ]; then
     echo "  - README.md"
@@ -108,6 +109,7 @@ if [ "$DEV_MODE" = false ]; then
     echo "  - docs/intro/quick-start.md"
     echo "  - docs/advanced/deployment.md"
     echo "  - docs/.vitepress/theme/components/YuxiHome.vue"
+    echo "  - 当前候选更新说明与 changelog 候选入口"
 fi
 echo ""
 read -rp "确认继续? [y/N] " confirm
@@ -142,12 +144,17 @@ echo "→ 更新 docker-compose.prod.yml"
 perl -pi -e "s/\\\$\\{YUXI_VERSION:-[^}]+\\}/\\\${YUXI_VERSION:-${NEW_VERSION}}/g" \
     "${PROJECT_ROOT}/docker-compose.prod.yml"
 
+echo "→ 更新网络工具 E2E 镜像版本"
+perl -pi -e "s/\\\$\\{YUXI_VERSION:-[^}]+\\}/\\\${YUXI_VERSION:-${NEW_VERSION}}/g" \
+    "${PROJECT_ROOT}/backend/test/e2e/web-tools.compose.yml"
+
 # -----------------------------------------------------------------------------
 # 5. 更新 uv.lock 中的项目版本号
 # -----------------------------------------------------------------------------
 echo "→ 更新 backend/uv.lock"
 # yuxi 包版本
-perl -0pi -e "s/(^name = \"yuxi\"\nversion = \")[^\"]+/\${1}${NEW_VERSION}/m" \
+LOCK_VERSION=$(printf '%s' "$NEW_VERSION" | sed -E 's/\.alpha([0-9]+)$/a\1/; s/\.beta([0-9]+)$/b\1/; s/\.rc([0-9]+)$/rc\1/')
+perl -0pi -e "s/(^name = \"yuxi\"\nversion = \")[^\"]+/\${1}${LOCK_VERSION}/m" \
     "${PROJECT_ROOT}/backend/uv.lock"
 
 # -----------------------------------------------------------------------------
@@ -175,6 +182,18 @@ if [ "$DEV_MODE" = false ]; then
     echo "→ 更新 docs/.vitepress/theme/components/YuxiHome.vue"
     perl -pi -e "s/(git clone --branch v)[0-9]+\\.[0-9]+\\.[0-9]+(\\.[a-zA-Z0-9]+)?/\${1}${NEW_VERSION}/g" \
         "${PROJECT_ROOT}/docs/.vitepress/theme/components/YuxiHome.vue"
+
+    # 当前候选说明包含正文版本号；历史验收记录不参与替换。
+    for current_doc in README.md README.en.md docs/intro/quick-start.md docs/advanced/deployment.md \
+        docs/.vitepress/theme/components/YuxiHome.vue; do
+        perl -pi -e "s/\\Q${CURRENT_VERSION}\\E/${NEW_VERSION}/g" "${PROJECT_ROOT}/${current_doc}"
+    done
+    release_notes="${PROJECT_ROOT}/docs/develop-guides/releases/$(printf '%s' "$NEW_VERSION" | cut -d. -f1-3).md"
+    if [ -f "$release_notes" ]; then
+        perl -pi -e "s/\\Q${CURRENT_VERSION}\\E/${NEW_VERSION}/g" "$release_notes"
+    fi
+    perl -pi -e "s/\\Q${CURRENT_VERSION}\\E/${NEW_VERSION}/g if /当前候选/" \
+        "${PROJECT_ROOT}/docs/develop-guides/changelog.md"
 else
     echo "→ dev 模式，跳过 README、快速开始、部署指南和文档首页的发布版本更新"
 fi
@@ -201,6 +220,5 @@ grep -E "image: .*frontend:.*YUXI_VERSION" "${PROJECT_ROOT}/docker-compose.prod.
 echo ""
 echo "后续步骤:"
 echo "  1. 检查 git diff 确认修改无误"
-echo "  2. git add . && git commit -m 'chore(release): bump version to ${NEW_VERSION}'"
-echo "  3. git tag v${NEW_VERSION}"
-echo "  4. git push origin main --tags"
+echo "  2. 仅提交本次版本改动并推送当前分支"
+echo "  3. 候选验收通过后，按贡献指南创建并显式推送 v${NEW_VERSION} tag"

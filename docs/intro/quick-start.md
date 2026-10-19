@@ -13,10 +13,10 @@
 
 ## 1. 获取代码
 
-当前候选源码版本为 `v0.8.0.beta1`，从 fork 的 `develop/0-8-0` 分支获取，tag 在验收后创建。本版本仅支持全新部署，请使用独立数据目录；旧数据库与索引不会自动升级。变化与限制见[0.8.0 更新说明](../develop-guides/releases/0.8.0.md)，数据要求见[生产部署](../advanced/deployment.md)。
+当前候选源码版本为 `v0.8.0.beta2`，从主仓库的 `develop/0-8-0` 分支获取，tag 在验收后创建。本版本仅支持全新部署，请使用独立数据目录；旧数据库与索引不会自动升级。变化与限制见[0.8.0 更新说明](../develop-guides/releases/0.8.0.md)，数据要求见[生产部署](../advanced/deployment.md)。
 
 ```bash
-git clone --branch develop/0-8-0 --depth 1 https://github.com/Yuchuan925/Yuxi.git
+git clone --branch develop/0-8-0 --depth 1 https://github.com/xerrors/Yuxi.git
 cd Yuxi
 ```
 

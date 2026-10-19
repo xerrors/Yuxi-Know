@@ -9,11 +9,13 @@ MCP（Model Context Protocol）让智能体调用外部服务提供的工具。�
 | 服务的认证要求 | Yuxi 配置 | 谁完成认证 |
 | --- | --- | --- |
 | 无认证或共享 API Key | `auth_mode=headers`，按需填写 headers | 超管配置，全体使用者共享服务身份 |
-| 预注册 OAuth 客户端，如 GitHub | `auth_mode=oauth`、`registration=static`，填写 Client ID/Secret | 超管注册客户端，每名用户连接自己的账号 |
-| 动态注册 OAuth，如 Notion | `auth_mode=oauth`、`registration=dynamic` | 平台持久化注册结果，每名用户个人授权 |
+| 预注册 OAuth 客户端 | `auth_mode=oauth`、`registration=static`，填写 Client ID/Secret | 超管注册客户端，每名用户连接自己的账号 |
+| 动态注册 OAuth | `auth_mode=oauth`、`registration=dynamic` | 平台持久化注册结果，每名用户个人授权 |
 | 自建企业个人业务，如考勤 | 每名用户 OAuth 授权 | 资源服务按已验证 token 的 issuer/subject 隔离数据 |
 
 平台登录和 MCP 资源授权分别签发凭据；部署密钥、状态与调用隔离的实现见 [MCP 授权与运行身份](../mechanisms/mcp.md)。
+
+注册方式说明配置要求，供应商是否可用还需核对发现协议、PKCE、回调地址与真实工具调用。GitHub、Notion 的最终真实授权兼容性尚未完成验收，配置示例和验证范围见[兼容性核对](../develop-guides/audits/mcp-oauth-compatibility-2026-10-18.md)。
 
 ## 支持的传输方式
 

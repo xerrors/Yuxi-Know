@@ -17,12 +17,12 @@ Yuxi（语析）是一个可私有部署的知识智能体平台，面向需要�
 
 | 能力 | 当前范围 |
 | --- | --- |
-| 知识库与 RAG | 上传、解析和索引文档，配置嵌入与重排模型，测试检索和评估质量；飞书、Dify、Notion 提供只读连接器 |
+| 知识库与 RAG | 上传、解析和索引文档，配置嵌入与重排模型，支持向量、BM25 与混合检索及来源核对；可只读连接外部知识源 |
 | 知识图谱 | 管理员对已索引的 Milvus 文档块提交构建任务，将实体和关系写入 Neo4j，并与文本检索融合 |
 | 智能体与协作 | 配置模型、提示词、Tools、MCP 和 Skills；协作会话拥有独立上下文，共享项目文件 |
 | 文件与执行环境 | 每个用户使用持久 Cube VM，智能体在授权目录中读写文件、运行命令，产物支持预览和下载 |
 | 团队与权限 | 管理用户、部门和共享资源范围；API Key 为外部应用提供独立 APP 与终端用户作用域 |
-| 接入与观测 | Web、npm CLI 和公开 API 共用运行链路；提供后台作业、运行审计、Langfuse tracing 和用户反馈 |
+| 接入与观测 | Web、npm CLI 和公开 API 共用运行链路，知识库支持 MCP 只读接入；提供后台作业、运行审计、Langfuse tracing 和用户反馈 |
 
 默认审批模式要求确认命令执行和当前 Project 外的文件写入，Project 内写入自动放行；用户可选择完全信任模式。知识库检索评估由平台提供，完整智能体评估可通过公开 API 自行构建，见[智能体评估](docs/agents/agent-evaluation.md)。
 
@@ -41,12 +41,12 @@ Yuxi（语析）是一个可私有部署的知识智能体平台，面向需要�
 
 安装 [Docker Engine](https://docs.docker.com/get-docker/) 和 Docker Compose，准备一个可用的大模型 API，并按[沙盒配置与运维](docs/advanced/sandbox-operations.md#原生执行节点)配置 Cube 节点、用户模板与共享目录。macOS/Windows 上运行应用也需要可访问的 Linux/KVM 节点。
 
-当前候选源码版本为 `v0.8.0.beta1`，从 fork 的 `develop/0-8-0` 分支获取，tag 在验收后创建。0.8 仅面向全新部署，旧数据库、索引和文件布局不提供自动升级；请用独立数据目录试用，见[0.8.0 更新说明](docs/develop-guides/releases/0.8.0.md)。
+当前候选源码版本为 `v0.8.0.beta2`，从主仓库的 `develop/0-8-0` 分支获取，tag 在验收后创建。0.8 仅面向全新部署，旧数据库、索引和文件布局不提供自动升级；请用独立数据目录试用，见[0.8.0 更新说明](docs/develop-guides/releases/0.8.0.md)。
 
 ### 1. 获取代码并初始化
 
 ```bash
-git clone --branch develop/0-8-0 --depth 1 https://github.com/Yuchuan925/Yuxi.git
+git clone --branch develop/0-8-0 --depth 1 https://github.com/xerrors/Yuxi.git
 cd Yuxi
 
 # Linux/macOS
@@ -92,27 +92,27 @@ curl --fail http://localhost:5050/api/system/ready
 
 **智能体工作台**：查看回答、工具过程、协作任务和文件交付。
 
-![智能体工作台](https://xerrors.oss-cn-shanghai.aliyuncs.com/github/image-20260825145022410.png)
+> 截图占位：智能体工作台
 
 **知识库**：管理文档处理、检索测试与评估。
 
-![知识库](https://xerrors.oss-cn-shanghai.aliyuncs.com/github/image-20260830144756161.png)
+> 截图占位：知识库
 
 **知识图谱**：构建实体和关系，查询关联子图。
 
-![知识图谱](https://xerrors.oss-cn-shanghai.aliyuncs.com/github/image-20260830145027082.png)
+> 截图占位：知识图谱
 
 **智能体配置**：选择模型、提示词、工具、MCP 和 Skills。
 
-![智能体配置](https://xerrors.oss-cn-shanghai.aliyuncs.com/github/image-20260825151729055.png)
+> 截图占位：智能体配置
 
 **工作区文件**：预览受支持的 HTML、PDF、Markdown、图片和代码，下载任务产物。
 
-![工作区文件](https://xerrors.oss-cn-shanghai.aliyuncs.com/github/image-20260826202142495.png)
+> 截图占位：工作区文件
 
 **团队管理**：管理用户、部门和共享资源范围。
 
-![用户与部门管理](https://xerrors.oss-cn-shanghai.aliyuncs.com/github/image-20260826201638124.png)
+> 截图占位：用户与部门管理
 
 </details>
 

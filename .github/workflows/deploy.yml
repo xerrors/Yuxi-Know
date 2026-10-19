@@ -11,9 +11,9 @@ on:
       - 'docs/**'
       - '.github/workflows/deploy.yml'
 
-  # 在面向 main 的 PR 中提前验证 docs 构建
+  # 在面向 main/develop/** 的 PR 中提前验证 docs 构建
   pull_request:
-    branches: [main]
+    branches: [main, 'develop/**']
     paths:
       - 'docs/**'
       - '.github/workflows/deploy.yml'

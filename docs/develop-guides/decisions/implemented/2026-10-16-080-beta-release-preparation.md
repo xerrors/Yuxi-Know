@@ -14,6 +14,8 @@ Owner：docs/develop-guides/releases/0.8.0.md
 
 候选分支为 `develop/0-8-0`，版本脚本同步 `0.8.0.beta1`；uv 将 Python 包版本规范化为 `0.8.0b1`。六个质量 workflow 的开发分支匹配替换为当前分支，保留 main、PR、tag、既有 jobs 与路径过滤。发布 workflow 测试分别拒绝恢复旧分支、漏配当前分支及同时残留旧分支，不增加平行 job 或降低门禁。
 
+后续候选的开发分支通配规则与版本同步由[开发分支 CI 与 beta2](2026-10-19-development-ci-beta2.md)拥有；本记录保留 beta1 的准备与验收范围。
+
 后端锁定 Docling Slim 2.132.0、LangGraph SDK 0.4.4、MCP 1.30.0 和 multidict 6.9.1，保留当前 MCP 1.x 消费契约。Web 锁定 Vue 3.5.44、DOMPurify 3.4.17、js-yaml 5.4.3，docs 使用 Vue 3.5.42，两者覆盖 source-map-js 1.2.2。修正两处既有单测的外部环境依赖：检索默认值测试隔离模型目录查询，压测探针子进程固定 backend 工作目录；原业务结果断言保持有效。
 
 [独立更新页](../../releases/0.8.0.md)按用户场景合并相对 `v0.7.3` tag 的变化。Decision 负责定位，源码、公开契约和测试确认最终行为；中间 Schema、旧沙盒回收行为和已被取代的 Agent 创建方案不作为最终功能。历史 changelog 只增加入口，导航、README、快速开始、部署参考和 roadmap 同步。Beta 不批量归档 Decision。

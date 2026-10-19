@@ -25,7 +25,7 @@ on:
     tags: ['v[0-9]*']
     branches:
       - main
-      - develop/0-8-0
+      - 'develop/**'
     paths:
       - '.env.template'
       - '.dockerignore'

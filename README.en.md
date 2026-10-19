@@ -16,12 +16,12 @@ Yuxi is a self-hosted knowledge agent platform for teams that manage their own d
 
 | Capability | Current scope |
 | --- | --- |
-| Knowledge bases and RAG | Upload, parse, and index documents; configure embedding and rerank models; test and evaluate retrieval; connect read-only Feishu, Dify, and Notion sources |
+| Knowledge bases and RAG | Upload, parse, and index documents; configure embedding and rerank models; use vector, BM25, or hybrid retrieval and verify sources; connect external knowledge sources for read-only access |
 | Knowledge graphs | Administrators submit build jobs for indexed Milvus chunks, store entities and relationships in Neo4j, and combine graph and text retrieval |
 | Agents and cooperation | Configure models, prompts, tools, MCP, and Skills; cooperating sessions keep independent contexts and share project files |
 | Files and execution | Each user has a persistent Cube VM for authorized file operations and commands, with artifact previews and downloads |
 | Team access | Manage users, departments, and shared resource scopes; API Keys isolate external applications and their end users |
-| Integration and observation | Web, npm CLI, and Public API share the execution pipeline, with background jobs, execution audits, Langfuse tracing, and feedback |
+| Integration and observation | Web, npm CLI, and Public API share the execution pipeline; knowledge bases support read-only MCP access, with background jobs, execution audits, Langfuse tracing, and feedback |
 
 The default approval mode requires confirmation for command execution and file writes outside the current Project; writes inside it proceed automatically. Users can select the always-trust mode. The platform evaluates knowledge retrieval; complete agent evaluators can be built through the Public API as described in [agent evaluation](docs/agents/agent-evaluation.md).
 
@@ -41,12 +41,12 @@ The default approval mode requires confirmation for command execution and file w
 
 Install [Docker Engine](https://docs.docker.com/get-docker/) and Docker Compose, prepare a working LLM API, and configure a dedicated Linux/KVM Cube node, user template, and shared Workspace/Skills directories as described in [sandbox operations](docs/advanced/sandbox-operations.md). Applications running on macOS or Windows also need access to this Linux/KVM node.
 
-The candidate source version is `v0.8.0.beta1`, available from the fork's `develop/0-8-0` branch; the tag is created after validation. Version 0.8 requires a fresh deployment with separate data directories and provides no automatic upgrade of older databases, indexes, or file layouts. See the [0.8.0 release notes](docs/develop-guides/releases/0.8.0.md).
+The candidate source version is `v0.8.0.beta2`, available from the main repository's `develop/0-8-0` branch; the tag is created after validation. Version 0.8 requires a fresh deployment with separate data directories and provides no automatic upgrade of older databases, indexes, or file layouts. See the [0.8.0 release notes](docs/develop-guides/releases/0.8.0.md).
 
 ### 1. Get the Code and Initialize
 
 ```bash
-git clone --branch develop/0-8-0 --depth 1 https://github.com/Yuchuan925/Yuxi.git
+git clone --branch develop/0-8-0 --depth 1 https://github.com/xerrors/Yuxi.git
 cd Yuxi
 
 # Linux/macOS
@@ -94,27 +94,27 @@ Keep the existing deployment and a consistent backup of PostgreSQL, MinIO, and u
 
 **Agent workspace**: Follow answers, tool activity, cooperating tasks, and file delivery.
 
-![Agent workspace](https://xerrors.oss-cn-shanghai.aliyuncs.com/github/image-20260825145022410.png)
+> Screenshot placeholder: Agent workspace
 
 **Knowledge bases**: Manage document processing, retrieval tests, and evaluation.
 
-![Knowledge bases](https://xerrors.oss-cn-shanghai.aliyuncs.com/github/image-20260830144756161.png)
+> Screenshot placeholder: Knowledge bases
 
 **Knowledge graphs**: Build entities and relationships, then explore related subgraphs.
 
-![Knowledge graphs](https://xerrors.oss-cn-shanghai.aliyuncs.com/github/image-20260830145027082.png)
+> Screenshot placeholder: Knowledge graphs
 
 **Agent configuration**: Select models, prompts, tools, MCP, and Skills.
 
-![Agent configuration](https://xerrors.oss-cn-shanghai.aliyuncs.com/github/image-20260825151729055.png)
+> Screenshot placeholder: Agent configuration
 
 **Workspace files**: Preview supported HTML, PDF, Markdown, images, and code, and download artifacts.
 
-![Workspace files](https://xerrors.oss-cn-shanghai.aliyuncs.com/github/image-20260826202142495.png)
+> Screenshot placeholder: Workspace files
 
 **Team management**: Manage users, departments, and shared resource scopes.
 
-![User and department management](https://xerrors.oss-cn-shanghai.aliyuncs.com/github/image-20260826201638124.png)
+> Screenshot placeholder: User and department management
 
 </details>
 

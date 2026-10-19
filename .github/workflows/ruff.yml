@@ -3,7 +3,7 @@
 #
 # 触发场景：
 # 1. Pull Request：发现问题直接标红，要求开发者本地运行 make format
-# 2. Push 到 main/develop/0-8-0：仅检查并在发现问题时标红，不修改仓库内容
+# 2. Push 到 main/develop/**：仅检查并在发现问题时标红，不修改仓库内容
 
 name: Ruff Format Check
 
@@ -13,7 +13,7 @@ on:
     tags: ['v[0-9]*']
     branches:
       - main
-      - develop/0-8-0
+      - 'develop/**'
     paths:
       - 'backend/**/*.py'
       - 'backend/pyproject.toml'
@@ -23,6 +23,7 @@ on:
   pull_request:
     branches:
       - main
+      - 'develop/**'
     paths:
       - 'backend/**/*.py'
       - 'backend/pyproject.toml'

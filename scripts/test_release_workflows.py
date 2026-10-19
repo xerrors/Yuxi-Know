@@ -33,21 +33,23 @@ class ReleaseWorkflowTests(unittest.TestCase):
             "dependency-audit",
             "deploy",
         ):
-            events = workflows[name].split("\non:\n", 1)[1].split("\n\n", 1)[0]
-            push = events.split("  push:\n", 1)[1]
-            self.assertRegex(
-                push, r"(?m)^    tags: \['v\[0-9\]\*'\]$", f"{name}: 缺少版本 tag 触发"
-            )
+            events = re.split(r"\n(?=[\w-]+:)", workflows[name].split("\non:\n", 1)[1], maxsplit=1)[0]
+            push = re.search(r"(?ms)^  push:\n(.*?)(?=^  [\w-]+:|\Z)", events).group(1)
+            self.assertRegex(push, r"(?m)^    tags: \['v\[0-9\]\*'\]$", f"{name}: 缺少版本 tag 触发")
             if name != "deploy":
                 self.assertRegex(
                     push,
-                    r"(?m)^(?:    branches: \[main, develop/0-8-0\]|      - develop/0-8-0)$",
-                    f"{name}: 缺少当前开发分支触发",
+                    r"(?m)^(?:    branches: \[main, 'develop/\*\*'\]|      - 'develop/\*\*')$",
+                    f"{name}: 缺少全部开发分支触发",
                 )
-                self.assertNotIn("develop/1.0", push, f"{name}: 保留退役开发分支触发")
-        cli_events = (
-            workflows["publish-yuxi-cli"].split("\non:\n", 1)[1].split("\n\n", 1)[0]
-        )
+            if name in ("ruff", "deploy"):
+                pull_request = re.search(r"(?ms)^  pull_request:\n(.*?)(?=^  [\w-]+:|\Z)", events).group(1)
+                self.assertRegex(
+                    pull_request,
+                    r"(?m)^(?:    branches: \[main, 'develop/\*\*'\]|      - 'develop/\*\*')$",
+                    f"{name}: PR 未覆盖开发目标分支",
+                )
+        cli_events = workflows["publish-yuxi-cli"].split("\non:\n", 1)[1].split("\n\n", 1)[0]
         self.assertEqual(
             re.findall(r"^  (\w+):", cli_events, re.MULTILINE),
             ["workflow_dispatch"],
@@ -85,9 +87,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
 
     def test_repository_release_events(self) -> None:
         """当前配置覆盖候选与正式 tag，CLI 仅手动触发。"""
-        self.assert_release_events(
-            {path.stem: path.read_text() for path in WORKFLOWS.glob("*.yml")}
-        )
+        self.assert_release_events({path.stem: path.read_text() for path in WORKFLOWS.glob("*.yml")})
 
     def test_runtime_system_tests_have_cold_build_budget(self) -> None:
         """冷缓存构建不能因过短 job 超时而跳过运行链路。"""
@@ -124,39 +124,32 @@ class ReleaseWorkflowTests(unittest.TestCase):
                 self.subTest(workflow=name),
                 self.assertRaisesRegex(AssertionError, f"{name}: 缺少版本 tag 触发"),
             ):
-                self.assert_release_events(
-                    workflows
-                    | {name: workflows[name].replace("    tags: ['v[0-9]*']\n", "")}
-                )
+                self.assert_release_events(workflows | {name: workflows[name].replace("    tags: ['v[0-9]*']\n", "")})
 
-    def test_retired_development_branch_is_rejected(self) -> None:
-        """恢复旧开发分支或漏掉当前分支时拒绝交付。"""
+    def test_narrow_development_branch_trigger_is_rejected(self) -> None:
+        """写死单个版本或漏掉嵌套开发分支时拒绝交付。"""
         workflows = {path.stem: path.read_text() for path in WORKFLOWS.glob("*.yml")}
         for name in ("trust", "test", "frontend", "ruff", "system-tests", "dependency-audit"):
-            for replacement in ("develop/1.0", "develop/other"):
+            for replacement in ("develop/0-8-0", "develop/1.0", "develop/*", "feature/**"):
                 with (
                     self.subTest(workflow=name, replacement=replacement),
-                    self.assertRaisesRegex(AssertionError, f"{name}: 缺少当前开发分支触发"),
+                    self.assertRaisesRegex(AssertionError, f"{name}: 缺少全部开发分支触发"),
                 ):
-                    self.assert_release_events(
-                        workflows | {name: workflows[name].replace("develop/0-8-0", replacement)}
-                    )
+                    self.assert_release_events(workflows | {name: workflows[name].replace("develop/**", replacement)})
 
-    def test_retired_branch_cannot_remain_alongside_current_branch(self) -> None:
-        """保留当前分支时也必须拒绝继续触发退役分支。"""
+    def test_pull_requests_to_development_branches_are_checked(self) -> None:
+        """恢复仅检查 main 目标的 PR 时拒绝。"""
         workflows = {path.stem: path.read_text() for path in WORKFLOWS.glob("*.yml")}
-        ruff = workflows["ruff"].replace(
-            "      - develop/0-8-0\n", "      - develop/0-8-0\n      - develop/1.0\n"
-        )
-        with self.assertRaisesRegex(AssertionError, "ruff: 保留退役开发分支触发"):
-            self.assert_release_events(workflows | {"ruff": ruff})
+        for name in ("ruff", "deploy"):
+            before, pull_request = workflows[name].split("  pull_request:\n", 1)
+            pull_request = pull_request.replace(", 'develop/**'", "").replace("      - 'develop/**'\n", "")
+            with self.subTest(workflow=name), self.assertRaisesRegex(AssertionError, f"{name}: PR 未覆盖开发目标分支"):
+                self.assert_release_events(workflows | {name: before + "  pull_request:\n" + pull_request})
 
     def test_application_release_cannot_publish_cli(self) -> None:
         """恢复应用 Release 触发时禁止重复上传独立 CLI 包。"""
         workflows = {path.stem: path.read_text() for path in WORKFLOWS.glob("*.yml")}
-        workflows["publish-yuxi-cli"] = workflows["publish-yuxi-cli"].replace(
-            "on:\n", "on:\n  release:\n    types: [published]\n", 1
-        )
+        workflows["publish-yuxi-cli"] = workflows["publish-yuxi-cli"].replace("on:\n", "on:\n  release:\n    types: [published]\n", 1)
         with self.assertRaisesRegex(AssertionError, "CLI 必须独立手动发布"):
             self.assert_release_events(workflows)
 

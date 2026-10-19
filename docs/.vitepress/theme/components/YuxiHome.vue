@@ -694,7 +694,7 @@ onBeforeUnmount(() => {
           <div v-reveal class="yx-quickstart__copy">
             <p class="yx-kicker">快速开始</p>
             <h2>用 Docker Compose 启动完整拓扑</h2>
-            <p>准备 Docker、模型 API，以及已配置用户模板和共享目录的 Linux/KVM Cube 节点。0.8.0.beta1 候选使用独立数据目录全新部署。</p>
+            <p>准备 Docker、模型 API，以及已配置用户模板和共享目录的 Linux/KVM Cube 节点。0.8.0.beta2 候选使用独立数据目录全新部署。</p>
             <div class="yx-inline-links">
               <a :href="withBase('/intro/quick-start')">阅读完整教程</a>
               <a :href="withBase('/advanced/sandbox-operations')">配置 Cube 执行节点</a>
@@ -708,9 +708,9 @@ onBeforeUnmount(() => {
               <span>Terminal</span>
               <span>Docker Compose</span>
             </div>
-            <pre><code><span># 获取 0.8.0.beta1 候选源码</span>
+            <pre><code><span># 获取 0.8.0.beta2 候选源码</span>
 git clone --branch develop/0-8-0 --depth 1 \
-  https://github.com/Yuchuan925/Yuxi.git
+  https://github.com/xerrors/Yuxi.git
 cd Yuxi
 
 <span># 初始化配置</span>
