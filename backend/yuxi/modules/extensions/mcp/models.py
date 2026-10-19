@@ -4,14 +4,14 @@ from typing import Any
 
 from sqlalchemy import (
     JSON,
+    CheckConstraint,
     Column,
     DateTime,
-    Integer,
     ForeignKey,
+    Integer,
+    String,
     Text,
     UniqueConstraint,
-    CheckConstraint,
-    String,
 )
 
 from yuxi.infrastructure.postgres.base import BusinessBase as Base

@@ -22,11 +22,11 @@ from yuxi.modules.extensions.mcp.repository import (
     save_mcp_server,
 )
 from yuxi.modules.extensions.mcp.runtime import (
-    to_camel_case,
-    validate_remote_transport,
+    get_mcp_tools as load_mcp_tools,
 )
 from yuxi.modules.extensions.mcp.runtime import (
-    get_mcp_tools as load_mcp_tools,
+    to_camel_case,
+    validate_remote_transport,
 )
 
 BUILTIN_MCP_SERVERS = BUILTIN_MCP_MANIFEST["mcpServers"]

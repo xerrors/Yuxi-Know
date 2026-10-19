@@ -5,9 +5,9 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.api.dependencies.auth import get_db, get_required_user, get_superadmin_user
+from yuxi.api.routers.extensions.mcp_oauth import router as oauth_router
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.modules.extensions.mcp.repository import get_all_mcp_servers, get_mcp_server
-from yuxi.api.routers.extensions.mcp_oauth import router as oauth_router
 from yuxi.modules.extensions.mcp.service import (
     MCPServerNotFoundError,
     create_mcp_server,

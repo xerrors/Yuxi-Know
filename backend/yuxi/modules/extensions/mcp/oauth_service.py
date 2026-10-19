@@ -16,11 +16,11 @@ from yuxi.modules.extensions.mcp.oauth_protocol import (
 )
 from yuxi.modules.extensions.mcp.repository import (
     active_mcp_user,
-    delete_expired_oauth_attempts,
-    get_mcp_server_by_id,
-    get_mcp_connection_by_id,
     consume_oauth_attempt,
+    delete_expired_oauth_attempts,
+    get_mcp_connection_by_id,
     get_mcp_server,
+    get_mcp_server_by_id,
     mcp_connection,
     runtime_mcp_policy,
 )

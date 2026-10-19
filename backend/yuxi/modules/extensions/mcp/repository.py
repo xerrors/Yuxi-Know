@@ -57,6 +57,7 @@ async def active_mcp_user(db, *, user_id=None, uid=None):
 async def mcp_connection(db, server_id, user_id, *, lock=False, create=False):
     """唯一约束与行锁共同串行化个人连接发布、撤销和刷新。"""
     from sqlalchemy.dialects.postgresql import insert
+
     from yuxi.modules.extensions.mcp.models import MCPConnection
 
     if create:
@@ -70,6 +71,7 @@ async def mcp_connection(db, server_id, user_id, *, lock=False, create=False):
 async def consume_oauth_attempt(db, state_hash, browser_hash):
     """错误浏览器不能消费事务；合法消费使用 DELETE RETURNING 原子执行。"""
     from sqlalchemy import delete
+
     from yuxi.modules.extensions.mcp.models import MCPOAuthAttempt
     from yuxi.shared.datetime import utc_now
 
@@ -133,6 +135,7 @@ async def get_mcp_connection_by_id(db, connection_id, *, lock=False):
 async def delete_expired_oauth_attempts(db):
     """跳过完成请求已锁定的结果，避免清理与连接行锁形成反向等待。"""
     from sqlalchemy import delete
+
     from yuxi.modules.extensions.mcp.models import MCPOAuthAttempt
     from yuxi.shared.datetime import utc_now
 
@@ -143,6 +146,7 @@ async def delete_expired_oauth_attempts(db):
 async def runtime_mcp_servers(db, slugs, user_id):
     """一次读取本次候选服务与调用者自己的连接。"""
     from sqlalchemy import and_
+
     from yuxi.modules.extensions.mcp.models import MCPConnection
 
     return (
@@ -173,6 +177,7 @@ async def runtime_mcp_policy(db, slug, uid):
 async def invalidate_mcp_connections(db, server_id):
     """配置变更推进所有个人连接世代，旧配置恢复也不能复活授权。"""
     from sqlalchemy import update
+
     from yuxi.modules.extensions.mcp.models import MCPConnection
 
     await db.execute(
