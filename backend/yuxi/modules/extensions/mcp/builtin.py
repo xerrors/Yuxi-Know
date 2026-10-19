@@ -8,8 +8,6 @@ BUILTIN_MCP_MANIFEST = {
             "extra_data": {
                 "name": "DeepWiki",
                 "description": "查询公开 GitHub 仓库的文档、架构与代码，支持针对仓库提问。",
-                "icon": "📚",
-                "tags": ["内置", "代码", "文档"],
             },
         },
     },

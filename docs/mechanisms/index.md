@@ -6,6 +6,7 @@
 
 - 排查资源不可见、共享授权或运行中撤权：看[资源权限](./resource-permissions.md)。
 - 理解配置怎样进入一次运行：看[Agent 运行时上下文](./agent-runtime.md)。
+- 理解 MCP 共享配置、个人授权及调用身份：看 [MCP 授权与运行身份](./mcp.md)。
 - 核对排队、引导、取消或恢复：看[输入队列与调度](./agent-request-queue.md)。
 - 排查文件路径、执行环境和清理：看[沙盒与文件系统](./sandbox.md)。
 - 理解长对话怎样压缩：看[上下文压缩](./context-compression.md)。
@@ -19,6 +20,7 @@
 | --- | --- | --- |
 | [资源权限](./resource-permissions.md) | 角色、私有/共享范围和运行中撤权在哪里执行？ | [配置智能体](../agents/agents-config.md#私有与共享定义)、[API Key 接入](../advanced/api-key-integration.md) |
 | [Agent 运行时上下文](./agent-runtime.md) | 配置、权限、文件和 checkpoint 怎样组成一次运行？ | [配置和开发智能体](../agents/agents-config.md) |
+| [MCP 授权与运行身份](./mcp.md) | 管理员配置、用户连接、刷新和工具调用怎样隔离？ | [MCP 集成](../agents/mcp-integration.md) |
 | [输入队列与调度](./agent-request-queue.md) | Input 怎样消费成 Turn/Run，steer、取消和失败后怎样恢复？ | [Agents Public API](../advanced/agents-public-api.md)、[会话协作](../agents/session-cooperation.md) |
 | [沙盒与文件系统](./sandbox.md) | runtime identity、挂载、路径权限和回收怎样协作？ | [沙盒配置与运维](../advanced/sandbox-operations.md) |
 | [上下文压缩](./context-compression.md) | 单一阈值怎样控制工具结果压缩、摘要和主动压缩？ | [中间件](../agents/middleware.md)、[智能体配置](../agents/agents-config.md) |

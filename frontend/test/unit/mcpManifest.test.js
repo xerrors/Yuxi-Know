@@ -10,11 +10,11 @@ test('清单分离连接和展示信息，HTTP 归一为运行时传输', () => 
     ...connection,
     headers: { Authorization: 'Bearer example' },
     timeout: 30,
-    extra_data: { name: 'Example', description: '说明', tags: ['文档'], icon: '📚' }
+    extra_data: { name: 'Example', description: '说明' }
   })), [{
     slug: 'example-mcp', name: 'Example', transport: 'streamable_http',
     url: 'https://example.com/mcp', headers: { Authorization: 'Bearer example' },
-    timeout: 30, description: '说明', tags: ['文档'], icon: '📚'
+    timeout: 30, description: '说明'
   }])
 })
 
@@ -40,7 +40,8 @@ for (const [entry, pattern] of [
   [{ ...connection, headers: { Authorization: 42 } }, /headers/],
   [{ ...connection, timeout: 0 }, /正整数/],
   [{ ...connection, timeout: 1.5 }, /正整数/],
-  [{ ...connection, extra_data: { tags: [42] } }, /tags/],
+  [{ ...connection, extra_data: { tags: ['docs'] } }, /extra_data/],
+  [{ ...connection, extra_data: { icon: '📚' } }, /extra_data/],
   [{ ...connection, extra_data: null }, /extra_data/]
 ]) {
   test(`清单拒绝非法字段 ${JSON.stringify(entry)}`, () => {

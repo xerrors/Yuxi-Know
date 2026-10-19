@@ -44,9 +44,30 @@ def _runtime_skill(
     }
 
 
+async def _authorized_model_call(monkeypatch, middleware, request, handler, *, mcp_policy=None):
+    """按生产顺序组合 Skills 与真实授权中间件，只替换持久权限读取。"""
+    from yuxi.modules.agents.runtime.middlewares import authorization
+
+    context = request.runtime.context
+    context.tools = getattr(context, "tools", [])
+    context.mcps = getattr(context, "mcps", [])
+    context.middleware_tool_names = {"read_file"}
+    context.registered_builtin_tool_names = {
+        tool.name for tool in request.tools if tool.name not in context.mcp_tool_servers and tool.name != "read_file"
+    }
+    monkeypatch.setattr(authorization, "refresh_execution_authorization", AsyncMock(return_value=mcp_policy or {}))
+
+    async def authorize(current):
+        """最终工具集交给生产授权实现。"""
+        return await authorization.RuntimeAuthorizationMiddleware().awrap_model_call(current, handler)
+
+    return await middleware.awrap_model_call(request, authorize)
+
+
 @pytest.mark.asyncio
 async def test_skills_prompt_uses_effective_skills_at_request_level():
     context = SimpleNamespace(
+        mcp_tools={},
         system_prompt="context base",
         skills=["configured-only"],
         skill_runtime_snapshot={
@@ -101,6 +122,7 @@ async def test_preloaded_skill_injects_full_instructions_once_and_hides_lazy_rea
         tools=[],
         mcps=[],
         mcp_tool_servers={},
+        mcp_tools={},
         skill_runtime_snapshot={
             "capability_limited": False,
             "context_skills": [],
@@ -148,18 +170,13 @@ async def test_preloaded_skill_injects_full_instructions_once_and_hides_lazy_rea
 
 @pytest.mark.asyncio
 async def test_awrap_model_call_mounts_dependencies_only_for_readable_activated_skills(monkeypatch):
-    monkeypatch.setattr(
-        skills_middleware,
-        "get_all_tool_instances",
-        lambda: [SimpleNamespace(name="tool-a"), SimpleNamespace(name="tool-b")],
-    )
-
     class FakeRequest:
         def __init__(self, tools=None):
             self.runtime = SimpleNamespace(
                 context=SimpleNamespace(
                     mcps=[],
                     mcp_tool_servers={},
+                    mcp_tools={},
                     skill_runtime_snapshot={
                         "capability_limited": False,
                         "context_skills": [],
@@ -176,7 +193,7 @@ async def test_awrap_model_call_mounts_dependencies_only_for_readable_activated_
                 )
             )
             self.state = {"activated_skills": ["alpha", "beta"]}
-            self.tools = tools or []
+            self.tools = tools if tools is not None else [SimpleNamespace(name="tool-a"), SimpleNamespace(name="tool-b")]
 
         def override(self, *, tools):
             new_request = FakeRequest(tools=tools)
@@ -190,20 +207,21 @@ async def test_awrap_model_call_mounts_dependencies_only_for_readable_activated_
         captured["tools"] = [tool.name for tool in request.tools]
         return "ok"
 
-    result = await SkillsMiddleware(enable_skills_prompt=False).awrap_model_call(FakeRequest(), handler)
+    result = await _authorized_model_call(monkeypatch, SkillsMiddleware(enable_skills_prompt=False), FakeRequest(), handler)
 
     assert result == "ok"
     assert captured["tools"] == ["tool-a"]
 
 
 @pytest.mark.asyncio
-async def test_awrap_model_call_mounts_knowledge_base_skill_tools():
+async def test_awrap_model_call_mounts_knowledge_base_skill_tools(monkeypatch):
     class FakeRequest:
         def __init__(self, tools=None):
             self.runtime = SimpleNamespace(
                 context=SimpleNamespace(
                     mcps=[],
                     mcp_tool_servers={},
+                    mcp_tools={},
                     skill_runtime_snapshot={
                         "capability_limited": False,
                         "context_skills": [],
@@ -222,7 +240,7 @@ async def test_awrap_model_call_mounts_knowledge_base_skill_tools():
                 )
             )
             self.state = {"activated_skills": ["knowledge-base"]}
-            self.tools = tools or []
+            self.tools = tools if tools is not None else [SimpleNamespace(name=name) for name in sorted(_KB_TOOL_NAMES)]
 
         def override(self, *, tools):
             new_request = FakeRequest(tools=tools)
@@ -236,7 +254,7 @@ async def test_awrap_model_call_mounts_knowledge_base_skill_tools():
         captured["tools"] = {tool.name for tool in request.tools}
         return "ok"
 
-    result = await SkillsMiddleware(enable_skills_prompt=False).awrap_model_call(FakeRequest(), handler)
+    result = await _authorized_model_call(monkeypatch, SkillsMiddleware(enable_skills_prompt=False), FakeRequest(), handler)
 
     assert result == "ok"
     assert captured["tools"] == {
@@ -255,6 +273,7 @@ async def test_resolve_skill_gated_tools_registers_kb_tools():
         tools=None,
         mcps=None,
         mcp_tool_servers={},
+        mcp_tools={},
         skill_runtime_snapshot={
             "capability_limited": False,
             "context_skills": [],
@@ -283,6 +302,7 @@ async def test_base_tools_are_registered_once_without_configuration_or_skill(run
         tools=[],
         mcps=[],
         mcp_tool_servers={},
+        mcp_tools={},
         skill_runtime_snapshot={
             "capability_limited": False,
             "context_skills": [],
@@ -302,12 +322,13 @@ async def test_base_tools_are_registered_once_without_configuration_or_skill(run
 
 
 @pytest.mark.asyncio
-async def test_unactivated_skill_cannot_hide_base_tools():
+async def test_unactivated_skill_cannot_hide_base_tools(monkeypatch):
     """Skill 声明基础工具依赖时，模型仍能看到基础工具，普通依赖保持隐藏。"""
     context = SimpleNamespace(
         tools=[],
         mcps=[],
         mcp_tool_servers={},
+        mcp_tools={},
         skill_runtime_snapshot={
             "capability_limited": False,
             "context_skills": [],
@@ -330,7 +351,7 @@ async def test_unactivated_skill_cannot_hide_base_tools():
         """读取实际交给模型的工具集合。"""
         return [tool.name for tool in current.tools]
 
-    visible = await SkillsMiddleware(enable_skills_prompt=False).awrap_model_call(request, handler)
+    visible = await _authorized_model_call(monkeypatch, SkillsMiddleware(enable_skills_prompt=False), request, handler)
     assert visible == ["ask_user_question", "mark_for_improvement"]
 
 
@@ -359,14 +380,18 @@ async def test_preloaded_skill_rejects_duplicate_mcp_tool_names(monkeypatch):
 
         return f"wrong-service:{value}"
 
-    async def fake_get_enabled_mcp_tools(server_name):
-        return [chart_tool] if server_name == "charts" else [conflicting_chart_tool]
+    async def fake_resolve_runtime_mcp_tools(server_names, *, uid=None, run_tools=None):
+        result = {name: [chart_tool] if name == "charts" else [conflicting_chart_tool] for name in server_names}
+        if run_tools is not None:
+            run_tools.update(result)
+        return result
 
-    monkeypatch.setattr(skills_middleware, "get_enabled_mcp_tools", fake_get_enabled_mcp_tools)
+    monkeypatch.setattr(skills_middleware, "resolve_runtime_mcp_tools", fake_resolve_runtime_mcp_tools)
     context = SimpleNamespace(
         tools=[],
         mcps=[],
         mcp_tool_servers={},
+        mcp_tools={},
         skill_runtime_snapshot={
             "capability_limited": False,
             "context_skills": [],
@@ -405,15 +430,19 @@ async def test_activated_mcp_rejects_name_of_inactive_registered_skill_tool(monk
 
         return f"mcp:{value}"
 
-    async def fake_get_enabled_mcp_tools(server_name):
-        assert server_name == "charts"
-        return [chart_tool]
+    async def fake_resolve_runtime_mcp_tools(server_names, *, uid=None, run_tools=None):
+        assert server_names == ["charts"]
+        result = {name: [chart_tool] for name in server_names}
+        if run_tools is not None:
+            run_tools.update(result)
+        return result
 
-    monkeypatch.setattr(skills_middleware, "get_enabled_mcp_tools", fake_get_enabled_mcp_tools)
+    monkeypatch.setattr(skills_middleware, "resolve_runtime_mcp_tools", fake_resolve_runtime_mcp_tools)
     context = SimpleNamespace(
         tools=[],
         mcps=[],
         mcp_tool_servers={},
+        mcp_tools={},
         skill_runtime_snapshot={
             "capability_limited": False,
             "context_skills": [],
@@ -451,15 +480,21 @@ async def test_preloaded_skill_exposes_mcp_tool_on_first_model_call(monkeypatch)
 
         return f"rendered:{value}"
 
-    async def fake_get_enabled_mcp_tools(server_name):
-        assert server_name == "charts"
-        return [chart_tool]
+    async def fake_resolve_runtime_mcp_tools(server_names, *, uid=None, run_tools=None):
+        assert server_names == ["charts"]
+        assert uid == "employee-runtime"
+        result = {name: [chart_tool] for name in server_names}
+        if run_tools is not None:
+            run_tools.update(result)
+        return result
 
-    monkeypatch.setattr(skills_middleware, "get_enabled_mcp_tools", fake_get_enabled_mcp_tools)
+    monkeypatch.setattr(skills_middleware, "resolve_runtime_mcp_tools", fake_resolve_runtime_mcp_tools)
     context = SimpleNamespace(
+        uid="employee-runtime",
         tools=[],
         mcps=[],
         mcp_tool_servers={},
+        mcp_tools={},
         skill_runtime_snapshot={
             "capability_limited": False,
             "context_skills": [],
@@ -505,15 +540,19 @@ async def test_activated_skill_loads_mcp_without_agent_selection(monkeypatch):
 
     calls = []
 
-    async def fake_get_enabled_mcp_tools(server_name):
-        calls.append(server_name)
-        return [chart_tool]
+    async def fake_resolve_runtime_mcp_tools(server_names, *, uid=None, run_tools=None):
+        calls.extend(server_names)
+        result = {name: [chart_tool] for name in server_names}
+        if run_tools is not None:
+            run_tools.update(result)
+        return result
 
-    monkeypatch.setattr(skills_middleware, "get_enabled_mcp_tools", fake_get_enabled_mcp_tools)
+    monkeypatch.setattr(skills_middleware, "resolve_runtime_mcp_tools", fake_resolve_runtime_mcp_tools)
     context = SimpleNamespace(
         tools=[],
         mcps=[],
         mcp_tool_servers={},
+        mcp_tools={},
         skill_runtime_snapshot={
             "capability_limited": False,
             "context_skills": [],
@@ -573,15 +612,19 @@ async def test_skill_reusing_explicit_mcp_server_does_not_duplicate_registered_t
 
     calls = []
 
-    async def fake_get_enabled_mcp_tools(server_name):
-        calls.append(server_name)
-        return [chart_tool]
+    async def fake_resolve_runtime_mcp_tools(server_names, *, uid=None, run_tools=None):
+        calls.extend(server_names)
+        result = {name: [chart_tool] for name in server_names}
+        if run_tools is not None:
+            run_tools.update(result)
+        return result
 
-    monkeypatch.setattr(skills_middleware, "get_enabled_mcp_tools", fake_get_enabled_mcp_tools)
+    monkeypatch.setattr(skills_middleware, "resolve_runtime_mcp_tools", fake_resolve_runtime_mcp_tools)
     context = SimpleNamespace(
         tools=[],
         mcps=["charts"],
-        mcp_tool_servers={},
+        mcp_tool_servers={"chart_tool": "charts"},
+        mcp_tools={},
         skill_runtime_snapshot={
             "capability_limited": False,
             "context_skills": [],
@@ -625,15 +668,19 @@ async def test_explicit_mcp_rejects_skill_local_tool_name_collision(monkeypatch)
 
         return "wrong-source"
 
-    async def fake_get_enabled_mcp_tools(server_name):
-        assert server_name == "configured"
-        return [conflicting_list_kbs]
+    async def fake_resolve_runtime_mcp_tools(server_names, *, uid=None, run_tools=None):
+        assert server_names == ["configured"]
+        result = {"configured": [conflicting_list_kbs]}
+        if run_tools is not None:
+            run_tools.update(result)
+        return result
 
-    monkeypatch.setattr("yuxi.modules.extensions.mcp.service.get_enabled_mcp_tools", fake_get_enabled_mcp_tools)
+    monkeypatch.setattr("yuxi.modules.extensions.mcp.service.resolve_runtime_mcp_tools", fake_resolve_runtime_mcp_tools)
     context = SimpleNamespace(
         tools=[],
         mcps=["configured"],
         mcp_tool_servers={},
+        mcp_tools={},
         skill_runtime_snapshot={
             "capability_limited": False,
             "context_skills": [],
@@ -660,6 +707,7 @@ def _make_gated_request(activated, *, preloaded=None):
                 context=SimpleNamespace(
                     mcps=[],
                     mcp_tool_servers={},
+                    mcp_tools={},
                     skill_runtime_snapshot={
                         "capability_limited": False,
                         "context_skills": [],
@@ -686,7 +734,7 @@ def _make_gated_request(activated, *, preloaded=None):
 
 
 @pytest.mark.asyncio
-async def test_awrap_model_call_hides_gated_tools_until_activated():
+async def test_awrap_model_call_hides_gated_tools_until_activated(monkeypatch):
     """未激活 Skill 时门控工具对模型不可见（懒加载），激活后才放出。"""
     request = _make_gated_request(activated=[])
     captured = {}
@@ -695,13 +743,13 @@ async def test_awrap_model_call_hides_gated_tools_until_activated():
         captured["tools"] = {tool.name for tool in req.tools}
         return "ok"
 
-    await SkillsMiddleware(enable_skills_prompt=False).awrap_model_call(request, handler)
+    await _authorized_model_call(monkeypatch, SkillsMiddleware(enable_skills_prompt=False), request, handler)
 
     assert captured["tools"] == {"read_file"}
 
 
 @pytest.mark.asyncio
-async def test_awrap_model_call_keeps_gated_tools_when_activated():
+async def test_awrap_model_call_keeps_gated_tools_when_activated(monkeypatch):
     request = _make_gated_request(activated=["knowledge-base"])
     captured = {}
 
@@ -709,7 +757,7 @@ async def test_awrap_model_call_keeps_gated_tools_when_activated():
         captured["tools"] = {tool.name for tool in req.tools}
         return "ok"
 
-    await SkillsMiddleware(enable_skills_prompt=False).awrap_model_call(request, handler)
+    await _authorized_model_call(monkeypatch, SkillsMiddleware(enable_skills_prompt=False), request, handler)
 
     assert captured["tools"] == {"read_file", "list_kbs", "query_kb"}
 
@@ -830,14 +878,20 @@ async def test_mcp_failure_reaches_runtime_instead_of_removing_tools(monkeypatch
     """显式 MCP 与 Skill MCP 加载失败都保留运行失败，不变成无工具成功。"""
     failure = RuntimeError("MCP 服务 demo 工具加载失败")
     loader = AsyncMock(side_effect=failure)
-    monkeypatch.setattr("yuxi.modules.extensions.mcp.service.get_enabled_mcp_tools", loader)
-    monkeypatch.setattr(skills_middleware, "get_enabled_mcp_tools", loader)
-    context = SimpleNamespace(tools=[], mcps=["demo"] if source == "configured" else [], mcp_tool_servers={})
+    monkeypatch.setattr("yuxi.modules.extensions.mcp.service.resolve_runtime_mcp_tools", loader)
+    monkeypatch.setattr(skills_middleware, "resolve_runtime_mcp_tools", loader)
+    context = SimpleNamespace(tools=[], mcps=["demo"] if source == "configured" else [], mcp_tool_servers={}, mcp_tools={})
     with pytest.raises(RuntimeError, match="MCP 服务 demo") as caught:
         if source == "configured":
             await resolve_configured_runtime_tools(context)
         else:
-            await SkillsMiddleware()._get_mcp_tools_from_context(context, extra_mcps=["demo"])
+            context.skill_runtime_snapshot = {
+                "effective_skills": ["report"],
+                "preloaded_skills": ["report"],
+                "runtime_skills": {"report": _runtime_skill("report", mcps=["demo"])},
+            }
+            request = SimpleNamespace(runtime=SimpleNamespace(context=context), state={})
+            await SkillsMiddleware(enable_skills_prompt=False).awrap_model_call(request, AsyncMock())
     assert caught.value is failure
     assert context.mcp_tool_servers == {}
 
@@ -852,6 +906,7 @@ async def test_skill_does_not_reintroduce_unconfigured_web_tools(configured):
         tools=[],
         mcps=[],
         mcp_tool_servers={},
+        mcp_tools={},
         skill_runtime_snapshot={
             "capability_limited": False,
             "context_skills": [],
@@ -887,3 +942,121 @@ async def test_skill_does_not_reintroduce_unconfigured_web_tools(configured):
         inspect,
     )
     assert result == "ok"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("via_skill", [False, True, "nested", "dynamic_nested"])
+async def test_unconnected_mcp_preserves_chat_and_hides_skill_dependencies(monkeypatch, via_skill):
+    """缺少个人授权时普通模型仍执行，Skill 本地依赖也不能伪装可用。"""
+    resolver = AsyncMock(return_value={})
+    monkeypatch.setattr("yuxi.modules.extensions.mcp.service.resolve_runtime_mcp_tools", resolver)
+    monkeypatch.setattr(skills_middleware, "resolve_runtime_mcp_tools", resolver)
+    context = SimpleNamespace(
+        uid="employee",
+        run_id="run",
+        thread_id="thread",
+        _authorization_turn_id="turn",
+        tools=[],
+        mcps=[] if via_skill else ["attendance"],
+        mcp_tool_servers={},
+        mcp_tools={},
+        skill_runtime_snapshot={
+            "capability_limited": False,
+            "context_skills": [],
+            "context_preload_skills": [],
+            "skill_metadata": {},
+            "preloaded_skills": ["report"] if via_skill else [],
+            "preloaded_skill_contents": {},
+            "effective_skills": ["report"],
+            "runtime_skills": {"report": _runtime_skill("report", tools=["list_kbs"], mcps=["attendance"])},
+        },
+    )
+    if via_skill in {"nested", "dynamic_nested"}:
+        snapshot = context.skill_runtime_snapshot
+        snapshot["effective_skills"].append("parent")
+        snapshot["preloaded_skills"] = ["parent", "report"]
+        snapshot["runtime_skills"]["report"]["tools"] = []
+        snapshot["runtime_skills"]["parent"] = _runtime_skill("parent", tools=["list_kbs"])
+        snapshot["runtime_skills"]["parent"]["skills"] = ["report"]
+    if via_skill == "dynamic_nested":
+        context.skill_runtime_snapshot["preloaded_skills"] = []
+    if not via_skill:
+        await resolve_configured_runtime_tools(context)
+
+    class Request:
+        """观察实际送入模型的工具与系统提示。"""
+
+        def __init__(self, *, tools=None, system_message=None):
+            self.runtime = SimpleNamespace(context=context)
+            self.state = {"activated_skills": ["parent"]} if via_skill == "dynamic_nested" else {}
+            self.tools = [SimpleNamespace(name="read_file"), SimpleNamespace(name="list_kbs")] if tools is None else tools
+            self.system_message = system_message or SystemMessage(content="base")
+
+        def override(self, **kwargs):
+            return Request(tools=kwargs.get("tools", self.tools), system_message=kwargs.get("system_message", self.system_message))
+
+    observed = []
+
+    async def handler(request):
+        """普通模型请求真实到达下游，提示和工具可见性均有可观察结果。"""
+        observed.append(request)
+        return "normal chat"
+
+    middleware = SkillsMiddleware(enable_skills_prompt=False)
+    for _ in range(2):
+        assert await _authorized_model_call(monkeypatch, middleware, Request(), handler) == "normal chat"
+    assert _system_message_text(observed[0].system_message) == "base"
+    assert {tool.name for tool in observed[0].tools} == {"read_file"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("connected", [False, True])
+async def test_dynamic_parent_uses_service_result_for_nested_mcp_dependency(monkeypatch, connected):
+    """子 Skill 的 MCP 可用时父工具开放，子 Skill 自身工具仍等待激活。"""
+    resolver = AsyncMock(return_value={})
+    mcp_policy = {"attendance": set()} if connected else {}
+    monkeypatch.setattr(skills_middleware, "resolve_runtime_mcp_tools", resolver)
+    parent = _runtime_skill("parent", tools=["list_kbs"])
+    parent["skills"] = ["child"]
+    context = SimpleNamespace(
+        tools=[],
+        mcps=[],
+        mcp_tool_servers={},
+        mcp_tools={},
+        registered_builtin_tool_names={"list_kbs"},
+        skill_runtime_snapshot={
+            "preloaded_skills": [],
+            "effective_skills": ["parent", "child"],
+            "runtime_skills": {"parent": parent, "child": _runtime_skill("child", mcps=["attendance"])},
+        },
+    )
+
+    class Request:
+        """观察实际模型获得的依赖工具。"""
+
+        def __init__(self, tools):
+            self.runtime = SimpleNamespace(context=context)
+            self.state = {"activated_skills": ["parent"]}
+            self.tools = tools
+
+        def override(self, *, tools):
+            """保留本轮上下文与激活状态。"""
+            return Request(tools)
+
+    async def handler(request):
+        """检查可用服务影响父工具，但不隐式激活子 Skill。"""
+        from yuxi.modules.agents.runtime.middlewares.authorization import tool_allowed
+
+        assert tool_allowed(context, "list_kbs", request.state, mcp_policy) is connected
+        return {tool.name for tool in request.tools}
+
+    names = await _authorized_model_call(
+        monkeypatch,
+        SkillsMiddleware(enable_skills_prompt=False),
+        Request([SimpleNamespace(name="list_kbs")]),
+        handler,
+        mcp_policy=mcp_policy,
+    )
+    assert names == ({"list_kbs"} if connected else set())
+    resolver.assert_not_called()
+    assert context.mcp_tool_servers == {}

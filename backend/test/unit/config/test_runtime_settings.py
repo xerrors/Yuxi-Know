@@ -4,11 +4,41 @@ import pytest
 
 from yuxi.infrastructure.runtime_settings import (
     get_int_env,
+    get_public_url,
     get_runtime_dir,
     get_skill_data_dir,
     get_skill_projection_dir,
     get_user_data_dir,
 )
+
+
+@pytest.mark.parametrize("value", ["https://platform.example", "https://platform.example/", "https://platform.example:8443/"])
+def test_public_url_uses_only_configured_site_origin(monkeypatch, value):
+    """公开来源保留部署端口，路径由具体协议拥有。"""
+    monkeypatch.setenv("YUXI_PUBLIC_URL", value)
+    assert get_public_url() == value.rstrip("/")
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "",
+        "//platform.example",
+        "file:///platform.example",
+        "https://user:secret@platform.example",
+        "https://platform.example/other-path",
+        "https://platform.example?redirect=evil",
+        "https://platform.example#fragment",
+        "https://platform.example:abc",
+        "https://platform.example:65536",
+        " https://platform.example",
+    ],
+)
+def test_public_url_rejects_non_origin_configuration(monkeypatch, value):
+    """部署入口拒绝改变回调路径或来源含义的配置。"""
+    monkeypatch.setenv("YUXI_PUBLIC_URL", value)
+    with pytest.raises(ValueError):
+        get_public_url()
 
 
 def test_get_int_env_reads_configured_value(monkeypatch):

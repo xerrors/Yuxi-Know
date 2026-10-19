@@ -54,19 +54,31 @@
           </a-select>
         </a-form-item>
       </div>
-      <div class="mcp-form-grid appearance-row">
-        <a-form-item label="图标" html-for="mcp-form-icon" class="form-item">
-          <a-input id="mcp-form-icon" v-model:value="form.icon" placeholder="Emoji" :maxlength="2" />
-        </a-form-item>
-        <a-form-item label="标签" html-for="mcp-form-tags" class="form-item">
-          <a-select
-            id="mcp-form-tags"
-            v-model:value="form.tags"
-            mode="tags"
-            placeholder="输入后回车添加（可选）"
-          />
-        </a-form-item>
-      </div>
+      <a-form-item label="认证方式" html-for="mcp-oauth-auth-mode">
+        <a-select id="mcp-oauth-auth-mode" v-model:value="form.auth_mode">
+          <a-select-option value="headers">共享请求头 / API Key</a-select-option>
+          <a-select-option value="oauth">每名用户 OAuth 授权</a-select-option>
+        </a-select>
+      </a-form-item>
+      <template v-if="form.auth_mode === 'oauth'">
+        <div class="mcp-form-grid oauth-row">
+          <a-form-item label="授权服务器 Issuer" html-for="mcp-oauth-issuer" required class="form-item"><a-input id="mcp-oauth-issuer" v-model:value="form.issuer_url" placeholder="https://sso.example.com/realms/company" /></a-form-item>
+          <a-form-item label="客户端注册方式" html-for="mcp-oauth-registration" class="form-item">
+            <a-select id="mcp-oauth-registration" v-model:value="form.registration"><a-select-option value="static">预注册客户端</a-select-option><a-select-option value="dynamic">动态注册</a-select-option></a-select>
+          </a-form-item>
+        </div>
+        <div v-if="form.registration === 'static'" class="mcp-form-grid">
+          <a-form-item label="Client ID" html-for="mcp-oauth-client-id" required class="form-item"><a-input id="mcp-oauth-client-id" v-model:value="form.client_id" /></a-form-item>
+          <div class="form-item">
+            <div class="mcp-secret-heading">
+              <label for="mcp-oauth-client-secret">Client Secret</label>
+              <a-checkbox v-if="editData?.oauth_client_secret_set" v-model:checked="form.clear_client_secret" aria-label="清除已保存 Client Secret" title="清除已保存 Client Secret">清除已保存</a-checkbox>
+            </div>
+            <a-form-item><a-input-password id="mcp-oauth-client-secret" v-model:value="form.client_secret" :disabled="form.clear_client_secret" :placeholder="editData?.oauth_client_secret_set ? '已配置，留空保留' : '按授权服务器要求填写'" autocomplete="new-password" /></a-form-item>
+          </div>
+        </div>
+        <a-form-item label="授权范围" html-for="mcp-oauth-scopes"><a-input id="mcp-oauth-scopes" v-model:value="form.scopes" placeholder="空格分隔的 scopes" /></a-form-item>
+      </template>
       <div class="mcp-connection-options">
         <button
           type="button"
@@ -128,18 +140,22 @@ const visible = computed({
   set: (val) => { if (!formLoading.value) emit('update:open', val) }
 })
 
-const form = reactive({
-  slug: '',
-  name: '',
-  description: '',
-  transport: 'http',
-  url: '',
-  headersText: '',
-  timeout: null,
-  sse_read_timeout: null,
-  tags: [],
-  icon: ''
-})
+/** 创建独立的空表单，供首次初始化与新增重置使用。 */
+function createEmptyForm() {
+  return {
+    auth_mode: 'headers', issuer_url: '', registration: 'static', client_id: '', client_secret: '', clear_client_secret: false, scopes: '',
+    slug: '',
+    name: '',
+    description: '',
+    transport: 'http',
+    url: '',
+    headersText: '',
+    timeout: null,
+    sse_read_timeout: null,
+  }
+}
+
+const form = reactive(createEmptyForm())
 
 watch(
   () => props.open,
@@ -147,6 +163,11 @@ watch(
     if (val) connectionOptionsOpen.value = props.editMode
     if (val && props.editData) {
       Object.assign(form, {
+        auth_mode: props.editData.auth_mode || 'headers',
+        issuer_url: props.editData.oauth_config?.issuer_url || '',
+        registration: props.editData.oauth_config?.registration || 'static',
+        client_id: props.editData.oauth_config?.client_id || '',
+        client_secret: '', clear_client_secret: false, scopes: props.editData.oauth_config?.scopes || '',
         slug: props.editData.slug || '',
         name: props.editData.name || '',
         description: props.editData.description || '',
@@ -155,22 +176,9 @@ watch(
         headersText: props.editData.headers ? JSON.stringify(props.editData.headers, null, 2) : '',
         timeout: props.editData.timeout,
         sse_read_timeout: props.editData.sse_read_timeout,
-        tags: props.editData.tags || [],
-        icon: props.editData.icon || ''
       })
     } else if (val && !props.editData) {
-      Object.assign(form, {
-        slug: '',
-        name: '',
-        description: '',
-        transport: 'http',
-        url: '',
-        headersText: '',
-        timeout: null,
-        sse_read_timeout: null,
-        tags: [],
-        icon: ''
-      })
+      Object.assign(form, createEmptyForm())
     }
   },
   { immediate: true }
@@ -180,7 +188,7 @@ const handleFormSubmit = async () => {
   if (formLoading.value) return
   try {
     formLoading.value = true
-    let headers = null
+    let headers
     if (form.headersText.trim()) {
       try {
         headers = JSON.parse(form.headersText)
@@ -188,6 +196,8 @@ const handleFormSubmit = async () => {
         message.error('请求头 JSON 格式错误')
         return
       }
+    } else if (props.editMode) {
+      headers = {}
     }
     if (!form.slug?.trim()) {
       message.error('MCP 标识不能为空')
@@ -200,17 +210,27 @@ const handleFormSubmit = async () => {
     const entry = {
       type: form.transport,
       url: form.url,
-      ...(form.headersText.trim() && { headers }),
+      ...(headers !== undefined && { headers }),
       ...(form.timeout != null && { timeout: form.timeout }),
       ...(form.sse_read_timeout != null && { sse_read_timeout: form.sse_read_timeout }),
       extra_data: {
         name: form.name,
         ...(form.description && { description: form.description }),
-        ...(form.tags.length && { tags: form.tags }),
-        ...(form.icon && { icon: form.icon })
       }
     }
     const [data] = parseMcpManifest(JSON.stringify({ mcpServers: { [form.slug]: entry } }))
+    data.auth_mode = form.auth_mode
+    if (form.auth_mode === 'oauth') {
+      data.oauth_config = {
+        issuer_url: form.issuer_url, registration: form.registration, client_id: form.client_id,
+        scopes: form.scopes,
+      }
+      if (form.clear_client_secret) {
+        data.oauth_config.client_secret = ''
+      } else if (form.client_secret) {
+        data.oauth_config.client_secret = form.client_secret
+      }
+    }
     let submitted
     if (props.editMode) {
       const { slug, ...updateData } = data
@@ -279,6 +299,19 @@ const handleFormSubmit = async () => {
   :deep(.ant-form-item-label > label) { color: var(--gray-800); font-size: 13px; }
 }
 
+.mcp-secret-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 8px;
+  color: var(--gray-800);
+  font-size: 13px;
+
+  :deep(.ant-checkbox-wrapper) { font-size: 12px; }
+}
+
 .mcp-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -286,7 +319,7 @@ const handleFormSubmit = async () => {
 
   > .form-item { min-width: 0; }
   &.endpoint-row { grid-template-columns: minmax(0, 1fr) 190px; }
-  &.appearance-row { grid-template-columns: 100px minmax(0, 1fr); }
+  &.oauth-row { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
 }
 
 .mcp-connection-options {
@@ -324,8 +357,7 @@ const handleFormSubmit = async () => {
 }
 
 @media (max-width: 600px) {
-  .mcp-form-grid, .mcp-form-grid.endpoint-row { grid-template-columns: minmax(0, 1fr); gap: 0; }
-  .mcp-form-grid.appearance-row { gap: 12px; }
+  .mcp-form-grid, .mcp-form-grid.endpoint-row, .mcp-form-grid.oauth-row { grid-template-columns: minmax(0, 1fr); gap: 0; }
   .mcp-connection-options .mcp-form-grid { gap: 16px; }
   .mcp-form :deep(.ant-input), .mcp-form :deep(.ant-select-selector), .mcp-form :deep(.ant-input-number) { min-height: 40px; }
   :global(.mcp-form-modal .ant-modal-footer .ant-btn) { min-height: 44px; }

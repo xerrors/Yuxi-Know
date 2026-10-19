@@ -54,7 +54,6 @@ async def test_dependency_failure_fields_reach_shipping_file_log(monkeypatch, tm
                     await mcp_runtime.get_mcp_tools(
                         "fixture-unavailable",
                         {"transport": "streamable_http", "url": "https://example.com/mcp"},
-                        cache=False,
                     )
 
             logging_module.logger.complete()

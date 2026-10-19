@@ -216,7 +216,7 @@ async def test_image_fallback_uses_authorized_tools_from_shipping_middleware_ord
     _patch_common_graph_deps(monkeypatch, chatbot_graph, {})
     monkeypatch.setattr(chatbot_graph, "create_memory_middleware", AsyncMock(return_value=None))
     monkeypatch.setattr(chatbot_graph, "create_cooperation_middleware", lambda _context: None)
-    monkeypatch.setattr(authorization, "refresh_execution_authorization", AsyncMock())
+    monkeypatch.setattr(authorization, "refresh_execution_authorization", AsyncMock(return_value={}))
     middlewares = await chatbot_graph._build_middlewares(context, object())
     wrappers = [
         middleware

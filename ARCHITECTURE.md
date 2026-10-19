@@ -16,7 +16,7 @@ Yuxi 是一个面向 RAG、知识图谱和多智能体工作流的知识库平�
 - `api`：FastAPI API 服务，挂载 `backend/yuxi` 和测试目录；API 与 worker 的源码修改通过显式重启生效。
 - `worker`：ARQ worker，执行已经派发的 AgentRun 与注册的 后台作业，并周期触发用户自建 Agent 定时任务；三者分别使用 PostgreSQL 中的运行租约、任务租约和调度锁闭合并发与恢复。
 - `storage-init`：无网络的一次性进程，准备 API/worker/app-init 与 Milvus 挂载根的属主和模式，不递归修改已有文件；消费进程等待其成功退出。
-- `app-init`：普通用户运行的部署任务，在 PostgreSQL advisory lock 内先建立或校验当前 Schema，再同步系统配置定义、内置供应商、Agent、MCP 与 Skill 来源文件。API 与 worker 等待全部成功。空库基线为 business 4、knowledge 1；其他版本明确拒绝，已有数据库的版本调整由部署侧负责。共享同步失败保留已提交内容，修正后幂等重跑。
+- `app-init`：普通用户运行的部署任务，在 PostgreSQL advisory lock 内先建立或校验当前 Schema，再同步系统配置定义、内置供应商、Agent、MCP 与 Skill 来源文件。API 与 worker 等待全部成功。空库基线为 business 1、knowledge 1，直接包含个人 MCP 授权表、128 位用户归属字段及当前约束。当前版本跳过结构初始化，其他版本明确拒绝；历史部署的结构调整由部署侧直接完成，代码不保留增量迁移脚本。共享同步失败保留已提交内容，修正后幂等重跑。
 - Cube Linux/KVM 执行节点：每个用户拥有一个持久普通账号 VM，Workspace 与授权 Skills 共享宿主文件。
 - `postgres`：业务数据、知识库元数据、持久 Input 队列、Turn/Run 与 LangGraph checkpoint。
 - `redis`：ARQ 投递、运行事件、取消信号以及跨进程配置和模型缓存。
@@ -26,6 +26,8 @@ Yuxi 是一个面向 RAG、知识图谱和多智能体工作流的知识库平�
 - `mineru-api`、`paddlex`：通过 `all` profile 可选启动的文档解析和 OCR 服务。
 
 API 在 `/api/mcp` 提供只读知识库 MCP，与 HTTP API 共用进程和端口。`api/routers/public_v1/knowledge_mcp.py` 与 Knowledge Public HTTP 入口并列，适配协议并复用 Key 认证、Knowledge Schema 与查询服务，MCP manager 随 API lifespan 启停；资源可见性仍由知识库服务拥有。
+
+企业认证中心由独立私有 YuxiAuth 项目部署和维护；Yuxi 仅消费标准 OIDC/MCP 协议，不保存 Keycloak 部署模板或运行认证数据库。
 
 ## 后端代码地图
 
@@ -48,6 +50,8 @@ Yuxi 始终交付完整知识能力。API 注册知识库、图谱、评估、Da
 - `modules/identity` 拥有用户、部门、权限、凭据与 OIDC 账号用例，以及 Public API 的 Key 校验与 App/end_user 身份解析；`modules/extensions` 拥有 Skills、MCP 与工具目录；`modules/models` 拥有模型适配和供应商配置。
 - `modules/schedules` 拥有用户定时 Agent 定义和 occurrence；`modules/background_jobs` 拥有任务登记、执行方上报的观察记录和取消意图；后台作业模块的 dispatch 与 registry 拥有提交和定义，`workers` 拥有领取、执行和失联维护；`modules/system` 拥有系统配置、Dashboard 与跨域共享资源所有权治理。
 
+`modules/extensions/mcp` 拥有远程服务器、个人 OAuth 连接和加密凭据。超管固定授权服务器信任根，浏览器事务绑定用户、浏览器和配置修订；回调结果由当前 JWT 用户确认后发布。PostgreSQL 连接行锁串行化刷新与断开，世代阻止旧回调恢复授权。MCP service 根据可信 runtime uid 统一解析本人的 MCP 可用性；Agent 与 Skill 只消费可用服务和工具，未连接时保持普通聊天可用，相关 Skill 依赖在执行边界关闭。工具目录归本次 Run 的 Context，服务按需发现一次后在运行内复用，新 Run 重新发现；每次出站复查当前用户、配置、工具和连接。 配置、协议、授权事务与个人 HTTP 适配分属对应模块，具体链路和适配边界见 [MCP 授权与运行身份](docs/mechanisms/mcp.md)。
+
 `modules/extensions/web` 拥有网络搜索、网页抓取与供应商适配；工具和管理员测试复用同一服务，每次调用读取当前有效配置，未配置的能力不进入运行工具集合。凭据与默认供应商复用 system 的持久设置和脱敏边界。
 
 `modules/extensions/skills` 按共享索引、个人来源、草稿、文件编辑和投影组织用例。共享编辑通过文件修订值拒绝过期保存，读取、运行快照与投影复制持有共享行锁；授权变更按共享行锁、用户投影锁的顺序提交并刷新投影。个人 Skill 文件由 `personal.py` 在 UserWorkspace 边界访问。
@@ -56,7 +60,7 @@ Yuxi 始终交付完整知识能力。API 注册知识库、图谱、评估、Da
 
 领域用例使用 `shared/errors.py` 中的失败类型、消息与可选业务 code，API 的 `errors.py` 负责转换为 HTTP 状态及现有 detail 正文。定时执行、文件预览与模型工具直接按领域类型消费失败；持久错误消息使用业务文本。HTTPException 属于 API 适配层。
 
-`infrastructure/postgres` 管理业务 session 与 LangGraph checkpoint pool；`redis` 提供连接，业务 key 与事件语义留在对应模块；`minio`、`neo4j` 和 `oidc` 封装远端客户端；`observability` 封装日志与 Langfuse SDK。`infrastructure/file_preview.py` 准备浏览器展示内容，`infrastructure/office_conversion.py` 独立执行 Office 到 PDF 转换；Workspace 与 Knowledge 拥有各自的预览缓存。`shared` 只保存不依赖业务域与 HTTP 的小型公共契约与通用逻辑，`shared/files.py` 拥有文件输入、文件结果、MIME 识别与共用原文件预览预算；各预览读取用例把预算传给文件或对象存储边界执行有界读取。`infrastructure/runtime_settings.py` 管理进程环境与运行目录；system 模块拥有品牌模板和持久系统配置。`api/responses` 负责文件与知识响应，业务服务提供已经授权的读取结果。
+`infrastructure/postgres` 管理业务 session 与 LangGraph checkpoint pool；`redis` 提供连接，业务 key 与事件语义留在对应模块；`minio`、`neo4j` 和 `oidc` 封装远端客户端；`observability` 封装日志与 Langfuse SDK。`infrastructure/file_preview.py` 准备浏览器展示内容，`infrastructure/office_conversion.py` 独立执行 Office 到 PDF 转换；Workspace 与 Knowledge 拥有各自的预览缓存。`shared` 只保存不依赖业务域与 HTTP 的小型公共契约与通用逻辑，`shared/files.py` 拥有文件输入、文件结果、MIME 识别与共用原文件预览预算；各预览读取用例把预算传给文件或对象存储边界执行有界读取。`infrastructure/crypto.py` 读取部署级 Fernet 凭据密钥，业务域拥有加密载荷与领域错误；`infrastructure/runtime_settings.py` 管理进程环境、公开站点来源与运行目录；system 模块拥有品牌模板和持久系统配置。`api/responses` 负责文件与知识响应，业务服务提供已经授权的读取结果。
 
 ### 后台任务
 
@@ -79,7 +83,7 @@ Yuxi 始终交付完整知识能力。API 注册知识库、图谱、评估、Da
 - `apis` 是集中 HTTP 边界，复用 `base.js` 的请求、鉴权和错误处理。模块不能依赖 app/pages，shared 不能依赖业务模块或 API；ESLint 检查别名、相对路径和动态导入。
 - 新 TypeScript 逻辑经 strict 类型检查，build 先执行 typecheck；现有 JavaScript 逐步迁移。sessionRuntime 按 Thread 拥有一份 item 状态，历史分页、SSE 与恢复快照写入同一 reducer，展示按需派生。sessionInput 拥有冻结提交、幂等重试和接收交接，输入队列观察者唯一负责消费后启动 Run 流；SessionWorkspace 负责编辑器草稿、附件消费与面板展示。视图存活期间的草稿分别保留，首次进入 Thread 从持久草稿初始化。独立 Thread 阅读与后续类型迁移见[重构提案](docs/develop-guides/decisions/proposed/2026-09-30-agent-view-frontend-refactor.md)。
 
-`/` 是公开首页；登录后的核心工作区是 `/agent`。`/extensions` 对所有登录用户开放，其中 Skills 对普通用户可见，知识库、工具和 MCP 管理能力仅管理员可见；Dashboard 仅超级管理员可访问。后端权限检查始终是最终边界，前端守卫只负责页面体验。
+`/` 是公开首页；登录后的核心工作区是 `/agent`。`/extensions` 对所有登录用户开放，其中 Skills 与 MCP 个人连接对普通用户可见，知识库和工具仅管理员可见，MCP 配置仅超级管理员可修改；Dashboard 仅超级管理员可访问。后端权限检查始终是最终边界，前端守卫只负责页面体验。
 
 ## 智能体运行链路
 

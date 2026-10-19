@@ -12,6 +12,12 @@ from yuxi.api.middleware.access_log import AccessLogMiddleware
 @pytest.mark.parametrize(
     "path",
     [
+        "/api/system/mcp-servers/oauth/callback",
+        "/api/system/mcp-servers/oauth/callback/",
+        "/api/system/mcp-servers/oauth/%63allback",
+        "/api//system/mcp-servers/oauth/callback",
+        "/api/other/../system/mcp-servers/oauth/callback",
+        "/system/mcp-servers/oauth/callback",
         "/api/auth/oidc/callback",
         "/api/auth/oidc/callback/",
         "/api/auth/oidc/%63allback",

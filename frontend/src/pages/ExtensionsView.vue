@@ -20,7 +20,7 @@
       <div v-if="activeTab === 'skills'" class="tab-panel">
         <SkillCardList ref="skillsRef" />
       </div>
-      <div v-if="userStore.isAdmin && activeTab === 'mcp'" class="tab-panel">
+      <div v-if="activeTab === 'mcp'" class="tab-panel">
         <McpCardList ref="mcpRef" />
       </div>
     </div>
@@ -55,7 +55,7 @@ const adminExtensionTabs = computed(() => [
   { key: 'tools', label: '工具' },
   { key: 'mcp', label: 'MCP' }
 ])
-const userExtensionTabs = [{ key: 'skills', label: '技能' }]
+const userExtensionTabs = [{ key: 'skills', label: '技能' }, { key: 'mcp', label: 'MCP' }]
 const extensionTabs = computed(() =>
   userStore.isAdmin ? adminExtensionTabs.value : userExtensionTabs
 )

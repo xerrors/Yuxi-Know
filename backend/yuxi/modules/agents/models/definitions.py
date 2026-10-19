@@ -58,8 +58,8 @@ class Agent(Base):
 
     is_default = Column(Boolean, nullable=False, default=False, index=True)
 
-    created_by = Column(String(64), nullable=True, index=True)
-    updated_by = Column(String(64), nullable=True)
+    created_by = Column(String(128), nullable=True, index=True)
+    updated_by = Column(String(128), nullable=True)
     created_at = Column(DateTime(timezone=True), default=utc_now)
     updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 

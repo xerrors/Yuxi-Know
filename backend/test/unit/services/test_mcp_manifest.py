@@ -12,8 +12,7 @@ def test_builtin_manifest_normalizes_deepwiki_connection_and_display():
     assert config["transport"] == "streamable_http"
     assert config["url"] == "https://mcp.deepwiki.com/mcp"
     assert config["name"] == "DeepWiki"
-    assert config["tags"] == ["内置", "代码", "文档"]
-    assert config["icon"] == "📚"
+    assert not {"icon", "tags"} & config.keys()
     assert not {"command", "args", "env", "extra_data"} & config.keys()
 
 
@@ -35,6 +34,8 @@ def test_builtin_manifest_normalizes_deepwiki_connection_and_display():
         ({"type": "http", "url": "https://example.com", "timeout": True}, "timeout"),
         ({"type": "http", "extra_data": {"command": "sh"}}, "extra_data"),
         ({"type": "http", "extra_data": None}, "extra_data"),
+        ({"type": "http", "extra_data": {"icon": "📚"}}, "extra_data"),
+        ({"type": "http", "extra_data": {"tags": ["docs"]}}, "extra_data"),
     ],
 )
 def test_manifest_rejects_invalid_remote_entry(entry, reason):

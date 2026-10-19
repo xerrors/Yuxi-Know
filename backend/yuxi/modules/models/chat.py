@@ -161,7 +161,7 @@ class ChatCompletionsAdapter(ChatOpenAI):
         message.response_metadata["output_version"] = "v1"
 
     def _get_request_payload(self, input_, *, stop=None, **kwargs):
-        """支持推理的供应商在工具续答时接收完整原文。"""
+        """在发送边界还原推理，并将纯文本工具结果序列化为字符串。"""
         payload = super()._get_request_payload(input_, stop=stop, **kwargs)
         _attach_user_uid_headers(payload, self.user_uid)
         if "messages" not in payload:
@@ -170,6 +170,12 @@ class ChatCompletionsAdapter(ChatOpenAI):
         if self.preserve_reasoning:
             self._restore_wire_reasoning(originals, payload["messages"])
         _sanitize_wire_invalid_tool_calls(payload["messages"], originals)
+        # MCP 等工具返回文本块；部分 Chat Completions 网关只接受字符串工具消息。
+        for message in payload["messages"]:
+            content = message.get("content")
+            if message.get("role") == "tool" and isinstance(content, list):
+                if all(isinstance(block, dict) and block.get("type") == "text" and isinstance(block.get("text"), str) for block in content):
+                    message["content"] = "\n".join(block["text"] for block in content)
         return payload
 
     def _restore_wire_reasoning(self, originals: list, wire_messages: list[dict]) -> None:

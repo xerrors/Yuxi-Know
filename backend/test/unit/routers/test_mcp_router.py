@@ -109,6 +109,7 @@ def test_get_mcp_servers_normal_user_is_stripped(monkeypatch):
             self.env = {"API_KEY": "secret"}
             self.headers = {"Auth": "Bearer secret"}
             self.enabled = 1
+            self.auth_mode = "headers"
 
         def to_dict(self):
             return {
@@ -127,6 +128,11 @@ def test_get_mcp_servers_normal_user_is_stripped(monkeypatch):
         return [DummyServer()]
 
     monkeypatch.setattr("yuxi.api.routers.extensions.mcp.get_all_mcp_servers", fake_get_all_mcp_servers)
+
+    async def fake_states(db, servers, user_id):
+        return {server.slug: "not_required" for server in servers}
+
+    monkeypatch.setattr("yuxi.api.routers.extensions.mcp.personal_connection_states", fake_states)
 
     # 1. 管理员请求，应该返回全部字段
     client_admin = TestClient(_build_app(allow_admin=True))
@@ -227,3 +233,16 @@ def test_update_mcp_server_not_found(monkeypatch):
     )
 
     assert resp.status_code == 404, resp.text
+
+
+@pytest.mark.parametrize("field,value", [("icon", "📚"), ("tags", ["docs"])])
+@pytest.mark.parametrize("method,path", [("post", "/api/system/mcp-servers"), ("put", "/api/system/mcp-servers/example")])
+def test_removed_presentation_fields_are_rejected(field, value, method, path):
+    """管理接口拒绝已删除展示字段，不静默兼容旧输入。"""
+    client = TestClient(_build_app())
+    payload = {"slug": "example", "name": "Example", "transport": "streamable_http", "url": "https://example.com/mcp"}
+    if method == "put":
+        payload.pop("slug")
+    response = getattr(client, method)(path, json={**payload, field: value})
+    assert response.status_code == 422
+    assert any(error["loc"][-1] == field and error["type"] == "extra_forbidden" for error in response.json()["detail"])

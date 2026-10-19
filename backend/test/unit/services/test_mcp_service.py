@@ -111,7 +111,8 @@ async def test_ensure_builtin_mcp_servers_preserves_user_slug(monkeypatch, mcp_s
     assert server.url == "https://example.com/mcp"
     assert server.enabled == 1
     assert not mcp_service.is_builtin_mcp_server(server)
-    configs = await mcp_service._load_enabled_mcp_server_configs(db=mcp_session)
+    servers = await mcp_service.get_enabled_mcp_servers(db=mcp_session)
+    configs = {server.slug: await mcp_service.get_enabled_mcp_server_config(server.slug, db=mcp_session) for server in servers}
     assert configs[slug]["url"] == "https://example.com/mcp"
 
 
@@ -190,7 +191,8 @@ async def test_runtime_configs_exclude_unsupported_transports(mcp_session):
     )
     await mcp_session.commit()
 
-    configs = await mcp_service._load_enabled_mcp_server_configs(db=mcp_session)
+    servers = await mcp_service.get_enabled_mcp_servers(db=mcp_session)
+    configs = {server.slug: await mcp_service.get_enabled_mcp_server_config(server.slug, db=mcp_session) for server in servers}
     slugs = await mcp_service.get_enabled_mcp_server_slugs(db=mcp_session)
 
     assert set(configs) == {"remote-http"}
@@ -284,10 +286,10 @@ async def test_update_unsupported_transport_requires_remote_url(mcp_session):
 async def test_get_enabled_mcp_tools_loads_latest_config_from_db(monkeypatch):
     captured: list[dict] = []
 
-    async def fake_get_enabled_mcp_server_config(server_name: str, db=None):
-        del db
-        assert server_name == "demo"
-        return {"transport": "streamable_http", "url": "demo", "disabled_tools": ["tool_b"]}
+    async def fake_get_enabled_mcp_servers(*, names, db=None):
+        """服务配置只读一次，底层直接消费该结果。"""
+        assert names == ["demo"]
+        return [MCPServer(slug="demo", transport="streamable_http", url="demo", auth_mode="headers", disabled_tools=["tool_b"])]
 
     async def fake_get_mcp_tools(server_name: str, additional_servers=None, disabled_tools=None, **kwargs):
         del kwargs
@@ -300,7 +302,7 @@ async def test_get_enabled_mcp_tools_loads_latest_config_from_db(monkeypatch):
         )
         return ["tool-a"]
 
-    monkeypatch.setattr(mcp_service, "get_enabled_mcp_server_config", fake_get_enabled_mcp_server_config)
+    monkeypatch.setattr(mcp_service, "get_enabled_mcp_servers", fake_get_enabled_mcp_servers)
     monkeypatch.setattr(mcp_service, "get_mcp_tools", fake_get_mcp_tools)
 
     tools = await mcp_service.get_enabled_mcp_tools("demo")
@@ -315,45 +317,19 @@ async def test_get_enabled_mcp_tools_loads_latest_config_from_db(monkeypatch):
     ]
 
 
-async def test_get_mcp_tools_rebuilds_cache_when_config_hash_changes(monkeypatch):
-    mcp_runtime.clear_mcp_cache()
-
-    configs = [
-        {"transport": "streamable_http", "url": "demo-v1", "disabled_tools": []},
-        {"transport": "streamable_http", "url": "demo-v2", "disabled_tools": []},
-    ]
-    build_calls: list[str] = []
-
-    async def fake_get_enabled_mcp_server_config(server_name: str, db=None):
-        del db
-        assert server_name == "demo"
-        return configs[0]
-
-    async def fake_get_mcp_client(server_configs):
-        config = server_configs["demo"]
-        build_calls.append(config["url"])
-        tool = SimpleNamespace(name=f"tool_for_{config['url']}", metadata={})
-        return _FakeClient([tool])
-
-    monkeypatch.setattr(mcp_service, "get_enabled_mcp_server_config", fake_get_enabled_mcp_server_config)
-    monkeypatch.setattr(mcp_runtime, "get_mcp_client", fake_get_mcp_client)
-
-    tools_v1_first = await mcp_service.get_mcp_tools("demo")
-    tools_v1_second = await mcp_service.get_mcp_tools("demo")
-
-    configs[0] = configs[1]
-    tools_v2 = await mcp_service.get_mcp_tools("demo")
-
-    assert [tool.name for tool in tools_v1_first] == ["tool_for_demo-v1"]
-    assert [tool.name for tool in tools_v1_second] == ["tool_for_demo-v1"]
-    assert [tool.name for tool in tools_v2] == ["tool_for_demo-v2"]
-    assert build_calls == ["demo-v1", "demo-v2"]
-
-    mcp_runtime.clear_mcp_cache()
+async def test_each_independent_discovery_reads_current_remote_tools(monkeypatch):
+    """相同配置的新发现也读取远端目录，不依赖进程缓存失效。"""
+    tools = [SimpleNamespace(name="first", metadata={})]
+    monkeypatch.setattr(mcp_runtime, "get_mcp_client", AsyncMock(side_effect=lambda _: _FakeClient(list(tools))))
+    config = {"transport": "streamable_http", "url": "https://example.com/mcp"}
+    first = await mcp_runtime.get_mcp_tools("demo", config)
+    tools[:] = [SimpleNamespace(name="second", metadata={})]
+    second = await mcp_runtime.get_mcp_tools("demo", config)
+    assert [tool.name for tool in first] == ["first"]
+    assert [tool.name for tool in second] == ["second"]
 
 
 async def test_get_mcp_tools_sets_handle_tool_error(monkeypatch):
-    mcp_runtime.clear_mcp_cache()
 
     config = {"transport": "streamable_http", "url": "demo-tool", "disabled_tools": []}
 
@@ -372,8 +348,6 @@ async def test_get_mcp_tools_sets_handle_tool_error(monkeypatch):
     assert len(tools) == 1
     assert tools[0].handle_tool_error is True
 
-    mcp_runtime.clear_mcp_cache()
-
 
 @pytest.mark.parametrize("transport", ["stdio", "websocket", None])
 async def test_client_rejects_unsupported_transport_before_adapter(monkeypatch, transport):
@@ -387,20 +361,12 @@ async def test_client_rejects_unsupported_transport_before_adapter(monkeypatch, 
         await mcp_runtime.get_mcp_client({"deepwiki-official": {"transport": transport}})
 
 
-async def test_additional_unsupported_config_cannot_reuse_cached_tools():
-    """缓存命中前仍拒绝不支持的远程传输。"""
-    import hashlib
-    import json
-
-    config = {"transport": "websocket"}
-    digest = hashlib.sha256(json.dumps(config, sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:16]
-    key = f"deepwiki-official:{digest}"
-    mcp_runtime._mcp_tools_cache[key] = [SimpleNamespace(name="unsafe_cached_tool")]
-    try:
-        with pytest.raises(ValueError, match="仅支持 sse 或 streamable_http"):
-            await mcp_service.get_mcp_tools("deepwiki-official", additional_servers={"deepwiki-official": config})
-    finally:
-        mcp_runtime.clear_mcp_cache()
+async def test_additional_unsupported_config_is_rejected_before_discovery(monkeypatch):
+    """直传配置也不能绕过传输校验。"""
+    forbidden = AsyncMock(side_effect=AssertionError("unsupported transport reached discovery"))
+    monkeypatch.setattr(mcp_runtime, "get_mcp_client", forbidden)
+    with pytest.raises(ValueError, match="仅支持 sse 或 streamable_http"):
+        await mcp_service.get_mcp_tools("deepwiki-official", additional_servers={"deepwiki-official": {"transport": "websocket"}})
 
 
 def test_model_cannot_serialize_stdio_for_execution():
@@ -482,7 +448,6 @@ async def test_inspection_connects_disabled_server_without_mutating_runtime(monk
         return SimpleNamespace(get_tools=get_tools)
 
     monkeypatch.setattr(mcp_service, "MultiServerMCPClient", client)
-    cache, stats = dict(mcp_runtime._mcp_tools_cache), dict(mcp_runtime._mcp_tools_stats)
     if outcome == "error":
         with pytest.raises(RuntimeError, match="fixture-credential"):
             await mcp_service.inspect_mcp_server_tools(server)
@@ -496,8 +461,6 @@ async def test_inspection_connects_disabled_server_without_mutating_runtime(monk
     assert configs[0][server.slug]["headers"] == server.headers
     assert "disabled_tools" not in configs[0][server.slug]
     assert server.enabled == 0 and server.disabled_tools == ["fixture_tool"]
-    assert mcp_runtime._mcp_tools_cache == cache
-    assert mcp_runtime._mcp_tools_stats == stats
 
 
 async def test_inspection_rejects_unmigrated_stdio_before_connecting(monkeypatch):
@@ -512,9 +475,8 @@ async def test_inspection_rejects_unmigrated_stdio_before_connecting(monkeypatch
 
 
 @pytest.mark.parametrize("phase", ["client", "tools", "group"])
-async def test_runtime_connection_failure_is_explicit_and_not_cached(monkeypatch, phase):
+async def test_runtime_connection_failure_remains_explicit(monkeypatch, phase):
     """配置的 MCP 建连或工具加载失败不能被当作合法空列表。"""
-    mcp_runtime.clear_mcp_cache()
     failure = RuntimeError("remote unavailable")
     if phase == "group":
         failure = ExceptionGroup("remote unavailable", [failure])
@@ -529,8 +491,5 @@ async def test_runtime_connection_failure_is_explicit_and_not_cached(monkeypatch
     with pytest.raises(RuntimeError, match="MCP.*demo.*失败") as caught:
         await mcp_runtime.get_mcp_tools("demo", {"transport": "streamable_http", "url": "https://example.com/mcp"})
     assert caught.value.__cause__ is failure
-    assert mcp_runtime._mcp_tools_cache == {}
-    assert mcp_runtime.get_mcp_tools_stats("demo") is None
     monkeypatch.setattr(mcp_runtime, "MultiServerMCPClient", lambda _: _FakeClient([]))
     assert await mcp_runtime.get_mcp_tools("demo", {"transport": "streamable_http", "url": "https://example.com/mcp"}) == []
-    mcp_runtime.clear_mcp_cache()

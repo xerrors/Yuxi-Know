@@ -16,7 +16,7 @@ Input 保存有序原始 messages、提交级 attachment_file_ids 和冻结配�
 
 Receipt 固定记录命令意图及目标，提交、转换、取消输入只指向 Input；消费不修改回执。执行控制保留自己的 Turn/Run 目标，输入的执行归属由 Input 查询和 Run 生命周期事件读取。Web、CLI、Demo、协作和定时任务同步采用该读取方式。正式历史直接按 message_id 装配附件；pending/cancelled Input 返回原文、原始文件 ID 与现存附件，items 为空。
 
-取消仅停止执行，保留绑定并允许文件继续准备；删除附件沿用删除行和字节的行为，不保留历史占位。原始 Input 保留文件 ID，不承诺已删文件可回放。保持现有 Session 锁、连续 ready steer 消费、follow-up FIFO、配置冻结和崩溃恢复边界。数据库初始化遵循[当前 Schema 基线](2026-10-15-initial-schema-baseline.md)，由 [app-init](2026-10-18-app-initialization.md) 建立空库或校验当前版本，不自动迁移或清空现有数据库。
+取消仅停止执行，保留绑定并允许文件继续准备；删除附件沿用删除行和字节的行为，不保留历史占位。原始 Input 保留文件 ID，不承诺已删文件可回放。保持现有 Session 锁、连续 ready steer 消费、follow-up FIFO、配置冻结和崩溃恢复边界。数据库初始化遵循[当前 Schema 基线](2026-10-19-schema-baseline-one.md)，由 [app-init](2026-10-18-app-initialization.md) 建立空库或校验当前版本，不自动迁移或清空现有数据库。
 
 ## 替代方案
 

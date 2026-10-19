@@ -19,8 +19,6 @@ class RemoteMCPConfig(BaseModel):
     timeout: Annotated[StrictInt, Field(gt=0, le=2147483647)] | None = None
     sse_read_timeout: Annotated[StrictInt, Field(gt=0, le=2147483647)] | None = None
     description: StrictStr | None = Field(None, max_length=500)
-    tags: list[StrictStr] | None = None
-    icon: StrictStr | None = Field(None, max_length=50)
 
     @field_validator("url")
     @classmethod
@@ -45,7 +43,7 @@ def normalize_mcp_manifest_entry(slug: str, config: dict[str, Any]) -> dict[str,
     if set(config) - {"type", "transport", "url", "headers", "timeout", "sse_read_timeout", "extra_data"}:
         raise ValueError(f"MCP '{slug}' 包含不支持的连接字段")
     extra_data = config.get("extra_data", {})
-    if not isinstance(extra_data, dict) or set(extra_data) - {"name", "description", "icon", "tags"}:
+    if not isinstance(extra_data, dict) or set(extra_data) - {"name", "description"}:
         raise ValueError(f"MCP '{slug}' 的 extra_data 无效")
 
     transport = config.get("transport", config.get("type"))

@@ -343,3 +343,64 @@ class CapturingModel(BaseChatModel):
         """记录最终请求并返回固定内容。"""
         self.requests.append(messages)
         return ChatResult(generations=[ChatGeneration(message=AIMessage(content="AUTHORIZATION_OK"))])
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+async def test_shipping_graph_checks_nested_mcp_without_discovering_inactive_tools(authorized_context, enabled):
+    """生产装配只查嵌套连接，未激活 MCP 的不可达地址不能阻止普通聊天。"""
+    from yuxi.modules.extensions.mcp.models import MCPServer
+
+    fixture = authorized_context
+    child_source = fixture.source.parent / "nested-skill"
+    child_source.mkdir()
+    (child_source / "SKILL.md").write_text("# NESTED_INACTIVE_SKILL\n")
+    async with fixture.sessions() as db:
+        parent = await db.scalar(select(Skill).where(Skill.slug == "live-skill"))
+        parent.skill_dependencies = ["nested-skill"]
+        parent.tool_dependencies = ["list_kbs"]
+        db.add_all(
+            [
+                Skill(
+                    slug="nested-skill",
+                    name="Nested",
+                    description="fixture",
+                    source_type="upload",
+                    created_by="owner",
+                    dir_path="shared/nested-skill",
+                    share_config=SHARED,
+                    mcp_dependencies=["nested-mcp"],
+                ),
+                MCPServer(
+                    slug="nested-mcp",
+                    name="Nested",
+                    transport="streamable_http",
+                    url="http://127.0.0.1:1/unreachable-mcp",
+                    enabled=int(enabled),
+                    created_by="owner",
+                    updated_by="owner",
+                ),
+            ]
+        )
+        await db.commit()
+    context = ChatBotContext(
+        uid="caller",
+        thread_id="live-thread",
+        agent_slug="live-agent",
+        workdir_relative_path="projects/live",
+        model="fixture:model",
+        tools=[],
+        mcps=[],
+        knowledges=[],
+        skills=["live-skill"],
+        preload_skills=[],
+    )
+    await prepare_agent_runtime_context(context)
+    tools = await resolve_configured_runtime_tools(context)
+    model = CapturingModel()
+    middlewares = await chatbot_graph._build_middlewares(context, CompositeBackend(default=StateBackend, routes={}), cleanup_model=model)
+    graph = create_agent(model=model, tools=tools, middleware=middlewares)
+    result = await graph.ainvoke({"messages": [HumanMessage(content="hello")], "activated_skills": ["live-skill"]}, context=context)
+    assert result["messages"][-1].content == "AUTHORIZATION_OK"
+    assert len(model.requests) == 1
+    assert ("list_kbs" in {tool.name for tool in model.bound_tools}) is enabled
+    assert context.mcp_tool_servers == {}

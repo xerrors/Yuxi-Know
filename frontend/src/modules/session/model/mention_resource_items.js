@@ -39,7 +39,7 @@ export const buildMentionResourceItems = (mention = {}) => {
         toResourceItem('mcp', {
           value: m.slug,
           label: m.name,
-          extra: { description: m.description || '', icon: m.icon || '' }
+          extra: { description: m.description || '' }
         })
       )
       .filter(Boolean),

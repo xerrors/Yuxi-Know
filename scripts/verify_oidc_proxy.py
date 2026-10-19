@@ -1,4 +1,4 @@
-"""用真实 Nginx 验证OIDC回调成功页与上游故障的日志和响应头。"""
+"""用真实 Nginx 验证 OIDC/MCP 回调成功页与上游故障的日志和响应头。"""
 
 import json
 import subprocess
@@ -35,8 +35,14 @@ def main():
                 ("/auth/oidc/callback/", 200), ("/%61uth/oidc/callback", 200),
                 ("/api/auth/oidc/%63allback", 502), ("//api/auth/oidc/callback", 502),
                 ("/api/auth/oidc/callback/", 502),
+                ("/api/system/mcp-servers/oauth/callback", 502),
+                ("/api/system/mcp-servers/oauth/%63allback", 502),
+                ("//api/system/mcp-servers/oauth/callback", 502),
+                ("/api/system/mcp-servers/oauth/callback/", 502),
+                ("/extensions", 200), ("/%65xtensions", 200),
+                ("//extensions", 200), ("/extensions/", 200),
             ):
-                request = Request(origin + path + "?code=" + marker + "&state=" + marker,
+                request = Request(origin + path + "?code=" + marker + "&state=" + marker + "&mcp_oauth_result=" + marker,
                                   headers={"Referer": origin + "/auth/oidc/callback?code=" + marker})
                 for attempt in range(50):
                     try:
@@ -55,10 +61,16 @@ def main():
                     assert response.headers["Cache-Control"] == "no-store"
                     if expected == 200:
                         assert b"Fixture SPA callback" in response.read()
+            for path in ("/auth/oidc/callback", "/api/system/mcp-servers/oauth/callback", "/extensions"):
+                request = Request(origin + "/assets/proxy-log-probe", headers={"Referer": origin + path + "?mcp_oauth_result=" + marker})
+                with urlopen(request, timeout=2) as response:
+                    assert response.code == 200
             logs = subprocess.check_output(["docker", "logs", name], stderr=subprocess.STDOUT, text=True)
             assert marker not in logs, "回调参数进入 Nginx 日志"
             assert 'GET /auth/oidc/callback HTTP/1.1" 200' in logs
             assert 'GET /api/auth/oidc/callback HTTP/1.1" 502' in logs
+            assert 'GET /api/system/mcp-servers/oauth/callback HTTP/1.1" 502' in logs
+            assert 'GET /extensions HTTP/1.1" 200' in logs
             print("Passed: actual Nginx callback DOM response, no-store/no-referrer, success/failure query and referer redaction")
         except Exception:
             print(subprocess.run(["docker", "logs", name], capture_output=True, text=True).stderr)

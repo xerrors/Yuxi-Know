@@ -57,7 +57,7 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
         query = request.url.query
         # 代理可转发原始多斜杠 URI；分类使用归一化路径，日志仍保留请求路径。
         path = normpath("/" + request.url.path.lstrip("/"))
-        if path.startswith(("/api/auth/oidc/", "/auth/oidc/")):
+        if path.startswith(("/api/auth/oidc/", "/auth/oidc/", "/api/system/mcp-servers/oauth/", "/system/mcp-servers/oauth/")):
             query = ""
         # 格式化日志消息，添加处理时间
         log_message = (

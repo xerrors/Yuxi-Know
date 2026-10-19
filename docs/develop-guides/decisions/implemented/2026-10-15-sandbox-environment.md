@@ -80,7 +80,7 @@ Web 用户设置只增加状态和重建操作。正在使用环境的 Run 和�
 
 #### 实现方案
 
-user_sandboxes 的 nullable paused_at 拥有平台确认休眠完成的时间，app-init 从当前 ORM 直接创建该列，数据库初始化遵循[首个 Schema 基线决策](2026-10-15-initial-schema-baseline.md)。CubeAdapter.pause 返回是否由本次操作确认休眠，provider 仅在确实执行休眠后记录确认时间，观察到既有外部休眠时保留未知，创建或成功恢复后清除旧时间。Web 状态查询返回 UTC 时间、实际空闲阈值和服务端观察时间；仅运行空闲且无错误时给出预计休眠阈值时间。休眠与命令策略沿用原 Owner。
+user_sandboxes 的 nullable paused_at 拥有平台确认休眠完成的时间，app-init 从当前 ORM 直接创建该列，数据库初始化遵循[首个 Schema 基线决策](2026-10-19-schema-baseline-one.md)。CubeAdapter.pause 返回是否由本次操作确认休眠，provider 仅在确实执行休眠后记录确认时间，观察到既有外部休眠时保留未知，创建或成功恢复后清除旧时间。Web 状态查询返回 UTC 时间、实际空闲阈值和服务端观察时间；仅运行空闲且无错误时给出预计休眠阈值时间。休眠与命令策略沿用原 Owner。
 
 设置卡片复用现有上海时区日期格式与状态标签，在状态区域展示休眠确认时间和时长，或已空闲时长与预计剩余时间。浏览器时间按服务端快照校正，每秒本地更新时长、每 15 秒重新读取真实状态，卸载清理定时器和迟到查询。阈值到达只显示等待休眠，忙碌状态不提供倒计时；历史时间为空则显示记录未知。接受重建结果时清除旧刷新资格及 loading，旧请求无法覆盖新环境。当前用户文案和运维行为由[沙盒运维参考](../../../advanced/sandbox-operations.md#运维与验证)拥有。
 
@@ -262,7 +262,7 @@ Node 24 系列标签随上游维护更新，构建验收记录实际 patch；Pyt
 | 时间来自真实状态，不改变原实例 | 从活动时间猜测休眠，恢复后残留旧时间 | provider 与 user_sandboxes | 真实 HTTP、命令、休眠恢复和数据库回读；sandbox 21 passed | 外部暂停后维护仍为 null；忙碌无截止时间；恢复清除时间 | Passed |
 | 展示时间、时长、倒计时并诚实显示边界 | 时钟偏差、忙碌倒计时、零值假休眠 | settings 卡片 | DOM unit、lint/build、真实 Vite 浏览器组件、浅/深色和 1440/1024/768px 截图 | 旧时间未知、任务忙碌、阈值到达、读取失败、旧查询与重建交错 | Passed |
 
-数据库初始化及其验证由[首个 Schema 基线决策](2026-10-15-initial-schema-baseline.md)取代；下述迁移命令和运行结果仅保留为历史验证记录。
+数据库初始化及其验证由[首个 Schema 基线决策](2026-10-19-schema-baseline-one.md)取代；下述迁移命令和运行结果仅保留为历史验证记录。
 
 实际执行 `docker compose exec -T api uv run --group test pytest test/integration/services/test_schema_migration_version.py -q`（19 passed）、`pytest test/integration/sandbox -q`（21 passed）、`pytest test/e2e/test_cube_agent_execution_e2e.py -q`（1 passed）及 `pytest test/unit -m 'not slow' -q`（2582 passed、59 skipped）。全部 pytest 命令在 API 容器内通过 `uv run --group test` 执行。
 

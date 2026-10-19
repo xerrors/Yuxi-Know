@@ -161,6 +161,18 @@ def expand_skill_closure(
     return result
 
 
+def connected_skills(slugs: list[str], runtime_skills: dict[str, RuntimeSkill], available_mcps: set[str]) -> list[str]:
+    """Skill 任意层依赖的 MCP 不可用时，不开放该 Skill 的工具。"""
+    return [
+        slug
+        for slug in slugs
+        if all(
+            set(runtime_skills[dependency].get("mcps", [])).issubset(available_mcps)
+            for dependency in expand_skill_closure([slug], runtime_skills)
+        )
+    ]
+
+
 def build_dependency_bundle(
     activated_skills: list[str],
     runtime_skills: dict[str, RuntimeSkill],

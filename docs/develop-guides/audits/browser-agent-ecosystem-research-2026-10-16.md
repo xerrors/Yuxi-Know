@@ -66,6 +66,6 @@ Chrome 136 起，Chrome 不再对默认数据目录响应 `--remote-debugging-po
 
 本调研结论状态为 `Inspected`：读取了本地沙盒文档、模板构建文件和各方案官方文档/仓库；GitHub 星标只作为项目关注度快照。真实 Yuxi 对话验证显示，稳定常识没有触发工具。旧提示词下，一项简单官方文档事实触发 4 次 `web_search` 和 4 次结果 `grep`；提示词改为简单问题最多搜索一次后，新对话只调用 1 次 `web_search`、读取一次结果并引用官方链接。指定页面任务按需读取 browser 与 chat-widgets Skill，调用 Playwright 打开 example.com 并保存截图；数据库中的最终回复使用 Image Widget，真实 DOM 图片尺寸为 1280×823，且没有 `present_artifacts` 调用。A/B 标记结果见上文。
 
-数据库 schema v1→v4 已在部署侧直接调整，应用代码没有保留历史迁移脚本；数据处置与备份校验见[数据库调整记录](../decisions/implemented/2026-10-16-business-schema-v1-to-v4-migration.md)。浏览器操作接入官方 `agent-browser` 和 `playwright-cli` Skill，推荐入口、按需安装与 CLI 配置边界见[浏览器能力决策](../decisions/implemented/2026-10-16-agent-browser-capability-boundary.md)。上文 Python Playwright 基线结果不覆盖两个 CLI 的运行与登录态。
+数据库 schema v1→v4 已在部署侧直接调整，应用代码没有保留历史迁移脚本；数据处置与备份校验见[数据库调整记录](../decisions/implemented/2026-10-19-schema-baseline-one.md)。浏览器操作接入官方 `agent-browser` 和 `playwright-cli` Skill，推荐入口、按需安装与 CLI 配置边界见[浏览器能力决策](../decisions/implemented/2026-10-16-agent-browser-capability-boundary.md)。上文 Python Playwright 基线结果不覆盖两个 CLI 的运行与登录态。
 
 仍未验证真实第三方账号登录、同一用户并行 Profile 冲突、VM 重建后的状态保留、浏览器镜像体积和运行性能。开源候选项目均为文档调研，没有安装对比。

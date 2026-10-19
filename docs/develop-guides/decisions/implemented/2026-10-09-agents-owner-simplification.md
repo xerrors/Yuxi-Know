@@ -62,4 +62,4 @@ docker exec yuxi-owner-api uv run --no-sync --group test pytest test/e2e/test_se
 
 附件表增加明确的 Schema 维护成本，并删除对象 manifest、JSON 归属反查、多处记录补写和文件 advisory lock。准备期间保留临时内容；就绪提交后删除来源，清理失败由现有恢复循环重试。跨存储不具有原子事务，持久准备状态和 ready 消费门禁拥有恢复边界。Workdir 修改不会被重复准备覆盖，草稿不承担正式内容的永久备份。
 
-当前数据库基线由[初始 Schema 决定](2026-10-15-initial-schema-baseline.md)拥有，[app-init](2026-10-18-app-initialization.md) 执行初始化并拒绝不兼容版本；本记录中的 v5→v6 验证只保留为历史证据。不导入历史 JSON，不转换缺失快照。需要历史数据支持时单独进行一次性转换。Session 默认配置更新只影响后续普通输入，已接收配置与当前 Run 保持各自时间快照。协作等待继续执行，人工等待要求响应，未读标记单独展示。
+当前数据库基线由[初始 Schema 决定](2026-10-19-schema-baseline-one.md)拥有，[app-init](2026-10-18-app-initialization.md) 执行初始化并拒绝不兼容版本；本记录中的 v5→v6 验证只保留为历史证据。不导入历史 JSON，不转换缺失快照。需要历史数据支持时单独进行一次性转换。Session 默认配置更新只影响后续普通输入，已接收配置与当前 Run 保持各自时间快照。协作等待继续执行，人工等待要求响应，未读标记单独展示。

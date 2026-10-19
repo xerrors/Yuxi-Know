@@ -34,24 +34,15 @@ from test.integration.support.postgres_schema import (
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
 
-@pytest.mark.parametrize(
-    "domain, version", [("business", 1), ("business", 2), ("business", 3), ("business", 12), ("business", 13), ("knowledge", 3)]
-)
-async def test_incompatible_schema_is_rejected_without_modifying_data(monkeypatch, domain, version):
-    """不兼容版本在 DDL 前失败，曾支持的升级入口也不得修改数据。"""
+@pytest.mark.parametrize("business,knowledge", [(2, 1), (3, 1), (4, 1), (5, 1), (6, 1), (7, 1), (8, 2), (1, 2)])
+async def test_incompatible_schema_is_rejected_without_modifying_data(monkeypatch, business, knowledge):
+    """历史及未来版本不再隐式升级，数据与两个版本均保持原值。"""
     schema, admin, engine, manager = await _create_isolated_manager("pytest_old_business")
     try:
         await create_business_tables(manager)
         await create_schema_version_table(manager)
-        await record_schema_version(manager, "business", BUSINESS_SCHEMA_VERSION)
-        await record_schema_version(manager, "knowledge", KNOWLEDGE_SCHEMA_VERSION)
-        await record_schema_version(manager, domain, version)
-        if domain == "business" and version == 1:
-            async with engine.begin() as conn:
-                await conn.execute(text("ALTER TABLE session_cooperation_runtimes ADD COLUMN idle_since timestamptz"))
-                await conn.execute(text("ALTER TABLE session_cooperation_runtimes ADD COLUMN released boolean NOT NULL"))
-            with pytest.raises(RuntimeError, match="business=1"):
-                await require_current_schema(manager)
+        await record_schema_version(manager, "business", business)
+        await record_schema_version(manager, "knowledge", knowledge)
         async with engine.begin() as conn:
             await conn.execute(
                 text(
@@ -61,9 +52,11 @@ async def test_incompatible_schema_is_rejected_without_modifying_data(monkeypatc
             )
         monkeypatch.setattr(manager, "initialize", lambda: None)
         monkeypatch.setattr(manager, "close", AsyncMock())
+        with pytest.raises(RuntimeError, match="incomplete or incompatible"):
+            await require_current_schema(manager)
         with pytest.raises(RuntimeError, match="Unsupported Yuxi schema"):
             await schema_bootstrap.initialize_schema(manager)
-        assert (await get_schema_versions(manager))[domain] == version
+        assert await get_schema_versions(manager) == {"business": business, "knowledge": knowledge}
         async with engine.connect() as conn:
             assert await conn.scalar(text("SELECT password_hash FROM users WHERE uid='existing'")) == "original"
             assert await conn.scalar(text("SELECT count(*) FROM oidc_identities")) == 0
@@ -183,7 +176,7 @@ async def test_fresh_business_schema_contains_input_lifecycle_without_request_ta
             "thread_id",
         } <= input_columns
         assert "conversation_thread_id" not in input_columns
-        assert BUSINESS_SCHEMA_VERSION == 4
+        assert BUSINESS_SCHEMA_VERSION == 1
         assert KNOWLEDGE_SCHEMA_VERSION == 1
     finally:
         await _drop_isolated_schema(schema, admin_engine, scoped_engine)
@@ -509,6 +502,16 @@ async def test_fresh_initializer_creates_complete_baseline_and_restarts_without_
                 )
             ).one()
             assert tuple(paused_at) == ("timestamp with time zone", "YES")
+        async with engine.connect() as conn:
+            mcp_columns = set(
+                (await conn.execute(text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_schema=current_schema() AND table_name='mcp_servers'"
+                ))).scalars()
+            )
+        assert {"mcp_servers", "mcp_connections", "mcp_oauth_attempts"} <= tables
+        assert {"auth_mode", "oauth_config", "oauth_secret", "oauth_registration"} <= mcp_columns
+        assert {"icon", "tags"}.isdisjoint(mcp_columns)
         async with manager.AsyncSession.begin() as session:
             session.add(UserSandbox(uid="fixture", envd_token="fixture-token", operation_id="fixture-operation"))
             session.add(KnowledgeBase(kb_id="existing", name="Preserved", kb_type="milvus"))

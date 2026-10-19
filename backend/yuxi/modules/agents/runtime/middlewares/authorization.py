@@ -10,8 +10,8 @@ from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.repositories.definitions import AgentRepository
 from yuxi.modules.agents.runtime.context import refresh_agent_context_resources
 from yuxi.modules.agents.services.event_writer import append_run_event_best_effort
-from yuxi.modules.extensions.mcp.models import MCPServer
-from yuxi.modules.extensions.skills.runtime import sync_agent_context_skills
+from yuxi.modules.extensions.mcp.service import available_mcp_servers
+from yuxi.modules.extensions.skills.runtime import connected_skills, expand_skill_closure, sync_agent_context_skills
 from yuxi.modules.extensions.tools.builtin import BASE_TOOL_NAMES
 from yuxi.modules.identity.models import User
 
@@ -25,7 +25,7 @@ class RuntimeAuthorizationMiddleware(AgentMiddleware):
 
     async def abefore_model(self, state, runtime):
         """刷新 Skill 输入，投影同步留给实际请求边界。"""
-        await _refresh_execution_resources(runtime.context)
+        await _refresh_execution_resources(runtime.context, state=state)
 
     async def aafter_model(self, state, runtime):
         """模型返回后、审批或工具路由前复查账号与 Agent。"""
@@ -35,16 +35,16 @@ class RuntimeAuthorizationMiddleware(AgentMiddleware):
     async def awrap_model_call(self, request, handler):
         """隐藏本轮已撤销的已注册工具，执行处仍再次检查。"""
         context = request.runtime.context
-        await refresh_execution_authorization(context)
-        tools = [tool for tool in request.tools if tool_allowed(context, tool.name, request.state)]
+        mcp_policy = await refresh_execution_authorization(context, state=request.state)
+        tools = [tool for tool in request.tools if tool_allowed(context, tool.name, request.state, mcp_policy)]
         return await handler(request.override(tools=tools))
 
     async def awrap_tool_call(self, request, handler):
         """Agent 失权终止，依赖失权返回不含资源信息的错误。"""
         context = request.runtime.context
-        await refresh_execution_authorization(context)
+        mcp_policy = await refresh_execution_authorization(context, state=request.state)
         name = request.tool_call["name"]
-        if not tool_allowed(context, name, request.state):
+        if not tool_allowed(context, name, request.state, mcp_policy):
             if context.run_id and not getattr(context, "_capability_warning_sent", False):
                 await append_run_event_best_effort(
                     context.run_id,
@@ -61,7 +61,7 @@ class RuntimeAuthorizationMiddleware(AgentMiddleware):
         return await handler(request)
 
 
-def tool_allowed(context, name: str, state: dict) -> bool:
+def tool_allowed(context, name: str, state: dict, mcp_policy: dict[str, set[str]]) -> bool:
     """按当前资源和已授权 Skill 依赖检查已注册工具。"""
     servers = getattr(context, "mcp_tool_servers", None)
     registered = getattr(context, "registered_builtin_tool_names", None)
@@ -71,30 +71,41 @@ def tool_allowed(context, name: str, state: dict) -> bool:
     allowed_mcps = set(context.mcps)
     allowed_tools = set(context.tools) | set(BASE_TOOL_NAMES)
     active = set(state.get("activated_skills", [])) | set(snapshot["preloaded_skills"])
-    for slug in active & set(snapshot["effective_skills"]):
+    for slug in connected_skills(
+        list(active & set(snapshot["effective_skills"])),
+        snapshot["runtime_skills"],
+        set(mcp_policy),
+    ):
         allowed_tools.update(snapshot["runtime_skills"][slug]["tools"])
         allowed_mcps.update(snapshot["runtime_skills"][slug]["mcps"])
     server = servers.get(name)
     if server:
-        return server in allowed_mcps and server in context.disabled_mcp_tools and name not in context.disabled_mcp_tools[server]
+        return server in allowed_mcps and server in mcp_policy and name not in mcp_policy[server]
     if name in registered:
         return name in allowed_tools
     return name in getattr(context, "middleware_tool_names", set())
 
 
-async def refresh_execution_authorization(context) -> None:
+async def refresh_execution_authorization(context, *, state=None) -> dict[str, set[str]]:
     """在实际模型、摘要与工具请求前解析当前权限并同步投影。"""
-    await _refresh_execution_resources(context)
+    mcp_policy = await _refresh_execution_resources(context, state=state)
     await sync_agent_context_skills(context)
+    return mcp_policy
 
 
-async def _refresh_execution_resources(context) -> None:
+async def _refresh_execution_resources(context, *, state=None) -> dict[str, set[str]]:
     """刷新模型输入与工具可见性，读取资源不扫描投影。"""
     async with pg_manager.get_async_session_context() as db:
         user, agent, run = await _require_execution_actor(context, db=db)
         await refresh_agent_context_resources(context, db=db, user=user, agent=agent)
-        rows = await db.execute(select(MCPServer.slug, MCPServer.disabled_tools).where(MCPServer.enabled == 1))
-        context.disabled_mcp_tools = {slug: set(disabled or []) for slug, disabled in rows}
+        snapshot = context.skill_runtime_snapshot
+        candidates = set(context.mcps)
+        if snapshot:
+            active = [*snapshot["preloaded_skills"], *((state or {}).get("activated_skills", []))]
+            for slug in expand_skill_closure(active, snapshot["runtime_skills"]):
+                if slug in snapshot["effective_skills"]:
+                    candidates.update(snapshot["runtime_skills"][slug]["mcps"])
+        servers = await available_mcp_servers(db, candidates, user_id=user.id)
         if context._capability_limited and not getattr(context, "_capability_warning_sent", False) and run is not None:
             await append_run_event_best_effort(
                 run.id,
@@ -107,6 +118,7 @@ async def _refresh_execution_resources(context) -> None:
                 },
             )
             context._capability_warning_sent = True
+        return {slug: set(server.disabled_tools or []) for slug, server in servers.items()}
 
 
 async def _require_execution_actor(context, *, db):

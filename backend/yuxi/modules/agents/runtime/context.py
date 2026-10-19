@@ -201,8 +201,7 @@ class BaseContext:
     mcp_tool_servers: dict[str, str] | None = field(default=None, repr=False, metadata={"configurable": False, "hide": True})
     registered_builtin_tool_names: set[str] | None = field(default=None, repr=False, metadata={"configurable": False, "hide": True})
     middleware_tool_names: set[str] = field(default_factory=set, repr=False, metadata={"configurable": False, "hide": True})
-    disabled_mcp_tools: dict[str, set[str]] = field(default_factory=dict, repr=False, metadata={"configurable": False, "hide": True})
-    active_skill_mcp_tools: dict[str, Any] = field(default_factory=dict, repr=False, metadata={"configurable": False, "hide": True})
+    mcp_tools: dict[str, list[Any]] = field(default_factory=dict, repr=False, metadata={"configurable": False, "hide": True})
     _runtime_prepared: bool = field(default=False, repr=False, metadata={"configurable": False, "hide": True})
     _resource_selections: dict[str, ResourceSelection] | None = field(
         default=None, repr=False, metadata={"configurable": False, "hide": True}
@@ -452,14 +451,10 @@ async def resolve_agent_resource_options(
         knowledge_bases = await knowledge_base.get_knowledge_bases_by_user(user)
         options["knowledges"] = [_resource_option(item.kb_id, item.name, item.description) for item in knowledge_bases if item.kb_id]
     if "mcps" in fields_to_load:
-        from yuxi.modules.extensions.mcp.repository import get_all_mcp_servers
-        from yuxi.modules.extensions.mcp.service import get_enabled_mcp_server_slugs
+        from yuxi.modules.extensions.mcp.service import get_enabled_mcp_servers
 
-        servers = await get_all_mcp_servers(db)
-        enabled_slugs = set(await get_enabled_mcp_server_slugs(db=db))
-        options["mcps"] = [
-            _resource_option(server.slug, server.name, server.description) for server in servers if server.slug in enabled_slugs
-        ]
+        servers = await get_enabled_mcp_servers(db=db)
+        options["mcps"] = [_resource_option(server.slug, server.name, server.description) for server in servers]
     if "skills" in fields_to_load:
         from yuxi.modules.extensions.skills.repository import SkillRepository
 

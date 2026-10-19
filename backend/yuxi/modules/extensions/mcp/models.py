@@ -7,6 +7,10 @@ from sqlalchemy import (
     Column,
     DateTime,
     Integer,
+    ForeignKey,
+    Text,
+    UniqueConstraint,
+    CheckConstraint,
     String,
 )
 
@@ -31,9 +35,12 @@ class MCPServer(Base):
     timeout = Column(Integer, nullable=True, comment="HTTP 超时时间（秒）")
     sse_read_timeout = Column(Integer, nullable=True, comment="SSE 读取超时（秒）")
 
+    auth_mode = Column(String(20), nullable=False, default="headers", server_default="headers")
+    oauth_config = Column(JSON, nullable=True)
+    oauth_secret = Column(Text, nullable=True)
+    oauth_registration = Column(Text, nullable=True)
+
     # UI 增强字段
-    tags = Column(JSON, nullable=True, comment="标签数组")
-    icon = Column(String(50), nullable=True, comment="图标（emoji）")
 
     # 状态字段
     enabled = Column(Integer, nullable=False, default=1, comment="是否启用：1=是，0=否")
@@ -56,10 +63,11 @@ class MCPServer(Base):
             "transport": self.transport,
             "url": self.url,
             "headers": self.headers or {},
+            "auth_mode": self.auth_mode or "headers",
+            "oauth_config": self.oauth_config,
+            "oauth_client_secret_set": bool(self.oauth_secret),
             "timeout": self.timeout,
             "sse_read_timeout": self.sse_read_timeout,
-            "tags": self.tags or [],
-            "icon": self.icon,
             "enabled": bool(self.enabled),
             "disabled_tools": self.disabled_tools or [],
             "created_by": self.created_by,
@@ -93,3 +101,35 @@ class MCPServer(Base):
         if self.disabled_tools:
             config["disabled_tools"] = self.disabled_tools
         return config
+
+
+class MCPConnection(Base):
+    """每名用户每个服务器只有一个连接，世代阻止旧授权复活。"""
+
+    __tablename__ = "mcp_connections"
+    __table_args__ = (
+        UniqueConstraint("server_id", "user_id", name="uq_mcp_connection_user"),
+        CheckConstraint("status IN ('disconnected', 'connected', 'reconnect_required')", name="ck_mcp_connection_status"),
+    )
+    id = Column(Integer, primary_key=True)
+    server_id = Column(Integer, ForeignKey("mcp_servers.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    generation = Column(Integer, nullable=False, default=0, server_default="0")
+    status = Column(String(24), nullable=False, default="disconnected", server_default="disconnected")
+    config_revision = Column(String(64), nullable=False, default="", server_default="")
+    credentials = Column(Text, nullable=True)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
+
+
+class MCPOAuthAttempt(Base):
+    """一次性浏览器授权事务，不拥有长期授权状态。"""
+
+    __tablename__ = "mcp_oauth_attempts"
+    state_hash = Column(String(64), primary_key=True)
+    connection_id = Column(Integer, ForeignKey("mcp_connections.id", ondelete="CASCADE"), nullable=False)
+    browser_hash = Column(String(64), nullable=False)
+    generation = Column(Integer, nullable=False)
+    config_revision = Column(String(64), nullable=False)
+    payload = Column(Text, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)

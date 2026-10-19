@@ -47,12 +47,17 @@
             :danger="server?.enabled !== false"
             :aria-label="`${actionLabel} MCP`"
             :title="`${actionLabel} MCP`"
-            @click="handleDangerAction"
+            @click="handleSetServerEnabled(server, server.enabled === false)"
             class="lucide-icon-btn extension-detail-action"
           >
             <Plus v-if="server?.enabled === false" :size="14" />
-            <Trash2 v-else :size="14" />
+            <Check v-else :size="14" />
             <span>{{ actionLabel }}</span>
+          </a-button>
+          <a-button v-if="server && !server.is_builtin" type="text" danger
+            aria-label="删除 MCP" @click="confirmDeleteServer(server)"
+            class="lucide-icon-btn extension-detail-action">
+            <Trash2 :size="14" /><span>删除</span>
           </a-button>
         </a-space>
       </div>
@@ -60,182 +65,68 @@
 
     <template #panel-general>
       <div class="extension-detail-view mcp-general-view">
-        <div v-if="isEditing" class="edit-panel">
-          <div class="edit-panel-header">
+        <McpFormModal v-model:open="isEditing" :edit-mode="true" :edit-data="server" @submitted="fetchServer" />
+        <section v-if="server.auth_mode === 'oauth'" class="mcp-connection-panel" aria-label="个人授权">
+          <div>
+            <h2>个人授权</h2>
+            <p>智能体将使用你的个人账号访问此服务。</p>
+          </div>
+          <McpConnectionControls :server="server" @changed="fetchServer" />
+        </section>
+
+        <section class="mcp-info-section" aria-label="连接信息">
+          <h2>连接信息</h2>
+          <dl class="mcp-info-list">
+            <div v-if="server.description" class="mcp-info-row">
+              <dt>描述</dt>
+              <dd>{{ server.description }}</dd>
+            </div>
+            <div class="mcp-info-row">
+              <dt>认证方式</dt>
+              <dd>{{ server.auth_mode === 'oauth' ? '个人账号授权' : '共享凭据' }}</dd>
+            </div>
+            <div class="mcp-info-row">
+              <dt>传输类型</dt>
+              <dd><code>{{ server.transport }}</code></dd>
+            </div>
+            <template v-if="server.transport === 'streamable_http' || server.transport === 'sse'">
+              <div v-if="server.url" class="mcp-info-row">
+                <dt>服务地址</dt>
+                <dd><code>{{ server.url }}</code></dd>
+              </div>
+              <div v-if="server.headers && Object.keys(server.headers).length > 0" class="mcp-info-row">
+                <dt>请求头</dt>
+                <dd><pre class="code-pre">{{ JSON.stringify(server.headers, null, 2) }}</pre></dd>
+              </div>
+              <div v-if="server.timeout" class="mcp-info-row">
+                <dt>HTTP 超时</dt>
+                <dd>{{ server.timeout }} 秒</dd>
+              </div>
+              <div v-if="server.sse_read_timeout" class="mcp-info-row">
+                <dt>SSE 读取超时</dt>
+                <dd>{{ server.sse_read_timeout }} 秒</dd>
+              </div>
+            </template>
+          </dl>
+        </section>
+
+        <section class="mcp-info-section mcp-maintenance-section" aria-label="维护信息">
+          <h2>维护信息</h2>
+          <dl class="mcp-maintenance-list">
             <div>
-              <h3>编辑 MCP</h3>
-              <p>修改后保存会立即更新当前 MCP 配置。</p>
+              <dt>创建人</dt>
+              <dd>{{ server.created_by || '—' }}</dd>
             </div>
-          </div>
-
-          <a-form layout="vertical" class="extension-form inline-edit-form">
-            <section class="form-section">
-              <div class="form-section-title">
-                <span>基础信息</span>
-                <small>定义 MCP 的名称、描述与展示方式。</small>
-              </div>
-              <div class="form-grid form-grid-three">
-                <a-form-item label="MCP 标识" required class="form-item">
-                  <a-input v-model:value="editForm.slug" disabled />
-                </a-form-item>
-                <a-form-item label="MCP 名称" required class="form-item">
-                  <a-input v-model:value="editForm.name" placeholder="请输入 MCP 展示名称" />
-                </a-form-item>
-                <a-form-item label="传输类型" required class="form-item">
-                  <a-select v-model:value="editForm.transport">
-                    <a-select-option value="streamable_http">streamable_http</a-select-option>
-                    <a-select-option value="sse">sse</a-select-option>
-                  </a-select>
-                </a-form-item>
-                <a-form-item label="图标" class="form-item">
-                  <a-input
-                    v-model:value="editForm.icon"
-                    placeholder="输入 emoji，如 🧠"
-                    :maxlength="2"
-                  />
-                </a-form-item>
-              </div>
-              <a-form-item label="描述" class="form-item form-item-full">
-                <a-textarea
-                  v-model:value="editForm.description"
-                  placeholder="请输入 MCP 描述"
-                  :rows="2"
-                />
-              </a-form-item>
-            </section>
-
-            <section class="form-section">
-              <div class="form-section-title">
-                <span>连接配置</span>
-                <small>配置当前传输方式需要的连接参数。</small>
-              </div>
-              <template
-                v-if="editForm.transport === 'streamable_http' || editForm.transport === 'sse'"
-              >
-                <a-form-item label="MCP URL" required class="form-item form-item-full">
-                  <a-input v-model:value="editForm.url" placeholder="https://example.com/mcp" />
-                </a-form-item>
-                <div class="form-grid">
-                  <a-form-item label="HTTP 超时（秒）" class="form-item">
-                    <a-input-number
-                      v-model:value="editForm.timeout"
-                      :min="1"
-                      :max="300"
-                      style="width: 100%"
-                    />
-                  </a-form-item>
-                  <a-form-item label="SSE 读取超时（秒）" class="form-item">
-                    <a-input-number
-                      v-model:value="editForm.sse_read_timeout"
-                      :min="1"
-                      :max="300"
-                      style="width: 100%"
-                    />
-                  </a-form-item>
-                </div>
-              </template>
-              <a-form-item label="标签" class="form-item form-item-full">
-                <a-select
-                  v-model:value="editForm.tags"
-                  mode="tags"
-                  placeholder="输入标签后回车添加"
-                  style="width: 100%"
-                />
-              </a-form-item>
-            </section>
-
-            <section class="form-section">
-              <div class="form-section-title">
-                <span>高级配置</span>
-                <small>请求头会直接影响 MCP 连接。</small>
-              </div>
-              <template
-                v-if="editForm.transport === 'streamable_http' || editForm.transport === 'sse'"
-              >
-                <a-form-item label="HTTP 请求头" class="form-item form-item-full">
-                  <a-textarea
-                    v-model:value="editForm.headersText"
-                    placeholder='JSON 格式，如：{"Authorization": "Bearer xxx"}'
-                    :rows="4"
-                    class="config-textarea"
-                  />
-                  <div class="form-helper">请输入合法 JSON 对象，留空表示不发送额外请求头。</div>
-                </a-form-item>
-              </template>
-            </section>
-          </a-form>
-
-          <div class="edit-panel-actions">
-            <a-button
-              size="small"
-              @click="cancelEdit"
-              :disabled="editLoading"
-              class="lucide-icon-btn"
-            >
-              <template #icon><X :size="14" /></template>
-              取消
-            </a-button>
-            <a-button
-              type="primary"
-              size="small"
-              @click="handleSaveEdit"
-              :loading="editLoading"
-              class="lucide-icon-btn"
-            >
-              <template #icon><Save :size="14" /></template>
-              保存
-            </a-button>
-          </div>
-        </div>
-
-        <div v-else class="info-grid extension-detail-divider-list">
-          <div class="info-item" v-if="server.description">
-            <label>描述</label>
-            <span>{{ server.description }}</span>
-          </div>
-          <div class="info-item">
-            <label>传输类型</label>
-            <span>
-              <a-tag :color="getTransportColor(server.transport)">{{ server.transport }}</a-tag>
-            </span>
-          </div>
-          <div class="info-item" v-if="Array.isArray(server.tags) && server.tags.length > 0">
-            <label>标签</label>
-            <span>
-              <a-tag v-for="tag in server.tags" :key="tag">{{ tag }}</a-tag>
-            </span>
-          </div>
-          <template v-if="server.transport === 'streamable_http' || server.transport === 'sse'">
-            <div class="info-item" v-if="server.url">
-              <label>MCP URL</label>
-              <span class="code-inline text-break-all">{{ server.url }}</span>
+            <div>
+              <dt>创建时间</dt>
+              <dd>{{ formatTime(server.created_at) }}</dd>
             </div>
-            <div class="info-item" v-if="server.headers && Object.keys(server.headers).length > 0">
-              <label>请求头</label>
-              <pre class="code-pre">{{ JSON.stringify(server.headers, null, 2) }}</pre>
+            <div>
+              <dt>更新时间</dt>
+              <dd>{{ formatTime(server.updated_at) }}</dd>
             </div>
-            <div class="info-item" v-if="server.timeout">
-              <label>HTTP 超时</label>
-              <span>{{ server.timeout }} 秒</span>
-            </div>
-            <div class="info-item" v-if="server.sse_read_timeout">
-              <label>SSE 读取超时</label>
-              <span>{{ server.sse_read_timeout }} 秒</span>
-            </div>
-          </template>
-          <div class="info-item">
-            <label>创建时间</label>
-            <span>{{ formatTime(server.created_at) }}</span>
-          </div>
-          <div class="info-item">
-            <label>更新时间</label>
-            <span>{{ formatTime(server.updated_at) }}</span>
-          </div>
-          <div class="info-item">
-            <label>创建人</label>
-            <span>{{ server.created_by }}</span>
-          </div>
-        </div>
+          </dl>
+        </section>
       </div>
     </template>
 
@@ -331,10 +222,11 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import {
+  Check,
   ChevronRight,
   Zap,
   Pencil,
@@ -344,10 +236,10 @@ import {
   Info,
   Copy,
   Settings2,
-  Wrench,
-  Save,
-  X
+  Wrench
 } from '@lucide/vue'
+import McpFormModal from './McpFormModal.vue'
+import McpConnectionControls from './McpConnectionControls.vue'
 import ExtensionDetailLayout from '@/shared/ui/ExtensionDetailLayout.vue'
 import { mcpApi } from '@/apis/mcp_api'
 import { formatFullDateTime } from '@/shared/lib/time'
@@ -367,31 +259,14 @@ const toolsError = ref(null)
 const toolSearchText = ref('')
 const toggleToolLoading = ref(null)
 
-const mcpDetailTabs = computed(() => {
-  const tabs = [{ key: 'general', label: '信息', icon: Settings2 }]
-  tabs.push({ key: 'tools', label: `工具 (${tools.value.length})`, icon: Wrench })
-  return tabs
-})
+const mcpDetailTabs = [
+  { key: 'general', label: '信息', icon: Settings2 },
+  { key: 'tools', label: '工具', icon: Wrench }
+]
 
 const isEditing = ref(false)
-const editLoading = ref(false)
-
-const editForm = reactive({
-  slug: '',
-  name: '',
-  description: '',
-  transport: 'streamable_http',
-  url: '',
-  headersText: '',
-  timeout: null,
-  sse_read_timeout: null,
-  tags: [],
-  icon: ''
-})
-
 const actionLabel = computed(() => {
-  if (server.value?.enabled === false) return '添加'
-  return server.value?.is_builtin ? '移除' : '删除'
+  return server.value?.enabled === false ? '启用' : '停用'
 })
 
 const filteredTools = computed(() => {
@@ -410,98 +285,8 @@ const goBack = () => {
 
 const formatTime = (timeStr) => formatFullDateTime(timeStr)
 
-const getTransportColor = (transport) => {
-  const colors = { sse: 'orange', streamable_http: 'blue' }
-  return colors[transport] || 'blue'
-}
-
-const resetEditForm = (data) => {
-  Object.assign(editForm, {
-    slug: data?.slug || '',
-    name: data?.name || '',
-    description: data?.description || '',
-    transport: data?.transport || 'streamable_http',
-    url: data?.url || '',
-    headersText: data?.headers ? JSON.stringify(data.headers, null, 2) : '',
-    timeout: data?.timeout,
-    sse_read_timeout: data?.sse_read_timeout,
-    tags: data?.tags || [],
-    icon: data?.icon || ''
-  })
-}
-
 const startEdit = () => {
-  if (!server.value) return
-  detailTab.value = 'general'
-  resetEditForm(server.value)
-  isEditing.value = true
-}
-
-const cancelEdit = () => {
-  isEditing.value = false
-  resetEditForm(server.value)
-}
-
-const buildEditPayload = () => {
-  let headers = null
-  if (editForm.headersText.trim()) {
-    try {
-      headers = JSON.parse(editForm.headersText)
-    } catch {
-      message.error('请求头 JSON 格式错误')
-      return null
-    }
-  }
-
-  return {
-    name: editForm.name,
-    description: editForm.description || null,
-    transport: editForm.transport,
-    url: editForm.url || null,
-    headers,
-    timeout: editForm.timeout || null,
-    sse_read_timeout: editForm.sse_read_timeout || null,
-    tags: editForm.tags.length > 0 ? editForm.tags : null,
-    icon: editForm.icon || null
-  }
-}
-
-const validateEditPayload = (data) => {
-  if (!data.name?.trim()) {
-    message.error('MCP 名称不能为空')
-    return false
-  }
-  if (!data.transport) {
-    message.error('请选择传输类型')
-    return false
-  }
-  if (['sse', 'streamable_http'].includes(data.transport) && !data.url?.trim()) {
-    message.error('HTTP 类型必须填写 MCP URL')
-    return false
-  }
-  return true
-}
-
-const handleSaveEdit = async () => {
-  if (!server.value) return
-  const data = buildEditPayload()
-  if (!data || !validateEditPayload(data)) return
-
-  try {
-    editLoading.value = true
-    const result = await mcpApi.updateMcpServer(server.value.slug, data)
-    if (result.success) {
-      message.success('MCP 更新成功')
-      isEditing.value = false
-      await fetchServer()
-    } else {
-      message.error(result.message || '更新失败')
-    }
-  } catch (err) {
-    message.error(err.message || '更新失败')
-  } finally {
-    editLoading.value = false
-  }
+  if (server.value) isEditing.value = true
 }
 
 const fetchServer = async () => {
@@ -509,12 +294,6 @@ const fetchServer = async () => {
     loading.value = true
     const result = await mcpApi.getMcpServer(slug.value)
     if (result.success) {
-      if (result.data?.enabled === false) {
-        server.value = null
-        message.info('请先添加 MCP 后再查看详情')
-        router.replace({ path: '/extensions', query: { tab: 'mcp' } })
-        return
-      }
       server.value = result.data
     } else {
       message.error(result.message || '获取 MCP 详情失败')
@@ -591,24 +370,11 @@ const handleTestServer = async () => {
   }
 }
 
-const handleDangerAction = async () => {
-  if (!server.value) return
-  if (server.value.enabled === false) {
-    await handleSetServerEnabled(server.value, true)
-    return
-  }
-  if (server.value.is_builtin) {
-    await handleSetServerEnabled(server.value, false)
-    return
-  }
-  confirmDeleteServer(server.value)
-}
-
 const handleSetServerEnabled = async (srv, enabled) => {
   try {
     const result = await mcpApi.updateMcpServerStatus(srv.slug, enabled)
     if (result.success) {
-      message.success(result.message || `MCP 已${enabled ? '添加' : '移除'}`)
+      message.success(result.message || `MCP 已${enabled ? '启用' : '停用'}`)
       await fetchServer()
     } else {
       message.error(result.message || '操作失败')
@@ -654,136 +420,66 @@ onMounted(() => {
 
 <style lang="less" scoped>
 
-.migration-alert {
-  margin-bottom: 20px;
+.mcp-general-view {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+
+  h2 {
+    margin: 0;
+    color: var(--gray-900);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 22px;
+  }
+
+  dl { margin: 0; }
+  dt { color: var(--gray-500); font-size: 12px; }
+  dd { min-width: 0; margin: 0; color: var(--gray-800); font-size: 13px; line-height: 22px; overflow-wrap: anywhere; }
+  code { font-size: 12px; }
 }
 
-.info-grid {
-  gap: 0;
+.mcp-connection-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 16px 20px;
+  border: 1px solid var(--gray-150);
+  border-radius: 10px;
+  background: var(--gray-25);
 
-  .info-item {
-    padding: 16px 0;
-    border-bottom: 1px solid var(--gray-150);
-  }
+  p { margin: 4px 0 0; color: var(--gray-500); font-size: 12px; line-height: 20px; }
 }
 
-.edit-panel {
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  padding: 0;
-  box-shadow: none;
+.mcp-info-section h2 { margin-bottom: 14px; }
 
-  .edit-panel-header {
-    display: flex;
-    justify-content: space-between;
-    gap: 16px;
-    align-items: flex-start;
-    margin-bottom: 18px;
-    padding-bottom: 16px;
-    border-bottom: 1px solid var(--gray-100);
+.mcp-info-list {
+  display: grid;
+  gap: 14px;
+}
 
-    h3 {
-      margin: 0 0 4px;
-      font-size: 16px;
-      font-weight: 600;
-      color: var(--gray-900);
-    }
+.mcp-info-row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 16px;
 
-    p {
-      margin: 0;
-      font-size: 13px;
-      color: var(--gray-500);
-    }
-  }
+  .code-pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+}
 
-  .inline-edit-form {
-    display: flex;
-    flex-direction: column;
+.mcp-maintenance-section {
+  padding-top: 20px;
+  border-top: 1px solid var(--gray-150);
+}
 
-    :deep(.ant-form-item) {
-      margin-bottom: 0;
-    }
+.mcp-maintenance-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
 
-    :deep(.ant-form-item-label > label) {
-      color: var(--gray-700);
-      font-size: 13px;
-      font-weight: 500;
-    }
-  }
-
-  .form-section {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    padding: 18px 0 0;
-
-    & + .form-section {
-      margin-top: 18px;
-      border-top: 1px solid var(--gray-100);
-    }
-
-    &:first-child {
-      padding-top: 0;
-    }
-  }
-
-  .form-section-title {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-
-    span {
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--gray-900);
-    }
-
-    small {
-      font-size: 12px;
-      color: var(--gray-500);
-    }
-  }
-
-  .form-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px;
-  }
-
-  .form-grid-three {
-    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(120px, 0.45fr);
-  }
-
-  .form-item-full {
-    width: 100%;
-  }
-
-  .form-helper {
-    margin-top: 6px;
-    font-size: 12px;
-    line-height: 1.5;
-    color: var(--gray-500);
-  }
-
-  .config-textarea {
-    font-family: 'Monaco', 'Consolas', monospace;
-    font-size: 13px;
-    line-height: 1.6;
-  }
-
-  .env-editor-shell {
-    padding: 0;
-  }
-
-  .edit-panel-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    margin-top: 18px;
-    padding-top: 16px;
-    border-top: 1px solid var(--gray-100);
-  }
+  dd { margin-top: 4px; }
 }
 
 /* 工具列表样式 */
@@ -920,12 +616,10 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
-  .edit-panel {
-    .form-grid,
-    .form-grid-three {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  }
+  .mcp-info-row { grid-template-columns: 76px minmax(0, 1fr); gap: 12px; }
+  .mcp-maintenance-list { grid-template-columns: 1fr; gap: 12px; }
+  .mcp-maintenance-list > div { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 12px; }
+  .mcp-maintenance-list dd { margin-top: 0; }
 
   .tools-toolbar {
     gap: 8px;

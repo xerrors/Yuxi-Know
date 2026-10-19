@@ -40,8 +40,8 @@ class Skill(Base):
     content_hash = Column(String(128), nullable=True, comment="技能当前完整目录的统一 SHA256 内容摘要")
     share_config = Column(JSON_VALUE, nullable=False, comment="共享权限配置")
     enabled = Column(Boolean, nullable=False, default=True, comment="是否启用")
-    created_by = Column(String(64), nullable=True)
-    updated_by = Column(String(64), nullable=True)
+    created_by = Column(String(128), nullable=True)
+    updated_by = Column(String(128), nullable=True)
     created_at = Column(DateTime(timezone=True), default=utc_now)
     updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
@@ -81,7 +81,7 @@ class SkillVersion(Base):
     dir_path = Column(String(512), nullable=False)
     metadata_json = Column(JSON_VALUE, nullable=False)
     content_hash = Column(String(128), nullable=False)
-    created_by = Column(String(64), nullable=False)
+    created_by = Column(String(128), nullable=False)
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
 
     def to_dict(self) -> dict[str, Any]:

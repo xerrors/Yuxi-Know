@@ -14,7 +14,7 @@ from test.integration.support.module_audit import isolated_audit_store
 import yuxi.modules.models.providers.cache as cache_module
 import yuxi.modules.models.chat as chat_module
 from yuxi.modules.extensions.mcp.models import MCPServer
-from yuxi.modules.extensions.mcp.runtime import clear_mcp_cache
+from yuxi.modules.identity.models import User
 from yuxi.modules.extensions.mcp.service import inspect_mcp_server_tools
 from yuxi.modules.extensions.tools.runtime import resolve_configured_runtime_tools
 from yuxi.modules.models.providers.cache import ModelCache, ModelInfo
@@ -83,14 +83,10 @@ async def test_mcp_wire_failure_reaches_agent_and_management(monkeypatch, transp
                 updated_by="fixture",
             )
             async with sessions.begin() as db:
-                db.add(server)
-            clear_mcp_cache()
-            try:
-                context = SimpleNamespace(tools=[], mcps=[server.slug])
-                with pytest.raises(RuntimeError, match="MCP.*failed-remote.*失败"):
-                    await resolve_configured_runtime_tools(context)
-                assert context.mcp_tool_servers == {}
-                with pytest.raises(ExceptionGroup):
-                    await inspect_mcp_server_tools(server)
-            finally:
-                clear_mcp_cache()
+                db.add_all([server, User(uid="fixture", username="fixture", password_hash="unused", role="user")])
+            context = SimpleNamespace(uid="fixture", tools=[], mcps=[server.slug])
+            with pytest.raises(RuntimeError, match="MCP.*failed-remote.*失败"):
+                await resolve_configured_runtime_tools(context)
+            assert context.mcp_tool_servers == {}
+            with pytest.raises(ExceptionGroup):
+                await inspect_mcp_server_tools(server)

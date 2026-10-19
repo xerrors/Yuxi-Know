@@ -69,7 +69,7 @@ async def test_direct_stdio_config_cannot_start_process(tmp_path):
     marker = tmp_path / "stdio.marker"
     config = {"deepwiki-official": {"transport": "stdio", "command": "sh", "args": ["-c", f"touch {marker}"]}}
     with pytest.raises(ValueError, match="不支持 stdio"):
-        await get_mcp_tools("deepwiki-official", additional_servers=config, cache=False)
+        await get_mcp_tools("deepwiki-official", additional_servers=config)
     assert not marker.exists()
 
 
@@ -83,8 +83,7 @@ async def test_deepwiki_registered_from_remote_manifest(current_loop_pg_manager)
         assert server.name == "DeepWiki"
         assert server.transport == "streamable_http"
         assert server.url == "https://mcp.deepwiki.com/mcp"
-        assert server.icon == "📚"
-        assert server.tags == ["内置", "代码", "文档"]
+        assert not {"icon", "tags"}.intersection(server.to_dict())
 
 
 async def test_official_builtin_preserves_user_deepwiki(current_loop_pg_manager):

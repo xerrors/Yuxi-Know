@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from yuxi.api.dependencies.auth import get_db, get_required_user, get_superadmin_user
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.modules.extensions.mcp.repository import get_all_mcp_servers, get_mcp_server
-from yuxi.modules.extensions.mcp.runtime import get_mcp_tools_stats
+from yuxi.api.routers.extensions.mcp_oauth import router as oauth_router
 from yuxi.modules.extensions.mcp.service import (
     MCPServerNotFoundError,
     create_mcp_server,
@@ -15,6 +15,7 @@ from yuxi.modules.extensions.mcp.service import (
     get_all_mcp_tools,
     inspect_mcp_server_tools,
     is_builtin_mcp_server,
+    personal_connection_states,
     set_server_enabled,
     toggle_tool_enabled,
     update_mcp_server,
@@ -22,6 +23,7 @@ from yuxi.modules.extensions.mcp.service import (
 from yuxi.modules.identity.models import User
 
 mcp = APIRouter(prefix="/system/mcp-servers", tags=["mcp"])
+mcp.include_router(oauth_router)
 
 
 # =============================================================================
@@ -32,6 +34,8 @@ mcp = APIRouter(prefix="/system/mcp-servers", tags=["mcp"])
 class CreateMcpServerRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    auth_mode: str = "headers"
+    oauth_config: dict | None = None
     slug: str = Field(..., description="稳定标识")
     name: str = Field(..., description="展示名称")
     transport: str = Field(..., description="传输类型：sse/streamable_http")
@@ -40,12 +44,13 @@ class CreateMcpServerRequest(BaseModel):
     headers: dict | None = Field(None, description="HTTP 请求头")
     timeout: StrictInt | None = Field(None, description="HTTP 超时时间（秒）")
     sse_read_timeout: StrictInt | None = Field(None, description="SSE 读取超时（秒）")
-    tags: list | None = Field(None, description="标签数组")
-    icon: str | None = Field(None, description="图标（emoji）")
 
 
 class UpdateMcpServerRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+    auth_mode: str | None = None
+    oauth_config: dict | None = None
 
     name: str | None = Field(None, description="展示名称")
     transport: str | None = Field(None, description="传输类型")
@@ -54,8 +59,6 @@ class UpdateMcpServerRequest(BaseModel):
     headers: dict | None = Field(None, description="HTTP 请求头")
     timeout: StrictInt | None = Field(None, description="HTTP 超时时间（秒）")
     sse_read_timeout: StrictInt | None = Field(None, description="SSE 读取超时（秒）")
-    tags: list | None = Field(None, description="标签数组")
-    icon: str | None = Field(None, description="图标（emoji）")
 
 
 class UpdateMcpServerStatusRequest(BaseModel):
@@ -96,20 +99,23 @@ async def get_mcp_servers(
     """获取所有 MCP 服务器配置（普通用户仅获取脱敏的基础信息）"""
     try:
         servers = await get_all_mcp_servers(db)
+        states = await personal_connection_states(db, servers, current_user.id)
         if current_user.role == "superadmin":
-            return {"success": True, "data": [serialize_mcp_server(s) for s in servers]}
+            return {"success": True, "data": [{**serialize_mcp_server(s), "connection_status": states[s.slug]} for s in servers]}
 
         data = []
         for s in servers:
+            if not s.enabled:
+                continue
             data.append(
                 {
                     "slug": s.slug,
+                    "auth_mode": s.auth_mode,
+                    "connection_status": states[s.slug],
                     "can_manage": False,
                     "name": getattr(s, "name", ""),
                     "description": getattr(s, "description", None),
-                    "icon": getattr(s, "icon", None),
                     "enabled": bool(getattr(s, "enabled", True)),
-                    "tags": getattr(s, "tags", None) or [],
                 }
             )
         return {"success": True, "data": data}
@@ -147,13 +153,13 @@ async def create_mcp_server_route(
             headers=request.headers,
             timeout=request.timeout,
             sse_read_timeout=request.sse_read_timeout,
-            tags=request.tags,
-            icon=request.icon,
             created_by=current_user.username,
+            auth_mode=request.auth_mode,
+            oauth_config=request.oauth_config,
         )
         return {"success": True, "data": serialize_mcp_server(server)}
-    except ValueError as ve:
-        raise HTTPException(status_code=400, detail=str(ve))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="MCP 配置无效，请检查地址、认证方式和必填字段")
     except HTTPException:
         raise
     except Exception as e:
@@ -170,7 +176,8 @@ async def get_mcp_server_route(
     """获取单个 MCP 服务器配置"""
     try:
         server = await get_server_or_404(db, slug)
-        return {"success": True, "data": serialize_mcp_server(server)}
+        states = await personal_connection_states(db, [server], current_user.id)
+        return {"success": True, "data": {**serialize_mcp_server(server), "connection_status": states[server.slug]}}
     except HTTPException:
         raise
     except Exception as e:
@@ -202,9 +209,9 @@ async def update_mcp_server_route(
             headers=request.headers,
             timeout=request.timeout,
             sse_read_timeout=request.sse_read_timeout,
-            tags=request.tags,
-            icon=request.icon,
             updated_by=current_user.username,
+            auth_mode=request.auth_mode,
+            oauth_config=request.oauth_config,
         )
         return {"success": True, "data": serialize_mcp_server(server)}
     except HTTPException:
@@ -213,8 +220,8 @@ async def update_mcp_server_route(
         raise HTTPException(status_code=404, detail=str(exc))
     except PermissionError as pe:
         raise HTTPException(status_code=403, detail=str(pe))
-    except ValueError as ve:
-        raise HTTPException(status_code=400, detail=str(ve))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="MCP 配置无效，请检查地址、认证方式和必填字段")
     except Exception as e:
         logger.error(f"Failed to update MCP server: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -259,7 +266,7 @@ async def test_mcp_server(
     try:
         server = await get_server_or_404(db, slug)
         try:
-            tools = await inspect_mcp_server_tools(server)
+            tools = await inspect_mcp_server_tools(server, uid=current_user.uid)
             return {
                 "success": True,
                 "message": f"连接成功，共发现 {len(tools)} 个工具",
@@ -294,8 +301,8 @@ async def update_mcp_server_status_route(
         }
     except MCPServerNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
-    except ValueError as ve:
-        raise HTTPException(status_code=400, detail=str(ve))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="MCP 配置无效，请检查地址、认证方式和必填字段")
     except HTTPException:
         raise
     except Exception as e:
@@ -321,7 +328,7 @@ async def get_mcp_server_tools(
 
         try:
             # 获取所有工具（不过滤 disabled_tools）
-            tools = await get_all_mcp_tools(slug)
+            tools = await get_all_mcp_tools(slug, uid=current_user.uid)
             tool_list = []
 
             for tool in tools:
@@ -361,48 +368,6 @@ async def get_mcp_server_tools(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@mcp.post("/{slug}/tools/refresh")
-async def refresh_mcp_server_tools(
-    slug: str,
-    current_user: User = Depends(get_superadmin_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """刷新 MCP 服务器的工具列表（清除缓存重新获取）"""
-    try:
-        await get_server_or_404(db, slug)
-        try:
-            # 获取所有工具（不过滤 disabled_tools）
-            tools = await get_all_mcp_tools(slug)
-
-            # 获取统计信息
-            stats = get_mcp_tools_stats(slug)
-            enabled_count = stats.get("enabled", len(tools)) if stats else len(tools)
-            disabled_count = stats.get("disabled", 0) if stats else 0
-
-            message = "工具列表已刷新"
-            if disabled_count > 0:
-                message += f"，{enabled_count} 个已启用，{disabled_count} 个已禁用"
-            else:
-                message += f"，共发现 {enabled_count} 个工具"
-
-            return {
-                "success": True,
-                "message": message,
-                "tool_count": enabled_count,
-                "enabled_count": enabled_count,
-                "disabled_count": disabled_count,
-            }
-        except HTTPException:
-            raise
-        except Exception as tool_error:
-            raise HTTPException(status_code=500, detail=f"刷新失败: {str(tool_error)}")
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to refresh MCP server tools: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @mcp.put("/{slug}/tools/{tool_name}/toggle")
 async def toggle_mcp_server_tool_route(
     slug: str,
@@ -419,8 +384,8 @@ async def toggle_mcp_server_tool_route(
             "enabled": enabled,
             "message": f"工具 '{tool_name}' 已{'启用' if enabled else '禁用'}",
         }
-    except ValueError as ve:
-        raise HTTPException(status_code=404, detail=str(ve))
+    except ValueError:
+        raise HTTPException(status_code=404, detail="MCP 配置无效，请检查地址、认证方式和必填字段")
     except HTTPException:
         raise
     except Exception as e:

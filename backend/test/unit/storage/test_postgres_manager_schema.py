@@ -54,3 +54,15 @@ async def test_runtime_rejects_missing_or_incompatible_schema_versions(monkeypat
         "knowledge": schema_versions.KNOWLEDGE_SCHEMA_VERSION,
     }
     await schema_versions.require_current_schema(manager)
+
+
+def test_ownership_columns_can_store_enterprise_identity_without_truncation():
+    """所有 UID 与归属快照列须容纳真实 OIDC 身份及外部用户标识。"""
+    load_models()
+    required = max(len("oidc:" + "a" * 64), len("endusr_" + "a" * 64))
+    for base in (BusinessBase, KnowledgeBase):
+        for table in base.metadata.tables.values():
+            for column in table.columns:
+                if column.name in {"uid", "created_by", "updated_by"}:
+                    length = getattr(column.type, "length", None)
+                    assert length is None or length >= required, f"{table.name}.{column.name} truncates generated identity"

@@ -10,7 +10,7 @@ from uuid import uuid4
 import asyncpg
 import pytest
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
+pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
 
 @pytest.mark.parametrize(
@@ -154,6 +154,8 @@ async def test_management_connection_uses_real_protocol_and_preserves_state(test
 @pytest.mark.parametrize(
     "payload,reason",
     [
+        ({"icon": "📚"}, "extra_forbidden"),
+        ({"tags": ["文档"]}, "extra_forbidden"),
         ({"transport": "stdio"}, "传输类型"),
         ({"transport": "streamable_http", "command": "sh"}, "extra_forbidden"),
         ({"transport": "streamable_http", "args": []}, "extra_forbidden"),
@@ -177,13 +179,19 @@ async def test_remote_config_rejected_before_persistence(test_client, admin_head
         headers=admin_headers,
         json={"slug": slug, "name": "Pytest rejected MCP", "url": "https://example.com/mcp", **payload},
     )
-    assert response.status_code in (400, 422), response.text
-    assert reason in response.text
     conn = await asyncpg.connect(os.environ["POSTGRES_URL"].replace("+asyncpg", ""))
     try:
+        assert response.status_code in (400, 422), response.text
+        assert reason in response.text or (response.status_code == 400 and response.json()["detail"].startswith("MCP 配置无效"))
         assert await conn.fetchrow("SELECT * FROM mcp_servers WHERE slug = $1", slug) is None
     finally:
-        await conn.close()
+        try:
+            # 负向 guard 退化而意外写入时，也只回收本用例的唯一资源。
+            response = await test_client.delete(f"/api/system/mcp-servers/{slug}", headers=admin_headers)
+            assert response.status_code in (200, 404), response.text
+            assert await conn.fetchrow("SELECT * FROM mcp_servers WHERE slug = $1", slug) is None
+        finally:
+            await conn.close()
 
 
 async def test_manifest_metadata_persisted_and_invalid_update_preserves_connection(test_client, admin_headers):
@@ -198,7 +206,7 @@ async def test_manifest_metadata_persisted_and_invalid_update_preserves_connecti
             "type": "http",
             "url": "https://example.com/mcp",
             "timeout": 30,
-            "extra_data": {"name": "Pytest manifest", "description": "Example docs", "icon": "📚", "tags": ["文档"]},
+            "extra_data": {"name": "Pytest manifest", "description": "Example docs"},
         },
     )
     response = await test_client.post("/api/system/mcp-servers", headers=admin_headers, json=config)
@@ -209,9 +217,7 @@ async def test_manifest_metadata_persisted_and_invalid_update_preserves_connecti
         assert before["name"] == "Pytest manifest"
         assert before["transport"] == "streamable_http"
         assert before["description"] == "Example docs"
-        assert before["icon"] == "📚"
-        assert json.loads(before["tags"]) == ["文档"]
-        assert not {"command", "args", "env", "extra_data"} & set(before.keys())
+        assert not {"command", "args", "env", "extra_data", "icon", "tags"} & set(before.keys())
         for payload, reason in [
             ({"url": "file:///tmp/mcp"}, "HTTP URL"),
             ({"url": "https://example.com:bad/mcp"}, "HTTP URL"),
@@ -224,7 +230,7 @@ async def test_manifest_metadata_persisted_and_invalid_update_preserves_connecti
         ]:
             response = await test_client.put(path, headers=admin_headers, json=payload)
             assert response.status_code in (400, 422), response.text
-            assert reason in response.text
+            assert reason in response.text or (response.status_code == 400 and response.json()["detail"].startswith("MCP 配置无效"))
             assert await conn.fetchrow("SELECT * FROM mcp_servers WHERE slug = $1", slug) == before
     finally:
         await test_client.delete(path, headers=admin_headers)

@@ -1,30 +1,20 @@
-"""MCP 客户端、工具缓存与远端传输校验。"""
+"""MCP 客户端、工具发现与远端传输校验。"""
 
-import asyncio
-import hashlib
 import json
 import re
 from collections.abc import Callable
 from typing import Any, cast
 
+import httpx
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
 from yuxi.infrastructure.observability.logging import logger
-
-_mcp_lock = asyncio.Lock()
-
-
-_mcp_tools_cache: dict[str, list[Callable[..., Any]]] = {}
-
-
-_mcp_tools_stats: dict[str, dict[str, int]] = {}
-
 
 SUPPORTED_TRANSPORTS = ("sse", "streamable_http")
 
 
 def validate_remote_transport(config: dict[str, Any]) -> None:
-    """在客户端与工具缓存边界拒绝非远程连接。"""
+    """在客户端入口拒绝非远程连接。"""
     if config.get("transport") not in SUPPORTED_TRANSPORTS:
         raise ValueError("MCP 仅支持 sse 或 streamable_http，不支持 stdio 等其他 transport")
     if set(config) & {"command", "args", "env"}:
@@ -53,125 +43,58 @@ def to_camel_case(s: str) -> str:
     return s
 
 
+class SharedMCPAuth(httpx.Auth):
+    """旧共享工具每次出站核对当前配置，不能跨认证方式沿用共享身份。"""
+
+    requires_request_body = True
+
+    def __init__(self, slug, config):
+        """绑定共享工具装配时捕获的连接字段。"""
+        self.slug = slug
+        self.endpoint = (config.get("transport"), config.get("url"), dict(config.get("headers") or {}))
+
+    async def async_auth_flow(self, request):
+        """配置撤销在网络副作用前拒绝；管理端临时连接检查不使用此适配器。"""
+        from yuxi.infrastructure.postgres.manager import pg_manager
+        from yuxi.modules.extensions.mcp.repository import get_mcp_server
+        from yuxi.shared.errors import StateConflictError
+
+        async with pg_manager.get_async_session_context() as db:
+            server = await get_mcp_server(db, self.slug)
+            if not server or not server.enabled or server.auth_mode != "headers":
+                raise StateConflictError("MCP 配置已改变，请重新运行")
+            if (server.transport, server.url, server.headers or {}) != self.endpoint:
+                raise StateConflictError("MCP 配置已改变，请重新运行")
+            if request.method == "POST" and request.content:
+                payload = json.loads(request.content)
+                if payload.get("method") == "tools/call" and payload.get("params", {}).get("name") in (server.disabled_tools or []):
+                    raise StateConflictError("MCP 工具已停用")
+        yield request
+
+
 async def get_mcp_tools(
     server_slug: str,
     server_config: dict[str, Any] | None,
-    disabled_tools: list[str] = None,
-    cache: bool = True,
-    force_refresh: bool = False,
+    disabled_tools: list[str] | None = None,
 ) -> list[Callable[..., Any]]:
-    """Get MCP tools for a specific server.
-
-    Architecture:
-    1. Fetching: Connects to MCP server to get ALL tools.
-    2. Caching: Stores the FULL, UNFILTERED list of tools in `_mcp_tools_cache`.
-    3. Filtering: Filters the return value based on `disabled_tools` argument.
-
-    Args:
-        server_slug: Server slug
-        server_config: 当前服务器的远端配置
-        disabled_tools: List of tool names to filter out from the RETURN value (does not affect cache)
-        cache: Whether to use/update the cache (default: True)
-        force_refresh: Whether to force a refresh from the server (default: False)
-    """
+    """发现当前远端工具，工具对象的生命周期由调用方拥有。"""
     if server_config is None:
         logger.warning(f"MCP server '{server_slug}' not found in database or disabled")
         return []
-
     validate_remote_transport(server_config)
-
-    # 配置 hash 直接基于完整配置生成。只要数据库中的配置发生变化，
-    # 本地工具缓存 key 就会变化，从而自然触发重建。
-    config_payload = json.dumps(server_config, sort_keys=True, ensure_ascii=True, separators=(",", ":"))
-    config_hash = hashlib.sha256(config_payload.encode("utf-8")).hexdigest()[:16]
-    cache_key = f"{server_slug}:{config_hash}"
-
-    all_processed_tools: list[Callable[..., Any]] = []
-
-    async with _mcp_lock:
-        if not force_refresh and cache and cache_key in _mcp_tools_cache:
-            all_processed_tools = _mcp_tools_cache[cache_key]
-
-    if not all_processed_tools:
-        try:
-            # disabled_tools 只影响返回值过滤，不参与 MCP client 建连参数。
-            client_config = {k: v for k, v in server_config.items() if k not in ("disabled_tools",)}
-
-            client = await get_mcp_client({server_slug: client_config})
-            raw_tools = cast(list[Any], await client.get_tools())
-
-            server_cc = to_camel_case(server_slug)
-            for tool in raw_tools:
-                original_name = tool.name
-                tool_cc = to_camel_case(original_name)
-                unique_id = f"mcp__{server_cc}__{tool_cc}"
-
-                if tool.metadata is None:
-                    tool.metadata = {}
-                tool.metadata["id"] = unique_id
-                # 开启错误处理，防止工具调用抛出 ToolException 时击穿服务
-                tool.handle_tool_error = True
-                all_processed_tools.append(tool)
-
-            if cache:
-                async with _mcp_lock:
-                    stale_keys = [key for key in _mcp_tools_cache if key.startswith(f"{server_slug}:") and key != cache_key]
-                    for stale_key in stale_keys:
-                        _mcp_tools_cache.pop(stale_key, None)
-                    _mcp_tools_cache[cache_key] = all_processed_tools
-
-                global_config_disabled = server_config.get("disabled_tools") or []
-                enabled_count = len([t for t in all_processed_tools if t.name not in global_config_disabled])
-                _mcp_tools_stats[server_slug] = {
-                    "total": len(all_processed_tools),
-                    "enabled": enabled_count,
-                    "disabled": len(all_processed_tools) - enabled_count,
-                }
-
-                logger.info(
-                    f"Refreshed MCP tools cache for '{server_slug}' with key '{cache_key}': {len(all_processed_tools)} tools loaded."
-                )
-
-        except Exception as e:
-            logger.bind(component="mcp", server_slug=server_slug, error_type=type(e).__name__, available=False).error(
-                "component=mcp server_slug={} error_type={} available=false MCP 工具加载失败", server_slug, type(e).__name__
-            )
-            raise RuntimeError(f"MCP 服务 '{server_slug}' 工具加载失败") from e
-
-    # 3. Filtering (Apply to Return Value Only)
-    if disabled_tools:
-        filtered_tools = [t for t in all_processed_tools if t.name not in disabled_tools]
-        logger.debug(
-            f"Returning {len(filtered_tools)}/{len(all_processed_tools)} tools for '{server_slug}' "
-            f"(filtered {len(disabled_tools)} by argument)"
+    try:
+        client_config = {key: value for key, value in server_config.items() if key != "disabled_tools"}
+        client_config["auth"] = SharedMCPAuth(server_slug, client_config)
+        client = await get_mcp_client({server_slug: client_config})
+        tools = cast(list[Any], await client.get_tools())
+        for tool in tools:
+            if tool.metadata is None:
+                tool.metadata = {}
+            tool.metadata["id"] = f"mcp__{to_camel_case(server_slug)}__{to_camel_case(tool.name)}"
+            tool.handle_tool_error = True
+    except Exception as exc:
+        logger.bind(component="mcp", server_slug=server_slug, error_type=type(exc).__name__, available=False).error(
+            "component=mcp server_slug={} error_type={} available=false MCP 工具加载失败", server_slug, type(exc).__name__
         )
-        return filtered_tools
-
-    return all_processed_tools
-
-
-def clear_mcp_cache() -> None:
-    """Clear the MCP tools cache (useful for testing)."""
-    global _mcp_tools_cache, _mcp_tools_stats
-    _mcp_tools_cache = {}
-    _mcp_tools_stats = {}
-
-
-def clear_mcp_server_tools_cache(server_slug: str) -> None:
-    """Clear the tools cache for a specific MCP server."""
-    global _mcp_tools_cache, _mcp_tools_stats
-    server_prefix = f"{server_slug}:"
-    stale_keys = [key for key in _mcp_tools_cache if key.startswith(server_prefix)]
-    for stale_key in stale_keys:
-        _mcp_tools_cache.pop(stale_key, None)
-    _mcp_tools_stats.pop(server_slug, None)
-    logger.info(f"Cleared tools cache for MCP server '{server_slug}'")
-
-
-def get_mcp_tools_stats(server_slug: str) -> dict[str, int] | None:
-    """Get tools statistics for a MCP server.
-
-    Returns:
-        dict with 'total', 'enabled', 'disabled' counts, or None if not available
-    """
-    return _mcp_tools_stats.get(server_slug)
+        raise RuntimeError(f"MCP 服务 '{server_slug}' 工具加载失败") from exc
+    return [tool for tool in tools if tool.name not in (disabled_tools or [])]

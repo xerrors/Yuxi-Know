@@ -10,8 +10,7 @@
     decorative
   />
   <span v-else class="resource-avatar" :style="{ '--resource-color': color }" aria-hidden="true">
-    <span v-if="item.type === 'mcp' && item.icon">{{ item.icon }}</span>
-    <component v-else :is="icon" :size="15" />
+    <component :is="icon" :size="15" />
   </span>
 </template>
 

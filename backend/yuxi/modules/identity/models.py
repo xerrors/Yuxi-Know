@@ -193,7 +193,7 @@ class APIKey(Base):
     revoked_at = Column(DateTime(timezone=True), nullable=True, index=True)
     last_used_at = Column(DateTime(timezone=True), nullable=True)
 
-    created_by = Column(String(64), nullable=False)
+    created_by = Column(String(128), nullable=False)
     created_at = Column(DateTime(timezone=True), default=utc_now)
 
     # 关联

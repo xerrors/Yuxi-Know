@@ -1,4 +1,4 @@
-import { apiGet, apiAdminGet, apiAdminPost, apiAdminPut, apiAdminDelete } from './base'
+import { apiPost, apiDelete, apiGet, apiAdminGet, apiAdminPost, apiAdminPut, apiAdminDelete } from './base'
 
 /**
  * MCP 服务器管理 API 模块
@@ -93,11 +93,6 @@ export const getMcpServerTools = async (name) => {
 }
 
 /**
- * 刷新 MCP 服务器的工具列表（清除缓存重新获取）
- * @param {string} name - 服务器名称
- * @returns {Promise} - 刷新结果
- */
-/**
  * 切换单个工具的启用状态
  * @param {string} serverName - 服务器名称
  * @param {string} toolName - 工具名称
@@ -111,6 +106,9 @@ export const toggleMcpServerTool = async (serverName, toolName) => {
 }
 
 export const mcpApi = {
+  connect: (slug) => apiPost(`${BASE_URL}/${encodeURIComponent(slug)}/connection`, {}),
+  disconnect: (slug) => apiDelete(`${BASE_URL}/${encodeURIComponent(slug)}/connection`),
+  complete: (result) => apiPost(`${BASE_URL}/oauth/complete`, { result }),
   getMcpServers,
   getMcpServer,
   createMcpServer,

@@ -40,7 +40,7 @@ class KnowledgeBase(Base):
     share_config = Column(JSON_VALUE)
     sample_questions = Column(JSON_VALUE)
     deleted_at = Column(DateTime(timezone=True), index=True)
-    created_by = Column(String(64))
+    created_by = Column(String(128))
     created_at = Column(DateTime(timezone=True), default=utc_now)
     updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
@@ -92,8 +92,8 @@ class KnowledgeFile(Base):
     error_message = Column(Text)
     processing_job_id = Column(String(64), index=True)
     processing_owner = Column(String(128))
-    created_by = Column(String(64))
-    updated_by = Column(String(64))
+    created_by = Column(String(128))
+    updated_by = Column(String(128))
     created_at = Column(DateTime(timezone=True), default=utc_now)
     # generation 是文件事实的单调代次；deleted_at 让删除先在 PostgreSQL 中生效。
     generation = Column(Integer, nullable=False, default=1, server_default=text("1"))
@@ -334,7 +334,7 @@ class EvaluationDataset(Base):
     has_gold_chunks = Column(Boolean, default=False)
     has_gold_answers = Column(Boolean, default=False)
     build_metadata = Column(JSON_VALUE)
-    created_by = Column(String(64))
+    created_by = Column(String(128))
     created_at = Column(DateTime(timezone=True), default=utc_now)
     updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
@@ -404,7 +404,7 @@ class EvaluationRun(Base):
     completed_items = Column(Integer, default=0)
     started_at = Column(DateTime(timezone=True), default=utc_now, index=True)
     completed_at = Column(DateTime(timezone=True))
-    created_by = Column(String(64))
+    created_by = Column(String(128))
 
 
 class EvaluationRunItem(Base):

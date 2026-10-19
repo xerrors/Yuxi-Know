@@ -14,12 +14,10 @@ from langchain.tools.tool_node import ToolCallRequest
 from langgraph.types import Command
 
 from yuxi.infrastructure.observability.logging import logger
-from yuxi.modules.extensions.mcp.service import get_enabled_mcp_tools
+from yuxi.modules.extensions.mcp.service import resolve_runtime_mcp_tools
 from yuxi.modules.extensions.skills.package import is_valid_skill_slug, normalize_string_list
 from yuxi.modules.extensions.skills.resolved import RuntimeSkill
 from yuxi.modules.extensions.skills.runtime import build_dependency_bundle
-from yuxi.modules.extensions.tools import get_all_tool_instances
-from yuxi.modules.extensions.tools.builtin import BASE_TOOL_NAMES
 from yuxi.modules.workspace.runtime_paths import PERSONAL_SKILLS_PATH, SHARED_SKILLS_PATH
 
 
@@ -40,7 +38,7 @@ class SkillsMiddleware(AgentMiddleware):
     职责：
     - Skills 摘要提示与预加载完整说明注入
     - 依赖展开（预加载配置 + 动态激活）
-    - 本地/MCP 依赖工具的模型可见性门控
+    - 为已激活 Skill 装配动态 MCP 工具
     """
 
     state_schema = SkillsState
@@ -96,102 +94,28 @@ class SkillsMiddleware(AgentMiddleware):
         activated = _activated_skills_reducer(self._get_preloaded_skills(runtime_context), activated)
 
         deps_bundle = build_dependency_bundle(activated, self._get_runtime_skills(runtime_context))
-        activated_tool_names = set(deps_bundle["tools"])
+        configured_mcps = set(getattr(runtime_context, "mcps", []))
+        server_names = [name for name in deps_bundle["mcps"] if name not in configured_mcps]
+        loaded_mcps = {}
+        if server_names:
+            if getattr(runtime_context, "mcp_tool_servers", None) is None:
+                raise RuntimeError("MCP 工具来源尚未装配")
+            loaded_mcps = await resolve_runtime_mcp_tools(
+                server_names, uid=getattr(runtime_context, "uid", None), run_tools=runtime_context.mcp_tools
+            )
 
-        # 门控：未激活 Skill 的依赖工具对模型不可见（保持按需加载）。
-        # 这些工具已在构建期由 resolve_configured_runtime_tools 注册进 ToolNode，剔除只影响模型可见性、不影响可执行性。
-        # 排除基础工具集中的工具（如 present_artifacts），它们始终可见、不受 Skill 激活影响。
-        gated_tool_names = self._resolve_gated_tool_names(runtime_context) - activated_tool_names
-        model_tools = list(request.tools or [])
-        registered_tool_names = {tool.name for tool in model_tools}
-        if gated_tool_names:
-            model_tools = [t for t in model_tools if t.name not in gated_tool_names]
-
-        # 追加已激活或预加载 Skill 的依赖工具。
-        enabled_tools = []
-        active_mcp_tools = []
-        if activated_tool_names:
-            # 网页工具虽稳定注册，未配置时不会进入本轮 ToolNode，Skill 不能重新暴露它们。
-            enabled_tools = [
-                t
-                for t in get_all_tool_instances()
-                if t.name in activated_tool_names and (t.name not in {"web_search", "web_fetch"} or t.name in registered_tool_names)
-            ]
-        if deps_bundle["mcps"]:
-            active_mcp_tools = await self._get_mcp_tools_from_context(runtime_context, extra_mcps=deps_bundle["mcps"])
-        active_mcp_tools_by_name = {}
-        for tool in active_mcp_tools:
-            existing = active_mcp_tools_by_name.get(tool.name)
-            if existing is not None and existing is not tool:
-                raise RuntimeError(f"Skill MCP 工具名冲突：{tool.name}")
-            active_mcp_tools_by_name[tool.name] = tool
-        setattr(runtime_context, "active_skill_mcp_tools", active_mcp_tools_by_name)
-
-        existing_tool_names = {t.name for t in model_tools}
-        for t in enabled_tools:
-            if t.name in existing_tool_names:
-                continue
-            model_tools.append(t)
-            existing_tool_names.add(t.name)
-        for t in active_mcp_tools:
-            if t.name in registered_tool_names or t.name in existing_tool_names:
-                raise RuntimeError(f"Skill MCP 工具名冲突：{t.name}")
-            model_tools.append(t)
-            existing_tool_names.add(t.name)
-
-        if gated_tool_names or enabled_tools or active_mcp_tools:
-            request = request.override(tools=model_tools)
-
-        return await handler(request)
-
-    def _resolve_gated_tool_names(self, runtime_context) -> set[str]:
-        """所有可见 Skill 依赖、且不属于基础工具集的工具名集合（即「仅经 Skill 激活才放出」的工具）。"""
-        runtime_skills = self._get_runtime_skills(runtime_context)
-        effective_skills = self._get_effective_skills(runtime_context)
-        base_tool_names = set(normalize_string_list(getattr(runtime_context, "tools", None)))
-        base_tool_names.update(BASE_TOOL_NAMES)
-        gated: set[str] = set()
-        for slug in effective_skills:
-            gated.update(runtime_skills[slug]["tools"])
-        return gated - base_tool_names
-
-    async def _get_mcp_tools_from_context(
-        self,
-        context,
-        *,
-        extra_mcps: list[str] | None = None,
-    ) -> list:
-        """从上下文配置中获取 MCP 工具列表"""
-        import asyncio
-
-        # 显式 MCP 已在 Graph 基础工具中注册，这里只加载 Skill 新增依赖。
-        if getattr(context, "mcp_tool_servers", None) is None:
-            raise RuntimeError("MCP 工具来源尚未装配")
-        configured_mcps = set(normalize_string_list(getattr(context, "mcps", None)))
-        all_mcp_names: list[str] = []
-        for server_name in extra_mcps or []:
-            if isinstance(server_name, str) and server_name not in configured_mcps:
-                all_mcp_names.append(server_name)
-
-        # 去重
-        unique_mcp_names = list(dict.fromkeys(all_mcp_names))
-
-        async def load_mcp_tools(server_name: str) -> list:
-            """加载单个依赖，建连故障保留为运行失败。"""
-            mcp_tools = await get_enabled_mcp_tools(server_name)
-            if not mcp_tools:
-                logger.info(f"SkillsMiddleware: mcp dependency has no enabled tools: {server_name}")
-            return mcp_tools
-
-        # 并行加载所有 MCP 工具
-        results = await asyncio.gather(*[load_mcp_tools(name) for name in unique_mcp_names])
-        selected_tools = []
-        for server_name, tools in zip(unique_mcp_names, results, strict=True):
+        # 本地工具已在构图时注册；最终可见性与执行权限统一由 Authorization 门控。
+        registered_names = {tool.name for tool in request.tools}
+        active_tools = {}
+        for server, tools in loaded_mcps.items():
             for tool in tools:
-                context.mcp_tool_servers[tool.name] = server_name
-            selected_tools.extend(tools)
-
-        return selected_tools
+                if tool.name in registered_names or tool.name in active_tools:
+                    raise RuntimeError(f"Skill MCP 工具名冲突：{tool.name}")
+                active_tools[tool.name] = tool
+                runtime_context.mcp_tool_servers[tool.name] = server
+        if active_tools:
+            request = request.override(tools=[*request.tools, *active_tools.values()])
+        return await handler(request)
 
     def _collect_prompt_metadata(self, slugs: list[str], runtime_context) -> list[RuntimeSkill]:
         """收集指定 slugs 的提示词元数据"""
@@ -251,10 +175,11 @@ class SkillsMiddleware(AgentMiddleware):
         if request.tool is not None:
             return request
         context = request.runtime.context
-        active_tools = getattr(context, "active_skill_mcp_tools", {})
-        if not isinstance(active_tools, dict):
+        name = request.tool_call.get("name")
+        server = (getattr(context, "mcp_tool_servers", None) or {}).get(name)
+        if server is None:
             return request
-        tool = active_tools.get(request.tool_call.get("name"))
+        tool = next((tool for tool in context.mcp_tools.get(server, []) if tool.name == name), None)
         return request.override(tool=tool) if tool is not None else request
 
     def _extract_skill_slug_from_skill_md_path(self, file_path: Any) -> str | None:

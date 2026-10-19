@@ -63,6 +63,7 @@ def setup_logger(name, level="DEBUG", console=True):
         rotation="10 MB",
         retention="30 days",
         compression="zip",
+        diagnose=False,
         enqueue=True,
     )
 
@@ -73,6 +74,7 @@ def setup_logger(name, level="DEBUG", console=True):
             level=level,
             format=("<green>{time:MM-DD HH:mm:ss}</green> <level>{level}</level> <cyan>{file}:{line}</cyan>: <level>{message}</level>"),
             colorize=True,
+            diagnose=False,
             enqueue=True,
         )
 

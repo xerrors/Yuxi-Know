@@ -10,9 +10,10 @@ from yuxi.modules.extensions.tools.registry import get_all_tool_instances
 
 async def resolve_configured_runtime_tools(context) -> list[Any]:
     """构图前装配工具并记录授权检查使用的真实来源。"""
-    from yuxi.modules.extensions.mcp.service import get_enabled_mcp_tools
+    from yuxi.modules.extensions.mcp.service import resolve_runtime_mcp_tools
 
     context.mcp_tool_servers = {}
+    context.mcp_tools = {}
     context.registered_builtin_tool_names = set()
     selected_tools = []
     selected_tool_names: set[str] = set()
@@ -42,26 +43,11 @@ async def resolve_configured_runtime_tools(context) -> list[Any]:
         selected_tool_sources[tool_name] = "local"
         context.registered_builtin_tool_names.add(tool_name)
 
-    # 去重后的 MCP server 列表(保持配置顺序)
-    selected_mcp_servers: set[str] = set()
-    server_names: list[str] = []
-    for server_name in getattr(context, "mcps", None) or []:
-        if not isinstance(server_name, str) or server_name in selected_mcp_servers:
-            continue
-        selected_mcp_servers.add(server_name)
-        server_names.append(server_name)
+    loaded = await resolve_runtime_mcp_tools(
+        getattr(context, "mcps", None) or [], uid=getattr(context, "uid", None), run_tools=context.mcp_tools
+    )
 
-    # 并发加载各 MCP server 的工具(单 server 33-300ms,串行 6 个累加 1-2s;
-    # 官方 deepagents-code 同款优化: asyncio.gather 并发,取 max 而非 sum)。
-    import asyncio
-
-    async def _load_one(name: str):
-        """加载已配置服务，建连故障保留为运行失败。"""
-        return name, await get_enabled_mcp_tools(name)
-
-    loaded = await asyncio.gather(*(_load_one(n) for n in server_names))
-
-    for server_name, mcp_tools in loaded:
+    for server_name, mcp_tools in loaded.items():
         if not mcp_tools:
             logger.info(f"Configured MCP returned no enabled tools: {server_name}")
             continue
@@ -75,7 +61,7 @@ async def resolve_configured_runtime_tools(context) -> list[Any]:
 
     # Skill 依赖的本地工具：必须随基础工具一起注册进 create_agent 的 ToolNode 才可执行，
     # 否则 Skill 激活后模型虽能发起调用，执行器仍报 "not a valid tool"。
-    # 默认绑定给模型的可见性由 SkillsMiddleware 按 Skill 激活状态门控（保持按需加载）。
+    # 模型可见性与实际执行统一由 Authorization 按 Skill 激活状态门控。
     for tool in skill_tools:
         if tool.name in {"web_search", "web_fetch"} and tool.name not in available_web:
             continue

@@ -15,7 +15,6 @@ def context():
         mcps=[],
         registered_builtin_tool_names={"skill_tool"},
         mcp_tool_servers={"remote_tool": "remote"},
-        disabled_mcp_tools={"remote": set()},
         skill_runtime_snapshot={
             "effective_skills": ["skill"],
             "preloaded_skills": [],
@@ -24,32 +23,45 @@ def context():
     )
 
 
-def test_unactivated_skill_cannot_execute_registered_local_or_mcp_dependency(context):
+@pytest.fixture
+def mcp_policy():
+    """本次 service 查询结果只在当前调用内传递。"""
+    return {"remote": set()}
+
+
+def test_unactivated_skill_cannot_execute_registered_local_or_mcp_dependency(context, mcp_policy):
     """直接调用隐藏工具不能代替读取或预加载 Skill。"""
-    assert not tool_allowed(context, "skill_tool", {})
-    assert not tool_allowed(context, "remote_tool", {})
-    assert tool_allowed(context, "skill_tool", {"activated_skills": ["skill"]})
+    assert not tool_allowed(context, "skill_tool", {}, mcp_policy)
+    assert not tool_allowed(context, "remote_tool", {}, mcp_policy)
+    assert tool_allowed(context, "skill_tool", {"activated_skills": ["skill"]}, mcp_policy)
     context.skill_runtime_snapshot["effective_skills"] = []
-    assert not tool_allowed(context, "skill_tool", {"activated_skills": ["skill"]})
+    assert not tool_allowed(context, "skill_tool", {"activated_skills": ["skill"]}, mcp_policy)
 
 
-def test_mcp_single_tool_or_server_disable_rejects_old_registration(context):
+def test_mcp_single_tool_or_server_disable_rejects_old_registration(context, mcp_policy):
     """启停服务器和单工具都不能被既有对象绕过。"""
     state = {"activated_skills": ["skill"]}
-    assert tool_allowed(context, "remote_tool", state)
-    context.disabled_mcp_tools["remote"] = {"remote_tool"}
-    assert not tool_allowed(context, "remote_tool", state)
-    context.disabled_mcp_tools.clear()
-    assert not tool_allowed(context, "remote_tool", state)
+    assert tool_allowed(context, "remote_tool", state, mcp_policy)
+    mcp_policy["remote"] = {"remote_tool"}
+    assert not tool_allowed(context, "remote_tool", state, mcp_policy)
+    mcp_policy.clear()
+    assert not tool_allowed(context, "remote_tool", state, mcp_policy)
+
+
+def test_direct_mcp_disconnect_rejects_registered_tool_before_outbound(context, mcp_policy):
+    """直接配置的旧工具也复用本轮连接查询，断开后不能继续出站。"""
+    context.mcps = ["remote"]
+    mcp_policy = {}
+    assert not tool_allowed(context, "remote_tool", {}, mcp_policy)
 
 
 @pytest.mark.parametrize("name", ["ask_user_question", "mark_for_improvement"])
-def test_base_tool_is_allowed_without_configuration_skill_or_run(context, name):
+def test_base_tool_is_allowed_without_configuration_skill_or_run(context, mcp_policy, name):
     """基础工具使用统一白名单，不依赖配置、Skill 或 Run 是否存在。"""
     context.registered_builtin_tool_names.add(name)
-    assert tool_allowed(context, name, {})
+    assert tool_allowed(context, name, {}, mcp_policy)
     context.mcp_tool_servers[name] = "remote"
-    assert not tool_allowed(context, name, {})
+    assert not tool_allowed(context, name, {}, mcp_policy)
 
 
 @pytest.mark.asyncio
@@ -86,10 +98,11 @@ async def test_network_retry_rechecks_before_each_model_request(monkeypatch, con
                 raise ConnectionError("network interrupted")
             return ChatResult(generations=[ChatGeneration(message=AIMessage(content="forbidden"))])
 
-    async def check(_context):
+    async def check(_context, **_kwargs):
         """授权 oracle 与模型请求记录独立。"""
         if revoked:
             raise authorization.AgentExecutionRevoked("revoked")
+        return {}
 
     monkeypatch.setattr(authorization, "refresh_execution_authorization", check)
     monkeypatch.setattr(authorization, "_refresh_execution_resources", check)
@@ -171,10 +184,11 @@ async def test_context_overflow_does_not_send_summary_after_revocation(monkeypat
             """测试历史不含已存在媒体。"""
             return [SimpleNamespace(content=None, error="file_not_found") for _ in paths]
 
-    async def check(_context):
+    async def check(_context, **_kwargs):
         """模型返回后按当前事实拒绝授权。"""
         if revoked:
             raise authorization.AgentExecutionRevoked("revoked")
+        return {}
 
     monkeypatch.setattr(authorization, "refresh_execution_authorization", check)
     monkeypatch.setattr(authorization, "_refresh_execution_resources", check)
