@@ -70,9 +70,9 @@ LangGraph checkpoint 保存标准问题结构，执行服务将其投影为持�
 
 ## 内置工具：记录改进线索
 
-`mark_for_improvement(reason)` 与 `ask_user_question` 同属基础内置工具，所有正常 Agent 图自动注册，不受工具选择、模型、专属 Skill 或 Skill 激活状态限制。基础工具集合由[内置工具模块](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/tools/builtin/__init__.py)统一维护，注册、授权和门控使用同一集合。用户明确纠正操作流程，或多次尝试后找到有实际依据的可复用方法、脚本时，Agent 可主动记录。
+`mark_for_improvement(reason)` 与 `ask_user_question` 同属基础内置工具，所有正常 Agent 图自动注册，不受工具选择、模型、专属 Skill 或 Skill 激活状态限制。基础工具集合由[内置工具模块](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/tools/builtin/__init__.py)统一维护，注册、授权和门控使用同一集合。工具描述要求 Agent 在用户纠正、反复不满意、工具失败或完成任务所需能力缺失时主动记录，无需等待用户要求或问题解决；找到有实际依据的可复用方法、脚本时也记录。
 
-reason 去除首尾空白后为 1–4000 字符，写明发生了什么、经验以及对应步骤或产物依据；不要包含凭据和无关原始用户内容。同一经验记录一次，普通完成任务不要求标记。
+reason 去除首尾空白后为 1–4000 字符，写明实际问题或经验、相关步骤或错误、已尝试的处理和当前结果，并区分事实与推测；不要包含凭据和无关原始用户内容。同一问题或经验不重复记录，有新增事实或不同问题时再记录；普通完成任务不要求标记。记录后继续处理原任务，记录工具自身失败时不循环调用或声称已保存。
 
 没有真实 Run 或工具调用 ID 时，工具明确拒绝保存。工具从注入的 runtime 取得当前身份、Run、worker token 和 tool_call_id，executor 在 PostgreSQL 事务中再次检查账号、Agent 使用权及有效执行租约。提交后返回 `{id, run_id, saved:true}`；同一 Run 的同一调用重放返回同一 ID，改变原因产生冲突。数据库失败或无效原因返回工具错误，原任务按普通工具错误处理继续；授权撤销仍终止执行。
 
