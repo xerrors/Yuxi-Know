@@ -20,10 +20,12 @@ for cube_attempt in {1..50}; do
     sleep 0.1
 done
 [[ -S /cube/vm/workspace.sock ]] || { kill "$cube_fs_pid" 2>/dev/null || true; exit 1; }
+# 由 guest 上报空闲页归还 memfd，保留节点的 24 GiB 内存容量。
 qemu-system-x86_64 \
-    -enable-kvm -machine q35,accel=kvm -cpu host -smp 4 -m 8192 \
-    -object memory-backend-memfd,id=mem,size=8G,share=on -numa node,memdev=mem \
+    -enable-kvm -machine q35,accel=kvm -cpu host -smp 8 -m 24576 \
+    -object memory-backend-memfd,id=mem,size=24G,share=on -numa node,memdev=mem \
     -device virtio-rng-pci \
+    -device virtio-balloon-pci,free-page-reporting=on \
     -drive "if=virtio,format=qcow2,file=$cube_disk" \
     -nic 'user,model=virtio-net-pci,hostfwd=tcp:0.0.0.0:10022-:22,hostfwd=tcp:0.0.0.0:13000-:3000,hostfwd=tcp:0.0.0.0:18080-:80' \
     -chardev socket,id=fs,path=/cube/vm/workspace.sock \

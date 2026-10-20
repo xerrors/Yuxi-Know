@@ -16,8 +16,8 @@ services:
     # virtiofsd 翻译宿主文件所有权需要这些能力；不授予用户 VM。
     cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, FSETID, SETGID, SETUID, MKNOD, SETFCAP, SETPCAP]
     security_opt: [no-new-privileges:true]
-    mem_limit: 10g
-    cpus: 4
+    mem_limit: 32g
+    cpus: 8
     volumes:
       - ${CUBE_DATA_DIR:?Set CUBE_DATA_DIR}/vm:/cube/vm
       - ${CUBE_SHARED_DIR:?Set the Yuxi state directory}/threads:/cube/shared/threads
