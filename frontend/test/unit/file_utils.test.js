@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict'
 import test, { after, before } from 'node:test'
 import { fileURLToPath } from 'node:url'
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 
 let parseDownloadFilename
 let server
 
 before(async () => {
-  server = await createServer({
+  server = await createTestServer({
     root: fileURLToPath(new URL('../..', import.meta.url)),
     server: { middlewareMode: true },
     appType: 'custom'

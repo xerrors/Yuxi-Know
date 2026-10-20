@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
 import { createPinia, setActivePinia } from 'pinia'
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 
 test('共享智能体保存只提交修改字段，并使用后端合并结果更新基线', async () => {
   const previousStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
@@ -10,7 +10,7 @@ test('共享智能体保存只提交修改字段，并使用后端合并结果�
     configurable: true,
     value: { getItem: () => null, setItem() {}, removeItem() {} }
   })
-  const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' })
+  const server = await createTestServer({ server: { middlewareMode: true }, appType: 'custom' })
   setActivePinia(createPinia())
   try {
     const { useAgentStore } = await server.ssrLoadModule('/src/modules/agents/model/agent.js')
@@ -96,7 +96,7 @@ test('Agent 数字主键与路由身份不同，详情和创建更新删除始�
     configurable: true,
     value: { getItem() {}, setItem() {} }
   })
-  const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' })
+  const server = await createTestServer({ server: { middlewareMode: true }, appType: 'custom' })
   setActivePinia(createPinia())
   try {
     const { useAgentStore } = await server.ssrLoadModule('/src/modules/agents/model/agent.js')

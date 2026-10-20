@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { createPinia, setActivePinia } from 'pinia'
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 
 function readSource(relativePath) {
   return readFileSync(new URL(relativePath, import.meta.url), 'utf8')
@@ -45,7 +45,7 @@ test('FileUploadModal 文件数量与进度统计仅计算受支持且非隐藏�
 })
 
 test('documentApi.addDocuments 能够将 source_paths 正确打包发送给知识库文档添加端点', async () => {
-  const server = await createServer({
+  const server = await createTestServer({
     server: { middlewareMode: true },
     appType: 'custom'
   })

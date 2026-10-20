@@ -4,11 +4,11 @@ import { setImmediate } from 'node:timers'
 import { readFileSync } from 'node:fs'
 import { compileScript, parse } from 'vue/compiler-sfc'
 import { createRenderer, h, nextTick } from 'vue'
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 
 async function renderSettings(component, api) {
   globalThis.__sandboxSettingsTest = api
-  const server = await createServer({
+  const server = await createTestServer({
     server: { middlewareMode: true, hmr: false },
     appType: 'custom',
     plugins: [

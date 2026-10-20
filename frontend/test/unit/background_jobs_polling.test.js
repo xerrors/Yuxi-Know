@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createPinia, setActivePinia } from 'pinia'
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 import { readFileSync } from 'node:fs'
 import { compileScript, parse } from 'vue/compiler-sfc'
 
@@ -15,7 +15,7 @@ const deferred = () => {
 
 test('任务请求时序与轮询生命周期', async (t) => {
   globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} }
-  const server = await createServer({
+  const server = await createTestServer({
     server: { middlewareMode: true, hmr: false },
     appType: 'custom'
   })
@@ -306,7 +306,7 @@ test('任务请求时序与轮询生命周期', async (t) => {
 
 test('已登记作业的终态通知覆盖分页遗漏、重复快照和账号失效', async (t) => {
   globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} }
-  const server = await createServer({
+  const server = await createTestServer({
     server: { middlewareMode: true, hmr: false },
     appType: 'custom'
   })

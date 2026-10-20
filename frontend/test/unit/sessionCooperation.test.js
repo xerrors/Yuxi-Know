@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict'
 import { after, before, test } from 'node:test'
 import { setImmediate } from 'node:timers'
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 import { createSSRApp, effectScope, h, nextTick, ref } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { createPinia } from 'pinia'
 let server, agentApi, useSessionCooperation, CooperationTree
 before(async () => {
   globalThis.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} }
-  server = await createServer({ server: { middlewareMode: true, hmr: false } })
+  server = await createTestServer({ server: { middlewareMode: true, hmr: false } })
   ;({ agentApi } = await server.ssrLoadModule('/src/apis/index.js'))
   ;({ useSessionCooperation } = await server.ssrLoadModule(
     '/src/modules/session/model/useSessionCooperation.js'

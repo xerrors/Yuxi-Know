@@ -3,7 +3,8 @@ import { Buffer } from 'node:buffer'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
-import { build, createServer } from 'vite'
+import { build } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 
 const cmapPath = '/assets/pdfjs-cmaps/UniGB-UCS2-H.bcmap'
 
@@ -17,7 +18,7 @@ test('PDF 本地 CMap 开发响应和构建产物与依赖字节一致', async (
   )
   assert.match(component, /cMapUrl: '\/assets\/pdfjs-cmaps\/'/)
   assert.doesNotMatch(component, /cdn\.jsdelivr/)
-  const server = await createServer({ server: { host: '127.0.0.1', port: 0 } })
+  const server = await createTestServer({ server: { host: '127.0.0.1', port: 0 } })
   try {
     await server.listen()
     const response = await fetch(`http://127.0.0.1:${server.httpServer.address().port}${cmapPath}`)

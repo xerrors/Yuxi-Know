@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createPinia, setActivePinia } from 'pinia'
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 
 test('产品创建、消息、等待恢复和队列控制仅使用 Public Thread', async () => {
   const saved = new Map()
@@ -25,7 +25,7 @@ test('产品创建、消息、等待恢复和队列控制仅使用 Public Thread
       headers: { 'content-type': 'application/json' }
     })
   }
-  const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' })
+  const server = await createTestServer({ server: { middlewareMode: true }, appType: 'custom' })
   try {
     setActivePinia(createPinia())
     const { useUserStore } = await server.ssrLoadModule('/src/modules/identity/model/user.js')

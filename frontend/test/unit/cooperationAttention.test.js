@@ -3,7 +3,7 @@ import { after, before, test } from 'node:test'
 import { readFileSync } from 'node:fs'
 import { createSSRApp, h, nextTick, ref, watch } from 'vue'
 import { renderToString } from 'vue/server-renderer'
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 import {
   getCooperationPendingActions,
   getSessionAttentionLabel
@@ -11,7 +11,7 @@ import {
 
 let server, CooperationAttention
 before(async () => {
-  server = await createServer({ server: { middlewareMode: true, hmr: false } })
+  server = await createTestServer({ server: { middlewareMode: true, hmr: false } })
   ;({ default: CooperationAttention } = await server.ssrLoadModule(
     '/src/modules/session/ui/CooperationAttention.vue'
   ))

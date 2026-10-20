@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { createRenderer, h, nextTick, ref } from 'vue'
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 import { compileScript, parse } from 'vue/compiler-sfc'
 import { readFileSync } from 'node:fs'
 
@@ -69,7 +69,7 @@ test('问题弹窗按顺序收集全部答案', async () => {
     })
   }
 
-  const server = await createServer({
+  const server = await createTestServer({
     server: { middlewareMode: true, hmr: false },
     appType: 'custom',
     plugins: [

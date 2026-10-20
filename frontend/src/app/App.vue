@@ -20,8 +20,9 @@ const removeBeforeEach = router.beforeEach((to) => {
   latestNavigation = to
   failedRoute.value = null
 })
-const removeErrorHandler = router.onError((_error, to) => {
+const removeErrorHandler = router.onError((error, to) => {
   if (latestNavigation && latestNavigation !== to) return
+  console.error('页面路由加载失败:', to.fullPath, error)
   failedRoute.value = router.resolve(to).href
   clearTimeout(loadingTimer)
 })

@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
 import { after, before, test } from 'node:test'
 import { createRouter, createMemoryHistory } from 'vue-router'
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 
 let server, createSessionRouteCache
 before(async () => {
-  server = await createServer({ server: { middlewareMode: true, hmr: false } })
+  server = await createTestServer({ server: { middlewareMode: true, hmr: false } })
   ;({ createSessionRouteCache } = await server.ssrLoadModule('/src/app/layouts/sessionRouteCache.ts'))
 })
 after(() => server.close())

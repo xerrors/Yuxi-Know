@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 import { createSSRApp, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 
@@ -20,7 +20,7 @@ const models = { fixture: { models: [{ spec: 'fixture:chat', display_name: '测�
 test('模型弹层的加载、关闭和失败重试', async (t) => {
   const previousStorage = globalThis.localStorage
   globalThis.localStorage = { getItem: () => null, setItem() {} }
-  const server = await createServer({
+  const server = await createTestServer({
     server: { middlewareMode: true, hmr: false },
     appType: 'custom',
     plugins: [

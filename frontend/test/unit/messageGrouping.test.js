@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { after, before, test } from 'node:test'
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 import MessageProcessor from '../../src/modules/session/model/messageProcessor.js'
 import {
   groupRunContinuations,
@@ -12,7 +12,7 @@ import {
 
 let server, getMessageGroupDisplayItems
 before(async () => {
-  server = await createServer({ server: { middlewareMode: true, hmr: false } })
+  server = await createTestServer({ server: { middlewareMode: true, hmr: false } })
   ;({ getMessageGroupDisplayItems } = await server.ssrLoadModule(
     '/src/modules/session/model/messageGrouping.js'
   ))

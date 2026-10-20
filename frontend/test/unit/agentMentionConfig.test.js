@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { ref } from 'vue'
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 
 test('文件 mention 来自附件元数据并按路径去重', async () => {
-  const server = await createServer({
+  const server = await createTestServer({
     server: { middlewareMode: true, hmr: false },
     appType: 'custom'
   })
@@ -48,7 +48,7 @@ test('文件 mention 来自附件元数据并按路径去重', async () => {
 })
 
 test('资源 mention 按智能体选择生成，不把预加载 Skills 当成可提及资源', async () => {
-  const server = await createServer({
+  const server = await createTestServer({
     server: { middlewareMode: true, hmr: false },
     appType: 'custom'
   })
@@ -113,7 +113,7 @@ test('资源 mention 按智能体选择生成，不把预加载 Skills 当成可
 })
 
 test('智能体 mention 只包含可运行目录并响应目录更新', async () => {
-  const server = await createServer({
+  const server = await createTestServer({
     server: { middlewareMode: true, hmr: false },
     appType: 'custom'
   })

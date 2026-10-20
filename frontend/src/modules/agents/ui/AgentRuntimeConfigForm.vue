@@ -93,32 +93,15 @@
                     <template v-if="!isReadOnlyConfig"> 清空全部会移除这些选择。 </template>
                   </div>
                   <div class="selection-toolbar">
-                    <span class="selection-count" role="status">
-                      <template v-if="isAllSelected(key)">已选择全部（含新增）</template>
-                      <template v-else>
-                        已选择 {{ getSelectedCount(key) }} 项｜共
-                        {{ getSelectionOptions(key, value).length }} 项
-                      </template>
-                    </span>
-                    <div v-if="!isReadOnlyConfig" class="selection-actions">
-                      <a-button
-                        v-if="supportsAllAgentResources(value) && !isAllSelected(key)"
-                        type="link"
-                        size="small"
-                        class="select-all-btn"
-                        @click="setAllSelection(key)"
-                      >
-                        选择全部
-                      </a-button>
-                      <a-button
-                        v-if="getSelectionOptions(key, value).length > 5"
-                        size="small"
-                        class="selection-trigger-btn"
-                        @click="openSelectionModal(key)"
-                      >
-                        选择...
-                      </a-button>
-                      <a-tooltip v-if="canResetSelection(key)" title="清空全部">
+                    <div class="selection-summary">
+                      <span class="selection-count" role="status">
+                        <template v-if="isAllSelected(key)">已选择全部（含新增）</template>
+                        <template v-else>
+                          已选择 {{ getSelectedCount(key) }} 项｜共
+                          {{ getSelectionOptions(key, value).length }} 项
+                        </template>
+                      </span>
+                      <a-tooltip v-if="!isReadOnlyConfig && canResetSelection(key)" title="清空全部">
                         <a-button
                           type="text"
                           size="small"
@@ -129,11 +112,22 @@
                           <X :size="14" aria-hidden="true" />
                         </a-button>
                       </a-tooltip>
+                    </div>
+                    <div v-if="!isReadOnlyConfig" class="selection-actions">
+                      <a-button
+                        v-if="supportsAllAgentResources(value) && !isAllSelected(key)"
+                        type="link"
+                        size="small"
+                        class="select-all-btn"
+                        @click="setAllSelection(key)"
+                      >
+                        选择全部
+                      </a-button>
                       <template
                         v-if="getSelectionOptions(key, value).length <= 5 && isResourceConfigKind(value.kind)"
                       >
                         <a-button
-                          type="link"
+                          type="text"
                           size="small"
                           @click="refreshConfigOptions(key, value.kind)"
                           class="inline-action-btn lucide-icon-btn"
@@ -142,7 +136,7 @@
                           刷新
                         </a-button>
                         <a-button
-                          type="link"
+                          type="text"
                           size="small"
                           @click="navigateToConfigPage(value.kind)"
                           class="inline-action-btn lucide-icon-btn"
@@ -152,6 +146,14 @@
                         </a-button>
                       </template>
                       <slot name="resource-actions" :field="key" :kind="value.kind" />
+                      <a-button
+                        v-if="getSelectionOptions(key, value).length > 5"
+                        size="small"
+                        class="selection-trigger-btn"
+                        @click="openSelectionModal(key)"
+                      >
+                        选择...
+                      </a-button>
                     </div>
                   </div>
 
@@ -1258,10 +1260,18 @@ defineExpose({ closeSelectionModal })
 }
 
 .selection-count {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   color: var(--gray-600);
   font-size: 12px;
   line-height: 1.5;
+}
+
+.selection-summary {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .selection-actions {
@@ -1297,15 +1307,16 @@ defineExpose({ closeSelectionModal })
 }
 
 .inline-action-btn, :deep(.inline-action-btn) {
-  padding: 2px 6px;
-  height: auto;
+  gap: 3px;
+  padding: 0 6px;
+  height: 28px;
   line-height: 1;
   font-size: 12px;
   color: var(--gray-600);
   white-space: nowrap;
 
   &:hover {
-    color: var(--main-color);
+    color: var(--gray-900);
   }
 }
 

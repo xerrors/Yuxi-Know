@@ -1028,7 +1028,7 @@ watch([useInlinePreview, workspaceActive], ([isInline, isActive]) => {
 .workspace-shell {
   position: relative;
   display: grid;
-  --workspace-sidebar-width: clamp(240px, 20vw, 280px);
+  --workspace-sidebar-width: clamp(240px, 15vw, 280px);
   grid-template-columns: var(--workspace-sidebar-width) minmax(0, 1fr);
   transition: grid-template-columns 220ms ease;
   flex: 1 1 auto;

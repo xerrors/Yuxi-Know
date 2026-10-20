@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { createPinia, setActivePinia } from 'pinia'
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 
 const storageValues = new Map([['user_token', 'test-token']])
 globalThis.localStorage = {
@@ -13,7 +13,7 @@ globalThis.localStorage = {
 }
 
 test('知识库文件修改守卫拒绝只读、锁定、筛选和虚拟目录场景', async () => {
-  const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' })
+  const server = await createTestServer({ server: { middlewareMode: true }, appType: 'custom' })
   try {
     const { canDropOnFileBreadcrumb } = await server.ssrLoadModule('/src/shared/lib/fileDrop.js')
     const {
@@ -64,7 +64,7 @@ test('知识库文件修改守卫拒绝只读、锁定、筛选和虚拟目录�
 })
 
 test('知识库文件夹移动与重命名 API 使用管理端 PUT 契约', async () => {
-  const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' })
+  const server = await createTestServer({ server: { middlewareMode: true }, appType: 'custom' })
   const requests = []
   globalThis.fetch = async (url, options = {}) => {
     requests.push({

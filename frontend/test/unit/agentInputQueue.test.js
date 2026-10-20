@@ -4,7 +4,7 @@ import { after, before, test } from 'node:test'
 import { setImmediate } from 'node:timers'
 import { fileURLToPath } from 'node:url'
 
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 import { createItemState } from '../../src/modules/session/model/agentItems.js'
 import { useAgentThreadState } from '../../src/modules/session/model/useAgentThreadState.js'
 
@@ -20,7 +20,7 @@ before(async () => {
     setItem: (key, value) => storage.set(key, String(value)),
     removeItem: (key) => storage.delete(key)
   }
-  server = await createServer({ root: webRoot, server: { middlewareMode: true } })
+  server = await createTestServer({ root: webRoot, server: { middlewareMode: true } })
   ;({ agentApi } = await server.ssrLoadModule('/src/apis/index.js'))
   ;({ useAgentInputQueue } = await server.ssrLoadModule(
     '/src/modules/session/model/useAgentInputQueue.js'

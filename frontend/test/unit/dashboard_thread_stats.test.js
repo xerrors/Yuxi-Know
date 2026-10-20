@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createPinia, setActivePinia } from 'pinia'
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 
 const storageValues = new Map()
 globalThis.localStorage = {
@@ -19,7 +19,7 @@ function jsonResponse(payload) {
 }
 
 async function withServer(run) {
-  const server = await createServer({
+  const server = await createTestServer({
     server: { middlewareMode: true },
     appType: 'custom',
     ssr: { noExternal: ['ant-design-vue'] },

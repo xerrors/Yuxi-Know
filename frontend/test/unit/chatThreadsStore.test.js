@@ -3,7 +3,7 @@ import test from 'node:test'
 import { setImmediate } from 'node:timers'
 
 import { createPinia, setActivePinia } from 'pinia'
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 
 globalThis.localStorage = {
   getItem: () => null,
@@ -12,7 +12,7 @@ globalThis.localStorage = {
 }
 
 test('线程创建期间共享 Store 拒绝外层切换，创建结果可显式提交', async () => {
-  const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' })
+  const server = await createTestServer({ server: { middlewareMode: true }, appType: 'custom' })
   setActivePinia(createPinia())
   try {
     const { useChatThreadsStore } = await server.ssrLoadModule(
@@ -34,7 +34,7 @@ test('线程创建期间共享 Store 拒绝外层切换，创建结果可显式�
 })
 
 test('Project 删除后 Store 只移除对应 Session 并清空当前选择', async () => {
-  const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' })
+  const server = await createTestServer({ server: { middlewareMode: true }, appType: 'custom' })
   setActivePinia(createPinia())
   try {
     const { useChatThreadsStore } = await server.ssrLoadModule(
@@ -56,7 +56,7 @@ test('Project 删除后 Store 只移除对应 Session 并清空当前选择', as
 
 for (const mutation of ['pin', 'archive', 'create', 'detail']) {
   test(`列表游标不被 ${mutation} 操作改变，下一页保留边界 Session`, async () => {
-    const server = await createServer({
+    const server = await createTestServer({
       server: { middlewareMode: true, hmr: false },
       appType: 'custom'
     })
@@ -109,7 +109,7 @@ for (const mutation of ['pin', 'archive', 'create', 'detail']) {
 }
 
 test('下一页与归档串行执行，归档结果不会重新出现在列表', async () => {
-  const server = await createServer({
+  const server = await createTestServer({
     server: { middlewareMode: true, hmr: false },
     appType: 'custom'
   })
@@ -152,7 +152,7 @@ test('下一页与归档串行执行，归档结果不会重新出现在列表',
 })
 
 test('较老的置顶 Session 始终展示，刷新状态不改变普通列表游标', async () => {
-  const server = await createServer({
+  const server = await createTestServer({
     server: { middlewareMode: true, hmr: false },
     appType: 'custom'
   })
@@ -197,7 +197,7 @@ test('较老的置顶 Session 始终展示，刷新状态不改变普通列表�
 })
 
 test('后台状态读取与改名串行，迟到资源不会覆盖已保存的标题', async () => {
-  const server = await createServer({
+  const server = await createTestServer({
     server: { middlewareMode: true, hmr: false },
     appType: 'custom'
   })

@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import { after, before, test } from 'node:test'
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 let server, createCoordinator
 before(async () => {
-  server = await createServer({ server: { middlewareMode: true, hmr: false } })
+  server = await createTestServer({ server: { middlewareMode: true, hmr: false } })
   ;({ createThreadRouteCoordinator: createCoordinator } = await server.ssrLoadModule(
     '/src/pages/agent/threadRouteCoordinator.ts'
   ))

@@ -5,7 +5,7 @@ import { setImmediate } from 'node:timers/promises'
 import { createPinia, setActivePinia } from 'pinia'
 import { createApp } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 import { message } from 'ant-design-vue'
 
 const storageValues = new Map()
@@ -17,7 +17,7 @@ globalThis.localStorage = {
 }
 
 test('解析和入库动作保留参数、结果反馈与 loading 生命周期', async (t) => {
-  const server = await createServer({
+  const server = await createTestServer({
     server: { middlewareMode: true, hmr: false },
     appType: 'custom'
   })
@@ -98,7 +98,7 @@ test('解析和入库动作保留参数、结果反馈与 loading 生命周期',
 })
 
 test('从二级目录点击全部文件会清空 parent_id 并返回根目录', async (t) => {
-  const server = await createServer({
+  const server = await createTestServer({
     server: { middlewareMode: true, hmr: false },
     appType: 'custom'
   })
@@ -161,7 +161,7 @@ test('从二级目录点击全部文件会清空 parent_id 并返回根目录', 
 })
 
 test('知识库提交跨账号返回时，不把旧入队任务登记给新账号', async (t) => {
-  const server = await createServer({
+  const server = await createTestServer({
     server: { middlewareMode: true, hmr: false },
     appType: 'custom'
   })
@@ -241,7 +241,7 @@ test('知识库提交跨账号返回时，不把旧入队任务登记给新账�
 })
 
 test('自动入库中间状态停止轮询后，作业终态仍回读正确文件与统计', async (t) => {
-  const server = await createServer({
+  const server = await createTestServer({
     server: { middlewareMode: true, hmr: false },
     appType: 'custom'
   })
@@ -311,7 +311,7 @@ test('自动入库中间状态停止轮询后，作业终态仍回读正确文�
 })
 
 test('切库或切账号后，旧文件与统计响应不能覆盖新页面', async (t) => {
-  const server = await createServer({
+  const server = await createTestServer({
     server: { middlewareMode: true, hmr: false },
     appType: 'custom'
   })
@@ -365,7 +365,7 @@ test('切库或切账号后，旧文件与统计响应不能覆盖新页面', as
 })
 
 test('同库旧请求晚到不能回退入库状态，元信息不能覆盖更新的文件统计', async () => {
-  const server = await createServer({
+  const server = await createTestServer({
     server: { middlewareMode: true, hmr: false },
     appType: 'custom'
   })

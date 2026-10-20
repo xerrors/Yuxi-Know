@@ -2,10 +2,10 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createSSRApp, h, reactive } from 'vue'
 import { renderToString } from 'vue/server-renderer'
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 
 test('共享弹层默认自适应，输入区向上约束使用实际可见空间', async () => {
-  const server = await createServer({
+  const server = await createTestServer({
     server: { middlewareMode: true, hmr: false },
     appType: 'custom'
   })

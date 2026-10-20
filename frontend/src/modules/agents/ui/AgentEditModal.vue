@@ -897,9 +897,9 @@ defineExpose({
               @manage-resource="manageRuntimeResource"
             >
               <template #resource-actions="{ field, kind }">
-                <a-button v-if="field === 'mcps' && userStore.isSuperAdmin" type="link" size="small" class="inline-action-btn lucide-icon-btn" :disabled="runtimeConfigReadonly" @click="openMcpCreate"><Plus :size="12" aria-hidden="true" />创建 MCP</a-button>
+                <a-button v-if="field === 'mcps' && userStore.isSuperAdmin" type="text" size="small" class="inline-action-btn lucide-icon-btn" :disabled="runtimeConfigReadonly" @click="openMcpCreate"><Plus :size="14" aria-hidden="true" />创建 MCP</a-button>
                 <a-upload v-if="field === 'skills' && kind === 'skills' && userStore.isAdmin" class="resource-create-upload" :show-upload-list="false" :before-upload="beforeSharedSkillUpload" :disabled="runtimeConfigReadonly" accept=".zip">
-                  <a-button type="link" size="small" class="inline-action-btn lucide-icon-btn" :loading="sharedSkillPreparing" :disabled="runtimeConfigReadonly"><Plus :size="12" aria-hidden="true" />创建共享 Skill</a-button>
+                  <a-button type="text" size="small" class="inline-action-btn lucide-icon-btn" :loading="sharedSkillPreparing" :disabled="runtimeConfigReadonly"><Plus :size="14" aria-hidden="true" />创建共享 Skill</a-button>
                 </a-upload>
               </template>
             </AgentRuntimeConfigForm>
@@ -964,7 +964,13 @@ defineExpose({
 .create-resource-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; }
 .create-resource-hint { font-size: 12px; line-height: 1.6; color: var(--gray-600); }
 .create-skill-upload { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.create-skill-upload, .resource-create-upload { :deep(.ant-upload) { display: inline-flex; align-items: center; } }
+.create-skill-upload, .resource-create-upload {
+  :deep(.ant-upload) { display: inline-flex; align-items: center; }
+  :deep(.inline-action-btn) {
+    color: var(--gray-600);
+    &:hover { color: var(--gray-900); }
+  }
+}
 .create-skill-selection { display: flex; align-items: center; gap: 8px; min-width: 0; :deep(.ant-btn) { flex-shrink: 0; } }
 .create-skill-filename { min-width: 0; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--gray-700); }
 .create-resource-error { display: flex; align-items: center; gap: 8px; color: var(--color-error-500); font-size: 12px; }

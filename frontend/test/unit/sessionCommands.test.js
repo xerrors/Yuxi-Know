@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict'
 import { before, after, test } from 'node:test'
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 import { createItemState } from '../../src/modules/session/model/agentItems.js'
 
 let server, api, resumeSessionWaitpoint, createSessionInput
 before(async () => {
   globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} }
-  server = await createServer({ server: { middlewareMode: true, hmr: false } })
+  server = await createTestServer({ server: { middlewareMode: true, hmr: false } })
   ;({ agentApi: api } = await server.ssrLoadModule('/src/apis/index.js'))
   ;({ resumeSessionWaitpoint } = await server.ssrLoadModule(
     '/src/modules/session/model/sessionCommands.js'

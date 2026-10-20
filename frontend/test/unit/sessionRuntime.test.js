@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict'
 import { after, before, test } from 'node:test'
 import { setImmediate } from 'node:timers'
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 import { createPinia, setActivePinia, disposePinia } from 'pinia'
 
 let server, api, useRuntime, ErrorHandler
 before(async () => {
   globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} }
-  server = await createServer({ server: { middlewareMode: true, hmr: false } })
+  server = await createTestServer({ server: { middlewareMode: true, hmr: false } })
   ;({ agentApi: api } = await server.ssrLoadModule('/src/apis/index.js'))
   ;({ ErrorHandler } = await server.ssrLoadModule('/src/shared/lib/errorHandler.js'))
   ;({ useSessionRuntimeStore: useRuntime } = await server.ssrLoadModule(

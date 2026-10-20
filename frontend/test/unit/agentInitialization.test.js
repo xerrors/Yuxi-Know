@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createPinia, disposePinia, setActivePinia } from 'pinia'
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 
 test('默认选择使用默认标记，不把其他内置角色当作默认助手', async (t) => {
   globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} }
-  const server = await createServer({ server: { middlewareMode: true, hmr: false } })
+  const server = await createTestServer({ server: { middlewareMode: true, hmr: false } })
   const pinia = createPinia()
   setActivePinia(pinia)
   try {
@@ -53,7 +53,7 @@ test('默认选择使用默认标记，不把其他内置角色当作默认助�
 
 test('并发入口等待目录准备后再继续，重置后可以重新初始化', async (t) => {
   globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} }
-  const server = await createServer({ server: { middlewareMode: true, hmr: false } })
+  const server = await createTestServer({ server: { middlewareMode: true, hmr: false } })
   const pinia = createPinia()
   setActivePinia(pinia)
   try {

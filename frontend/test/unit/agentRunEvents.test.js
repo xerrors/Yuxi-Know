@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict'
 import { after, before, test } from 'node:test'
 import { setImmediate } from 'node:timers'
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 import { createItemState } from '../../src/modules/session/model/agentItems.js'
 
 let server, api, useAgentRunStream, processRunSseResponse, ErrorHandler
 before(async () => {
   globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} }
-  server = await createServer({ server: { middlewareMode: true, hmr: false } })
+  server = await createTestServer({ server: { middlewareMode: true, hmr: false } })
   ;({ agentApi: api } = await server.ssrLoadModule('/src/apis/index.js'))
   ;({ useAgentRunStream, processRunSseResponse } = await server.ssrLoadModule(
     '/src/modules/session/model/useAgentRunStream.js'

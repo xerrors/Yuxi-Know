@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { createPinia, setActivePinia } from 'pinia'
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 
 test('调试模式读取受限 LocalStorage 时降级为关闭', async () => {
   Object.defineProperty(globalThis, 'localStorage', {
@@ -15,7 +15,7 @@ test('调试模式读取受限 LocalStorage 时降级为关闭', async () => {
       removeItem() {}
     }
   })
-  const server = await createServer({
+  const server = await createTestServer({
     server: { middlewareMode: true, hmr: false },
     appType: 'custom'
   })
@@ -33,7 +33,7 @@ test('调试模式读取受限 LocalStorage 时降级为关闭', async () => {
 })
 
 test('品牌配置合并并发读取，成功缓存，失败与强制刷新可重试', async (t) => {
-  const server = await createServer({
+  const server = await createTestServer({
     server: { middlewareMode: true, hmr: false },
     appType: 'custom'
   })

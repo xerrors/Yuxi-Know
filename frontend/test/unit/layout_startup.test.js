@@ -3,12 +3,12 @@ import test from 'node:test'
 import { createPinia, disposePinia, setActivePinia } from 'pinia'
 import { createRenderer, h, ssrContextKey } from 'vue'
 import { createRouter, createMemoryHistory } from 'vue-router'
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 
 test('布局导航不等待品牌或知识库，卸载后清理状态同步计时器', async (t) => {
   globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} }
   globalThis.window = { addEventListener() {}, removeEventListener() {} }
-  const server = await createServer({
+  const server = await createTestServer({
     server: { middlewareMode: true, hmr: false },
     appType: 'custom'
   })

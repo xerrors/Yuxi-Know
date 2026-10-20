@@ -4,11 +4,11 @@ import { readFileSync } from 'node:fs'
 import { compileScript, parse } from 'vue/compiler-sfc'
 import { createRenderer, h, nextTick, ref } from 'vue'
 import { createPinia, disposePinia, setActivePinia } from 'pinia'
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 
 test('设置仅挂载访问页，切换保留表单，关闭重开只挂载当前页', async () => {
   globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} }
-  const server = await createServer({
+  const server = await createTestServer({
     server: { middlewareMode: true, hmr: false },
     appType: 'custom',
     plugins: [

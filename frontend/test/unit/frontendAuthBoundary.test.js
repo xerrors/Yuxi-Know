@@ -3,7 +3,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import test from 'node:test'
 import { createPinia, disposePinia, setActivePinia } from 'pinia'
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 
 const storageValues = new Map()
 globalThis.localStorage = {
@@ -25,7 +25,7 @@ async function collectSourceFiles(directory) {
 }
 
 test('超级管理员 API 无权限时 fail-closed 且不发起请求', async () => {
-  const server = await createServer({
+  const server = await createTestServer({
     server: { middlewareMode: true, hmr: false },
     ssr: { noExternal: ['ant-design-vue'] },
     plugins: [

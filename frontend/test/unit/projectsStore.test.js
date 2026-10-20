@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { createPinia, setActivePinia } from 'pinia'
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 import { buildProjectSessionGroups } from '../../src/modules/projects/model/projectSessionGroups.js'
 
 globalThis.localStorage = {
@@ -12,7 +12,7 @@ globalThis.localStorage = {
 }
 
 test('创建 Project 后迟到的列表响应不会覆盖侧边栏状态', async () => {
-  const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' })
+  const server = await createTestServer({ server: { middlewareMode: true }, appType: 'custom' })
   setActivePinia(createPinia())
   try {
     const { projectApi } = await server.ssrLoadModule('/src/apis/project_api.js')
@@ -49,7 +49,7 @@ test('创建 Project 后迟到的列表响应不会覆盖侧边栏状态', async
 })
 
 test('项目刷新期间保留已加载状态，失败后仍可使用已有列表', async () => {
-  const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' })
+  const server = await createTestServer({ server: { middlewareMode: true }, appType: 'custom' })
   setActivePinia(createPinia())
   try {
     const { projectApi } = await server.ssrLoadModule('/src/apis/project_api.js')
@@ -82,7 +82,7 @@ test('项目刷新期间保留已加载状态，失败后仍可使用已有列�
 })
 
 test('退出登录清空项目缓存，退出前的迟到响应不能跨会话写回', async () => {
-  const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' })
+  const server = await createTestServer({ server: { middlewareMode: true }, appType: 'custom' })
   setActivePinia(createPinia())
   try {
     const { projectApi } = await server.ssrLoadModule('/src/apis/project_api.js')

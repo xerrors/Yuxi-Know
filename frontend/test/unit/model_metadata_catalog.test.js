@@ -1,11 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { providers } from '@opencode-ai/models/snapshot'
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 import { resolveModelDisplayMetadata } from '../../src/modules/settings/model/modelMetadata.js'
 
 test('构建投影保留完整模型覆盖与显示结果，并缩减序列化体积', async () => {
-  const server = await createServer({ server: { middlewareMode: true, hmr: false }, appType: 'custom' })
+  const server = await createTestServer({ server: { middlewareMode: true, hmr: false }, appType: 'custom' })
   try {
     const { loadModelMetadataCatalog } = await server.ssrLoadModule('/src/modules/settings/model/modelMetadata.js')
     const { providers: compact } = await loadModelMetadataCatalog()

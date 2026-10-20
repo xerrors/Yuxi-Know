@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { after, before, test } from 'node:test'
-import { createServer } from 'vite'
+import { createTestServer } from '../helpers/createTestServer.js'
 import { createSSRApp, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 
@@ -10,7 +10,7 @@ let server
 let QueryResultChunk
 
 before(async () => {
-  server = await createServer({
+  server = await createTestServer({
     root: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..'),
     server: { middlewareMode: true }
   })
