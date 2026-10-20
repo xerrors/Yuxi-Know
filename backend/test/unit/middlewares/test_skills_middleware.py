@@ -380,7 +380,7 @@ async def test_preloaded_skill_rejects_duplicate_mcp_tool_names(monkeypatch):
 
         return f"wrong-service:{value}"
 
-    async def fake_resolve_runtime_mcp_tools(server_names, *, uid=None, run_tools=None):
+    async def fake_resolve_runtime_mcp_tools(server_names, *, uid=None, run_tools=None, unavailable=None):
         result = {name: [chart_tool] if name == "charts" else [conflicting_chart_tool] for name in server_names}
         if run_tools is not None:
             run_tools.update(result)
@@ -430,7 +430,7 @@ async def test_activated_mcp_rejects_name_of_inactive_registered_skill_tool(monk
 
         return f"mcp:{value}"
 
-    async def fake_resolve_runtime_mcp_tools(server_names, *, uid=None, run_tools=None):
+    async def fake_resolve_runtime_mcp_tools(server_names, *, uid=None, run_tools=None, unavailable=None):
         assert server_names == ["charts"]
         result = {name: [chart_tool] for name in server_names}
         if run_tools is not None:
@@ -480,7 +480,7 @@ async def test_preloaded_skill_exposes_mcp_tool_on_first_model_call(monkeypatch)
 
         return f"rendered:{value}"
 
-    async def fake_resolve_runtime_mcp_tools(server_names, *, uid=None, run_tools=None):
+    async def fake_resolve_runtime_mcp_tools(server_names, *, uid=None, run_tools=None, unavailable=None):
         assert server_names == ["charts"]
         assert uid == "employee-runtime"
         result = {name: [chart_tool] for name in server_names}
@@ -540,7 +540,7 @@ async def test_activated_skill_loads_mcp_without_agent_selection(monkeypatch):
 
     calls = []
 
-    async def fake_resolve_runtime_mcp_tools(server_names, *, uid=None, run_tools=None):
+    async def fake_resolve_runtime_mcp_tools(server_names, *, uid=None, run_tools=None, unavailable=None):
         calls.extend(server_names)
         result = {name: [chart_tool] for name in server_names}
         if run_tools is not None:
@@ -612,7 +612,7 @@ async def test_skill_reusing_explicit_mcp_server_does_not_duplicate_registered_t
 
     calls = []
 
-    async def fake_resolve_runtime_mcp_tools(server_names, *, uid=None, run_tools=None):
+    async def fake_resolve_runtime_mcp_tools(server_names, *, uid=None, run_tools=None, unavailable=None):
         calls.extend(server_names)
         result = {name: [chart_tool] for name in server_names}
         if run_tools is not None:
@@ -668,7 +668,7 @@ async def test_explicit_mcp_rejects_skill_local_tool_name_collision(monkeypatch)
 
         return "wrong-source"
 
-    async def fake_resolve_runtime_mcp_tools(server_names, *, uid=None, run_tools=None):
+    async def fake_resolve_runtime_mcp_tools(server_names, *, uid=None, run_tools=None, unavailable=None):
         assert server_names == ["configured"]
         result = {"configured": [conflicting_list_kbs]}
         if run_tools is not None:

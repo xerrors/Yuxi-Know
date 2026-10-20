@@ -493,3 +493,65 @@ async def test_runtime_connection_failure_remains_explicit(monkeypatch, phase):
     assert caught.value.__cause__ is failure
     monkeypatch.setattr(mcp_runtime, "MultiServerMCPClient", lambda _: _FakeClient([]))
     assert await mcp_runtime.get_mcp_tools("demo", {"transport": "streamable_http", "url": "https://example.com/mcp"}) == []
+
+
+@pytest.mark.parametrize("auth_mode", ["oauth", "headers"])
+@pytest.mark.parametrize("failure_kind", ["missing_key", "wrong_key", "unreachable", "nested", "mixed"])
+async def test_runtime_isolates_failed_mcp_and_retains_healthy_tools(monkeypatch, auth_mode, failure_kind):
+    """单服务失败保留安全原因，健康工具和正常聊天不受影响。"""
+    from yuxi.modules.extensions.mcp import repository
+    from yuxi.shared.errors import StateConflictError
+
+    failure = {
+        "missing_key": StateConflictError("secret-must-not-leak", code="mcp_oauth_unconfigured"),
+        "wrong_key": StateConflictError("secret-must-not-leak", code="mcp_reconnect_required"),
+        "unreachable": ConnectionError("secret-must-not-leak"),
+        "nested": ExceptionGroup("TaskGroup", [ExceptionGroup("inner", [StateConflictError("secret", code="mcp_reconnect_required")])]),
+        "mixed": ExceptionGroup("TaskGroup", [StateConflictError("secret", code="mcp_reconnect_required"), RuntimeError("secret")]),
+    }[failure_kind]
+    servers = {
+        slug: MCPServer(slug=slug, auth_mode=auth_mode, transport="streamable_http", url="https://example.com/mcp")
+        for slug in ["broken", "healthy"]
+    }
+    tool = SimpleNamespace(name="healthy_tool")
+    monkeypatch.setattr(postgres_manager.pg_manager, "get_async_session_context", lambda: _AsyncSessionContext(None))
+    monkeypatch.setattr(repository, "active_mcp_user", AsyncMock(return_value=SimpleNamespace(id=1)))
+    monkeypatch.setattr(mcp_service, "available_mcp_servers", AsyncMock(return_value=servers))
+
+    async def load(server, *_args, **_kwargs):
+        """从单服务发现边界注入故障。"""
+        if (server if isinstance(server, str) else server.slug) == "broken":
+            raise failure
+        return [tool]
+
+    monkeypatch.setattr(mcp_service, "personal_mcp_tools", load)
+    monkeypatch.setattr(mcp_service, "get_mcp_tools", load)
+    unavailable, run_tools = {}, {}
+    logs = []
+    sink = mcp_service.logger.add(lambda message: logs.append(str(message)))
+    try:
+        result = await mcp_service.resolve_runtime_mcp_tools(
+            ["broken", "healthy", "unconnected"], uid="user", run_tools=run_tools, unavailable=unavailable
+        )
+    finally:
+        mcp_service.logger.remove(sink)
+    assert "secret" not in "".join(logs)
+    assert "server=broken" in "".join(logs) and "reason=" in "".join(logs)
+    assert result == {"healthy": [tool]}
+    assert run_tools == {"healthy": [tool]}
+    assert set(unavailable) == {"broken", "unconnected"}
+    assert "secret" not in str(unavailable) and "TaskGroup" not in str(unavailable)
+    assert "扩展页面" in unavailable["unconnected"]
+    if failure_kind == "missing_key":
+        assert "加密密钥" in unavailable["broken"]
+    elif failure_kind in {"wrong_key", "nested", "mixed"}:
+        assert "重新连接" in unavailable["broken"]
+    else:
+        assert "连接或调用失败" in unavailable["broken"]
+
+
+async def test_runtime_does_not_swallow_identity_or_database_failure(monkeypatch):
+    """共享持久化失败不能冒充单 MCP 不可用。"""
+    monkeypatch.setattr(postgres_manager.pg_manager, "get_async_session_context", _FailingSessionContext)
+    with pytest.raises(RuntimeError, match="database-secret"):
+        await mcp_service.resolve_runtime_mcp_tools(["demo"], uid="user", unavailable={})

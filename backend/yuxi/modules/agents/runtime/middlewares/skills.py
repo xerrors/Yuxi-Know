@@ -101,7 +101,10 @@ class SkillsMiddleware(AgentMiddleware):
             if getattr(runtime_context, "mcp_tool_servers", None) is None:
                 raise RuntimeError("MCP 工具来源尚未装配")
             loaded_mcps = await resolve_runtime_mcp_tools(
-                server_names, uid=getattr(runtime_context, "uid", None), run_tools=runtime_context.mcp_tools
+                server_names,
+                uid=getattr(runtime_context, "uid", None),
+                run_tools=runtime_context.mcp_tools,
+                unavailable=getattr(runtime_context, "mcp_unavailable", None),
             )
 
         # 本地工具已在构图时注册；最终可见性与执行权限统一由 Authorization 门控。

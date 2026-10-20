@@ -1332,6 +1332,10 @@ watch(inputValue, (value) => {
   if (debounceTimer.value) {
     clearTimeout(debounceTimer.value)
   }
+  if (!value) {
+    nextTick(adjustTextareaHeight)
+    return
+  }
   debounceTimer.value = setTimeout(() => {
     nextTick(() => {
       adjustTextareaHeight()

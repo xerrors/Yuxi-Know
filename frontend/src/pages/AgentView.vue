@@ -33,6 +33,7 @@ const props = defineProps({
   agentId: { type: String, default: '' },
   projectId: { type: String, default: '' }
 })
+const emit = defineEmits(['session-created'])
 const router = useRouter()
 const agentStore = useAgentStore()
 const workspaceRef = ref(null)
@@ -88,6 +89,10 @@ function handleThreadChange(id) {
   if (!ownsCurrentRoute.value || coordinator.isSyncing()) return
   const nextThreadId = id || ''
   if (props.threadId === nextThreadId) return
+  if (!props.threadId && nextThreadId) {
+    emit('session-created', nextThreadId)
+    return
+  }
   const location = nextThreadId
     ? { name: 'AgentCompWithThreadId', params: { thread_id: nextThreadId } }
     : { name: 'AgentComp' }

@@ -102,6 +102,7 @@ async def test_state_view_reads_persisted_fields_without_agent_runtime(checkpoin
         artifacts: list
         token_usage: dict
         internal_only: str
+        warnings: list[dict]
 
     payload = {
         "messages": [HumanMessage(content="saved message")],
@@ -111,6 +112,7 @@ async def test_state_view_reads_persisted_fields_without_agent_runtime(checkpoin
         "cooperation": {"sessions": []},
         "token_usage": {"total": 123},
         "internal_only": "not a response field",
+        "warnings": [{"code": "mcp_unavailable", "source": "mcp:fixture", "message": "MCP fixture 未连接，请重新连接"}],
     }
     builder = StateGraph(DisplayState)
     builder.add_node("done", lambda state: {})
@@ -134,7 +136,7 @@ async def test_state_view_reads_persisted_fields_without_agent_runtime(checkpoin
         db=None,
         include_relations=include_relations,
     )
-    assert response["agent_state"] == {key: payload[key] for key in ("artifacts", "cooperation", "token_usage")}
+    assert response["agent_state"] == {key: payload[key] for key in ("artifacts", "cooperation", "token_usage", "warnings")}
     assert "todos" not in response["agent_state"]
     assert "items" not in response
     assert "saved message" not in str(response)

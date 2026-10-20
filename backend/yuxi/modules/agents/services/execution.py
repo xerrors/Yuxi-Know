@@ -109,12 +109,13 @@ async def _flush_langfuse_best_effort(*, timeout: float = 2) -> None:
 def extract_agent_state(values: dict) -> AgentStatePayload:
     """从 LangGraph state 中提取 agent 状态"""
     if not isinstance(values, dict):
-        return {"artifacts": [], "cooperation": {"sessions": []}, "token_usage": None}
+        return {"artifacts": [], "cooperation": {"sessions": []}, "token_usage": None, "warnings": []}
 
     # 直接获取，信任 state 的数据结构
     artifacts = values.get("artifacts")
     token_usage = values.get("token_usage")
     result: AgentStatePayload = {
+        "warnings": values.get("warnings", []),
         "artifacts": list(artifacts) if artifacts else [],
         "cooperation": {"sessions": []},
         "token_usage": dict(token_usage) if isinstance(token_usage, dict) else None,

@@ -326,14 +326,13 @@ async def toggle_tool_enabled(
 
 
 async def resolve_runtime_mcp_tools(
-    server_slugs: list[str], *, uid: str | None, run_tools: dict[str, list] | None = None
+    server_slugs: list[str], *, uid: str | None, run_tools: dict[str, list] | None = None, unavailable: dict[str, str] | None = None
 ) -> dict[str, list]:
     """按本人当前权限读取工具，本 Run 的目录由调用方独占持有，不跨运行或用户复用。"""
     import asyncio
 
     from yuxi.infrastructure.postgres.manager import pg_manager
     from yuxi.modules.extensions.mcp.repository import active_mcp_user
-    from yuxi.shared.errors import StateConflictError
 
     if not server_slugs:
         return {}
@@ -344,31 +343,55 @@ async def resolve_runtime_mcp_tools(
     if run_tools is None:
         run_tools = {}
 
+    if unavailable is None:
+        unavailable = {}
+    for slug in server_slugs:
+        if slug not in servers:
+            unavailable[slug] = "未连接或不可用，请在扩展页面检查连接"
+
     async def load(server):
-        """装配期间确认授权失效时排除该服务，未知故障保留失败语义。"""
-        if server.auth_mode != "oauth":
+        """隔离单服务发现故障，日志和提示只包含安全原因。"""
+        try:
+            if server.auth_mode == "oauth":
+                return await personal_mcp_tools(server, uid, include_disabled=True)
             config = _to_runtime_mcp_config(server)
             return await get_mcp_tools(server.slug, additional_servers={server.slug: config}, disabled_tools=[])
-        try:
-            return await personal_mcp_tools(server, uid, include_disabled=True)
-        except (StateConflictError, ExceptionGroup) as exc:
-            if isinstance(exc, ExceptionGroup):
-                _, remaining = exc.split(lambda error: isinstance(error, StateConflictError) and error.code == "mcp_reconnect_required")
-                if remaining is not None:
-                    raise
-            elif exc.code != "mcp_reconnect_required":
-                raise
-            logger.info(f"MCP service requires reconnection: {server.slug}")
+        except Exception as exc:
+            unavailable[server.slug] = runtime_mcp_failure_message(exc)
+            logger.warning(
+                "MCP discovery unavailable: server={}, uid={}, error_type={}, reason={}",
+                server.slug,
+                uid,
+                type(exc).__name__,
+                unavailable[server.slug],
+            )
             return None
 
-    pending = {slug: server for slug, server in servers.items() if slug not in run_tools}
+    pending = {slug: server for slug, server in servers.items() if slug not in run_tools and slug not in unavailable}
     loaded = await asyncio.gather(*(load(server) for server in pending.values()))
     run_tools.update({slug: tools for slug, tools in zip(pending, loaded, strict=True) if tools is not None})
     return {
         slug: [tool for tool in run_tools[slug] if tool.name not in (server.disabled_tools or [])]
         for slug, server in servers.items()
-        if slug in run_tools
+        if slug in run_tools and slug not in unavailable
     }
+
+
+def runtime_mcp_failure_message(exc: Exception) -> str:
+    """展开任务组和异常链，仅将已知业务原因转换为可公开提示。"""
+    from yuxi.shared.errors import StateConflictError
+
+    if isinstance(exc, StateConflictError):
+        if exc.code == "mcp_oauth_unconfigured":
+            return "部署未配置有效的 MCP 凭据加密密钥，请联系管理员"
+        if exc.code == "mcp_reconnect_required":
+            return "授权凭据不可用或已失效，请在扩展页面重新连接"
+    if isinstance(exc, ExceptionGroup):
+        reasons = dict.fromkeys(runtime_mcp_failure_message(child) for child in exc.exceptions)
+        return "；".join(reasons)
+    if exc.__cause__ is not None and isinstance(exc.__cause__, Exception):
+        return runtime_mcp_failure_message(exc.__cause__)
+    return "服务连接或调用失败，请检查 MCP 服务后重试"
 
 
 async def available_mcp_servers(db: AsyncSession, server_slugs, *, user_id: int) -> dict[str, MCPServer]:

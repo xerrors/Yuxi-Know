@@ -2,15 +2,17 @@
 
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
+from langgraph.errors import GraphBubbleUp
 from sqlalchemy import select
 
+from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.repositories.definitions import AgentRepository
 from yuxi.modules.agents.runtime.context import refresh_agent_context_resources
-from yuxi.modules.agents.services.event_writer import append_run_event_best_effort
-from yuxi.modules.extensions.mcp.service import available_mcp_servers
+from yuxi.modules.agents.runtime.state import BaseState, RuntimeWarning
+from yuxi.modules.extensions.mcp.service import available_mcp_servers, runtime_mcp_failure_message
 from yuxi.modules.extensions.skills.runtime import connected_skills, expand_skill_closure, sync_agent_context_skills
 from yuxi.modules.extensions.tools.builtin import BASE_TOOL_NAMES
 from yuxi.modules.identity.models import User
@@ -23,14 +25,18 @@ class AgentExecutionRevoked(PermissionError):
 class RuntimeAuthorizationMiddleware(AgentMiddleware):
     """每个新模型和工具调用使用当前调用者权限。"""
 
+    state_schema = BaseState
+
     async def abefore_model(self, state, runtime):
         """刷新 Skill 输入，投影同步留给实际请求边界。"""
         await _refresh_execution_resources(runtime.context, state=state)
+        return {"warnings": capability_warnings(runtime.context)}
 
     async def aafter_model(self, state, runtime):
         """模型返回后、审批或工具路由前复查账号与 Agent。"""
         async with pg_manager.get_async_session_context() as db:
             await _require_execution_actor(runtime.context, db=db)
+        return {"warnings": capability_warnings(runtime.context)}
 
     async def awrap_model_call(self, request, handler):
         """隐藏本轮已撤销的已注册工具，执行处仍再次检查。"""
@@ -45,20 +51,42 @@ class RuntimeAuthorizationMiddleware(AgentMiddleware):
         mcp_policy = await refresh_execution_authorization(context, state=request.state)
         name = request.tool_call["name"]
         if not tool_allowed(context, name, request.state, mcp_policy):
-            if context.run_id and not getattr(context, "_capability_warning_sent", False):
-                await append_run_event_best_effort(
-                    context.run_id,
-                    {
-                        "type": "yuxi.session.turn.capability_limited",
-                        "session_id": context.thread_id,
-                        "turn_id": context._authorization_turn_id,
-                        "yuxi": {"run_id": context.run_id},
-                        "message": "部分配置能力不可用，已按当前调用者权限过滤。",
-                    },
-                )
-                context._capability_warning_sent = True
             return ToolMessage(content="能力受限：当前调用者无权使用该工具。", tool_call_id=request.tool_call["id"], status="error")
-        return await handler(request)
+        server = (getattr(context, "mcp_tool_servers", None) or {}).get(name)
+        if not server:
+            return await handler(request)
+        try:
+            return await handler(request)
+        except (AgentExecutionRevoked, GraphBubbleUp):
+            raise
+        except Exception as exc:
+            reason = runtime_mcp_failure_message(exc)
+            context.mcp_unavailable[server] = reason
+            logger.warning(
+                "MCP tool unavailable: server={}, run_id={}, error_type={}, reason={}",
+                server,
+                context.run_id,
+                type(exc).__name__,
+                reason,
+            )
+            return ToolMessage(content=f"MCP {server} 不可用：{reason}", tool_call_id=request.tool_call["id"], status="error")
+
+
+def capability_warnings(context) -> list[RuntimeWarning]:
+    """生成当前能力警告，整体替换图状态中的列表。"""
+    warnings: list[RuntimeWarning] = [
+        {"code": "mcp_unavailable", "source": f"mcp:{slug}", "message": f"MCP {slug}：{reason}"}
+        for slug, reason in getattr(context, "mcp_unavailable", {}).items()
+    ]
+    if getattr(context, "_capability_limited", False):
+        warnings.append(
+            {
+                "code": "capability_limited",
+                "source": "authorization",
+                "message": "部分配置能力不可用，已按当前调用者权限过滤。",
+            }
+        )
+    return warnings
 
 
 def tool_allowed(context, name: str, state: dict, mcp_policy: dict[str, set[str]]) -> bool:
@@ -96,7 +124,7 @@ async def refresh_execution_authorization(context, *, state=None) -> dict[str, s
 async def _refresh_execution_resources(context, *, state=None) -> dict[str, set[str]]:
     """刷新模型输入与工具可见性，读取资源不扫描投影。"""
     async with pg_manager.get_async_session_context() as db:
-        user, agent, run = await _require_execution_actor(context, db=db)
+        user, agent, _ = await _require_execution_actor(context, db=db)
         await refresh_agent_context_resources(context, db=db, user=user, agent=agent)
         snapshot = context.skill_runtime_snapshot
         candidates = set(context.mcps)
@@ -106,18 +134,8 @@ async def _refresh_execution_resources(context, *, state=None) -> dict[str, set[
                 if slug in snapshot["effective_skills"]:
                     candidates.update(snapshot["runtime_skills"][slug]["mcps"])
         servers = await available_mcp_servers(db, candidates, user_id=user.id)
-        if context._capability_limited and not getattr(context, "_capability_warning_sent", False) and run is not None:
-            await append_run_event_best_effort(
-                run.id,
-                {
-                    "type": "yuxi.session.turn.capability_limited",
-                    "session_id": run.thread_id,
-                    "turn_id": run.turn_id,
-                    "message": "部分配置能力不可用，已按当前调用者权限过滤。",
-                    "yuxi": {"run_id": run.id},
-                },
-            )
-            context._capability_warning_sent = True
+        unavailable = getattr(context, "mcp_unavailable", {})
+        servers = {slug: server for slug, server in servers.items() if slug not in unavailable}
         return {slug: set(server.disabled_tools or []) for slug, server in servers.items()}
 
 
@@ -130,7 +148,6 @@ async def _require_execution_actor(context, *, db):
     if user is None:
         raise AgentExecutionRevoked("执行账号已失效")
     if run is not None:
-        context._authorization_turn_id = run.turn_id
         agent = await AgentRepository(db).get_visible_by_slug(
             slug=run.agent_slug,
             user=user,

@@ -206,9 +206,8 @@ class BaseContext:
     _resource_selections: dict[str, ResourceSelection] | None = field(
         default=None, repr=False, metadata={"configurable": False, "hide": True}
     )
+    mcp_unavailable: dict[str, str] = field(default_factory=dict, repr=False, metadata={"configurable": False, "hide": True})
     _capability_limited: bool = field(default=False, repr=False, metadata={"configurable": False, "hide": True})
-    _capability_warning_sent: bool = field(default=False, repr=False, metadata={"configurable": False, "hide": True})
-    _authorization_turn_id: str | None = field(default=None, repr=False, metadata={"configurable": False, "hide": True})
     _cooperation_config_snapshot: dict[str, Any] | None = field(default=None, repr=False, metadata={"configurable": False, "hide": True})
 
     system_prompt: str = field(

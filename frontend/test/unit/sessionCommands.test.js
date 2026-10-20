@@ -115,7 +115,10 @@ test('接收后消费冻结草稿并交给唯一输入观察者，保留已知�
   assert.equal(await h.controller.send('thread', h.draft), true)
   assert.equal(monitored, 'accepted')
   assert.deepEqual(h.state.itemState.items.old, { id: 'old' })
-  assert.deepEqual(h.state.optimisticInputs, {})
+  assert.equal(h.state.optimisticInputs.accepted[0].content, '原始消息', '回执到消费之间用户消息保持可见')
+  assert.equal(h.state.optimisticInputs.accepted[0].delivery_status, 'queued')
+  assert.equal(h.state.optimisticInputs.accepted[0].extra_metadata.input_id, 'accepted')
+  assert.deepEqual(Object.keys(h.state.itemState.items), ['old'], '接收展示不能伪造正式历史')
   assert.equal(h.runtime.pendingSends.thread, undefined)
   assert.equal(h.accepted[0].text, '原始消息')
 })
@@ -155,6 +158,7 @@ test('协作等待追加输入只进入队列，不重置运行流', async (t) =
   assert.equal(h.state.queuedInputs[0].input_id, 'queued')
   assert.equal(h.state.activeRunId, 'existing')
   assert.equal(h.state.isStreaming, true)
+  assert.deepEqual(h.state.optimisticInputs, {}, '运行中的后续输入继续只显示在队列')
 })
 
 test('明确拒绝才恢复草稿，回执查询失败不重发', async (t) => {

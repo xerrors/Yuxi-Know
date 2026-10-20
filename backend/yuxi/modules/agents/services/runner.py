@@ -767,18 +767,6 @@ async def _process_agent_run(ctx, run_id: str, execution_timeout: asyncio.Timeou
             raise asyncio.CancelledError(f"run {run_id} cancelled after manifest recorded")
 
         context = prepared_execution.context
-        if getattr(context, "_capability_limited", False):
-            context._capability_warning_sent = True
-            await append_run_event_best_effort(
-                run_id,
-                {
-                    "type": "yuxi.session.turn.capability_limited",
-                    "session_id": thread_id,
-                    "turn_id": turn_id,
-                    "message": "部分配置能力不可用，已按当前调用者权限过滤。",
-                    "yuxi": {"run_id": run_id},
-                },
-            )
         meta = {
             "run_id": run_id,
             "turn_id": turn_id,

@@ -32,6 +32,7 @@ import SessionNavSection from '@/modules/session/ui/SessionNavSection.vue'
 import GlobalSearchModal from '@/modules/session/ui/GlobalSearchModal.vue'
 import { searchWorkspaceFiles } from '@/apis/workspace_api'
 import { projectApi } from '@/apis/project_api'
+import { createSessionRouteCache } from './sessionRouteCache'
 
 const configStore = useConfigStore()
 const agentStore = useAgentStore()
@@ -156,6 +157,8 @@ onUnmounted(() => {
 
 const route = useRoute()
 const router = useRouter()
+const sessionRouteCache = createSessionRouteCache(router)
+onUnmounted(sessionRouteCache.dispose)
 
 const activeJobCount = computed(() => activeCountRef.value || 0)
 const activeSessionThreadId = computed(() => {
@@ -535,7 +538,12 @@ provide('settingsModal', {
     <main id="app-router-view">
       <router-view v-slot="{ Component, route }">
         <keep-alive>
-          <component :is="Component" v-if="route.meta.keepAlive !== false" :key="route.path" />
+          <component
+            :is="Component"
+            v-if="route.meta.keepAlive !== false"
+            :key="sessionRouteCache.key(route)"
+            @session-created="sessionRouteCache.adopt"
+          />
         </keep-alive>
         <component :is="Component" v-if="route.meta.keepAlive === false" />
       </router-view>

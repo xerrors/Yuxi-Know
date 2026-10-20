@@ -215,7 +215,18 @@ jobs:
         timeout-minutes: 25
         run: bash scripts/ci_probe_hosted_cube.sh
       - name: Prepare Compose environment
-        run: bash scripts/ci_prepare_system_tests_env.sh
+        run: |
+          bash scripts/ci_prepare_system_tests_env.sh
+          python3 - <<'PYKEY'
+          import base64
+          import secrets
+          from pathlib import Path
+
+          path = Path(".env")
+          lines = [line for line in path.read_text().splitlines() if not line.startswith("YUXI_ENCRYPTION_KEY=")]
+          lines.append("YUXI_ENCRYPTION_KEY=" + base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())
+          path.write_text("\n".join(lines) + "\n")
+          PYKEY
       - name: Restore api image layer cache
         id: api-cache
         uses: actions/cache/restore@v4
@@ -342,6 +353,8 @@ jobs:
       - name: Verify attachment HTTP and object contract
         timeout-minutes: 3
         run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_chat_router.py::test_thread_artifact_uses_image_signature_for_content_type test/integration/api/test_public_agent_files.py -q
+      - name: Verify MCP failure isolation through worker
+        run: docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_mcp_failure_isolation.py -q
       - name: Verify MCP management connection contract
         run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_mcp_router.py -q
       - name: Verify knowledge MCP authentication and persisted documents

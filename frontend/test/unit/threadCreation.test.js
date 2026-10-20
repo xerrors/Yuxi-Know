@@ -30,6 +30,7 @@ test('首次发送在创建 Thread 前冻结附件、图片和配置，后来草
   }
   const send = workspaceLogic('const handleSendMessage =', 'const handleDirectSteer =', dependencies, 'handleSendMessage')
   const sending = send({ images })
+  assert.equal(dependencies.userInput.value, '', '移到底部前清空冻结文本，避免多行编辑器二次收缩')
   files.value.push({ id: 'next-draft-file' })
   images.push({ imageUrl: 'next-draft-image' })
   model.value = 'next:model'
@@ -65,6 +66,33 @@ test('延迟创建响应遇到上下文切换时不被接受', async () => {
   resolveRequest({ id: 'thread-a' })
 
   assert.deepEqual(await pending, { thread: { id: 'thread-a' }, accepted: false })
+})
+
+test('首条发送创建失败或未获得线程时恢复冻结文本和图片，不覆盖新编辑', async () => {
+  for (const rejects of [true, false]) {
+    let restoredImages, errors = 0
+    const userInput = ref('原始消息\n第二行')
+    const dependencies = {
+      pendingSends: ref({}), currentChatId: ref(null), userInput,
+      agentExecutionAvailable: ref(true), sendCooldownActive: ref(false), props: {},
+      isLoadingMessages: ref(false), isWaitingForUserAction: ref(false),
+      currentPendingThreadAttachments: ref([]), currentModelSpec: ref(null), currentToolApprovalMode: ref('default'),
+      startSendCooldown() {},
+      ensureActiveThread: async () => {
+        assert.equal(userInput.value, '')
+        userInput.value = '后来编辑'
+        if (rejects) throw new Error('creation failed')
+        return null
+      },
+      agentInputAreaRef: ref({ restoreImages: (images) => { restoredImages = images } }),
+      message: { error: () => { errors++ } }
+    }
+    const send = workspaceLogic('const handleSendMessage =', 'const handleDirectSteer =', dependencies, 'handleSendMessage')
+    await send({ images: [{ imageUrl: 'original-image' }] })
+    assert.equal(userInput.value, '原始消息\n第二行\n后来编辑')
+    assert.deepEqual(restoredImages, [{ imageUrl: 'original-image' }])
+    assert.equal(errors, 1)
+  }
 })
 
 

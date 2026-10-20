@@ -70,7 +70,12 @@ export function createSessionInput({ runtime, onPrepared, onAccepted, onRejected
       state.queuedInputs = state.queuedInputs.filter((item) => item.input_id !== clientKey)
       state.queuedInputs.push({ input_id: inputId, status: 'pending', kind: data.mode,
         content: text, created_at: message.created_at, message: acceptedMessage })
-      if (!hadActiveRun) state.isStreaming = false
+      if (!hadActiveRun) {
+        // 接收回执尚未生成正式消息，保留带 queued 状态的展示直到消费快照接管。
+        state.optimisticInputs[inputId] = [acceptedMessage]
+        state.pendingInputId = inputId
+        state.isStreaming = false
+      }
       runtime.startInputMonitor(threadId, inputId)
       await onAccepted?.(threadId, frozen)
       return true

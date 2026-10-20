@@ -94,6 +94,10 @@
               'has-embedded-state': statePanelOpen && statePanelPlacement.mode === 'embedded'
             }"
           >
+            <div v-if="isSessionLoading" class="session-loading" role="status">
+              <a-spin />
+              <span>正在加载对话...</span>
+            </div>
             <div class="chat-box">
               <button
                 v-if="historyPages[currentChatId]?.hasMore"
@@ -181,10 +185,21 @@
                 </div>
               </template>
 
-              <div class="generating-status" v-if="isReplyLoading" role="status">
+              <div class="generating-status" v-if="isReplyLoading && !isSessionLoading" role="status">
                 <div class="generating-indicator">
                   <span class="loading-spark" aria-hidden="true"></span>
                   <span class="generating-text">{{ replyLoadingText }}</span>
+                  <button
+                    v-if="primaryQueuedInput && !currentThreadState?.activeRunId"
+                    type="button"
+                    class="generating-cancel lucide-icon-btn"
+                    aria-label="取消这条待处理输入"
+                    title="取消这条待处理输入"
+                    :disabled="cancellingInputIds.has(primaryQueuedInput.input_id)"
+                    @click="handleCancelQueuedInput(primaryQueuedInput.input_id)"
+                  >
+                    <X :size="14" />
+                  </button>
                 </div>
               </div>
             </div>
@@ -194,7 +209,7 @@
               :class="{ 'start-screen': showStartScreen }"
             >
               <div class="message-input-wrapper">
-                <div v-if="pendingSends[currentChatId]" class="queued-request-notice">
+                <div v-if="pendingSends[currentChatId] && !pendingSends[currentChatId].submitting" class="queued-request-notice">
                   <span>发送结果待确认，重试会确认同一条消息。</span>
                   <button
                     class="queued-request-continue"
@@ -204,19 +219,13 @@
                     重试发送
                   </button>
                 </div>
-                <!-- 加载状态：加载消息 -->
-                <div v-if="isLoadingMessages" class="chat-loading" role="status">
-                  <div class="loading-spinner" aria-hidden="true"></div>
-                  <span>正在加载消息...</span>
-                </div>
-
                 <!-- 打招呼区域 - 在输入框上方 -->
                 <div v-if="showStartScreen" class="chat-greeting-input">
                   <h1>{{ randomGreeting }}</h1>
                 </div>
 
                 <section
-                  v-if="currentQueuedInputs.length"
+                  v-if="visibleQueuedInputs.length"
                   class="queued-request-panel"
                   aria-label="排队请求"
                 >
@@ -240,7 +249,7 @@
                   </div>
                   <div class="queued-request-list">
                     <div
-                      v-for="input in currentQueuedInputs"
+                      v-for="input in visibleQueuedInputs"
                       :key="input.input_id"
                       class="queued-request-row"
                     >
@@ -303,13 +312,12 @@
                   class="message-input-stage"
                   :class="{ 'has-tool-approval': currentToolApprovalVisible }"
                 >
-                  <div v-if="currentChatId && !agentExecutionAvailable" class="agent-availability-notice" role="status">
+                  <div v-if="currentChatId && ['unavailable', 'error'].includes(sessionAgentStatus)" class="agent-availability-notice" role="status">
                     <span v-if="sessionAgentStatus === 'unavailable'">智能体当前不可用</span>
                     <template v-else-if="sessionAgentStatus === 'error'">
                       <span>智能体加载失败，请重试</span>
                       <a-button type="link" size="small" @click="retrySessionAgent">重试</a-button>
                     </template>
-                    <span v-else>正在加载智能体...</span>
                   </div>
                   <HumanApprovalModal
                     v-if="agentExecutionAvailable"
@@ -323,7 +331,6 @@
                   />
 
                   <div
-                    v-if="!currentChatId || agentExecutionAvailable"
                     class="message-input-surface"
                     :inert="currentToolApprovalVisible"
                     :aria-hidden="currentToolApprovalVisible ? 'true' : undefined"
@@ -332,11 +339,11 @@
                       ref="agentInputAreaRef"
                       v-model="userInput"
                       :is-loading="shouldShowStopButton"
-                      :disabled="!currentAgent || currentToolApprovalVisible"
+                      :disabled="threadCreationInFlight || !agentExecutionAvailable || currentToolApprovalVisible"
                       :send-button-disabled="isSendButtonDisabled"
                       :mention="mentionConfig"
                       :thread-id="currentChatId"
-                      :show-extra="!currentChatId"
+                      :show-extra="showStartScreen"
                       :attachments="currentPendingThreadAttachments"
                       @send="handleSendOrStop"
                       @upload-attachment="handleAttachmentUpload"
@@ -345,7 +352,7 @@
                       <template #extra>
                         <ProjectSelectionSection
                           upward
-                          v-if="!currentChatId"
+                          v-if="showStartScreen"
                           v-model="selectedProjectId"
                           :disabled="threadCreationInFlight"
                         />
@@ -407,7 +414,7 @@
                   @added="handleTmpAttachmentsAdded"
                 />
 
-                <div class="bottom-actions" v-if="runGroups.length > 0">
+                <div class="bottom-actions" v-if="!showStartScreen">
                   <p class="note">
                     当前智能体：{{ currentThreadAgentName }}；请注意辨别内容的可靠性
                   </p>
@@ -452,6 +459,12 @@
           </div>
 
           <div class="state-panel-body">
+            <section v-if="currentAgentState?.warnings?.length" class="state-warning" role="status">
+              <span class="state-section-title">警告</span>
+              <p v-for="warning in currentAgentState.warnings" :key="`${warning.code}:${warning.source}`">
+                {{ warning.message }}
+              </p>
+            </section>
             <ContextUsagePanel
               :usage="currentTokenUsage"
               :compressing="isContextCompressionPending"
@@ -700,7 +713,8 @@ import {
   ListCollapse,
   Play,
   RefreshCw,
-  Trash2
+  Trash2,
+  X
 } from '@lucide/vue'
 import FileTypeIcon from '@/shared/ui/FileTypeIcon.vue'
 import AgentInputArea from '@/modules/session/ui/AgentInputArea.vue'
@@ -806,7 +820,9 @@ const { agents, selectedAgentId, agentDetails, availableKnowledgeBases } = store
 const threadStoreRefs = storeToRefs(chatThreadsStore)
 const { threads, threadCreationInFlight } = threadStoreRefs
 const currentThreadId = ref(null)
-const showStartScreen = computed(() => props.isNewSession && !currentThreadId.value)
+const showStartScreen = computed(
+  () => props.isNewSession && !currentThreadId.value && !threadCreationInFlight.value
+)
 const currentThread = ref(null)
 // 列表翻页不能丢弃保活实例的会话详情；新详情仍从共享目录同步。
 watch(
@@ -1260,6 +1276,13 @@ const { status: sessionAgentStatus, refresh: refreshSessionAgent } = useSessionA
 const agentExecutionAvailable = computed(() =>
   currentChatId.value ? sessionAgentStatus.value === 'ready' : Boolean(currentAgent.value?.can_run !== false && currentAgent.value)
 )
+const isSessionLoading = computed(() =>
+  (props.isNewSession && threadCreationInFlight.value) ||
+  (!currentThreadState.value?.historyLoaded && (
+    isLoadingMessages.value ||
+    (Boolean(currentChatId.value) && sessionAgentStatus.value === 'loading')
+  ))
+)
 
 /** 重用对话加载入口重试，临时错误不改变对话身份。 */
 const retrySessionAgent = async () => {
@@ -1557,6 +1580,7 @@ const showStateEntry = computed(() => !props.embedded && Boolean(currentChatId.v
 const showFileEntry = computed(() => Boolean(currentChatId.value))
 const hasVisibleStateSections = computed(
   () =>
+    Boolean(currentAgentState.value?.warnings?.length) ||
     Boolean(currentTokenUsage.value) ||
     currentStateFiles.value.length > 0 ||
     currentArtifactFiles.value.length > 0 ||
@@ -1741,6 +1765,19 @@ const currentQueuedInputs = computed(() => currentThreadState.value?.queuedInput
 const currentQueueSnapshot = computed(
   () => currentThreadState.value?.queueSnapshot || IDLE_QUEUE_SNAPSHOT
 )
+// 当前首条输入已有消息气泡，等待消费时只在回复位置提供取消操作。
+const primaryQueuedInput = computed(() => {
+  const state = currentThreadState.value
+  if (currentQueueSnapshot.value.status === 'paused') return null
+  return currentQueuedInputs.value.find((input) =>
+    input.input_id === state?.pendingInputId &&
+    state?.optimisticInputs?.[input.input_id]?.length &&
+    input.attachment_status !== 'preparing'
+  ) || null
+})
+const visibleQueuedInputs = computed(() =>
+  currentQueuedInputs.value.filter((input) => input !== primaryQueuedInput.value)
+)
 const queuedInputCount = computed(() => currentQueuedInputs.value.length)
 const hasQueuedInputs = computed(() => queuedInputCount.value > 0)
 const isWaitingForUserAction = computed(() =>
@@ -1818,7 +1855,7 @@ const replyLoadingText = computed(() => {
   if (threadState?.cancellationPending) return '正在停止，等待任务清理完成...'
   if (threadState?.cooperationWaiting) return '等待协作任务完成...'
   if (threadState?.contextCompressing) return '正在压缩上下文...'
-  if (!isStreaming.value && hasQueuedInputs.value)
+  if (!isStreaming.value && hasQueuedInputs.value && !primaryQueuedInput.value)
     return `排队中（${queuedInputCount.value} 条）...`
   return '正在生成回复...'
 })
@@ -2619,13 +2656,19 @@ const handleSendMessage = async ({
     mode
   }
   if (!threadId) {
+    const consumeDraft = !fromWidget && userInput.value.trim() === text
+    if (consumeDraft) userInput.value = ''
     try {
       threadId = await ensureActiveThread()
+      if (!threadId) throw new Error('创建对话未返回线程')
     } catch {
+      if (consumeDraft) {
+        userInput.value = [draft.text, userInput.value].filter(Boolean).join('\n')
+        agentInputAreaRef.value?.restoreImages?.(draft.images)
+      }
       message.error('创建对话失败，请重试')
       return
     }
-    if (!threadId) return
     promoteDraftSelection(selectedModelByThread, threadId)
   }
   return sessionInput.send(threadId, draft, { retry })
@@ -3135,11 +3178,15 @@ watch(currentChatId, (threadId, oldThreadId) => {
 
 <style lang="less" scoped>
 .agent-availability-notice {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  right: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 64px;
-  padding: 16px;
+  padding: 8px;
+  background: var(--gray-0);
   color: var(--text-secondary);
   font-size: 14px;
 }
@@ -3481,26 +3528,24 @@ watch(currentChatId, (threadId, oldThreadId) => {
   font-size: 12px;
 }
 
-.chat-loading {
-  padding-bottom: 12px;
-  text-align: center;
+.session-loading {
+  position: absolute;
+  top: 30%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 12px;
+  color: var(--gray-600);
+  font-size: 14px;
+  line-height: 20px;
+  pointer-events: none;
 
-  span {
-    color: var(--gray-700);
-    font-size: 14px;
-  }
-
-  .loading-spinner {
-    width: 20px;
-    height: 20px;
-    border: 2px solid var(--gray-200);
-    border-top-color: var(--main-color);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
+  :deep(.ant-spin) {
+    display: flex;
+    line-height: 1;
   }
 }
 
@@ -3861,8 +3906,6 @@ watch(currentChatId, (threadId, oldThreadId) => {
   display: flex;
   justify-content: flex-start;
   padding: 1rem 0;
-  animation: fadeInUp 0.4s ease-out;
-  transition: all 0.2s;
 }
 
 .generating-indicator {
@@ -3887,6 +3930,17 @@ watch(currentChatId, (threadId, oldThreadId) => {
   }
   50% {
     opacity: 1;
+  }
+}
+
+.generating-cancel {
+  border: none;
+  padding: 4px;
+  background: transparent;
+  color: var(--gray-500);
+
+  &:disabled {
+    cursor: wait;
   }
 }
 
@@ -4126,6 +4180,21 @@ watch(currentChatId, (threadId, oldThreadId) => {
   flex-direction: column;
   gap: 12px;
   overflow: auto;
+}
+
+.state-warning {
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--color-warning-50);
+  color: var(--color-warning-900);
+
+  p {
+    margin: 4px 0 0;
+    font-size: 13px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
 }
 
 .state-section {
