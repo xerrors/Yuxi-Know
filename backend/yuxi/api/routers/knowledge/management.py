@@ -1,7 +1,6 @@
 import asyncio
 import os
 import textwrap
-import time
 import traceback
 from urllib.parse import quote, unquote
 
@@ -19,10 +18,10 @@ from yuxi.api.dependencies.knowledge import (
     require_knowledge_base_manage,
     require_knowledge_base_read,
 )
-from yuxi.api.responses.knowledge import serialize_knowledge_base, serialize_knowledge_base_list
+from yuxi.api.responses.knowledge import serialize_knowledge_base, serialize_knowledge_base_list, serialize_staged_file
 from yuxi.api.uploads import read_upload_with_limit
 from yuxi.infrastructure.document_parsing import SUPPORTED_FILE_EXTENSIONS, is_supported_file_extension
-from yuxi.infrastructure.minio.client import MinIOClient, StorageError, aupload_file_to_minio, get_minio_client
+from yuxi.infrastructure.minio.client import MinIOClient, StorageError, get_minio_client
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.modules.background_jobs.dispatch import submit_job
 from yuxi.modules.background_jobs.service import job_tracker
@@ -30,11 +29,12 @@ from yuxi.modules.identity.models import User
 from yuxi.modules.identity.permissions import ResourcePermission, resolve_knowledge_base_permission
 from yuxi.modules.knowledge.base import KBNameConflictError, KBNotFoundError
 from yuxi.modules.knowledge.chunking.presets import get_chunk_preset_options, normalize_chunk_preset_id
-from yuxi.modules.knowledge.graphs.service import GRAPH_TASK_TYPE, KnowledgeGraphService
+from yuxi.modules.knowledge.graphs.service import KnowledgeGraphService
 from yuxi.modules.knowledge.read_models import KnowledgeBaseDetail
 from yuxi.modules.knowledge.runtime import knowledge_base as knowledge_base_manager
+from yuxi.modules.knowledge.services import graph_build
+from yuxi.modules.knowledge.services.uploads import DuplicateDocumentContentError, stage_document
 from yuxi.modules.knowledge.utils import (
-    calculate_content_hash,
     is_minio_url,
     params_for_uploaded_document,
     parse_minio_url,
@@ -51,7 +51,6 @@ from yuxi.shared.errors import DomainError
 
 knowledge = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
-ACTIVE_GRAPH_BUILD_STATUSES = {"pending", "running"}
 MAX_DIRECT_DOCUMENT_ACTION_FILE_IDS = 1000
 MAX_UPLOAD_SIZE_BYTES = 100 * 1024 * 1024
 PENDING_PARSE_STATUSES = ["uploaded"]
@@ -184,17 +183,6 @@ def _validate_uploaded_document_items(items: list[str], params: dict) -> None:
         has_preprocessed_hash = isinstance(preprocessed, dict) and bool(preprocessed.get("content_hash"))
         if not has_content_hash and not has_preprocessed_hash:
             raise HTTPException(status_code=400, detail=f"Missing content_hash for file: {item}")
-
-
-async def _has_running_graph_build_job(kb_id: str) -> bool:
-    return (
-        await job_tracker.find_job_by_payload(
-            job_type=GRAPH_TASK_TYPE,
-            payload_match={"kb_id": kb_id},
-            statuses=ACTIVE_GRAPH_BUILD_STATUSES,
-        )
-        is not None
-    )
 
 
 # =============================================================================
@@ -394,28 +382,9 @@ async def index_graph_build(
     current_user: User = Depends(require_knowledge_base_manage),
 ):
     try:
-        if await _has_running_graph_build_job(kb_id):
-            raise HTTPException(status_code=409, detail="该知识库已有正在运行的图谱构建任务")
-
-        knowledge_base = await knowledge_base_manager.get_knowledge_base_info(kb_id)
-        if not knowledge_base:
-            raise HTTPException(status_code=404, detail=f"知识库 {kb_id} 不存在")
-
-        service = KnowledgeGraphService()
-        graph_status = await service.get_status(kb_id)
-        if not graph_status.get("locked"):
-            raise HTTPException(status_code=400, detail="请先确认并锁定图谱抽取配置")
-
-        job, created = await submit_job(
-            name=f"图谱构建 ({knowledge_base.name})",
-            job_type=GRAPH_TASK_TYPE,
-            payload={"kb_id": kb_id, "action": "build"},
-            payload_match={"kb_id": kb_id},
-        )
-        if not created:
-            raise HTTPException(status_code=409, detail="该知识库已有正在运行的图谱构建任务")
+        job = await graph_build.start_graph_build(kb_id)
         return {"message": "图谱构建任务已提交", "status": "queued", "job_id": job.id}
-    except HTTPException:
+    except (HTTPException, DomainError):
         raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -449,15 +418,12 @@ async def reset_graph_build(
 ):
     data = data or {}
     try:
-        if await _has_running_graph_build_job(kb_id):
-            raise HTTPException(status_code=409, detail="该知识库存在正在运行的图谱构建任务，无法重置")
-
-        return await KnowledgeGraphService().reset(
+        return await graph_build.reset_graph_build(
             kb_id,
             clear_extraction_result=bool(data.get("clear_extraction_result", True)),
             clear_config=bool(data.get("clear_config", False)),
         )
-    except HTTPException:
+    except (HTTPException, DomainError):
         raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -474,31 +440,15 @@ async def reconcile_graph_build(
 ):
     data = data or {}
     mode = data.get("mode") or "failed"
-    if mode not in {"failed", "all_vectors"}:
-        raise HTTPException(status_code=400, detail="mode 必须是 failed 或 all_vectors")
     try:
-        if await _has_running_graph_build_job(kb_id):
-            raise HTTPException(status_code=409, detail="该知识库已有正在运行的图谱构建任务")
-
-        knowledge_base = await knowledge_base_manager.get_knowledge_base_info(kb_id)
-        if not knowledge_base:
-            raise HTTPException(status_code=404, detail=f"知识库 {kb_id} 不存在")
-
-        job, created = await submit_job(
-            name=f"图谱向量索引修复 ({knowledge_base.name})",
-            job_type=GRAPH_TASK_TYPE,
-            payload={"kb_id": kb_id, "action": "reconcile", "reconcile_mode": mode},
-            payload_match={"kb_id": kb_id},
-        )
-        if not created:
-            raise HTTPException(status_code=409, detail="该知识库已有正在运行的图谱构建任务")
+        job = await graph_build.reconcile_graph_build(kb_id, mode=mode)
         return {
             "message": "图谱向量索引修复任务已提交",
             "status": "queued",
             "job_id": job.id,
             "mode": mode,
         }
-    except HTTPException:
+    except (HTTPException, DomainError):
         raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -1336,52 +1286,22 @@ async def fetch_url(
         # 1. 下载内容 (包含白名单校验、大小限制、类型检查)
         content_bytes, final_url = await fetch_url_content(url)
 
-        # 2. 计算 Hash
-        content_hash = await calculate_content_hash(content_bytes)
-
-        # 检查是否已存在相同内容的文件
-        if kb_id:
-            file_exists = await knowledge_base_manager.file_exists_in_knowledge_base(kb_id, content_hash)
-            if file_exists:
-                raise HTTPException(
-                    status_code=409,
-                    detail="知识库中已经存在了相同内容文件",
-                )
-
-        # 3. 上传到 MinIO
-        minio_client = get_minio_client()
-        bucket_name = MinIOClient.KB_BUCKETS["documents"]
-        await asyncio.to_thread(minio_client.ensure_bucket_exists, bucket_name)
-
-        folder = kb_id if kb_id else "unknown"
-        object_name = f"{folder}/upload/{content_hash}.html"
-
-        upload_result = await minio_client.aupload_file(
-            bucket_name=bucket_name,
-            object_name=object_name,
-            data=content_bytes,
-            content_type="text/html",
-        )
-
-        # 检测同名文件（URL即为文件名）
-        same_name_files = []
-        has_same_name = False
-        if kb_id:
-            same_name_files = await knowledge_base_manager.get_same_name_files(kb_id, url)
-            has_same_name = len(same_name_files) > 0
+        staged = await stage_document(kb_id=kb_id, filename=url, content=content_bytes, source="url")
 
         return {
             "status": "success",
-            "file_path": upload_result.url,
-            "minio_url": upload_result.url,
-            "content_hash": content_hash,
+            "file_path": staged.upload.url,
+            "minio_url": staged.upload.url,
+            "content_hash": staged.content_hash,
             "filename": url,  # 原始 URL 作为文件名
             "final_url": final_url,
             "size": len(content_bytes),
-            "has_same_name": has_same_name,
-            "same_name_files": same_name_files,
+            "has_same_name": bool(staged.same_name_files),
+            "same_name_files": staged.same_name_files,
         }
 
+    except DuplicateDocumentContentError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except HTTPException:
         raise
     except ValueError as e:
@@ -1408,7 +1328,6 @@ async def import_workspace_files(
     await _require_manage_permission_if_kb_id(kb_id, current_user)
     await _ensure_knowledge_base_supports_documents(kb_id, "文档添加/解析/入库")
 
-    bucket_name = MinIOClient.KB_BUCKETS["documents"]
     results = []
     for workspace_path in paths:
         filename, file_bytes = await read_workspace_file_bytes(
@@ -1419,36 +1338,15 @@ async def import_workspace_files(
         if not is_supported_file_extension(filename):
             raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
 
-        content_hash = await calculate_content_hash(file_bytes)
-
-        file_exists = await knowledge_base_manager.file_exists_in_knowledge_base(kb_id, content_hash)
-        if file_exists:
-            raise HTTPException(status_code=409, detail=f"知识库中已经存在了相同内容文件: {filename}")
-
-        basename, ext = os.path.splitext(filename)
-        timestamp = int(time.time() * 1000)
-        minio_filename = f"{basename}_{timestamp}{ext}"
-        object_name = f"{kb_id}/upload/{minio_filename}"
-        minio_url = await aupload_file_to_minio(bucket_name, object_name, file_bytes)
-
-        normalized_filename = filename.lower()
-        same_name_files = await knowledge_base_manager.get_same_name_files(kb_id, normalized_filename)
+        try:
+            staged = await stage_document(kb_id=kb_id, filename=filename, content=file_bytes)
+        except DuplicateDocumentContentError as exc:
+            raise HTTPException(status_code=409, detail=f"知识库中已经存在了相同内容文件: {filename}") from exc
         results.append(
             {
                 "message": "Workspace file successfully imported",
-                "file_path": minio_url,
-                "minio_path": minio_url,
-                "kb_id": kb_id,
-                "content_hash": content_hash,
-                "filename": normalized_filename,
-                "original_filename": basename,
-                "size": len(file_bytes),
-                "minio_filename": minio_filename,
-                "object_name": object_name,
-                "bucket_name": bucket_name,
+                **serialize_staged_file(staged, kb_id=kb_id, filename=filename, size=len(file_bytes)),
                 "workspace_path": workspace_path,
-                "same_name_files": same_name_files,
-                "has_same_name": len(same_name_files) > 0,
             }
         )
 
@@ -1476,10 +1374,6 @@ async def upload_file(
     if not is_supported_file_extension(file.filename):
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
 
-    basename, ext = os.path.splitext(file.filename)
-    # 直接使用原始文件名（小写）
-    filename = f"{basename}{ext}".lower()
-
     try:
         file_bytes = await read_upload_with_limit(
             file,
@@ -1489,44 +1383,16 @@ async def upload_file(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    content_hash = await calculate_content_hash(file_bytes)
-
-    file_exists = await knowledge_base_manager.file_exists_in_knowledge_base(kb_id, content_hash)
-    if file_exists:
+    try:
+        staged = await stage_document(kb_id=kb_id, filename=file.filename, content=file_bytes)
+    except DuplicateDocumentContentError as exc:
         raise HTTPException(
             status_code=409,
             detail="知识库中已经存在了相同内容文件，File with the same content already exists in this knowledge_base",
-        )
-
-    # 直接上传到MinIO，添加时间戳区分版本
-    timestamp = int(time.time() * 1000)
-    minio_filename = f"{basename}_{timestamp}{ext}"
-
-    bucket_name = MinIOClient.KB_BUCKETS["documents"]
-    folder = kb_id if kb_id else "unknown"
-    object_name = f"{folder}/upload/{minio_filename}"
-
-    # 上传到MinIO
-    minio_url = await aupload_file_to_minio(bucket_name, object_name, file_bytes)
-
-    # 检测同名文件（基于原始文件名）
-    same_name_files = await knowledge_base_manager.get_same_name_files(kb_id, filename)
-    has_same_name = len(same_name_files) > 0
-
+        ) from exc
     return {
         "message": "File successfully uploaded",
-        "file_path": minio_url,  # MinIO路径作为主要路径
-        "minio_path": minio_url,  # MinIO路径
-        "kb_id": kb_id,
-        "content_hash": content_hash,
-        "filename": filename,  # 原始文件名（小写）
-        "original_filename": basename,  # 原始文件名（去掉后缀）
-        "size": len(file_bytes),
-        "minio_filename": minio_filename,  # MinIO中的文件名（带时间戳）
-        "object_name": object_name,
-        "bucket_name": bucket_name,  # MinIO存储桶名称
-        "same_name_files": same_name_files,  # 同名文件列表
-        "has_same_name": has_same_name,  # 是否包含同名文件标志
+        **serialize_staged_file(staged, kb_id=kb_id, filename=file.filename, size=len(file_bytes)),
     }
 
 

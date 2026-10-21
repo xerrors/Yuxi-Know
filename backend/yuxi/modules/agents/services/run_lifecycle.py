@@ -23,6 +23,7 @@ from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 from yuxi.modules.agents.runtime.sandbox.provider import get_sandbox_provider
 from yuxi.modules.agents.scope import ActorScope
+from yuxi.modules.agents.services.queue_control import pause_pending_queue
 from yuxi.modules.agents.services.cooperation_notifications import notify_turn_state
 from yuxi.modules.agents.services.run_creation import create_turn_run
 from yuxi.modules.agents.services.scheduler import Dispatch, dispatch_next_input
@@ -182,11 +183,7 @@ async def settle_checkpoint(
         )
         if terminal is None or not changed:
             return RunSettlement(status=terminal.status if terminal else status, changed=False)
-        agent_session.queue_paused = await AgentInputRepository(db).has_pending_inputs(
-            thread_id=agent_session.thread_id,
-            uid=agent_session.uid,
-            app_id=agent_session.app_id,
-        )
+        await pause_pending_queue(db, agent_session)
         if status == "failed":
             await turn_repo.set_terminal(turn, status="failed")
         elif turn.status != "cancelling":
@@ -205,9 +202,7 @@ async def reconcile_expired_run(db: AsyncSession, *, run_id: str, now: datetime 
     if run is None:
         return None
     if locked.turn.current_run_id == run.id:
-        locked.agent_session.queue_paused = await AgentInputRepository(db).has_pending_inputs(
-            thread_id=run.thread_id, uid=run.uid, app_id=run.app_id
-        )
+        await pause_pending_queue(db, locked.agent_session)
         await AgentTurnRepository(db).set_terminal(locked.turn, status="failed")
         await notify_turn_state(db, run)
     return run

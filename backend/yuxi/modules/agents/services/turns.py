@@ -14,6 +14,7 @@ from yuxi.modules.agents.repositories.input_receipt import AgentInputReceiptRepo
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 from yuxi.modules.agents.scope import ActorScope
+from yuxi.modules.agents.services.queue_control import pause_pending_queue
 from yuxi.modules.agents.services.cooperation_notifications import notify_turn_state, notify_user_intervention
 from yuxi.modules.agents.services.run_creation import create_resume_run
 from yuxi.modules.agents.services.run_lifecycle import settle_waiting_cancel
@@ -161,11 +162,7 @@ async def cancel_turn(
     waiting_cleanup = False
     terminal_changed = False
     if turn.status != "cancelled":
-        agent_session.queue_paused = await AgentInputRepository(db).has_pending_inputs(
-            thread_id=agent_session.thread_id,
-            uid=agent_session.uid,
-            app_id=agent_session.app_id,
-        )
+        await pause_pending_queue(db, agent_session)
         waiting_cleanup = turn.status == "waiting" or (turn.status == "cancelling" and bool(turn.waitpoint))
         if turn.status != "cancelling":
             await turn_repo.set_cancelling(turn)
@@ -221,7 +218,6 @@ async def get_turn_snapshot(*, db: AsyncSession, scope: ActorScope, thread_id: s
     turn = await turn_repo.get_for_scope(turn_id=turn_id, thread_id=thread_id, uid=scope.uid, app_id=scope.app_id)
     if turn is None:
         raise ResourceNotFoundError("Turn 不存在")
-    from yuxi.modules.agents.repositories.input import AgentInputRepository
     from yuxi.modules.agents.services.public_items import serialize_public_run
 
     runs = await turn_repo.list_runs(turn.id)

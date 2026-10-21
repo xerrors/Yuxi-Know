@@ -26,6 +26,7 @@ from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 from yuxi.modules.agents.runtime.agent_backends import get_agent_backend
 from yuxi.modules.agents.runtime_locks import cooperation_lock_key
 from yuxi.modules.agents.scope import ActorScope
+from yuxi.modules.agents.services.queue_control import pause_pending_queue
 from yuxi.modules.agents.services.directory import list_public_agents
 from yuxi.modules.agents.services.input_config import resolve_agent_context_snapshot
 from yuxi.modules.agents.services.inputs import accept_locked
@@ -577,9 +578,10 @@ async def control_tree(*, db, scope: ActorScope, thread_id: str, idempotency_key
         intent_hash=intent,
     )
     for target in members:
-        target.queue_paused = stopped and await AgentInputRepository(db).has_pending_inputs(
-            thread_id=target.thread_id, uid=target.uid, app_id=target.app_id
-        )
+        if stopped:
+            await pause_pending_queue(db, target)
+        else:
+            target.queue_paused = False
     await db.commit()
     if stopped:
         await reconcile_stopped_trees(tree_root_thread_id=member.tree_root_thread_id)
@@ -661,11 +663,7 @@ async def reconcile_stopped_trees(*, tree_root_thread_id: str | None = None) -> 
                 )
                 if not stopped:
                     continue
-                target.queue_paused = await AgentInputRepository(db).has_pending_inputs(
-                    thread_id=target.thread_id,
-                    uid=target.uid,
-                    app_id=target.app_id,
-                )
+                await pause_pending_queue(db, target)
                 turn = await AgentTurnRepository(db).lock_active_for_thread(
                     thread_id=target.thread_id,
                     uid=target.uid,

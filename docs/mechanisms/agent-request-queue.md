@@ -50,6 +50,8 @@ Message 是消费后的执行投影：`source_input_id + input_position` 唯一�
 
 正常输出、Run 结束和 Turn 最终结果在 PostgreSQL 中按明确关联收敛；`output_message_id` 只指向同 Run 的 assistant Message，Turn `result_run_id` 只指向同 Turn 的顶层 Run。Run `yielded` 或 `interrupted` 不是 Turn 完成。失败、最终超时和取消仅暂停已有待办。用户显式继续时领取原优先队头；用户提交新的公开消息时，接收事务持久保存恢复意图并解除目标队列暂停，调度器优先单独消费最新恢复消息。该消息的附件未就绪时保留优先位置，旧 steer 不与它合批。新轮成功后恢复旧队列，再次失败或取消则暂停剩余待办；幂等重放、协作与定时输入不触发自动恢复。前轮必要清理未完成时，调度器不创建下一轮。
 
+`services/queue_control.py` 在调用方已经锁定的 Thread 和事务中，从持久待办派生暂停；取消待办只在队列已暂停时刷新，避免重新暂停仍可消费的队列。Input model 拥有恢复标记的 JSON 编码与读取表达，repository 拥有恢复优先排序、单独消费及接收序号边界。各用例继续拥有恢复意图、整树门禁、提交和投递。
+
 附件 Input 先持久接收来源，再准备 Workdir 文件并提交就绪事实。队头未就绪时不创建 Turn/Run，也不跳过它；pending steer 未就绪时不能安全接管。恢复扫描补全同一文件，取消只停止执行，仍完成已接收的文件提交；会话归档或 Project 软删除后准备恢复也继续，执行领取仍拒绝归档会话。准备失败与状态通过 Input/queue 的 `attachment_status`、`attachment_error` 回读，详细文件规则见[公开 API](../advanced/agents-public-api.md#图片与文件附件)。
 
 ARQ 投递只发生在 owning transaction 提交后。持久 `pending` Run 可由恢复扫描补投同一个 Run；已经失败的工作不会自动创建新业务 Run。Worker 取得 Run 时记录唯一 attempt token、heartbeat 和 lease；过期的 `running` 或 `cancel_requested` 会收敛为可观察的 `worker_lease_expired` 失败。该失败只说明执行 ownership 丢失，外部工具副作用仍需核对。
@@ -62,7 +64,7 @@ Thread SSE 把输入接收、Input 消费、Run 结束、Turn 结束和短期增
 
 接收、配置治理、交互恢复和 checkpoint 结算各由所属 service 提交或回滚，仓储只查询、锁定或 flush。幂等指纹保留接收时的规范 JSON 字节；同命令同意图才重放，用户、APP、Thread 和键的唯一约束仍由 PG 拥有。锁前快速重放与锁后复查保留在各命令入口，权限和资源删除语义由所属用例决定。Run 创建在已有 Thread 锁内固定当前 Turn、冻结配置、Input 与恢复 Message；提交后通过 scheduler 投递同一个 Run。
 
-[Message 仓储](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/repositories/messages.py)拥有正式消息的共同写入和读取，工具执行只保存在 `tool_audit` Message 中；Input 消费、模型/工具审计与公开 item 仓储分别拥有原始来源投影、执行事实与公开快照的原子更新。[checkpoint 消息结算](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/services/checkpoint_messages.py)显式接收 AsyncSession，在同一事务对账这些事实并结算 Run/Turn。完成路径在 Thread/Turn 锁后锁定并裁决待处理 steer，再取得 Run 锁；其他终态保留各自锁定位置。终态服务消费调用方在同一事务锁定的对象与 steer 就绪裁决，继续检查 current Run 与 lease。最终回答由 `result_run_id` 明确绑定。终态提交后释放运行清理责任，再发布公开事件；协作通知与业务状态在同一 PG 事务写入，观察与恢复可补读。[事件订阅](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/services/subscriptions.py)消费持久生命周期和 Redis 投影，[审计读取](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/services/message_audits.py)只组装已授权持久事实。
+[Message 仓储](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/repositories/messages.py)拥有正式消息的共同写入和读取，工具执行只保存在 `tool_audit` Message 中；Input 消费、模型/工具审计与公开 item 仓储分别拥有原始来源投影、执行事实与公开快照的原子更新。[checkpoint 消息结算](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/services/checkpoint_messages.py)显式接收 AsyncSession，在同一事务对账这些事实并结算 Run/Turn。`run_lifecycle` 拥有 Thread→Turn→Input→Run 的共同结算锁序、steer 裁决及 Run/Turn 投影，继续检查 current Run 与 lease；checkpoint 用例在同一事务对账输出并显式提交。最终回答由 `result_run_id` 明确绑定。终态提交后释放运行清理责任，再发布公开事件；协作通知与业务状态在同一 PG 事务写入，观察与恢复可补读。[事件订阅](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/services/subscriptions.py)消费持久生命周期和 Redis 投影，[审计读取](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/services/message_audits.py)只组装已授权持久事实。
 
 执行服务在进入模型流前提交 runtime、附件与追踪准备事务，禁用追踪时也经过此提交点；准备或提交失败会回滚、结束 observation 并进入失败收敛，图不执行。
 

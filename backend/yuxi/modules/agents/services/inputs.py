@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.modules.agents.input_messages import AgentRunInputMessage, serialize_input_message
-from yuxi.modules.agents.models.inputs import AgentInputReceipt
+from yuxi.modules.agents.models.inputs import AgentInputReceipt, queue_resume_payload
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.receipts import input_intent_hash, require_idempotency_key, require_receipt_replay
 from yuxi.modules.agents.repositories.attachments import AttachmentRepository
@@ -241,7 +241,7 @@ async def accept_message(
         idempotency_key=idempotency_key,
         event_type="agent.session.input.message",
         intent_hash=intent_hash,
-        frozen_payload={"resume_queue": True} if resume_queue else None,
+        frozen_payload=queue_resume_payload() if resume_queue else None,
         mode=mode,
         messages=messages,
         attachment_file_ids=attachment_file_ids,

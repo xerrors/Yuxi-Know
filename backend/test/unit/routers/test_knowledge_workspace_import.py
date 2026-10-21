@@ -6,6 +6,8 @@ import pytest
 from fastapi import HTTPException
 
 import yuxi.api.routers.knowledge.management as knowledge_router
+from yuxi.modules.knowledge.services import uploads
+from yuxi.infrastructure.minio.client import UploadResult
 
 pytestmark = pytest.mark.asyncio
 
@@ -25,11 +27,12 @@ async def test_import_workspace_files_uploads_workspace_file_to_minio(monkeypatc
         assert filename == "note.md"
         return []
 
-    async def fake_upload(bucket_name: str, file_name: str, data: bytes) -> str:
-        assert bucket_name == knowledge_router.MinIOClient.KB_BUCKETS["documents"]
+    async def fake_upload(*, bucket_name: str, object_name: str, data: bytes, content_type) -> UploadResult:
+        file_name = object_name
+        assert bucket_name == uploads.MinIOClient.KB_BUCKETS["documents"]
         assert file_name.startswith("db_1/upload/note_")
         assert data == b"# workspace note\n"
-        return f"http://minio/{bucket_name}/{file_name}"
+        return UploadResult(f"http://minio/{bucket_name}/{file_name}", bucket_name, file_name)
 
     monkeypatch.setattr(
         knowledge_router,
@@ -47,7 +50,7 @@ async def test_import_workspace_files_uploads_workspace_file_to_minio(monkeypatc
     monkeypatch.setattr(knowledge_router, "read_workspace_file_bytes", fake_read_workspace_file_bytes)
     monkeypatch.setattr(knowledge_router.knowledge_base_manager, "file_exists_in_knowledge_base", fake_file_exists_in_knowledge_base)
     monkeypatch.setattr(knowledge_router.knowledge_base_manager, "get_same_name_files", fake_get_same_name_files)
-    monkeypatch.setattr(knowledge_router, "aupload_file_to_minio", fake_upload)
+    monkeypatch.setattr(uploads, "get_minio_client", lambda: SimpleNamespace(aupload_file=fake_upload))
 
     result = await knowledge_router.import_workspace_files(
         knowledge_router.WorkspaceImportRequest(kb_id="db_1", paths=["/note.md"]),
@@ -57,7 +60,7 @@ async def test_import_workspace_files_uploads_workspace_file_to_minio(monkeypatc
     assert result["status"] == "success"
     assert len(result["items"]) == 1
     item = result["items"][0]
-    assert item["file_path"].startswith(f"http://minio/{knowledge_router.MinIOClient.KB_BUCKETS['documents']}/db_1/upload/note_")
+    assert item["file_path"].startswith(f"http://minio/{uploads.MinIOClient.KB_BUCKETS['documents']}/db_1/upload/note_")
     assert item["content_hash"]
     assert item["filename"] == "note.md"
     assert item["size"] == len(b"# workspace note\n")

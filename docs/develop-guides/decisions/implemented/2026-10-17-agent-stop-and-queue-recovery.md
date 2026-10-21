@@ -12,7 +12,7 @@ Owner：backend/yuxi/modules/agents/services/turns.py
 
 ### 实现方案
 
-Turn service 拥有取消完成判断，正常 runtime 清理和恢复扫描共用该判断；只有当前 Run 已停止、必要清理完成后才结束 Turn。等待取消在同一 Thread/Turn 锁内复查、清理 checkpoint 并提交终态，阻止迟到清理改写下一轮 checkpoint。Input repository 提供待办存在性查询，取消、失败和整树停止仅暂停已有待办；删除最后一条待办后清除暂停。scheduler 在前轮清理未完成时阻止新轮执行。
+Turn service 拥有取消完成判断，正常 runtime 清理和恢复扫描共用该判断；只有当前 Run 已停止、必要清理完成后才结束 Turn。等待取消在同一 Thread/Turn 锁内复查、清理 checkpoint 并提交终态，阻止迟到清理改写下一轮 checkpoint。Input repository 提供待办存在性查询，queue_control 在调用方事务中派生暂停，取消、失败和整树停止仅暂停已有待办；删除最后一条待办后清除暂停。暂停派生与恢复标记的当前归属见[用例职责决定](2026-10-21-architecture-convergence.md#队列暂停与恢复)。scheduler 在前轮清理未完成时阻止新轮执行。
 
 用户消息接收事务在 Thread 锁内保存恢复触发输入的持久标记，并解除该队列暂停；调度器优先单独消费这条消息，附件未就绪时不越过它。恢复 Turn 从已消费 Input 的接收序号派生引导边界，旧 steer 等待本轮完成，之后新提交的 steer 仍可接管。成功后沿用原调度规则处理旧队列，再次失败或取消时暂停剩余待办。幂等重放、协作和定时输入不产生新的恢复意图。
 

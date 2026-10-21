@@ -6,6 +6,7 @@ from fastapi import HTTPException, UploadFile
 
 import yuxi.api.routers.knowledge.management as knowledge_router
 from yuxi.modules.knowledge.read_models import KnowledgeBaseDetail
+from yuxi.modules.knowledge.services import graph_build, uploads
 import yuxi.modules.knowledge.services.background_jobs as knowledge_job_service
 
 pytestmark = pytest.mark.asyncio
@@ -168,7 +169,7 @@ async def test_upload_file_fails_before_read_or_minio(monkeypatch, kb_id, status
         fake_ensure_knowledge_base_supports_documents,
     )
     monkeypatch.setattr(knowledge_router, "read_upload_with_limit", fake_read_upload_with_limit)
-    monkeypatch.setattr(knowledge_router, "aupload_file_to_minio", fake_upload_to_minio)
+    monkeypatch.setattr(uploads, "get_minio_client", lambda: SimpleNamespace(aupload_file=fake_upload_to_minio))
 
     upload = UploadFile(filename="demo.txt", file=BytesIO(b"demo"))
 
@@ -321,11 +322,10 @@ async def test_reconcile_graph_build_mutates_state_only_after_unique_job_is_crea
         assert "reconcile" not in captured
         return SimpleNamespace(id="job_1"), True
 
-    monkeypatch.setattr(knowledge_router, "_has_running_graph_build_job", fake_has_running_graph_build_job)
-    monkeypatch.setattr(knowledge_router.knowledge_base_manager, "get_knowledge_base_info", fake_get_knowledge_base_info)
-    monkeypatch.setattr(knowledge_router, "KnowledgeGraphService", FakeGraphService)
+    monkeypatch.setattr(graph_build, "_has_active_job", fake_has_running_graph_build_job)
+    monkeypatch.setattr(graph_build.knowledge_base, "get_knowledge_base_info", fake_get_knowledge_base_info)
     monkeypatch.setattr(knowledge_job_service, "KnowledgeGraphService", FakeGraphService)
-    monkeypatch.setattr(knowledge_router, "submit_job", fake_enqueue_unique_by_payload)
+    monkeypatch.setattr(graph_build, "submit_job", fake_enqueue_unique_by_payload)
 
     result = await knowledge_router.reconcile_graph_build(
         "kb_1",

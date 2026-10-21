@@ -35,15 +35,6 @@ test('FileUploadModal 收集相对路径 source_paths 并过滤隐藏文件', ()
   assert.match(source, /Upload\.LIST_IGNORE/)
 })
 
-test('FileUploadModal 文件数量与进度统计仅计算受支持且非隐藏的文件', () => {
-  const source = readSource('../../src/modules/knowledge/ui/FileUploadModal.vue')
-
-  assert.match(source, /const validFileList\s*=\s*computed/)
-  assert.match(source, /const totalUploadCount\s*=\s*computed\(\(\)\s*=>\s*validFileList\.value\.length\)/)
-  assert.match(source, /for\s*\(\s*const file of validFileList\.value\s*\)/)
-  assert.match(source, /const isSupportedUploadFile\s*=\s*\(file\)/)
-})
-
 test('documentApi.addDocuments 能够将 source_paths 正确打包发送给知识库文档添加端点', async () => {
   const server = await createTestServer({
     server: { middlewareMode: true },

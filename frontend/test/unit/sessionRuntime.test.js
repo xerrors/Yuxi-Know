@@ -68,6 +68,32 @@ function setup(t) {
   }
 }
 
+test('首次观察与清理后重建声明运行版本、协作等待和审批默认值，并隔离 Thread', (t) => {
+  const { runtime } = setup(t)
+  const detach = runtime.observeThread('thread', {})
+  const detachOther = runtime.observeThread('other', {})
+  const original = runtime.getThreadState('thread')
+  assert.equal(original.runStateVersion, 0)
+  assert.equal(original.cooperationWaiting, false)
+  assert.equal(original.approvalSubmitting, false)
+  original.runStateVersion = 3
+  original.cooperationWaiting = true
+  original.approvalSubmitting = true
+  const other = runtime.getThreadState('other')
+  assert.equal(other.runStateVersion, 0)
+  assert.equal(other.cooperationWaiting, false)
+  assert.equal(other.approvalSubmitting, false)
+  detach()
+  const detachNew = runtime.observeThread('thread', {})
+  const current = runtime.getThreadState('thread')
+  assert.notEqual(current, original)
+  assert.equal(current.runStateVersion, 0)
+  assert.equal(current.cooperationWaiting, false)
+  assert.equal(current.approvalSubmitting, false)
+  detachNew()
+  detachOther()
+})
+
 test('页面和侧栏共享一个流及恢复请求，卸载一个视图不停止另一个', async (t) => {
   const h = setup(t),
     { runtime } = h

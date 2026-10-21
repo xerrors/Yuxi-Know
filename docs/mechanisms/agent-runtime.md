@@ -29,6 +29,8 @@ API/worker 不信任浏览器内存中的完整配置。请求可以提供受限
 
 HTTP 状态查询提供待办、产物和用量，Turn SSE 提供执行增量；`/api/v1/agents/sessions/{thread_id}/cooperation` 从持久关系批量读取成员、最新 Turn 和输入队列，不读取 checkpoint 或结果正文。同一 Thread 的页面与侧栏共享历史、状态、流订阅和 Input 观察器，最后一个观察视图卸载时释放订阅。终态和 resync 触发新的历史读取，结果归属以持久快照为准。
 
+`sessionRuntime` 拥有前端每 Thread 的共享观察、恢复与命令，`useAgentThreadState` 创建运行版本、协作等待及审批提交等状态的确定初值；清理后重新观察使用新的独立状态。
+
 前端 SSE 连续 60 秒没有收到字节时关闭失效读流，回读当前 Turn；仍在运行时按原 cursor 重连，已经终止时加载最终历史并刷新产物。服务器默认空闲心跳为 15 秒；超时只恢复订阅，不取消任务。
 
 Input 接收、附件就绪、消费与 Run 投递分别拥有明确提交点；worker 使用输入冻结配置，并重新取得当前身份、Workdir 与授权资源。FIFO、steer、安全接管、消息与附件归属、取消和队列恢复的完整契约由[输入队列与调度](./agent-request-queue.md)维护。

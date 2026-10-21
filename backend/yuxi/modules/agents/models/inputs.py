@@ -14,9 +14,16 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 
+from sqlalchemy.ext.hybrid import hybrid_property
+
 from yuxi.infrastructure.postgres.base import JSON_VALUE
 from yuxi.infrastructure.postgres.base import BusinessBase as Base
 from yuxi.shared.datetime import utc_now
+
+
+def queue_resume_payload() -> dict:
+    """编码已有恢复意图，保持持久 JSON 协议。"""
+    return {"resume_queue": True}
 
 
 class AgentInput(Base):
@@ -45,6 +52,16 @@ class AgentInput(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
     consumed_at = Column(DateTime(timezone=True), nullable=True)
     cancelled_at = Column(DateTime(timezone=True), nullable=True)
+
+    @hybrid_property
+    def resumes_queue(self) -> bool:
+        """只有严格布尔 true 表示用户恢复队列。"""
+        return self.input_payload.get("resume_queue") is True
+
+    @resumes_queue.expression
+    def resumes_queue(cls):
+        """恢复边界沿用持久 JSON 的 SQL 布尔查询。"""
+        return cls.input_payload["resume_queue"].as_boolean().is_(True)
 
     __table_args__ = (
         UniqueConstraint("id", "thread_id", name="uq_agent_inputs_id_thread"),

@@ -61,8 +61,8 @@ class AgentInputRepository:
         return sorted(
             pending,
             key=lambda item: (
-                item.input_payload.get("resume_queue") is not True,
-                -item.received_seq if item.input_payload.get("resume_queue") is True else 0,
+                not item.resumes_queue,
+                -item.received_seq if item.resumes_queue else 0,
             ),
         )
 
@@ -114,7 +114,7 @@ class AgentInputRepository:
             if batch and item.kind != "steer":
                 break
             batch.append(item)
-            if item.kind == "follow_up" or item.input_payload.get("resume_queue") is True:
+            if item.kind == "follow_up" or item.resumes_queue:
                 break
         return batch
 
@@ -198,7 +198,7 @@ class AgentInputRepository:
             await self.db.scalar(
                 select(func.max(AgentInput.received_seq)).where(
                     AgentInput.turn_id == turn_id,
-                    AgentInput.input_payload["resume_queue"].as_boolean().is_(True),
+                    AgentInput.resumes_queue,
                 )
             )
         ) or 0

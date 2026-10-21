@@ -304,6 +304,7 @@ import {
   ChevronUp
 } from '@lucide/vue'
 import { buildChunkParamsPayload } from '@/modules/knowledge/model/chunkUtils'
+import { useKnowledgeUploadQueue } from '@/modules/knowledge/model/useKnowledgeUploadQueue'
 import ChunkParamsConfig from '@/modules/knowledge/ui/ChunkParamsConfig.vue'
 import OCRSelector from '@/modules/settings/ui/OCRSelector.vue'
 import WorkspacePathPicker from '@/modules/workspace/ui/WorkspacePathPicker.vue'
@@ -472,63 +473,31 @@ const chunkLoading = computed(() => store.state.chunkLoading)
 
 // 上传模式
 const uploadMode = ref('file')
-const MAX_UPLOAD_CONCURRENCY = 10
 
 // 文件列表
 const fileList = ref([])
-const validFileList = computed(() => {
-  return fileList.value.filter((file) => isSupportedUploadFile(file))
+const {
+  validFileList,
+  uploadTaskStatus,
+  totalUploadCount,
+  queuedUploadCount,
+  uploadingUploadCount,
+  successUploadCount,
+  failedUploadCount,
+  hasPendingUploads,
+  overallUploadProgress,
+  showAggregateProgress,
+  customRequest,
+  reset: resetUploadQueue
+} = useKnowledgeUploadQueue({
+  fileList,
+  isSupportedFile: isSupportedUploadFile,
+  getKbId: () => kbId.value,
+  isFolderUpload: () => isFolderUpload.value,
+  getUploadUrl: fileApi.getUploadUrl,
+  getAuthHeaders: () => getAuthHeaders()
 })
-
-const uploadQueue = ref([])
-const activeUploadCount = ref(0)
-const uploadTaskStatus = ref({})
-const uploadTaskProgress = ref({})
 const progressExpanded = ref(false)
-
-const totalUploadCount = computed(() => validFileList.value.length)
-const validUidSet = computed(
-  () => new Set(validFileList.value.map((file) => file.uid).filter(Boolean))
-)
-const queuedUploadCount = computed(
-  () =>
-    Object.entries(uploadTaskStatus.value).filter(
-      ([uid, status]) => validUidSet.value.has(uid) && status === 'queued'
-    ).length
-)
-const uploadingUploadCount = computed(
-  () =>
-    Object.entries(uploadTaskStatus.value).filter(
-      ([uid, status]) => validUidSet.value.has(uid) && status === 'uploading'
-    ).length
-)
-const successUploadCount = computed(
-  () =>
-    Object.entries(uploadTaskStatus.value).filter(
-      ([uid, status]) => validUidSet.value.has(uid) && status === 'done'
-    ).length
-)
-const failedUploadCount = computed(
-  () =>
-    Object.entries(uploadTaskStatus.value).filter(
-      ([uid, status]) => validUidSet.value.has(uid) && status === 'error'
-    ).length
-)
-const hasPendingUploads = computed(() => queuedUploadCount.value + uploadingUploadCount.value > 0)
-
-const overallUploadProgress = computed(() => {
-  const total = totalUploadCount.value
-  if (!total) {
-    return 0
-  }
-  let sum = 0
-  for (const uid of validUidSet.value) {
-    sum += uploadTaskProgress.value[uid] || 0
-  }
-  return Math.round(sum / total)
-})
-
-const showAggregateProgress = computed(() => totalUploadCount.value >= MAX_UPLOAD_CONCURRENCY)
 
 const failedDetailItems = computed(() => {
   return validFileList.value
@@ -596,33 +565,8 @@ watch(uploadMode, (val) => {
   urlList.value = []
   newUrl.value = ''
   selectedWorkspacePaths.value = []
-  for (const task of uploadQueue.value) {
-    task.canceled = true
-  }
-  uploadQueue.value = []
-  uploadTaskStatus.value = {}
-  uploadTaskProgress.value = {}
+  resetUploadQueue()
   progressExpanded.value = false
-})
-
-watch(fileList, (newFileList) => {
-  const validUidSet = new Set(newFileList.map((file) => file.uid).filter(Boolean))
-  const nextStatus = {}
-  const nextProgress = {}
-
-  for (const [uid, status] of Object.entries(uploadTaskStatus.value)) {
-    if (validUidSet.has(uid)) {
-      nextStatus[uid] = status
-    }
-  }
-  for (const [uid, progress] of Object.entries(uploadTaskProgress.value)) {
-    if (validUidSet.has(uid)) {
-      nextProgress[uid] = progress
-    }
-  }
-
-  uploadTaskStatus.value = nextStatus
-  uploadTaskProgress.value = nextProgress
 })
 
 // URL 列表
@@ -941,164 +885,6 @@ const deleteSameNameFile = (file) => {
         message.error(`删除文件失败: ${error.message || '未知错误'}`)
       }
     }
-  })
-}
-
-const customRequest = async (options) => {
-  const fileUid = options.file?.uid
-  if (fileUid) {
-    uploadTaskStatus.value[fileUid] = 'queued'
-    uploadTaskProgress.value[fileUid] = 0
-  }
-
-  const task = {
-    options,
-    xhr: null,
-    canceled: false
-  }
-
-  uploadQueue.value.push(task)
-  processUploadQueue()
-
-  return {
-    abort: () => {
-      task.canceled = true
-      if (task.xhr) {
-        task.xhr.abort()
-      }
-      const queueIndex = uploadQueue.value.indexOf(task)
-      if (queueIndex !== -1) {
-        uploadQueue.value.splice(queueIndex, 1)
-      }
-      if (fileUid) {
-        uploadTaskStatus.value[fileUid] = 'error'
-      }
-    }
-  }
-}
-
-const processUploadQueue = () => {
-  while (activeUploadCount.value < MAX_UPLOAD_CONCURRENCY && uploadQueue.value.length > 0) {
-    const task = uploadQueue.value.shift()
-    if (!task || task.canceled) {
-      continue
-    }
-
-    activeUploadCount.value += 1
-    runUploadTask(task)
-      .catch(() => {
-        // 错误已经在 runUploadTask 内处理，这里只保证队列继续消费
-      })
-      .finally(() => {
-        activeUploadCount.value -= 1
-        processUploadQueue()
-      })
-  }
-}
-
-const runUploadTask = (task) => {
-  const { file, onProgress, onSuccess, onError } = task.options
-  const fileUid = file?.uid
-
-  if (fileUid) {
-    uploadTaskStatus.value[fileUid] = 'uploading'
-  }
-
-  return new Promise((resolve, reject) => {
-    const formData = new FormData()
-    const filename =
-      isFolderUpload.value && file.webkitRelativePath ? file.webkitRelativePath : file.name
-    formData.append('file', file, filename)
-
-    const currentKbId = kbId.value
-    if (!currentKbId) {
-      const error = new Error('Knowledge base ID is missing')
-      if (fileUid) {
-        uploadTaskStatus.value[fileUid] = 'error'
-      }
-      onError(error)
-      reject(error)
-      return
-    }
-
-    const xhr = new XMLHttpRequest()
-    task.xhr = xhr
-    xhr.open('POST', fileApi.getUploadUrl(currentKbId))
-
-    const headers = getAuthHeaders()
-    for (const [key, value] of Object.entries(headers)) {
-      xhr.setRequestHeader(key, value)
-    }
-
-    xhr.upload.onprogress = (event) => {
-      if (!event.lengthComputable) {
-        return
-      }
-      const percent = Math.min(100, (event.loaded / event.total) * 100)
-      if (fileUid) {
-        uploadTaskProgress.value[fileUid] = percent
-      }
-      onProgress({ percent })
-    }
-
-    xhr.onload = () => {
-      if (task.canceled) {
-        resolve()
-        return
-      }
-
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          const response = JSON.parse(xhr.responseText)
-          if (fileUid) {
-            uploadTaskStatus.value[fileUid] = 'done'
-            uploadTaskProgress.value[fileUid] = 100
-          }
-          onSuccess(response, xhr)
-          resolve()
-        } catch (error) {
-          if (fileUid) {
-            uploadTaskStatus.value[fileUid] = 'error'
-          }
-          onError(error)
-          reject(error)
-        }
-        return
-      }
-
-      let errorResp
-      try {
-        errorResp = JSON.parse(xhr.responseText || '{}')
-      } catch {
-        errorResp = {}
-      }
-      file.response = errorResp
-      const error = new Error(errorResp.detail || 'Upload failed')
-      if (fileUid) {
-        uploadTaskStatus.value[fileUid] = 'error'
-      }
-      onError(error, file)
-      reject(error)
-    }
-
-    xhr.onerror = (errorEvent) => {
-      if (fileUid) {
-        uploadTaskStatus.value[fileUid] = 'error'
-      }
-      onError(errorEvent)
-      reject(errorEvent)
-    }
-
-    xhr.onabort = () => {
-      if (fileUid) {
-        uploadTaskStatus.value[fileUid] = 'error'
-      }
-      const abortError = new Error('Upload aborted')
-      onError(abortError)
-      reject(abortError)
-    }
-
-    xhr.send(formData)
   })
 }
 

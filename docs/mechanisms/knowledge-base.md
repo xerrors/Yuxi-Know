@@ -54,6 +54,8 @@ flowchart LR
 
 Milvus 执行器持有 `KnowledgeGraphService`，首次图检索在线程内初始化图向量客户端，后续请求复用。Neo4j 连接由基础设施管理，图谱服务协调 PG 事实与 Neo4j/Milvus 投影。一次图谱构建复用一个抽取模型客户端；模型 JSON 归一化负责实体属性合并和关系去重，图 payload 转换只分配局部 ID。
 
+`services/graph_build.py` 拥有构建与向量修复的提交准入、唯一 Job 登记和重置前的活动任务检查。HTTP 路由校验权限并适配响应；worker 消费已登记的 action，直接调用图谱执行器，执行器重新验证知识库类型与锁定配置并持有投影锁。提交预检与重置的活动任务检查各自读取当前事实，不提供跨请求的串行化承诺。
+
 分块入口和配置位于 `chunking/dispatcher.py` 与 `chunking/presets.py`。`ragflow_like` 是借鉴 RAGFlow 思路并经过本地修改的适配实现；其中 parser 使用 Yuxi 的 `source_spans` 保留原文定位，不能按未修改的第三方 vendor 整体替换。语义分块通过 `chunk_parser_config.embed_model_id` 接收模型 spec；索引用例在未指定时注入系统 embedding 配置。缺失模型或装配故障使索引失败，不产出普通切分结果。固定输入的分块和来源范围由 parser 测试拥有。
 
 摄取 chunk 字典、PostgreSQL 行、Milvus 列数组与检索结果各自服务不同边界：dispatcher 生成内容与来源范围，Milvus 执行器明确转换为 PG 字段和向量列，检索再从 PG 补全当前可见文件来源。文件元数据、目录投影和 HTTP 列表保持各自需要的字段，不把虚拟目录当作持久化文件。运行时查询以 `MilvusRetrievalConfig` 为默认值，再叠加持久化选项和本次请求；面板使用同一默认配置。已有显式配置继续生效，未保存的阈值与 BM25 数量分别取 0.0 和 50。
@@ -110,7 +112,9 @@ Milvus 索引会把 chunk 写入 PostgreSQL 和 Milvus。它不是跨存储事�
 
 JobTracker 保存任务登记、执行方上报的进度与结果摘要，并提供管理员查询和取消请求。知识库和评估 service 拥有业务结论：文档导入遇到任一失败会结束为失败，批量解析或索引可以执行完成并报告失败计数。进度达到 100 不决定任务终态。后台作业只展示有限资源引用和计数，完整结果从业务资源读取。
 
-上传原文件是同步对象存储操作；批量添加、解析、索引和图谱构建把 `job_type`、Handler 版本和可序列化 payload 保存到 PostgreSQL。提交后 API 只发布 `job_id`，ARQ worker 从 registry 加载领域 Handler。
+普通上传、URL 抓取和工作区导入由 `knowledge/services/uploads.py` 同步暂存原件：计算内容哈希，查询知识库未删除文件的相同内容，写入 MinIO，再查询同名文件。路由校验权限、调用来源安全读取入口并适配响应；Workspace filesystem 拥有 no-follow 和有界读取，URL fetcher 拥有白名单与 SSRF 检查。暂存结果包含对象与预处理信息，正式文件由后续添加入口登记。批量添加、解析、索引和图谱构建把 `job_type`、Handler 版本和可序列化 payload 保存到 PostgreSQL。提交后 API 只发布 `job_id`，ARQ worker 从 registry 加载领域 Handler。
+
+浏览器文件与目录上传通过 `useKnowledgeUploadQueue` 管理 XHR 并发、进度与列表状态，并同步返回 Ant Upload 的取消句柄。主动取消不弹出失败提示；同步准备失败在受控列表刷新后投影为错误，结束的请求忽略迟到回调。`FileUploadModal` 拥有来源选择、文件过滤、同名提示与正式提交；URL 抓取和个人空间导入沿各自的读取与提交时点执行。
 
 提交端在事务完成后发布作业 ID；worker 从共享作业定义加载 Handler，拥有领取、执行、超时和失联检测，用唯一 attempt token claim 作业 并续租 lease；重复投递和失权 worker 的迟到写入会被 PostgreSQL 拒绝。首次发布失败时，pending 作业 保留，启动和周期 publisher 会补发。所有 后台作业 在 owner 中断或 lease 过期后都会明确失败，不自动重放未知外部副作用。领域 failure hook 由 worker 在终态事务中调用，JobTracker 的观察和取消入口不调用这些 Hook。
 
@@ -152,6 +156,7 @@ Agent 的 `knowledges` 只能缩小用户已有权限。协作成员沿用执行
 | 维护任务 | 起点与职责 | 继续追踪 |
 | --- | --- | --- |
 | 管理配置、文件列表和检索调度 | [Manager](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/knowledge/manager.py) 读取配置、查询可见性并选择 executor | repositories 拥有持久查询；base 与 implementations 拥有文件处理和具体存储操作 |
+| 暂存上传、URL 和工作区原件 | [原件暂存 service](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/knowledge/services/uploads.py) 组织内容去重、对象写入和同名查询 | 路由校验权限、调用来源安全读取入口并适配响应；正式文件和后台作业由后续添加、解析入口登记 |
 | 异步导入、解析、索引和图谱构建 | [知识库作业 service](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/knowledge/services/background_jobs.py) 组织领域动作、进度和失败结论 | background_jobs registry/worker 拥有调度与 lease；文档处理由 Manager 分派，图谱构建直接调用 KnowledgeGraphService |
 | Agent 或 Public API 的知识能力 | [访问 service](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/knowledge/services/access.py) 计算当前权限与所选范围的交集；[工具 service](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/knowledge/services/tools.py) 组织领域工具操作 | extensions 工具与 Public 路由适配调用，执行时复查可见性与文档归属 |
 

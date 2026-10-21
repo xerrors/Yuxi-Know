@@ -20,6 +20,7 @@ from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 from yuxi.modules.agents.scope import ActorScope
+from yuxi.modules.agents.services.queue_control import pause_pending_queue
 from yuxi.modules.agents.services.input_config import (
     resolve_agent_run_model_spec,
     resolve_agent_run_tool_approval_mode,
@@ -269,7 +270,7 @@ async def cancel_input(*, db: AsyncSession, scope: ActorScope, thread_id: str, i
         raise StateConflictError("Input 已被领取或取消")
     await input_repo.cancel(input_item)
     if agent_session.queue_paused:
-        agent_session.queue_paused = await input_repo.has_pending_inputs(thread_id=thread_id, uid=scope.uid, app_id=scope.app_id)
+        await pause_pending_queue(db, agent_session)
     receipt = await receipt_repo.create(
         receipt_id=str(uuid.uuid4()),
         idempotency_key=idempotency_key,

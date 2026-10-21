@@ -3,11 +3,29 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { createServer } from 'vite'
 
-/** 为每个测试服务隔离 Vite 缓存，并在关闭时清理。 */
+/** 服务 SSR 和静态资源测试，关闭客户端预构建并隔离临时缓存。 */
 export async function createTestServer(config = {}) {
   const cacheDir = await mkdtemp(path.join(tmpdir(), 'yuxi-vite-test-'))
+  let server
   try {
-    const server = await createServer({ ...config, cacheDir })
+    server = await createServer({
+      ...config,
+      plugins: [
+        {
+          name: 'test-server-resource-owner',
+          enforce: 'pre',
+          configureServer: {
+            order: 'pre',
+            handler(created) {
+              server = created
+            }
+          }
+        },
+        ...(config.plugins || [])
+      ],
+      optimizeDeps: { noDiscovery: true, include: [] },
+      cacheDir
+    })
     const close = server.close.bind(server)
     server.close = async () => {
       try {
@@ -18,7 +36,11 @@ export async function createTestServer(config = {}) {
     }
     return server
   } catch (error) {
-    await rm(cacheDir, { recursive: true, force: true })
+    try {
+      await server?.close()
+    } finally {
+      await rm(cacheDir, { recursive: true, force: true })
+    }
     throw error
   }
 }
