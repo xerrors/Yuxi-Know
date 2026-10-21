@@ -561,6 +561,46 @@ def test_parse_skill_markdown_supports_display_name_with_slug():
     assert meta["version"] == "1.0.2"
 
 
+def test_parse_skill_markdown_derives_slug_from_chinese_display_name():
+    content = (
+        "---\n"
+        "name: 周易智慧\n"
+        "description: 提供占卜与卦象解读参考。\n"
+        "---\n"
+        "# 周易智慧\n"
+    )
+    slug, name, desc, _meta = svc.parse_skill_markdown(content)
+    assert slug == "zhouyizhihui"
+    assert name == "周易智慧"
+    assert desc == "提供占卜与卦象解读参考。"
+
+
+def test_parse_skill_markdown_derives_slug_from_ascii_display_name():
+    content = (
+        "---\n"
+        "name: Word / DOCX\n"
+        "description: Create and edit Word documents.\n"
+        "---\n"
+        "# Word\n"
+    )
+    slug, name, _desc, _meta = svc.parse_skill_markdown(content)
+    assert slug == "word-docx"
+    assert name == "Word / DOCX"
+
+
+def test_parse_skill_markdown_rejects_invalid_explicit_slug():
+    content = (
+        "---\n"
+        "name: 展示名\n"
+        "slug: Invalid_Slug\n"
+        "description: explicit slug must still be valid\n"
+        "---\n"
+        "# Demo\n"
+    )
+    with pytest.raises(ValueError, match="SKILL.md frontmatter.slug 必须是小写字母/数字/短横线"):
+        svc.parse_skill_markdown(content)
+
+
 def test_parse_skill_markdown_requires_frontmatter():
     with pytest.raises(ValueError, match="frontmatter"):
         svc.parse_skill_markdown("# missing")
@@ -1199,7 +1239,64 @@ async def test_skill_zip_import_uses_skill_md_name_not_zip_or_root_dir(tmp_path:
 
 
 @pytest.mark.asyncio
-async def test_skill_zip_import_validates_skill_md_name_not_zip_filename(
+async def test_skill_zip_import_derives_slug_from_display_name_not_zip_filename(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+
+    class FakeRepo(RealSkillRepository):
+        created_item: Skill | None = None
+
+        def __init__(self, _db):
+            pass
+
+        async def exists_slug(self, _slug: str) -> bool:
+            return False
+
+        async def create(self, **kwargs) -> Skill:
+            item = Skill(**kwargs, updated_by=kwargs["created_by"])
+            self.__class__.created_item = item
+            return item
+
+    monkeypatch.setattr(svc, "SkillRepository", FakeRepo)
+
+    zip_bytes = _build_zip(
+        {
+            "valid-archive/SKILL.md": (
+                "---\n"
+                "name: 周易智慧\n"
+                "description: 提供占卜与卦象解读参考。\n"
+                "---\n"
+                "# 周易智慧\n"
+            ),
+        }
+    )
+    operator = _user("root")
+
+    draft = await draft_service.create_uploaded_skill_draft(
+        filename="valid-archive.zip",
+        file_bytes=zip_bytes,
+        operator=operator,
+    )
+    results = await svc.confirm_skill_install_draft(
+        _UnitOfWork(),
+        draft_id=draft["draft_id"],
+        share_config=None,
+        operator=operator,
+    )
+
+    assert draft["items"][0]["slug"] == "zhouyizhihui"
+    assert draft["items"][0]["name"] == "周易智慧"
+    assert results[0]["success"] is True
+    assert results[0]["slug"] == "zhouyizhihui"
+    assert FakeRepo.created_item.slug == "zhouyizhihui"
+    assert FakeRepo.created_item.name == "周易智慧"
+    skill_md = (tmp_path / "skill-sources/shared" / "zhouyizhihui" / "SKILL.md").read_text(encoding="utf-8")
+    assert "name: 周易智慧" in skill_md
+    assert "slug: zhouyizhihui" in skill_md
+
+
+@pytest.mark.asyncio
+async def test_skill_zip_import_rejects_invalid_explicit_slug(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
 
@@ -1214,11 +1311,18 @@ async def test_skill_zip_import_validates_skill_md_name_not_zip_filename(
 
     zip_bytes = _build_zip(
         {
-            "valid-archive/SKILL.md": ("---\nname: invalid--skill\ndescription: invalid name\n---\n# Invalid\n"),
+            "valid-archive/SKILL.md": (
+                "---\n"
+                "name: 展示名\n"
+                "slug: Invalid_Slug\n"
+                "description: invalid explicit slug\n"
+                "---\n"
+                "# Invalid\n"
+            ),
         }
     )
 
-    with pytest.raises(ValueError, match="SKILL.md frontmatter.name 必须是小写字母/数字/短横线"):
+    with pytest.raises(ValueError, match="SKILL.md frontmatter.slug 必须是小写字母/数字/短横线"):
         await draft_service.create_uploaded_skill_draft(
             filename="valid-archive.zip",
             file_bytes=zip_bytes,

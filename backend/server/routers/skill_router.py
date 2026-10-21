@@ -632,10 +632,13 @@ async def delete_skills_batch_route(
 
 
 def _raise_from_value_error(e: ValueError) -> None:
-    """按现有错误契约映射 HTTP 状态。"""
+    """按现有错误契约映射 HTTP 状态，并以业务 detail 透传可展示文案。"""
     message = str(e)
     status_code = 404 if "不存在" in message or "无权" in message else 400
-    raise HTTPException(status_code=status_code, detail=message)
+    raise HTTPException(
+        status_code=status_code,
+        detail={"code": "skill_request_invalid", "message": message},
+    )
 
 
 def _cleanup_export_file(path: str) -> None:

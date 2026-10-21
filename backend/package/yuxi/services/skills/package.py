@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 import shutil
 from pathlib import Path, PurePosixPath
 from typing import Any
 
 import yaml
+from pypinyin import Style, lazy_pinyin
 
 SKILL_SLUG_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+SKILL_SLUG_MAX_LENGTH = 64
 
 TEXT_FILE_EXTENSIONS = {
     ".md",
@@ -67,16 +70,29 @@ def parse_skill_markdown(content: str) -> tuple[str, str, str, dict[str, Any]]:
 
     name = _validate_skill_display_name(str(data.get("name", "")))
     raw_slug = str(data.get("slug", "")).strip()
-    slug = (
-        _validate_skill_slug_value(raw_slug, field_name="slug")
-        if raw_slug
-        else _validate_skill_slug_value(name, field_name="name")
-    )
+    if raw_slug:
+        slug = _validate_skill_slug_value(raw_slug, field_name="slug")
+    elif is_valid_skill_slug(name):
+        slug = name
+    else:
+        slug = derive_skill_slug_from_display_name(name)
     description = str(data.get("description", "")).strip()
     if not description:
         raise ValueError("SKILL.md frontmatter 缺少 description")
 
     return slug, name, description, data
+
+
+def derive_skill_slug_from_display_name(name: str) -> str:
+    """从展示名派生稳定 slug：拼音优先，失败则哈希兜底。"""
+    phonetic = "".join(lazy_pinyin(name, style=Style.NORMAL))
+    source = phonetic.strip() or name
+    base = re.sub(r"[^a-zA-Z0-9]+", "-", source.strip().lower())
+    base = re.sub(r"-{2,}", "-", base).strip("-")[:SKILL_SLUG_MAX_LENGTH].strip("-")
+    if is_valid_skill_slug(base):
+        return base
+    digest = hashlib.sha1(name.encode("utf-8")).hexdigest()[:12]
+    return f"skill-{digest}"
 
 
 def copy_skill_snapshot(
@@ -91,12 +107,13 @@ def copy_skill_snapshot(
     parsed = parse_skill_dir_metadata(target_dir)
     if expected_slug and parsed["slug"] != expected_slug:
         raise ValueError("Skill slug 在复制过程中发生变化")
-    if final_slug and parsed["slug"] != final_slug:
+    if final_slug:
         skill_md = target_dir / "SKILL.md"
         skill_md.write_text(
             rewrite_frontmatter_slug(skill_md.read_text(encoding="utf-8"), final_slug),
             encoding="utf-8",
         )
+        parsed = parse_skill_dir_metadata(target_dir)
     return parsed
 
 
@@ -117,12 +134,14 @@ def copy_skill_tree_no_symlinks(source_dir: Path, target_dir: Path) -> None:
 
 
 def rewrite_frontmatter_slug(content: str, new_slug: str) -> str:
-    """在安装快照中写入最终 Skill slug。"""
+    """在安装快照中写入最终 Skill slug，保留非 slug 形态的展示名。"""
     frontmatter_raw, body = split_skill_frontmatter(content)
     data = _load_skill_frontmatter(frontmatter_raw)
-    if data.get("slug"):
-        data["slug"] = new_slug
-    else:
+    had_explicit_slug = bool(str(data.get("slug", "")).strip())
+    name = str(data.get("name", "")).strip()
+    data["slug"] = new_slug
+    # name 曾充当 slug 身份时同步改写；展示名（含中文）保持不变。
+    if not had_explicit_slug and is_valid_skill_slug(name):
         data["name"] = new_slug
     dumped = yaml.safe_dump(data, sort_keys=False, allow_unicode=True).strip()
     return f"---\n{dumped}\n---\n{body}"
