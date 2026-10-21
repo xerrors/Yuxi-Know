@@ -44,6 +44,8 @@ uv run --locked --group test pytest \
     test/integration/services/test_thread_priority_inputs.py \
     test/integration/services/test_session_title_generation.py \
     test/integration/services/test_agent_run_lease.py \
+    test/integration/services/test_agent_run_manifest_and_attempts.py \
+    test/integration/services/test_run_admission.py \
     test/integration/services/test_agent_feedback.py \
     test/integration/services/test_session_cooperation.py \
     test/integration/services/test_oidc_login_transaction.py \

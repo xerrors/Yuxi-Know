@@ -1280,14 +1280,6 @@ async def test_manifest_persist_failure_fails_run_before_execution(monkeypatch: 
     assert "执行未开始" in terminal_calls[0]["error_message"]
 
 
-def test_retry_requires_new_manifest_fingerprint_to_match_write_once_fact():
-    persisted = SimpleNamespace(manifest_fingerprint="a" * 64)
-
-    runner._require_persisted_manifest_match(persisted, recorded=False, fingerprint="a" * 64)
-    with pytest.raises(RuntimeError, match="运行资产已在重试前变化"):
-        runner._require_persisted_manifest_match(persisted, recorded=False, fingerprint="b" * 64)
-
-
 @pytest.mark.asyncio
 async def test_cancel_during_manifest_preparation_settles_without_waiting_for_lease(monkeypatch):
     """配置准备期间取消不能被误判为固化失败并留待 lease 超时。"""
@@ -1469,3 +1461,107 @@ async def test_terminal_redelivery_finishes_after_cleanup_and_conditional_public
     await runner.process_agent_run({"job_try": 1}, run.id)
     assert events == (["cleanup", "publish"] if cleanup_pending else []) + ["dispatch", "trace"]
     assert loaded == (2 if cleanup_pending else 1)
+
+
+@pytest.mark.parametrize(
+    ("fault", "error_type", "message", "expected_steps"),
+    [
+        ("payload", "invalid_input_payload", "run input_payload 必须是对象", []),
+        ("runtime", "invalid_runtime_payload", "run input_payload.runtime 必须是对象", []),
+        ("messages", "input_message_not_found", "运行任务缺少输入消息", ["messages"]),
+        ("metadata", "invalid_input_metadata", "输入消息 metadata 必须是对象", ["messages"]),
+        ("run_type", "invalid_run_type", "不支持的 run_type: unknown", ["messages"]),
+        ("user", "user_not_found", "user user-1 not found", ["messages", "user"]),
+        ("workdir", "invalid_runtime_scope", "Workdir authorization rejected", ["messages", "user", "workdir"]),
+        ("resume", "resume_input_not_found", "resume run 缺少 resume 输入", ["messages", "user", "workdir"]),
+        ("raw", "invalid_input_message", "invalid raw_message for chat input message", ["messages", "user", "workdir"]),
+        (
+            "manifest",
+            "manifest_persist_failed",
+            "运行清单固化失败，执行未开始：manifest rejected",
+            ["messages", "user", "workdir", "heartbeat", "title", "manifest"],
+        ),
+    ],
+)
+async def test_admission_rejections_preserve_order_and_business_reason(monkeypatch, fault, error_type, message, expected_steps):
+    """相邻后续条件也非法时仍保留原拒绝优先序，任何拒绝都不进入执行。"""
+    run = _build_run()
+    _patch_common(monkeypatch, run)
+    steps, settled, settled_usage = [], [], []
+    existing_usage = {"available": True, "total": {"total_tokens": 23}}
+    metadata = {"raw_message": {"type": "human", "content": "hello"}}
+    input_message = SimpleNamespace(id=10, source_input_id="input-1", content="hello", image_content=None, extra_metadata=metadata)
+    if fault == "payload":
+        run.input_payload = []
+    if fault == "runtime":
+        run.input_payload["runtime"] = "bad runtime"
+    if fault in {"messages", "metadata", "run_type"}:
+        run.run_type = "unknown"
+    if fault == "metadata":
+        input_message.extra_metadata = []
+    if fault in {"workdir", "resume"}:
+        run.run_type = "resume"
+    if fault == "raw":
+        input_message.extra_metadata = {"raw_message": {"type": "human", "content": object()}}
+
+    async def load_messages(_run):
+        """记录持久输入读取边界。"""
+        steps.append("messages")
+        return [] if fault in {"runtime", "messages"} else [input_message]
+
+    async def load_user(_uid):
+        """记录用户读取，供相邻拒绝检查比较顺序。"""
+        steps.append("user")
+        return None if fault in {"run_type", "user"} else SimpleNamespace(uid="user-1")
+
+    async def authorize(_run):
+        """表达真实授权边界的失败，解析 resume 之前必须先授权。"""
+        steps.append("workdir")
+        if fault in {"user", "workdir"}:
+            raise RuntimeError("Workdir authorization rejected")
+        return SimpleNamespace(workdir_path="projects/test")
+
+    async def start(_context):
+        """记录心跳在 manifest 之前启动。"""
+        steps.append("heartbeat")
+
+    async def prepare(**_kwargs):
+        """后续准备故意失败，前置错误必须先被拒绝。"""
+        steps.append("manifest")
+        raise RuntimeError("manifest rejected")
+
+    async def terminal(_run_id, status, **kwargs):
+        """保存结算的业务结果，供单测断言错误与顺序。"""
+        settled.append((status, kwargs["error_type"], kwargs["error_message"]))
+        settled_usage.append(kwargs["token_usage"])
+        run.status = status
+        return runner.TerminalTransition(status=status, changed=True)
+
+    monkeypatch.setattr(runner, "_read_run_token_usage_from_state", AsyncMock(return_value=existing_usage))
+    monkeypatch.setattr(runner, "_load_run_input_messages", load_messages)
+    monkeypatch.setattr(runner, "_load_user", load_user)
+    monkeypatch.setattr(runner, "_validate_run_workdir_binding", authorize)
+    monkeypatch.setattr(runner.RunContext, "start", start)
+    monkeypatch.setattr(runner, "start_session_title", lambda **_kwargs: steps.append("title"))
+    monkeypatch.setattr(runner, "prepare_and_record_run_execution", prepare)
+    monkeypatch.setattr(runner, "mark_run_terminal", terminal)
+    monkeypatch.setattr(runner, "stream_agent_execution", lambda **_kwargs: pytest.fail("准入拒绝后不能进入执行"))
+    await runner.process_agent_run({"job_try": 1}, run.id)
+    assert settled == [("failed", error_type, message)]
+    assert steps == expected_steps
+    assert settled_usage == [existing_usage if fault in {"workdir", "resume", "raw", "manifest"} else {"available": False}]
+
+
+async def test_admission_settlement_failure_keeps_outer_retry_policy(monkeypatch):
+    """共享拒绝出口自身失败仍进入既有外层基础设施重试。"""
+    run = _build_run()
+    _patch_common(monkeypatch, run)
+    run.input_payload = []
+    settle = AsyncMock(side_effect=ConnectionError("settlement database unavailable"))
+    release = AsyncMock(return_value=True)
+    monkeypatch.setattr(runner, "_settle_uncommitted_run", settle)
+    monkeypatch.setattr(runner, "release_run_lease_for_retry", release)
+    with pytest.raises(runner.RetryableRunError, match="settlement database unavailable"):
+        await runner.process_agent_run({"job_try": 1}, run.id)
+    assert run.status == "pending"
+    release.assert_awaited_once()

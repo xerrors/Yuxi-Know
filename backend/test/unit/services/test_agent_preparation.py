@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
+
+import yuxi.modules.agents.services.preparation as service
 
 from yuxi.modules.agents.services.preparation import (
     build_skill_manifest_entries,
@@ -338,3 +342,12 @@ async def test_execution_preparation_rejects_missing_dependencies(monkeypatch, m
             workdir_binding=SimpleNamespace(workdir_path="projects/project"),
             worker_id="owner",
         )
+
+
+def test_retry_requires_new_manifest_fingerprint_to_match_write_once_fact():
+    """重试只接受与已固化运行资产相同的指纹。"""
+    persisted = SimpleNamespace(manifest_fingerprint="a" * 64)
+
+    service._require_persisted_manifest_match(persisted, recorded=False, fingerprint="a" * 64)
+    with pytest.raises(RuntimeError, match="运行资产已在重试前变化"):
+        service._require_persisted_manifest_match(persisted, recorded=False, fingerprint="b" * 64)

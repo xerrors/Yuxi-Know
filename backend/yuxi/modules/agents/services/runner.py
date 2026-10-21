@@ -42,9 +42,7 @@ from yuxi.modules.agents.services.leases import (
 )
 from yuxi.modules.agents.services.openai_events import OpenAIEventAdapter
 from yuxi.modules.agents.services.preparation import (
-    PreparedRunExecution,
-    compute_manifest_fingerprint,
-    prepare_run_execution,
+    prepare_and_record_run_execution,
 )
 from yuxi.modules.agents.services.run_lifecycle import complete_run_command_cleanup, finish_run_lifecycle, settle_run
 from yuxi.modules.agents.services.titles import start_session_title
@@ -84,6 +82,15 @@ class RuntimeCleanupPendingError(RetryJob):
 
 class NonRetryableRunError(Exception):
     """Error type that should not trigger ARQ retry."""
+
+
+class RunAdmissionRejected(Exception):
+    """携带执行前拒绝的业务原因，由 runner 统一结算。"""
+
+    def __init__(self, error_type: str, message: str):
+        """保留已有错误类型与文案，不改变拒绝优先序。"""
+        super().__init__(message)
+        self.error_type = error_type
 
 
 async def _validate_run_workdir_binding(run: AgentRun) -> AuthorizedWorkdir:
@@ -279,41 +286,6 @@ async def mark_run_terminal(
             )
             persisted_status = run.status if run else None
     return TerminalTransition(status=persisted_status, changed=changed)
-
-
-def _require_persisted_manifest_match(persisted_run: AgentRun | None, *, recorded: bool, fingerprint: str) -> None:
-    """重试只能复用与 write-once manifest 完全一致的运行资产。"""
-    if recorded:
-        return
-    if persisted_run is None or persisted_run.manifest_fingerprint != fingerprint:
-        raise RuntimeError("运行资产已在重试前变化，与已固化 manifest 不一致")
-
-
-async def prepare_and_record_run_execution(
-    *,
-    run: AgentRun,
-    user: User,
-    worker_id: str,
-    workdir_binding: AuthorizedWorkdir,
-) -> PreparedRunExecution:
-    """在构图执行前固化运行清单与指纹；准备和固化失败由调用方收尾。"""
-    async with pg_manager.get_async_session_context() as db:
-        result = await prepare_run_execution(
-            run=run,
-            user=user,
-            db=db,
-            worker_id=worker_id,
-            workdir_binding=workdir_binding,
-        )
-        fingerprint = compute_manifest_fingerprint(result.manifest)
-        persisted_run, recorded = await AgentRunRepository(db).record_run_manifest(
-            run.id,
-            manifest=result.manifest,
-            fingerprint=fingerprint,
-            worker_id=worker_id,
-        )
-        _require_persisted_manifest_match(persisted_run, recorded=recorded, fingerprint=fingerprint)
-        return result
 
 
 async def _record_run_timing_best_effort(
@@ -578,155 +550,79 @@ async def _process_agent_run(ctx, run_id: str, execution_timeout: asyncio.Timeou
             run_ctx.cancel_event.set()
             raise asyncio.CancelledError(f"run {run_id} cancelled before execution")
 
-        if not isinstance(run.input_payload, dict):
-            await _settle_uncommitted_run(
-                run_id,
-                "failed",
-                worker_id=worker_id,
-                error_type="invalid_input_payload",
-                error_message="run input_payload 必须是对象",
-                thread_id=thread_id,
-                current_user=user,
-            )
-            return
-        payload = run.input_payload
-        runtime = payload.get("runtime") or {}
-        if not isinstance(runtime, dict):
-            await _settle_uncommitted_run(
-                run_id,
-                "failed",
-                worker_id=worker_id,
-                error_type="invalid_runtime_payload",
-                error_message="run input_payload.runtime 必须是对象",
-                thread_id=thread_id,
-                current_user=user,
-            )
-            return
-
-        input_messages = await _load_run_input_messages(run)
-        if not input_messages:
-            await _settle_uncommitted_run(
-                run_id,
-                "failed",
-                worker_id=worker_id,
-                error_type="input_message_not_found",
-                error_message="运行任务缺少输入消息",
-                thread_id=thread_id,
-                current_user=user,
-            )
-            return
-        if any(not isinstance(message.extra_metadata, dict) for message in input_messages):
-            await _settle_uncommitted_run(
-                run_id,
-                "failed",
-                worker_id=worker_id,
-                error_type="invalid_input_metadata",
-                error_message="输入消息 metadata 必须是对象",
-                thread_id=thread_id,
-                current_user=user,
-            )
-            return
-
-        input_metadata = input_messages[0].extra_metadata
-        image_content = any(message.image_content for message in input_messages)
-
-        if run_type not in SUPPORTED_RUN_TYPES:
-            await _settle_uncommitted_run(
-                run_id,
-                "failed",
-                worker_id=worker_id,
-                error_type="invalid_run_type",
-                error_message=f"不支持的 run_type: {run_type}",
-                thread_id=thread_id,
-                current_user=user,
-            )
-            return
-
-        user = await _load_user(uid)
-        if not user:
-            await _settle_uncommitted_run(
-                run_id,
-                "failed",
-                worker_id=worker_id,
-                error_type="user_not_found",
-                error_message=f"user {uid} not found",
-                thread_id=thread_id,
-                current_user=user,
-            )
-            return
-
+        # 准入拒绝共用出口；结算自身失败仍交给外层的取消与重试策略。
         try:
-            workdir_binding = await _validate_run_workdir_binding(run)
-        except Exception as exc:  # noqa: BLE001
-            await _settle_uncommitted_run(
-                run_id,
-                "failed",
-                worker_id=worker_id,
-                error_type="invalid_runtime_scope",
-                error_message=str(exc),
-                thread_id=thread_id,
-                current_user=user,
-            )
-            return
+            if not isinstance(run.input_payload, dict):
+                raise RunAdmissionRejected("invalid_input_payload", "run input_payload 必须是对象")
+            payload = run.input_payload
+            runtime = payload.get("runtime") or {}
+            if not isinstance(runtime, dict):
+                raise RunAdmissionRejected("invalid_runtime_payload", "run input_payload.runtime 必须是对象")
 
-        resume_input = None
-        normalized_input_messages = []
-        if run_type == "resume":
-            resume_input = input_metadata.get("resume")
-            if resume_input is None:
-                await _settle_uncommitted_run(
-                    run_id,
-                    "failed",
-                    worker_id=worker_id,
-                    error_type="resume_input_not_found",
-                    error_message="resume run 缺少 resume 输入",
-                    thread_id=thread_id,
-                    current_user=user,
-                )
-                return
-        else:
+            input_messages = await _load_run_input_messages(run)
+            if not input_messages:
+                raise RunAdmissionRejected("input_message_not_found", "运行任务缺少输入消息")
+            if any(not isinstance(message.extra_metadata, dict) for message in input_messages):
+                raise RunAdmissionRejected("invalid_input_metadata", "输入消息 metadata 必须是对象")
+
+            input_metadata = input_messages[0].extra_metadata
+            image_content = any(message.image_content for message in input_messages)
+
+            if run_type not in SUPPORTED_RUN_TYPES:
+                raise RunAdmissionRejected("invalid_run_type", f"不支持的 run_type: {run_type}")
+
+            user = await _load_user(uid)
+            if not user:
+                raise RunAdmissionRejected("user_not_found", f"user {uid} not found")
+
             try:
-                normalized_input_messages = [
-                    restore_chat_input_message(
-                        content=message.content,
-                        image_content=message.image_content,
-                        metadata={**message.extra_metadata, "message_id": message.id},
-                    )
-                    for message in input_messages
-                ]
-            except ValueError as exc:
-                await _settle_uncommitted_run(
-                    run_id,
-                    "failed",
-                    worker_id=worker_id,
-                    error_type="invalid_input_message",
-                    error_message=str(exc),
-                    thread_id=thread_id,
-                    current_user=user,
-                )
-                return
+                workdir_binding = await _validate_run_workdir_binding(run)
+            except Exception as exc:  # noqa: BLE001
+                raise RunAdmissionRejected("invalid_runtime_scope", str(exc))
 
-        await run_ctx.start()
-        if run_type == "chat":
-            start_session_title(thread_id=thread_id, uid=uid, app_id=run.app_id, content=input_messages[0].content)
-        # 准备配置期间也续租；manifest 提交成功前不得开始构图执行。
-        try:
-            prepared_execution = await prepare_and_record_run_execution(
-                run=run,
-                user=user,
-                worker_id=worker_id,
-                workdir_binding=workdir_binding,
-            )
-        except Exception as manifest_error:
-            if await _is_cancel_requested(run_id):
-                raise asyncio.CancelledError(f"run {run_id} cancelled during preparation")
-            logger.error(f"Failed to persist AgentRun manifest: run={run_id}", exc_info=True)
+            resume_input = None
+            normalized_input_messages = []
+            if run_type == "resume":
+                resume_input = input_metadata.get("resume")
+                if resume_input is None:
+                    raise RunAdmissionRejected("resume_input_not_found", "resume run 缺少 resume 输入")
+            else:
+                try:
+                    normalized_input_messages = [
+                        restore_chat_input_message(
+                            content=message.content,
+                            image_content=message.image_content,
+                            metadata={**message.extra_metadata, "message_id": message.id},
+                        )
+                        for message in input_messages
+                    ]
+                except ValueError as exc:
+                    raise RunAdmissionRejected("invalid_input_message", str(exc))
+
+            await run_ctx.start()
+            if run_type == "chat":
+                start_session_title(thread_id=thread_id, uid=uid, app_id=run.app_id, content=input_messages[0].content)
+            # 准备配置期间也续租；manifest 提交成功前不得开始构图执行。
+            try:
+                prepared_execution = await prepare_and_record_run_execution(
+                    run=run,
+                    user=user,
+                    worker_id=worker_id,
+                    workdir_binding=workdir_binding,
+                )
+            except Exception as manifest_error:
+                if await _is_cancel_requested(run_id):
+                    raise asyncio.CancelledError(f"run {run_id} cancelled during preparation")
+                logger.error(f"Failed to persist AgentRun manifest: run={run_id}", exc_info=True)
+                raise RunAdmissionRejected("manifest_persist_failed", f"运行清单固化失败，执行未开始：{manifest_error}")
+
+        except RunAdmissionRejected as rejection:
             await _settle_uncommitted_run(
                 run_id,
                 "failed",
-                error_type="manifest_persist_failed",
-                error_message=f"运行清单固化失败，执行未开始：{manifest_error}",
                 worker_id=worker_id,
+                error_type=rejection.error_type,
+                error_message=str(rejection),
                 thread_id=thread_id,
                 current_user=user,
             )

@@ -16,8 +16,10 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.repositories.definitions import AgentRepository
+from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.runtime.agent_backends import get_agent_backend
 from yuxi.modules.agents.runtime.context import BaseContext, prepare_agent_runtime_context
 from yuxi.modules.extensions.skills.personal import PERSONAL_SKILL_SOURCE_TYPE
@@ -43,6 +45,33 @@ class PreparedRunExecution:
     manifest: dict
     context: BaseContext
     backend_id: str
+
+
+async def prepare_and_record_run_execution(
+    *,
+    run: AgentRun,
+    user: User,
+    worker_id: str,
+    workdir_binding: AuthorizedWorkdir,
+) -> PreparedRunExecution:
+    """在构图执行前固化运行清单与指纹；准备和固化失败由调用方收尾。"""
+    async with pg_manager.get_async_session_context() as db:
+        result = await prepare_run_execution(
+            run=run,
+            user=user,
+            db=db,
+            worker_id=worker_id,
+            workdir_binding=workdir_binding,
+        )
+        fingerprint = compute_manifest_fingerprint(result.manifest)
+        persisted_run, recorded = await AgentRunRepository(db).record_run_manifest(
+            run.id,
+            manifest=result.manifest,
+            fingerprint=fingerprint,
+            worker_id=worker_id,
+        )
+        _require_persisted_manifest_match(persisted_run, recorded=recorded, fingerprint=fingerprint)
+        return result
 
 
 def canonical_json(payload: Any) -> str:
@@ -188,3 +217,11 @@ async def prepare_run_execution(
         code_revision=resolve_code_revision(),
     )
     return PreparedRunExecution(manifest=manifest, context=context, backend_id=agent_item.backend_id)
+
+
+def _require_persisted_manifest_match(persisted_run: AgentRun | None, *, recorded: bool, fingerprint: str) -> None:
+    """重试只能复用与 write-once manifest 完全一致的运行资产。"""
+    if recorded:
+        return
+    if persisted_run is None or persisted_run.manifest_fingerprint != fingerprint:
+        raise RuntimeError("运行资产已在重试前变化，与已固化 manifest 不一致")
