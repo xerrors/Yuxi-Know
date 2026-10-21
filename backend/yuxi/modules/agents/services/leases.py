@@ -6,44 +6,23 @@ import asyncio
 import uuid
 from datetime import datetime
 
-from sqlalchemy import select
-
-from yuxi.infrastructure.filesystem import await_io
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.manager import pg_manager
-from yuxi.modules.agents.models.runs import AgentRun
-from yuxi.modules.agents.repositories.input import AgentInputRepository
 from yuxi.modules.agents.repositories.runs import TERMINAL_RUN_STATUSES, AgentRunRepository
-from yuxi.modules.agents.repositories.sessions import SessionRepository
-from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 from yuxi.modules.agents.runtime.sandbox.provider import get_sandbox_provider
-from yuxi.modules.agents.services.cooperation_notifications import notify_turn_state
 from yuxi.modules.agents.services.event_writer import publish_run_settlement
-from yuxi.modules.agents.services.scheduler import dispatch_next_input
+from yuxi.modules.agents.services.run_lifecycle import (
+    complete_run_command_cleanup,
+    finish_run_lifecycle,
+    reconcile_cancelling_turns,
+    reconcile_expired_run,
+)
 from yuxi.modules.agents.services.tracing import finish_turn_observation_if_terminal
 
 RUN_LEASE_SECONDS = 120
 
 
 WORKER_ID = f"worker-{uuid.uuid4().hex}"
-
-
-async def complete_run_command_cleanup(run: AgentRun) -> bool:
-    """确认该 Run 外部命令清理后才释放 cleanup 责任。"""
-    async with pg_manager.get_async_session_context() as db:
-        current = await db.scalar(select(AgentRun).where(AgentRun.id == run.id).with_for_update(key_share=True))
-        if current is None:
-            raise RuntimeError("Run 的 cleanup Owner 不存在")
-        if current.runtime_cleanup_pending:
-            # 与 retry 领取持同一 Run 锁；取消也必须等待外部清理结束后才能释放。
-            await await_io(asyncio.to_thread(get_sandbox_provider().cancel_run, current.uid, current.id))
-            current.runtime_cleanup_pending = False
-            await db.flush()
-    if current.status == "cancelled":
-        from yuxi.modules.agents.services.turns import finish_cancelled_run
-
-        await finish_cancelled_run(current)
-    return True
 
 
 async def maintain_user_sandboxes() -> None:
@@ -106,40 +85,13 @@ async def reconcile_expired_run_leases(*, now: datetime | None = None) -> list[s
     reconciled: list[str] = []
     terminal_turn_ids: list[str] = []
     failures = 0
-    for run_id, root_thread_id, uid, app_id in candidates:
+    for run_id, _thread_id, _uid, _app_id in candidates:
         try:
             async with pg_manager.get_async_session_context() as db:
-                agent_session = await SessionRepository(db).lock_session_by_thread_id(root_thread_id)
-                if agent_session is None or agent_session.uid != uid or agent_session.app_id != app_id:
-                    continue
-                repo = AgentRunRepository(db)
-                candidate = await repo.get_run(run_id)
-                if candidate is None:
-                    continue
-                turn = await AgentTurnRepository(db).get_for_scope(
-                    turn_id=candidate.turn_id,
-                    thread_id=root_thread_id,
-                    uid=uid,
-                    app_id=app_id,
-                    for_update=True,
-                )
-                if turn is None:
-                    raise ValueError("失联 Run 的根 Turn 不存在")
-                # 恢复使用相同 Input→Run 锁序；返回行无需参与失联状态裁决。
-                await AgentInputRepository(db).get_pending_steer(thread_id=root_thread_id, uid=uid, app_id=app_id)
-                run = await repo.reconcile_expired_lease(run_id, now=now)
+                run = await reconcile_expired_run(db, run_id=run_id, now=now)
                 if run is None:
                     continue
-                if turn.current_run_id == run.id:
-                    agent_session.queue_paused = await AgentInputRepository(db).has_pending_inputs(
-                        thread_id=agent_session.thread_id,
-                        uid=agent_session.uid,
-                        app_id=agent_session.app_id,
-                    )
-                    await AgentTurnRepository(db).set_terminal(turn, status="failed")
-
-                    await notify_turn_state(db, run)
-                    terminal_turn_ids.append(turn.id)
+                terminal_turn_ids.append(run.turn_id)
                 reconciled.append(run.id)
         except Exception:
             failures += 1
@@ -164,18 +116,14 @@ async def reconcile_pending_runtime_cleanups() -> list[str]:
                 continue
             if run.status in TERMINAL_RUN_STATUSES:
                 await publish_run_settlement(run.id, run.status, thread_id=run.thread_id)
-            if run.status in {"completed", "failed", "cancelled"}:
-                await dispatch_next_input(
-                    uid=run.uid,
-                    agent_slug=run.agent_slug,
-                    thread_id=run.thread_id,
-                )
+            async with pg_manager.get_async_session_context() as db:
+                current = await AgentRunRepository(db).get_run(run.id)
+            if current is not None:
+                await finish_run_lifecycle(current)
             cleaned.append(run.id)
         except Exception:
             failures += 1
             logger.exception("Run cleanup recovery failed: run_id=%s", run.id)
-    from yuxi.modules.agents.services.turns import reconcile_cancelling_turns
-
     await reconcile_cancelling_turns()
     if failures:
         raise RuntimeError(f"执行清理恢复失败：{failures} 条")

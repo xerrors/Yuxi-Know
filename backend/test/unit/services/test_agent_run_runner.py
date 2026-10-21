@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 from arq.worker import RetryJob
 
+import yuxi.modules.agents.services.run_lifecycle as lifecycle
 import yuxi.bootstrap.worker as worker_bootstrap
 import yuxi.modules.agents.services.event_writer as event_writer
 import yuxi.modules.agents.services.leases as leases
@@ -347,8 +348,8 @@ def _patch_common(monkeypatch: pytest.MonkeyPatch, run_obj: SimpleNamespace):
     monkeypatch.setattr(runner, "get_agent_state_view", fake_get_agent_state_view)
     monkeypatch.setattr(runner, "mark_run_running", fake_mark_run_running)
     monkeypatch.setattr(runner, "release_run_lease_for_retry", fake_mark_run_running)
-    monkeypatch.setattr(runner, "dispatch_next_input", fake_noop)
-    monkeypatch.setattr(runner, "finish_turn_observation_if_terminal", fake_noop)
+    monkeypatch.setattr(lifecycle, "dispatch_next_input", fake_noop)
+    monkeypatch.setattr(lifecycle, "finish_turn_observation_if_terminal", fake_noop)
     from test.unit.support.agent_context_fixtures import prepared_execution
 
     async def fake_prepare_execution(**kwargs):
@@ -372,7 +373,7 @@ def _patch_common(monkeypatch: pytest.MonkeyPatch, run_obj: SimpleNamespace):
         ),
     )
     monkeypatch.setattr(runner, "complete_run_command_cleanup", fake_cleanup)
-    monkeypatch.setattr(runner, "clear_cancel_signal", fake_noop)
+    monkeypatch.setattr(lifecycle, "clear_cancel_signal", fake_noop)
     monkeypatch.setattr(runner, "publish_run_settlement", fake_noop)
     monkeypatch.setattr(runner, "stream_agent_execution", lambda **kwargs: object())
     monkeypatch.setattr(runner.RunContext, "start", fake_noop)
@@ -518,8 +519,8 @@ async def test_next_fifo_input_dispatches_before_optional_turn_trace(monkeypatch
         order.append("trace")
 
     monkeypatch.setattr(runner, "stream_agent_execution", lambda **_kwargs: stream())
-    monkeypatch.setattr(runner, "dispatch_next_input", dispatch)
-    monkeypatch.setattr(runner, "finish_turn_observation_if_terminal", trace)
+    monkeypatch.setattr(lifecycle, "dispatch_next_input", dispatch)
+    monkeypatch.setattr(lifecycle, "finish_turn_observation_if_terminal", trace)
 
     await runner.process_agent_run({"job_try": 1}, run_obj.id)
 
@@ -1424,3 +1425,47 @@ async def test_nonretryable_output_conflict_after_user_cancel_settles_cancelled(
     monkeypatch.setattr(runner, "_settle_uncommitted_run", finish)
     await runner.process_agent_run({"job_try": 1}, run.id)
     finish.assert_awaited_once()
+
+
+@pytest.mark.parametrize("cleanup_pending", [False, True])
+async def test_terminal_redelivery_finishes_after_cleanup_and_conditional_publication(monkeypatch, cleanup_pending):
+    """重投终态仅在补偿清理时重发，并在新快照上先派发后导出观察。"""
+    run = _build_run()
+    _patch_common(monkeypatch, run)
+    run.status = "completed"
+    run.runtime_cleanup_pending = cleanup_pending
+    events = []
+    loaded = 0
+
+    async def get_run(_run_id):
+        """清理完成后的读取返回独立新快照，不复用旧 cleanup 标记。"""
+        nonlocal loaded
+        loaded += 1
+        if loaded > 1:
+            return SimpleNamespace(**{**vars(run), "runtime_cleanup_pending": False})
+        return run
+
+    async def cleanup(_run, _message):
+        """保留传入对象旧标记，用新快照证明派发依据。"""
+        events.append("cleanup")
+
+    async def publish(*_args, **_kwargs):
+        """记录终态发布位置。"""
+        events.append("publish")
+
+    async def dispatch(**_kwargs):
+        """记录下一输入派发位置。"""
+        events.append("dispatch")
+
+    async def trace(_turn_id):
+        """记录观察导出位置。"""
+        events.append("trace")
+
+    monkeypatch.setattr(runner, "_get_run", get_run)
+    monkeypatch.setattr(runner, "_require_runtime_cleanup", cleanup)
+    monkeypatch.setattr(runner, "publish_run_settlement", publish)
+    monkeypatch.setattr(lifecycle, "dispatch_next_input", dispatch)
+    monkeypatch.setattr(lifecycle, "finish_turn_observation_if_terminal", trace)
+    await runner.process_agent_run({"job_try": 1}, run.id)
+    assert events == (["cleanup", "publish"] if cleanup_pending else []) + ["dispatch", "trace"]
+    assert loaded == (2 if cleanup_pending else 1)

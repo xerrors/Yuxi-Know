@@ -13,6 +13,7 @@ from agent_run_test_helpers import cleanup_agent_run_threads, create_agent_run
 from langchain_core.messages import ToolMessage
 from langgraph.types import Command
 
+import yuxi.modules.agents.services.run_lifecycle as lifecycle
 import yuxi.modules.agents.services.leases as lease_worker
 import yuxi.modules.agents.services.runner as run_worker
 from yuxi.infrastructure.postgres.manager import pg_manager
@@ -522,14 +523,12 @@ async def test_root_failure_preserves_independent_child_turn(postgres_sessions, 
 
 async def test_cancelling_recovery_isolates_bad_checkpoint(postgres_sessions, monkeypatch):
     """首条 checkpoint 清理失败仍收敛后续 Turn，同时拒绝报告整轮成功。"""
-    from yuxi.modules.agents.services import turns
-
     sessions = postgres_sessions
     bad_id, bad_thread, _ = await _create_run(sessions, status="interrupted")
     good_id, good_thread, _ = await _create_run(sessions, status="cancelled")
-    monkeypatch.setattr(turns.pg_manager, "get_async_session_context", lambda: _session_context(sessions))
-    monkeypatch.setattr(turns, "_clear_waitpoint_checkpoint", AsyncMock(side_effect=RuntimeError("broken checkpoint")))
-    monkeypatch.setattr(turns, "finish_turn_observation_if_terminal", AsyncMock())
+    monkeypatch.setattr(lifecycle.pg_manager, "get_async_session_context", lambda: _session_context(sessions))
+    monkeypatch.setattr(lifecycle, "_clear_waitpoint_checkpoint", AsyncMock(side_effect=RuntimeError("broken checkpoint")))
+    monkeypatch.setattr(lifecycle, "finish_turn_observation_if_terminal", AsyncMock())
     try:
         async with sessions() as db:
             for run_id in [bad_id, good_id]:
@@ -541,7 +540,7 @@ async def test_cancelling_recovery_isolates_bad_checkpoint(postgres_sessions, mo
                     turn.waitpoint = {"kind": "answer", "id": "broken", "run_id": bad_id}
             await db.commit()
         with pytest.raises(RuntimeError, match="cancelling Turn recovery failed"):
-            await turns.reconcile_cancelling_turns()
+            await lifecycle.reconcile_cancelling_turns()
         async with sessions() as db:
             bad = await db.get(AgentRun, bad_id)
             good = await db.get(AgentRun, good_id)
@@ -579,7 +578,7 @@ async def test_cancelled_cleanup_holds_run_lock_until_external_command_finishes(
             await db.commit()
         monkeypatch.setattr(lease_worker.pg_manager, "get_async_session_context", lambda: _session_context(sessions))
         monkeypatch.setattr(
-            lease_worker, "get_sandbox_provider", lambda: type("Provider", (), {"cancel_run": staticmethod(cancel_commands)})()
+            lifecycle, "get_sandbox_provider", lambda: type("Provider", (), {"cancel_run": staticmethod(cancel_commands)})()
         )
         task = asyncio.create_task(lease_worker.complete_run_command_cleanup(stale))
         assert await asyncio.to_thread(started.wait, 5)

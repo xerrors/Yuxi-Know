@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+import yuxi.modules.agents.services.run_lifecycle as lifecycle
 import yuxi.modules.agents.services.leases as leases
 
 
@@ -32,17 +33,18 @@ async def test_cleanup_reconciler_keeps_pending_run_for_dispatch_recovery(monkey
         async def list_pending_runtime_cleanups(self):
             return [run]
 
+        async def get_run(self, _run_id):
+            return run
+
     cleanup = AsyncMock(return_value=True)
     dispatch = AsyncMock()
     settlement = AsyncMock()
     monkeypatch.setattr(leases.pg_manager, "get_async_session_context", session_context)
     monkeypatch.setattr(leases, "AgentRunRepository", Repo)
     monkeypatch.setattr(leases, "complete_run_command_cleanup", cleanup)
-    monkeypatch.setattr(leases, "dispatch_next_input", dispatch)
+    monkeypatch.setattr(lifecycle, "dispatch_next_input", dispatch)
     monkeypatch.setattr(leases, "publish_run_settlement", settlement)
-    from yuxi.modules.agents.services import turns
-
-    monkeypatch.setattr(turns, "reconcile_cancelling_turns", AsyncMock())
+    monkeypatch.setattr(leases, "reconcile_cancelling_turns", AsyncMock())
 
     cleaned = await leases.reconcile_pending_runtime_cleanups()
 
@@ -65,7 +67,7 @@ async def test_stale_cleanup_does_not_touch_commands_of_new_attempt(monkeypatch,
 
     provider = SimpleNamespace(cancel_run=lambda *_: marker.unlink())
     monkeypatch.setattr(leases.pg_manager, "get_async_session_context", session_context)
-    monkeypatch.setattr(leases, "get_sandbox_provider", lambda: provider)
+    monkeypatch.setattr(lifecycle, "get_sandbox_provider", lambda: provider)
     stale = SimpleNamespace(id="run-1", uid="user-1", runtime_cleanup_pending=True)
     assert await leases.complete_run_command_cleanup(stale)
     assert marker.read_text() == "running"

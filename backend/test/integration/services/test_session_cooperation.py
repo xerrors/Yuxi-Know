@@ -13,7 +13,7 @@ from agent_run_test_helpers import cleanup_agent_run_threads, create_agent_run
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from test.integration.services.agent_run_test_helpers import settle_locked_run
+from yuxi.modules.agents.services.run_lifecycle import settle_run
 from yuxi.bootstrap.models import load_models
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.agents.models.cooperation import CooperationEvent
@@ -478,7 +478,7 @@ async def test_cooperation_wait_releases_slot_and_recovers_same_turn(tree):
         wait = await service.wait_updates(targets=[member["session_id"]], after_cursor=0, timeout_seconds=300)
         assert wait["kind"] == "cooperation"
         run = await db.get(AgentRun, run_id)
-        await settle_locked_run(
+        await settle_run(
             db=db,
             run=run,
             worker_id="root-worker",
@@ -517,7 +517,7 @@ async def test_tool_side_effects_replay_across_resume_runs(tree):
         await db.commit()
         submitted = await service.submit_input(target=member["session_id"], description="FOLLOWUP", call_id="followup")
         wait = await service.wait_updates(targets=[member["session_id"]], after_cursor=0, timeout_seconds=300)
-        await settle_locked_run(
+        await settle_run(
             db=db,
             run=await db.get(AgentRun, run_id),
             worker_id="root-worker",
@@ -650,7 +650,7 @@ async def test_user_message_after_tree_stop_resumes_only_target_queue(tree, monk
 
     monkeypatch.setattr("yuxi.modules.agents.services.turns.publish_cancel_signals", AsyncMock())
     monkeypatch.setattr(
-        "yuxi.modules.agents.services.leases.get_sandbox_provider",
+        "yuxi.modules.agents.services.run_lifecycle.get_sandbox_provider",
         lambda: type("Provider", (), {"cancel_run": staticmethod(lambda *_: None)})(),
     )
     factory, run_id, root_id, uid = tree
@@ -672,7 +672,7 @@ async def test_user_message_after_tree_stop_resumes_only_target_queue(tree, monk
             await accept_message(db=db, **arguments)
     async with factory() as db:
         run = await db.get(AgentRun, run_id)
-        await settle_locked_run(db=db, run=run, worker_id="root-worker", status="cancelled", token_usage=None)
+        await settle_run(db=db, run=run, worker_id="root-worker", status="cancelled", token_usage=None)
         await db.commit()
     await complete_run_command_cleanup(run)
     async with factory() as db:
@@ -702,7 +702,7 @@ async def test_tree_stop_pauses_idle_queues_before_user_can_resume(tree, monkeyp
         await service.submit_input(target=root_id, description="old root", call_id="idle-root")
         old_child = await service.submit_input(target=member["session_id"], description="old child", call_id="idle-child")
         root_run = await db.get(AgentRun, run_id)
-        await settle_locked_run(db=db, run=root_run, worker_id="root-worker", status="failed", token_usage=None)
+        await settle_run(db=db, run=root_run, worker_id="root-worker", status="failed", token_usage=None)
         child_run, changed = await AgentRunRepository(db).set_terminal_status(member["run_id"], status="failed")
         assert changed
         await AgentTurnRepository(db).set_terminal(await db.get(AgentTurn, member["turn_id"]), status="failed")
@@ -957,7 +957,7 @@ async def test_resume_call_cannot_change_target_session(tree, monkeypatch, opera
         service = SessionCooperationService(db, run_id=run_id, uid=uid)
         original = await invoke(service, first)
         await db.commit()
-        await settle_locked_run(
+        await settle_run(
             db=db,
             run=await db.get(AgentRun, run_id),
             worker_id="root-worker",
@@ -1041,7 +1041,7 @@ async def test_cancelling_last_pending_run_keeps_tree_stop_state(tree):
     member = await child(tree)
     async with factory() as db:
         root_run = await db.get(AgentRun, run_id)
-        await settle_locked_run(db=db, run=root_run, worker_id="root-worker", status="failed", token_usage=None)
+        await settle_run(db=db, run=root_run, worker_id="root-worker", status="failed", token_usage=None)
         await db.commit()
     await complete_run_command_cleanup(root_run)
     async with factory() as db:
@@ -1123,7 +1123,7 @@ async def test_input_wait_recovers_after_queued_input_cancelled(tree):
         wait = await service.wait_inputs(input_ids=[queued["input_id"]], timeout_seconds=300)
         run = await db.get(AgentRun, run_id)
         turn_id = run.turn_id
-        await settle_locked_run(
+        await settle_run(
             db=db,
             run=run,
             worker_id="root-worker",
@@ -1326,7 +1326,7 @@ async def test_bad_wait_does_not_block_other_wait_recovery(tree):
         runs = [await db.get(AgentRun, root_run_id), await db.get(AgentRun, member["run_id"])]
         runs.sort(key=lambda run: run.turn_id)
         for index, run in enumerate(runs):
-            await settle_locked_run(
+            await settle_run(
                 db=db,
                 run=run,
                 worker_id="root-worker" if run.id == root_run_id else "child-wait",

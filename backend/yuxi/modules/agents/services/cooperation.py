@@ -30,6 +30,7 @@ from yuxi.modules.agents.services.directory import list_public_agents
 from yuxi.modules.agents.services.input_config import resolve_agent_context_snapshot
 from yuxi.modules.agents.services.inputs import accept_locked
 from yuxi.modules.agents.services.run_creation import create_resume_run
+from yuxi.modules.agents.services.run_lifecycle import settle_waiting_cancel
 from yuxi.modules.agents.services.scheduler import Dispatch, deliver, dispatch_next_input
 from yuxi.modules.agents.services.thread_access import require_thread
 from yuxi.modules.agents.services.turns import cancel_turn
@@ -685,8 +686,6 @@ async def reconcile_stopped_trees(*, tree_root_thread_id: str | None = None) -> 
         except Exception:
             failures += 1
             logger.exception("Stopped tree recovery failed: thread_id=%s", member.thread_id)
-    from yuxi.modules.agents.services.turns import settle_waiting_cancel
-
     for target, turn_id in waiting:
         try:
             await settle_waiting_cancel(thread_id=target.thread_id, turn_id=turn_id, uid=target.uid, app_id=target.app_id)

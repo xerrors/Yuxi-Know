@@ -13,10 +13,8 @@ from yuxi.modules.agents.models.messages import MODEL_AUDIT_MESSAGE_TYPE, Messag
 from yuxi.modules.agents.repositories.messages import MessageRepository
 from yuxi.modules.agents.repositories.model_audit import ModelMessageAuditRepository
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
-from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.agents.repositories.tool_audit import ToolMessageAuditRepository
-from yuxi.modules.agents.repositories.turn import AgentTurnRepository
-from yuxi.modules.agents.services.runs import lock_ready_steer, settle_checkpoint
+from yuxi.modules.agents.services.run_lifecycle import lock_run_lifecycle, settle_checkpoint
 from yuxi.modules.agents.services.scheduler import Dispatch, deliver
 from yuxi.modules.agents.tool_results import TOOL_FAILURE_MESSAGE, tool_result_text
 from yuxi.shared.datetime import utc_now
@@ -49,22 +47,8 @@ async def save_messages_from_langgraph_state(
     next_dispatch: Dispatch | None = None
     try:
         await db.flush()
-        agent_session = await SessionRepository(db).lock_session_by_thread_id(thread_id)
-        if agent_session is None:
-            raise ValueError("AgentRun 的 Thread 不存在")
-        persisted_run = await run_repo.get_run(run_id)
-        if persisted_run is None:
-            raise ValueError("AgentRun 不存在")
-        turn = await AgentTurnRepository(db).get_for_scope(
-            turn_id=turn_id,
-            thread_id=thread_id,
-            uid=agent_session.uid,
-            app_id=agent_session.app_id,
-            for_update=True,
-        )
-        if turn is None or turn.current_run_id != run_id:
-            raise ValueError("AgentRun 不是当前 Turn 的执行段")
-        pending_steer = await lock_ready_steer(db, agent_session=agent_session, turn=turn) if complete_run else None
+        locked = await lock_run_lifecycle(db, run_id=run_id, thread_id=thread_id, turn_id=turn_id, allow_steer=complete_run)
+        persisted_run, pending_steer = locked.run, locked.pending_steer
         continue_after_cancelled_steer = complete_run and steer_before_model and pending_steer is None
         if continue_after_cancelled_steer:
             complete_run = False
@@ -194,10 +178,7 @@ async def save_messages_from_langgraph_state(
                 waitpoint = _bind_approval_calls(waitpoint, last_ai_message)
             settlement = await settle_checkpoint(
                 db=db,
-                run=locked_run,
-                agent_session=agent_session,
-                turn=turn,
-                pending_steer=pending_steer,
+                locked=locked,
                 worker_id=worker_id,
                 status=terminal_status,
                 waitpoint=waitpoint,
@@ -253,21 +234,7 @@ async def save_partial_message(
         if not worker_id or not turn_id:
             raise ValueError("持久化 AgentRun 部分输出需要当前 worker 和 Turn")
         run_repo = AgentRunRepository(db)
-        agent_session = await SessionRepository(db).lock_session_by_thread_id(thread_id)
-        if agent_session is None:
-            raise ValueError("AgentRun 的 Thread 不存在")
-        persisted_run = await run_repo.get_run(run_id)
-        if persisted_run is None:
-            raise ValueError("AgentRun 不存在")
-        turn = await AgentTurnRepository(db).get_for_scope(
-            turn_id=turn_id,
-            thread_id=thread_id,
-            uid=agent_session.uid,
-            app_id=agent_session.app_id,
-            for_update=True,
-        )
-        if turn is None or turn.current_run_id != run_id:
-            raise ValueError("AgentRun 不是当前 Turn 的执行段")
+        locked = await lock_run_lifecycle(db, run_id=run_id, thread_id=thread_id, turn_id=turn_id)
         locked_run = await run_repo.lock_output_persistence(
             run_id,
             worker_id=worker_id,
@@ -290,10 +257,7 @@ async def save_partial_message(
         await run_repo.set_output_message(run_id, message.id, worker_id=worker_id)
         settlement = await settle_checkpoint(
             db=db,
-            run=locked_run,
-            agent_session=agent_session,
-            turn=turn,
-            pending_steer=None,
+            locked=locked,
             worker_id=worker_id,
             status="failed",
             error_type=error_type,

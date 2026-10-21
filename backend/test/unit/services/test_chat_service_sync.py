@@ -8,10 +8,9 @@ from langchain.messages import AIMessage, HumanMessage, ToolMessage
 
 from yuxi.modules.agents.runtime import context as agent_context
 from test.unit.support.agent_context_fixtures import prepared_execution
+import yuxi.modules.agents.services.run_lifecycle as lifecycle
 import yuxi.modules.agents.services.execution as svc
 import yuxi.modules.agents.services.checkpoint_messages as message_svc
-import yuxi.modules.agents.services.runs as run_svc
-import yuxi.modules.agents.services.runs as lifecycle_runs
 
 
 def test_approval_binding_uses_current_model_and_keeps_duplicate_call_order():
@@ -83,11 +82,12 @@ def owning_turn_boundary(monkeypatch):
         async def get_pending_steer(self, **kwargs):
             return None
 
-    monkeypatch.setattr(message_svc, "SessionRepository", lambda db: db.message_repository)
+    monkeypatch.setattr(lifecycle, "SessionRepository", lambda db: db.message_repository)
+    monkeypatch.setattr(lifecycle, "AgentRunRepository", lambda db: message_svc.AgentRunRepository(db))
     monkeypatch.setattr(message_svc, "MessageRepository", lambda db: db.message_repository)
-    monkeypatch.setattr(message_svc, "AgentTurnRepository", TurnRepo)
-    monkeypatch.setattr(run_svc, "AgentInputRepository", InputRepo)
-    monkeypatch.setattr(run_svc, "AttachmentRepository", lambda db: SimpleNamespace(has_unready=AsyncMock(return_value=False)))
+    monkeypatch.setattr(lifecycle, "AgentTurnRepository", TurnRepo)
+    monkeypatch.setattr(lifecycle, "AgentInputRepository", InputRepo)
+    monkeypatch.setattr(lifecycle, "AttachmentRepository", lambda db: SimpleNamespace(has_unready=AsyncMock(return_value=False)))
 
     async def settle(**kwargs):
         repo = message_svc.AgentRunRepository(kwargs["db"])
@@ -121,7 +121,19 @@ class _FakeRunRepoBase:
 
     async def get_run(self, _run_id: str):
         """消息重建测试固定当前 Run 与 Turn 的输出归属。"""
-        return SimpleNamespace(run_type="chat", id="run-1", uid="user-1", app_id=None, turn_id="turn-1", input_message_id=None)
+        return SimpleNamespace(
+            run_type="chat",
+            id=_run_id,
+            thread_id="thread-1",
+            uid="user-1",
+            app_id=None,
+            turn_id="request-current" if _run_id == "run-current" else "turn-1",
+            input_message_id=None,
+        )
+
+    async def lock_run_for_user(self, run_id, uid):
+        """模拟锁后重读同一 Run。"""
+        return await self.get_run(run_id)
 
     async def set_output_message(self, _run_id, _message_id, *, worker_id):
         """默认不记录输出绑定。"""
@@ -336,7 +348,7 @@ async def test_steer_before_first_model_yields_without_ai_output(monkeypatch):
         events.append("dispatch")
 
     monkeypatch.setattr(message_svc, "AgentRunRepository", RunRepo)
-    monkeypatch.setattr(run_svc, "AgentInputRepository", InputRepo)
+    monkeypatch.setattr(lifecycle, "AgentInputRepository", InputRepo)
     monkeypatch.setattr(message_svc, "ModelMessageAuditRepository", _EmptyModelAuditRepo)
     monkeypatch.setattr(message_svc, "ToolMessageAuditRepository", _EmptyToolAuditRepo)
     monkeypatch.setattr(message_svc, "settle_checkpoint", settle)
@@ -394,7 +406,7 @@ async def test_checkpoint_without_lifecycle_does_not_create_output(monkeypatch: 
             return object()
 
     monkeypatch.setattr(message_svc, "AgentRunRepository", FakeRunRepo)
-    monkeypatch.setattr(lifecycle_runs, "AgentRunRepository", FakeRunRepo)
+    monkeypatch.setattr(lifecycle, "AgentRunRepository", FakeRunRepo)
     monkeypatch.setattr(message_svc, "ModelMessageAuditRepository", _EmptyModelAuditRepo)
     monkeypatch.setattr(message_svc, "ToolMessageAuditRepository", _EmptyToolAuditRepo)
 
@@ -404,7 +416,7 @@ async def test_checkpoint_without_lifecycle_does_not_create_output(monkeypatch: 
         db=session_repo.db,
         trace_info={"langfuse_trace_id": "trace-1"},
         run_id="run-1",
-        turn_id="req-1",
+        turn_id="turn-1",
         worker_id="worker-1",
     )
 
@@ -440,7 +452,7 @@ async def test_checkpoint_cannot_create_missing_current_or_previous_run_audits(m
     fake_db = FakeDB()
     session_repo = _FakeConvRepo(fake_db)
     monkeypatch.setattr(message_svc, "AgentRunRepository", FakeRunRepo)
-    monkeypatch.setattr(lifecycle_runs, "AgentRunRepository", FakeRunRepo)
+    monkeypatch.setattr(lifecycle, "AgentRunRepository", FakeRunRepo)
     monkeypatch.setattr(message_svc, "ModelMessageAuditRepository", _EmptyModelAuditRepo)
     monkeypatch.setattr(message_svc, "ToolMessageAuditRepository", _EmptyToolAuditRepo)
 
@@ -527,7 +539,7 @@ async def test_state_reconcile_uses_latest_error_unless_run_is_interrupted(
 
     fake_db = FakeDB()
     monkeypatch.setattr(message_svc, "AgentRunRepository", FakeRunRepo)
-    monkeypatch.setattr(lifecycle_runs, "AgentRunRepository", FakeRunRepo)
+    monkeypatch.setattr(lifecycle, "AgentRunRepository", FakeRunRepo)
     monkeypatch.setattr(message_svc, "ModelMessageAuditRepository", _EmptyModelAuditRepo)
     monkeypatch.setattr(message_svc, "ToolMessageAuditRepository", FakeToolAuditRepo)
     monkeypatch.setattr(message_svc, "_reconcile_tool_error_from_state", reconcile_tool)
@@ -594,7 +606,7 @@ async def test_model_state_reconcile_uses_latest_message_when_operation_id_is_re
 
     session_repo = _FakeConvRepo(FakeDB())
     monkeypatch.setattr(message_svc, "AgentRunRepository", FakeRunRepo)
-    monkeypatch.setattr(lifecycle_runs, "AgentRunRepository", FakeRunRepo)
+    monkeypatch.setattr(lifecycle, "AgentRunRepository", FakeRunRepo)
     monkeypatch.setattr(message_svc, "ModelMessageAuditRepository", FakeModelAuditRepo)
     monkeypatch.setattr(message_svc, "ToolMessageAuditRepository", _EmptyToolAuditRepo)
 
@@ -654,7 +666,7 @@ async def test_completed_run_rejects_unmatched_final_state_message(monkeypatch: 
 
     fake_db = FakeDB()
     monkeypatch.setattr(message_svc, "AgentRunRepository", FakeRunRepo)
-    monkeypatch.setattr(lifecycle_runs, "AgentRunRepository", FakeRunRepo)
+    monkeypatch.setattr(lifecycle, "AgentRunRepository", FakeRunRepo)
     monkeypatch.setattr(message_svc, "ModelMessageAuditRepository", FakeAuditRepo)
     monkeypatch.setattr(message_svc, "ToolMessageAuditRepository", _EmptyToolAuditRepo)
 
@@ -664,7 +676,7 @@ async def test_completed_run_rejects_unmatched_final_state_message(monkeypatch: 
             thread_id="thread-1",
             db=_FakeConvRepo(fake_db).db,
             run_id="run-1",
-            turn_id="request-1",
+            turn_id="turn-1",
             worker_id="worker-1",
             complete_run=True,
         )
@@ -727,7 +739,7 @@ async def test_interrupted_run_does_not_bind_older_reconciled_model_audit(
     fake_db = FakeDB()
     session_repo = _FakeConvRepo(fake_db)
     monkeypatch.setattr(message_svc, "AgentRunRepository", FakeRunRepo)
-    monkeypatch.setattr(lifecycle_runs, "AgentRunRepository", FakeRunRepo)
+    monkeypatch.setattr(lifecycle, "AgentRunRepository", FakeRunRepo)
     monkeypatch.setattr(message_svc, "ModelMessageAuditRepository", FakeAuditRepo)
     monkeypatch.setattr(message_svc, "ToolMessageAuditRepository", _EmptyToolAuditRepo)
 
@@ -736,7 +748,7 @@ async def test_interrupted_run_does_not_bind_older_reconciled_model_audit(
         thread_id="thread-1",
         db=session_repo.db,
         run_id="run-1",
-        turn_id="request-1",
+        turn_id="turn-1",
         worker_id="worker-1",
         interrupt_run=True,
     )
@@ -803,7 +815,7 @@ async def test_tool_call_interrupt_ignores_historical_same_id_tool_message(monke
     fake_db = FakeDB()
     session_repo = _FakeConvRepo(fake_db)
     monkeypatch.setattr(message_svc, "AgentRunRepository", FakeRunRepo)
-    monkeypatch.setattr(lifecycle_runs, "AgentRunRepository", FakeRunRepo)
+    monkeypatch.setattr(lifecycle, "AgentRunRepository", FakeRunRepo)
     monkeypatch.setattr(message_svc, "ModelMessageAuditRepository", FakeAuditRepo)
     monkeypatch.setattr(message_svc, "ToolMessageAuditRepository", _EmptyToolAuditRepo)
 
@@ -812,7 +824,7 @@ async def test_tool_call_interrupt_ignores_historical_same_id_tool_message(monke
         thread_id="thread-1",
         db=session_repo.db,
         run_id="run-1",
-        turn_id="request-1",
+        turn_id="turn-1",
         worker_id="worker-1",
         interrupt_run=True,
     )
@@ -859,7 +871,7 @@ async def test_interrupt_without_model_does_not_invent_message(
 
     fake_db = FakeDB()
     monkeypatch.setattr(message_svc, "AgentRunRepository", FakeRunRepo)
-    monkeypatch.setattr(lifecycle_runs, "AgentRunRepository", FakeRunRepo)
+    monkeypatch.setattr(lifecycle, "AgentRunRepository", FakeRunRepo)
     monkeypatch.setattr(message_svc, "ModelMessageAuditRepository", _EmptyModelAuditRepo)
     monkeypatch.setattr(message_svc, "ToolMessageAuditRepository", _EmptyToolAuditRepo)
 
@@ -868,7 +880,7 @@ async def test_interrupt_without_model_does_not_invent_message(
         thread_id="thread-1",
         db=_FakeConvRepo(fake_db).db,
         run_id="run-1",
-        turn_id="request-1",
+        turn_id="turn-1",
         worker_id="worker-1",
         interrupt_run=True,
         interrupt_error_type="ask_user_question_required",

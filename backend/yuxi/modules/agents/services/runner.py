@@ -20,10 +20,7 @@ from yuxi.modules.agents.input_messages import restore_chat_input_message
 from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.repositories.environment import AgentEnvRepository
-from yuxi.modules.agents.repositories.input import AgentInputRepository
 from yuxi.modules.agents.repositories.runs import TERMINAL_RUN_STATUSES, AgentRunRepository
-from yuxi.modules.agents.repositories.sessions import SessionRepository
-from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 from yuxi.modules.agents.runtime.callbacks.model_request_timing import FirstModelRequestRecorder
 from yuxi.modules.agents.services.checkpoint_state import get_agent_state_view
 from yuxi.modules.agents.services.event_writer import (
@@ -38,7 +35,6 @@ from yuxi.modules.agents.services.event_writer import (
 from yuxi.modules.agents.services.execution import RunExecutionResult, stream_agent_execution
 from yuxi.modules.agents.services.leases import (
     WORKER_ID,
-    complete_run_command_cleanup,
     mark_run_running,
     release_run_lease_for_retry,
     renew_run_lease,
@@ -50,12 +46,9 @@ from yuxi.modules.agents.services.preparation import (
     compute_manifest_fingerprint,
     prepare_run_execution,
 )
-from yuxi.modules.agents.services.runs import lock_ready_steer, settle_checkpoint
-from yuxi.modules.agents.services.scheduler import dispatch_next_input
+from yuxi.modules.agents.services.run_lifecycle import complete_run_command_cleanup, finish_run_lifecycle, settle_run
 from yuxi.modules.agents.services.titles import start_session_title
-from yuxi.modules.agents.services.tracing import finish_turn_observation_if_terminal
 from yuxi.modules.agents.services.transport import (
-    clear_cancel_signal,
     wait_for_cancel_signal,
 )
 from yuxi.modules.identity.models import User
@@ -264,30 +257,9 @@ async def mark_run_terminal(
         if run is None:
             return TerminalTransition(status=None, changed=False)
         if run.status not in TERMINAL_RUN_STATUSES:
-            agent_session = await SessionRepository(db).lock_session_by_thread_id(run.thread_id)
-            if agent_session is None:
-                raise ValueError("Run 的 Thread 不存在")
-            turn = await AgentTurnRepository(db).get_for_scope(
-                turn_id=run.turn_id,
-                thread_id=run.thread_id,
-                uid=run.uid,
-                app_id=run.app_id,
-                for_update=True,
-            )
-            if turn is None or turn.current_run_id != run.id:
-                raise ValueError("Run 不是当前 Turn 的执行段")
-            pending_steer = None
-            if status == "completed":
-                pending_steer = await lock_ready_steer(db, agent_session=agent_session, turn=turn)
-            else:
-                # 非完成终态只取得 Input 行锁，保持 Session→Turn→Input→Run 锁序。
-                await AgentInputRepository(db).get_pending_steer(thread_id=run.thread_id, uid=run.uid, app_id=run.app_id)
-            settled = await settle_checkpoint(
+            settled = await settle_run(
                 db=db,
                 run=run,
-                agent_session=agent_session,
-                turn=turn,
-                pending_steer=pending_steer,
                 worker_id=worker_id,
                 status=status,
                 token_usage=token_usage,
@@ -566,12 +538,10 @@ async def _process_agent_run(ctx, run_id: str, execution_timeout: asyncio.Timeou
         if cleanup_was_pending:
             await _require_runtime_cleanup(run, f"Run {run_id} 尚未完成 runtime cleanup")
             await publish_run_settlement(run_id, run.status, thread_id=run.thread_id)
-        if run.status in {"completed", "failed", "cancelled"}:
-            await dispatch_next_input(
-                uid=run.uid,
-                agent_slug=run.agent_slug,
-                thread_id=run.thread_id,
-            )
+        # cleanup 在独立事务释放责任；重读后复用正常执行的派发与观察收尾。
+        current = await _get_run(run_id) if cleanup_was_pending else run
+        if current is not None:
+            await finish_run_lifecycle(current)
         logger.info(f"Run already terminal, skip: {run_id}, status={run.status}")
         return
 
@@ -963,17 +933,8 @@ async def _process_agent_run(ctx, run_id: str, execution_timeout: asyncio.Timeou
         except Exception:
             logger.error(f"Failed to load AgentRun during lifecycle cleanup: run={run_id}", exc_info=True)
             final_run = None
-        if final_run and final_run.status == "cancelled":
-            await clear_cancel_signal(run_id)
-        # 清理后领取已获用户恢复许可的输入；失败或取消保留的暂停仍由调度器执行。
-        if final_run and final_run.status in {"completed", "failed", "cancelled"} and not final_run.runtime_cleanup_pending:
-            await dispatch_next_input(
-                uid=uid,
-                agent_slug=agent_slug,
-                thread_id=thread_id,
-            )
-        if final_run and final_run.status in TERMINAL_RUN_STATUSES:
-            await finish_turn_observation_if_terminal(final_run.turn_id)
+        if final_run:
+            await finish_run_lifecycle(final_run)
 
 
 async def _load_run_input_messages(run: AgentRun) -> list[Message]:

@@ -12,6 +12,7 @@ import pytest_asyncio
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+import yuxi.modules.agents.services.run_lifecycle as lifecycle
 from yuxi.infrastructure.postgres.manager import PostgresManager
 from yuxi.migrations.schema import create_business_tables
 from yuxi.modules.agents.input_messages import build_chat_input_message, serialize_input_message
@@ -171,6 +172,7 @@ async def sessions(monkeypatch):
     notify = AsyncMock()
 
     monkeypatch.setattr(input_config.model_cache, "get_model_info", lambda spec: SimpleNamespace(model_type="chat"))
+    monkeypatch.setattr(lifecycle, "finish_turn_observation_if_terminal", notify)
     monkeypatch.setattr(turns, "finish_turn_observation_if_terminal", notify)
     monkeypatch.setattr(turns, "publish_cancel_signals", notify)
     monkeypatch.setattr(scheduler, "resolve_session_workdir_binding", resolve_binding)

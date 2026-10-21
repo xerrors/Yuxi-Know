@@ -9,7 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import DBAPIError
 
 from test.integration.services.agent_input_fixtures import SCOPE, queue_inputs, start_input_run
-from test.integration.services.agent_run_test_helpers import settle_locked_run
+import yuxi.modules.agents.services.run_lifecycle as lifecycle
+from yuxi.modules.agents.services.run_lifecycle import settle_run
 from test.integration.services.test_arq_worker_dispatch import isolated_queue as isolated_queue
 from yuxi.modules.agents.input_messages import build_chat_input_message
 from yuxi.modules.agents.models.inputs import AgentInput
@@ -39,12 +40,12 @@ async def test_cancel_pending_with_empty_queue_does_not_pause_future_work(sessio
 async def test_running_cancel_finishes_turn_after_cleanup_without_reconciler(sessions, monkeypatch):
     """真实清理入口应直接收敛 Turn，不调用周期恢复。"""
     run = await start_input_run(sessions)
-    monkeypatch.setattr(leases, "get_sandbox_provider", lambda: type("Provider", (), {"cancel_run": staticmethod(lambda *_: None)})())
+    monkeypatch.setattr(lifecycle, "get_sandbox_provider", lambda: type("Provider", (), {"cancel_run": staticmethod(lambda *_: None)})())
     async with sessions() as db:
         await turns.cancel_turn(db=db, scope=SCOPE, thread_id="input-thread", turn_id=run.turn_id, idempotency_key="stop-running")
     async with sessions() as db:
         current = await db.get(AgentRun, run.id)
-        await settle_locked_run(db=db, run=current, worker_id="owner", status="cancelled", token_usage=None)
+        await settle_run(db=db, run=current, worker_id="owner", status="cancelled", token_usage=None)
         await db.commit()
     async with sessions() as db:
         current = await db.get(AgentRun, run.id)
@@ -89,7 +90,7 @@ async def test_user_message_resumes_paused_queue_before_old_steer(sessions):
         db.add(output)
         await db.flush()
         current.output_message_id = output.id
-        result = await settle_locked_run(db=db, run=current, worker_id="resume-owner", status="completed", token_usage=None)
+        result = await settle_run(db=db, run=current, worker_id="resume-owner", status="completed", token_usage=None)
         assert result.status == "completed", "旧引导不能把恢复消息完成改写成 yielded"
         current.runtime_cleanup_pending = False
         await db.commit()
@@ -119,7 +120,7 @@ async def test_waiting_cancel_with_empty_queue_finishes_without_pause(sessions, 
     run = await start_input_run(sessions)
     async with sessions() as db:
         current = await db.get(AgentRun, run.id)
-        await settle_locked_run(
+        await settle_run(
             db=db,
             run=current,
             worker_id="owner",
@@ -135,8 +136,8 @@ async def test_waiting_cancel_with_empty_queue_finishes_without_pause(sessions, 
         async with sessions() as db:
             assert not (await db.get(AgentRun, current.id)).runtime_cleanup_pending
 
-    monkeypatch.setattr(leases, "get_sandbox_provider", lambda: type("Provider", (), {"cancel_run": staticmethod(lambda *_: None)})())
-    monkeypatch.setattr(turns, "_clear_waitpoint_checkpoint", clear_checkpoint)
+    monkeypatch.setattr(lifecycle, "get_sandbox_provider", lambda: type("Provider", (), {"cancel_run": staticmethod(lambda *_: None)})())
+    monkeypatch.setattr(lifecycle, "_clear_waitpoint_checkpoint", clear_checkpoint)
     async with sessions() as db:
         await turns.cancel_turn(db=db, scope=SCOPE, thread_id="input-thread", turn_id=run.turn_id, idempotency_key="stop-wait")
     async with sessions() as db:
@@ -158,7 +159,7 @@ async def test_waiting_cancellation_http_snapshot_keeps_stopping_fact(sessions, 
     run = await start_input_run(sessions)
     async with sessions() as db:
         current = await db.get(AgentRun, run.id)
-        await settle_locked_run(
+        await settle_run(
             db=db,
             run=current,
             worker_id="owner",
@@ -187,7 +188,7 @@ async def test_waiting_cancellation_http_snapshot_keeps_stopping_fact(sessions, 
 
     app.dependency_overrides[get_db] = database
     app.dependency_overrides[require_public_context] = lambda: SimpleNamespace(scope=SCOPE)
-    monkeypatch.setattr(turns, "_clear_waitpoint_checkpoint", AsyncMock())
+    monkeypatch.setattr(lifecycle, "_clear_waitpoint_checkpoint", AsyncMock())
     url = f"/api/v1/agents/sessions/input-thread/turns/{run.turn_id}"
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get(url)
@@ -196,7 +197,7 @@ async def test_waiting_cancellation_http_snapshot_keeps_stopping_fact(sessions, 
         assert snapshot["status"] == "in_progress"
         assert snapshot["yuxi"]["runs"][0]["status"] == "interrupted"
         assert snapshot["yuxi"]["cancellation_pending"] is True
-        assert await turns.settle_waiting_cancel(thread_id="input-thread", turn_id=run.turn_id, uid=SCOPE.uid, app_id=None)
+        assert await lifecycle.settle_waiting_cancel(thread_id="input-thread", turn_id=run.turn_id, uid=SCOPE.uid, app_id=None)
         snapshot = (await client.get(url)).json()
         assert snapshot["status"] == "cancelled" and snapshot["yuxi"]["cancellation_pending"] is False
 
@@ -206,7 +207,7 @@ async def test_waiting_checkpoint_cleanup_excludes_other_thread_writers(sessions
     run = await start_input_run(sessions)
     async with sessions() as db:
         current = await db.get(AgentRun, run.id)
-        await settle_locked_run(
+        await settle_run(
             db=db,
             run=current,
             worker_id="owner",
@@ -231,9 +232,9 @@ async def test_waiting_checkpoint_cleanup_excludes_other_thread_writers(sessions
         clearing.set()
         await allow_clear.wait()
 
-    monkeypatch.setattr(turns, "_clear_waitpoint_checkpoint", clear_checkpoint)
+    monkeypatch.setattr(lifecycle, "_clear_waitpoint_checkpoint", clear_checkpoint)
     arguments = dict(thread_id="input-thread", turn_id=run.turn_id, uid=SCOPE.uid, app_id=None)
-    cleanup = asyncio.create_task(turns.settle_waiting_cancel(**arguments))
+    cleanup = asyncio.create_task(lifecycle.settle_waiting_cancel(**arguments))
     try:
         await asyncio.wait_for(clearing.wait(), 5)
         async with sessions() as db:
@@ -243,7 +244,7 @@ async def test_waiting_checkpoint_cleanup_excludes_other_thread_writers(sessions
     finally:
         allow_clear.set()
         assert await asyncio.wait_for(cleanup, 5)
-    assert not await turns.settle_waiting_cancel(**arguments)
+    assert not await lifecycle.settle_waiting_cancel(**arguments)
     async with sessions() as db:
         assert (await db.get(AgentTurn, run.turn_id)).status == "cancelled"
         accepted = await inputs.accept_message(
@@ -263,7 +264,7 @@ async def test_failure_cleanup_blocks_next_turn_even_when_queue_is_resumed(sessi
     run = await start_input_run(sessions)
     async with sessions() as db:
         current = await db.get(AgentRun, run.id)
-        await settle_locked_run(db=db, run=current, worker_id="owner", status="failed", token_usage=None)
+        await settle_run(db=db, run=current, worker_id="owner", status="failed", token_usage=None)
         await db.commit()
     async with sessions() as db:
         accepted = await inputs.accept_message(
@@ -289,7 +290,7 @@ async def test_failure_before_model_preparation_finishes_cleanup_without_scan(se
         current = await db.get(AgentRun, run.id)
         current.input_payload = {"runtime": "invalid"}
         await db.commit()
-    monkeypatch.setattr(leases, "get_sandbox_provider", lambda: type("Provider", (), {"cancel_run": staticmethod(lambda *_: None)})())
+    monkeypatch.setattr(lifecycle, "get_sandbox_provider", lambda: type("Provider", (), {"cancel_run": staticmethod(lambda *_: None)})())
     await runner.process_agent_run({"job_try": 1}, run.id)
     async with sessions() as db:
         current = await db.get(AgentRun, run.id)
@@ -304,7 +305,7 @@ async def test_cancel_between_failure_check_and_terminal_commit_is_settled_by_ow
     assert not await runner._confirmed_user_cancel(run.id)
     async with sessions() as db:
         await turns.cancel_turn(db=db, scope=SCOPE, thread_id="input-thread", turn_id=run.turn_id, idempotency_key="late-cancel")
-    monkeypatch.setattr(leases, "get_sandbox_provider", lambda: type("Provider", (), {"cancel_run": staticmethod(lambda *_: None)})())
+    monkeypatch.setattr(lifecycle, "get_sandbox_provider", lambda: type("Provider", (), {"cancel_run": staticmethod(lambda *_: None)})())
     transition = await runner._settle_uncommitted_run(
         run.id,
         "failed",
@@ -417,7 +418,7 @@ async def test_arq_execution_timeout_persists_failed_turn_and_releases_cleanup(s
     monkeypatch.setattr(runner, "stream_agent_execution", blocked_stream)
     monkeypatch.setattr(runner, "start_session_title", lambda **_: None)
     monkeypatch.setattr(runner, "get_agent_state_view", AsyncMock(return_value={"agent_state": None}))
-    monkeypatch.setattr(leases, "get_sandbox_provider", lambda: type("Provider", (), {"cancel_run": staticmethod(lambda *_: None)})())
+    monkeypatch.setattr(lifecycle, "get_sandbox_provider", lambda: type("Provider", (), {"cancel_run": staticmethod(lambda *_: None)})())
     redis, namespace, queue_name, workers = isolated_queue
     worker = YuxiWorker(
         functions=[func(runner.process_agent_run, timeout=5)],

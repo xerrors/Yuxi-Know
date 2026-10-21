@@ -10,6 +10,7 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+import yuxi.modules.agents.services.run_lifecycle as lifecycle
 import yuxi.modules.agents.services.scheduler as scheduler
 import yuxi.modules.agents.services.threads as threads
 import yuxi.modules.agents.services.turns as turns
@@ -25,7 +26,7 @@ from test.integration.services.agent_input_fixtures import (
 from test.integration.services.agent_input_fixtures import (
     queue_inputs as _queue_inputs,
 )
-from test.integration.services.agent_run_test_helpers import settle_locked_run
+from yuxi.modules.agents.services.run_lifecycle import settle_run
 from yuxi.modules.agents.models.inputs import AgentInput, AgentInputReceipt
 from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.agents.models.runs import AgentRun
@@ -174,7 +175,7 @@ async def test_completion_winning_thread_lock_rejects_stale_cancel() -> None:
                 await control_started.wait()
                 await asyncio.sleep(0.05)
                 current = await AgentRunRepository(db).get_run(dispatch.run_id)
-                settled = await settle_locked_run(db=db, run=current, worker_id="owner-a", status="completed", token_usage=None)
+                settled = await settle_run(db=db, run=current, worker_id="owner-a", status="completed", token_usage=None)
                 await db.commit()
                 return settled
 
@@ -224,7 +225,7 @@ async def test_same_key_concurrent_cancel_replays_receipt_after_thread_lock(monk
             async def ignore_external(*args, **kwargs):
                 """本用例仅验证真实事务并发，隔离事务提交后的 tracing/Redis 通知。"""
 
-            monkeypatch.setattr(turns, "finish_turn_observation_if_terminal", ignore_external)
+            monkeypatch.setattr(lifecycle, "finish_turn_observation_if_terminal", ignore_external)
             monkeypatch.setattr(turns, "publish_cancel_signals", ignore_external)
         original = AgentInputReceiptRepository.get_for_scope
         seen_sessions, start = set(), asyncio.Event()
