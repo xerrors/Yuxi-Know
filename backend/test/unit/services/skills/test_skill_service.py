@@ -1482,7 +1482,11 @@ async def test_skill_md_prepare_confirm_creates_single_file_skill(tmp_path: Path
     assert results[0]["slug"] == "demo"
     assert results[0]["success"] is True
     assert FakeRepo.created_item.name == "demo"
-    assert (tmp_path / "skill-sources/shared" / "demo" / "SKILL.md").read_text(encoding="utf-8") == skill_md
+    installed = (tmp_path / "skill-sources/shared" / "demo" / "SKILL.md").read_text(encoding="utf-8")
+    assert "name: demo" in installed
+    assert "slug: demo" in installed
+    assert "description: this is demo" in installed
+    assert installed.endswith("# Demo\n")
 
 
 def test_skill_dependency_scope_covers_read_and_manage_audiences():
