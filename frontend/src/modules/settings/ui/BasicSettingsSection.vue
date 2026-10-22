@@ -88,6 +88,10 @@
 <script setup>
 import { computed } from 'vue'
 import { useConfigStore } from '@/modules/settings/model/config'
+import {
+  COOPERATION_DEPTH_KEY,
+  applyCooperationDepth
+} from '@/modules/settings/model/cooperationDepth'
 import { useUserStore } from '@/modules/identity'
 import ModelSelectorComponent from '@/modules/agents/ui/ModelSelectorComponent.vue'
 import EmbeddingModelSelector from '@/modules/settings/ui/EmbeddingModelSelector.vue'
@@ -103,7 +107,7 @@ const handleChange = (key, e) => {
 
 /** 只提交完整的非负整数，清空输入不会修改已保存的限制。 */
 const handleCooperationDepthChange = (value) => {
-  if (Number.isInteger(value) && value >= 0) handleChange('max_cooperation_depth', value)
+  applyCooperationDepth(value, (depth) => handleChange(COOPERATION_DEPTH_KEY, depth))
 }
 
 const handleChatModelSelect = (spec) => {

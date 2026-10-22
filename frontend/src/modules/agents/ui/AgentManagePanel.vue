@@ -12,6 +12,7 @@ import InfoCard from '@/shared/ui/InfoCard.vue'
 import FallbackAvatar from '@/shared/ui/FallbackAvatar.vue'
 import ExtensionCardGrid from '@/modules/extensions/ui/ExtensionCardGrid.vue'
 import { normalizeAgentBackendOption } from '@/modules/agents/model/agentConfigUtils'
+import { filterAndSortAgents } from '@/modules/agents/model/agentOrder'
 import { getShareConfigLabel } from '@/modules/agents/model/shareConfig'
 
 const props = defineProps({ focusAgent: { type: String, default: '' } })
@@ -25,27 +26,7 @@ const agentBackendOptions = ref([])
 const managedAgents = ref([])
 const agentEditModalRef = ref(null)
 
-const filteredAgents = computed(() => {
-  const keyword = searchQuery.value.trim().toLowerCase()
-  const list = managedAgents.value || []
-  const filtered = keyword
-    ? list.filter(
-        (agent) =>
-          String(agent.name || '')
-            .toLowerCase()
-            .includes(keyword) ||
-          String(agent.agent_id || '')
-            .toLowerCase()
-            .includes(keyword) ||
-          String(agent.backend_id || '')
-            .toLowerCase()
-            .includes(keyword)
-      )
-    : list
-  return [...filtered].sort(
-    (a, b) => Date.parse(a.created_at) - Date.parse(b.created_at) || a.id - b.id
-  )
-})
+const filteredAgents = computed(() => filterAndSortAgents(managedAgents.value, searchQuery.value))
 
 const visibleAgents = computed(() =>
   visibilityFilter.value === 'all'

@@ -304,6 +304,12 @@ import {
   ChevronUp
 } from '@lucide/vue'
 import { buildChunkParamsPayload } from '@/modules/knowledge/model/chunkUtils'
+import {
+  buildUploadParams,
+  collectUploadMetadata,
+  isHiddenUploadPath,
+  shouldAcceptUploadFile
+} from '@/modules/knowledge/model/uploadMetadata'
 import { useKnowledgeUploadQueue } from '@/modules/knowledge/model/useKnowledgeUploadQueue'
 import ChunkParamsConfig from '@/modules/knowledge/ui/ChunkParamsConfig.vue'
 import OCRSelector from '@/modules/settings/ui/OCRSelector.vue'
@@ -430,24 +436,7 @@ const isSupportedExtension = (fileName) => {
   return supportedFileTypes.value.includes(ext) || ext === '.zip'
 }
 
-const isHiddenPath = (name, relativePath) => {
-  if (name && name.startsWith('.')) return true
-  if (relativePath) {
-    const parts = relativePath.split('/')
-    if (parts.some((part) => part.startsWith('.'))) return true
-  }
-  return false
-}
-
-const isSupportedUploadFile = (file) => {
-  if (!file) return false
-  const name = file.name || ''
-  const relativePath = file.webkitRelativePath || file.originFileObj?.webkitRelativePath || ''
-  if (isHiddenPath(name, relativePath)) {
-    return false
-  }
-  return isSupportedExtension(name)
-}
+const isSupportedUploadFile = (file) => shouldAcceptUploadFile(file, isSupportedExtension)
 
 const loadSupportedFileTypes = async () => {
   try {
@@ -796,7 +785,7 @@ const handleCancel = () => {
 
 const beforeUpload = (file) => {
   const relativePath = file?.webkitRelativePath || file?.originFileObj?.webkitRelativePath
-  if (isHiddenPath(file?.name, relativePath)) {
+  if (isHiddenUploadPath(file?.name, relativePath)) {
     return Upload.LIST_IGNORE
   }
   if (!isSupportedExtension(file?.name)) {
@@ -1084,24 +1073,11 @@ const chunkData = async () => {
   const imageExtensions = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif']
 
   // 提取已上传的文件信息
-  const items = []
-  const content_hashes = {}
-  const file_sizes = {}
-  const source_paths = {}
+  const metadata = collectUploadMetadata(validFileList.value)
   for (const file of validFileList.value) {
     if (file.status !== 'done') continue
     const file_path = file.response?.file_path
-    const content_hash = file.response?.content_hash
     if (!file_path) continue
-
-    items.push(file_path)
-    if (content_hash) content_hashes[file_path] = content_hash
-    if (Number.isFinite(file.response?.size)) file_sizes[file_path] = file.response.size
-
-    const relativePath = file.webkitRelativePath || file.originFileObj?.webkitRelativePath
-    if (relativePath) {
-      source_paths[file_path] = relativePath
-    }
 
     // 检查是否需要OCR
     const ext = file_path.substring(file_path.lastIndexOf('.')).toLowerCase()
@@ -1114,24 +1090,21 @@ const chunkData = async () => {
     }
   }
 
-  if (items.length === 0) {
+  if (metadata.items.length === 0) {
     message.error('请先上传文件')
     return
   }
 
   try {
     store.state.chunkLoading = true
-    const params = { ...processingParams.value, content_hashes, file_sizes }
-    if (Object.keys(source_paths).length > 0) {
-      params.source_paths = source_paths
-    }
+    const params = buildUploadParams(processingParams.value, metadata)
     if (autoIndex.value) {
       params.auto_index = true
       Object.assign(params, buildAutoIndexParams())
     }
 
     await store.addFiles({
-      items,
+      items: metadata.items,
       contentType: 'file',
       params,
       parentId: selectedFolderId.value

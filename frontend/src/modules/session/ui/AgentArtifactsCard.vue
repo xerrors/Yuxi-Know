@@ -75,7 +75,10 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { normalizeArtifacts } from '@/modules/session/model/artifacts'
+import {
+  buildArtifactItems,
+  visibleArtifactItems
+} from '@/modules/session/model/artifactPresentation'
 import { message } from 'ant-design-vue'
 import { ChevronDown, Download, LoaderCircle, Save } from '@lucide/vue'
 import { threadApi } from '@/apis/agent_api'
@@ -95,14 +98,10 @@ const props = defineProps({
 })
 const emit = defineEmits(['saved', 'open-preview'])
 
-const normalizedArtifacts = computed(() =>
-  normalizeArtifacts(props.artifacts)
-    .reverse()
-    .map((path) => ({ path, name: path.split('/').pop() || path }))
-)
+const normalizedArtifacts = computed(() => buildArtifactItems(props.artifacts))
 const expanded = ref(false)
 const visibleArtifacts = computed(() =>
-  expanded.value ? normalizedArtifacts.value : normalizedArtifacts.value.slice(0, 3)
+  visibleArtifactItems(normalizedArtifacts.value, expanded.value)
 )
 const savingState = ref({})
 const saveDialogOpen = ref(false)
