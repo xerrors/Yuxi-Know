@@ -205,7 +205,7 @@ import {
 import SessionNavItem from '@/modules/session/ui/SessionNavItem.vue'
 import { SESSION_ACTIVITY_LABELS } from '@/modules/session/model/sessionActivity'
 import CollapseTransition from '@/shared/ui/CollapseTransition.vue'
-import { buildProjectSessionGroups } from '@/modules/projects/model/projectSessionGroups'
+import { buildProjectSessionGroups } from '@/modules/projects'
 
 const props = defineProps({
   currentChatId: { type: String, default: null },

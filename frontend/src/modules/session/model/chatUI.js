@@ -30,7 +30,7 @@ export const useChatUIStore = defineStore(
   {
     persist: {
       key: 'chat-ui-store',
-      storage: localStorage,
+      storage: typeof localStorage === 'undefined' ? undefined : localStorage,
       pick: ['sidebarCollapsed']
     }
   }

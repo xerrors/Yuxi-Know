@@ -285,8 +285,8 @@
 <script setup>
 import { ref, computed, onMounted, watch, h } from 'vue'
 import { message, Upload, Modal } from 'ant-design-vue'
-import { useUserStore } from '@/modules/identity/model/user'
-import { useConfigStore } from '@/modules/settings/model/config'
+import { useUserStore } from '@/modules/identity'
+import { useConfigStore } from '@/modules/settings'
 import { useKnowledgeBaseStore } from '@/modules/knowledge/model/knowledgeBase'
 import { fileApi, documentApi } from '@/apis/knowledge_api'
 import {

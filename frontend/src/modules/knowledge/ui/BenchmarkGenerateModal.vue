@@ -183,7 +183,7 @@ import { ref, reactive, computed, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { CircleHelp, Database, Network } from '@lucide/vue'
 import { evaluationApi, graphBuildApi } from '@/apis/knowledge_api'
-import { useConfigStore } from '@/modules/settings/model/config'
+import { useConfigStore } from '@/modules/settings'
 import ModelSelectorComponent from '@/modules/agents/ui/ModelSelectorComponent.vue'
 
 const configStore = useConfigStore()

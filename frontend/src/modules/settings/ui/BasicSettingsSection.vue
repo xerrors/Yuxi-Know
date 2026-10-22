@@ -88,7 +88,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useConfigStore } from '@/modules/settings/model/config'
-import { useUserStore } from '@/modules/identity/model/user'
+import { useUserStore } from '@/modules/identity'
 import ModelSelectorComponent from '@/modules/agents/ui/ModelSelectorComponent.vue'
 import EmbeddingModelSelector from '@/modules/settings/ui/EmbeddingModelSelector.vue'
 import RerankModelSelector from '@/modules/settings/ui/RerankModelSelector.vue'

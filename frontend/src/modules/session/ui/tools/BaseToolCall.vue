@@ -133,7 +133,7 @@ import {
   XCircle,
   CheckCircle
 } from '@lucide/vue'
-import { useAgentStore } from '@/modules/agents/model/agent'
+import { useAgentStore } from '@/modules/agents'
 import { storeToRefs } from 'pinia'
 import CollapseTransition from '@/shared/ui/CollapseTransition.vue'
 import ToolResultContent from './ToolResultContent.vue'

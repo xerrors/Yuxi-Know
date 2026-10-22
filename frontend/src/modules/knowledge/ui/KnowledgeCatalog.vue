@@ -135,7 +135,7 @@ import { getExtensionIconColor } from '@/shared/lib/extensionIconColor'
 import { useThemeStore } from '@/shared/model/theme'
 import dayjs, { parseToShanghai } from '@/shared/lib/time'
 import { getKbTypeLabel, getKbTypeIcon, getKbTypeColor, kbUtils } from '@/modules/knowledge/model/kb_utils'
-import { getShareConfigLabel } from '@/modules/agents/model/shareConfig'
+import { getShareConfigLabel } from '@/modules/agents'
 
 const themeStore = useThemeStore()
 const route = useRoute()

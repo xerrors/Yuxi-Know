@@ -181,9 +181,9 @@ import ActionDropdown from '@/shared/ui/ActionDropdown.vue'
 import ActionTrigger from '@/shared/ui/ActionTrigger.vue'
 import { modelProviderApi } from '@/apis/system_api'
 import { Eye, RefreshCw, X, Check } from '@lucide/vue'
-import { useModelStatus } from '@/modules/settings/model/useModelStatus'
-import { useUserStore } from '@/modules/identity/model/user'
-import { loadModelMetadataCatalog, resolveModelDisplayMetadata } from '@/modules/settings/model/modelMetadata'
+import { useModelStatus } from '@/modules/settings'
+import { useUserStore } from '@/modules/identity'
+import { loadModelMetadataCatalog, resolveModelDisplayMetadata } from '@/modules/settings'
 
 const props = defineProps({
   modelType: {

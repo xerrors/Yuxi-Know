@@ -171,7 +171,7 @@
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { Building2, Globe, Users, UserPlus } from '@lucide/vue'
-import { useUserStore } from '@/modules/identity/model/user'
+import { useUserStore } from '@/modules/identity'
 import { authApi } from '@/apis/auth_api'
 import { departmentApi } from '@/apis/department_api'
 

@@ -19,7 +19,7 @@ import { computed } from 'vue'
 import FallbackAvatar from '@/shared/ui/FallbackAvatar.vue'
 import { getExtensionIconColor } from '@/shared/lib/extensionIconColor'
 import { getSkillIcon } from '@/shared/lib/skill_icon_utils'
-import { getKbTypeIcon } from '@/modules/knowledge/model/kb_utils'
+import { getKbTypeIcon } from '@/modules/knowledge'
 import { getMentionIconComponent } from '@/modules/session/model/mention_icon_utils'
 
 const props = defineProps({ item: { type: Object, required: true } })

@@ -377,8 +377,8 @@
 <script setup>
 import { ref, computed, watch, nextTick, onUnmounted, reactive } from 'vue'
 import { useKnowledgeBaseStore } from '@/modules/knowledge/model/knowledgeBase'
-import { useBackgroundJobsStore } from '@/modules/background-jobs/model/jobs'
-import { useConfigStore } from '@/modules/settings/model/config'
+import { useBackgroundJobsStore } from '@/modules/background-jobs'
+import { useConfigStore } from '@/modules/settings'
 import {
   RefreshCw,
   Settings,

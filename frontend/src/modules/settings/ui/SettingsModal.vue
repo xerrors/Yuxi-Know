@@ -246,7 +246,7 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { useUserStore } from '@/modules/identity/model/user'
+import { useUserStore } from '@/modules/identity'
 import {
   CircleUser,
   ExternalLink,

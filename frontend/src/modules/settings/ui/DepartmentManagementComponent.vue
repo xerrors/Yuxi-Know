@@ -191,7 +191,7 @@ import { reactive, onMounted, watch } from 'vue'
 import { notification, message, Modal } from 'ant-design-vue'
 import { authApi, departmentApi } from '@/apis'
 import { Building2, Plus, RefreshCw, SquarePen, Trash2 } from '@lucide/vue'
-import { isPasswordLongEnough, MIN_PASSWORD_LENGTH } from '@/modules/identity/model/passwordValidation'
+import { isPasswordLongEnough, MIN_PASSWORD_LENGTH } from '@/modules/identity'
 
 // 表格列定义
 const columns = [

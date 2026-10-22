@@ -96,7 +96,7 @@ import { computed } from 'vue'
 import BaseToolCall from '../BaseToolCall.vue'
 import { getToolCallStatus } from '../toolRegistry'
 import KbResultGroupedList from '@/modules/knowledge/ui/KbResultGroupedList.vue'
-import { useKnowledgeBaseStore } from '@/modules/knowledge/model/knowledgeBase'
+import { useKnowledgeBaseStore } from '@/modules/knowledge'
 import { parseToolCallArgs } from '../toolRegistry'
 
 const props = defineProps({

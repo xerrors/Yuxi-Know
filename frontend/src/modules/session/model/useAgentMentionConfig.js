@@ -5,7 +5,7 @@ import {
   getAgentConfigOptions,
   getAgentConfigOptionValue,
   getVisibleAgentResourceSelection
-} from '@/modules/agents/model/agentConfigUtils'
+} from '@/modules/agents'
 
 const MENTION_FIELDS = [
   ['knowledges', 'knowledgeBases'],

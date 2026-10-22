@@ -464,7 +464,7 @@
 <script setup>
 import { ref, computed, h, watch } from 'vue'
 import { useKnowledgeBaseStore } from '@/modules/knowledge/model/knowledgeBase'
-import { useConfigStore } from '@/modules/settings/model/config'
+import { useConfigStore } from '@/modules/settings'
 import OCRSelector from '@/modules/settings/ui/OCRSelector.vue'
 import { message, Modal } from 'ant-design-vue'
 import { documentApi } from '@/apis/knowledge_api'

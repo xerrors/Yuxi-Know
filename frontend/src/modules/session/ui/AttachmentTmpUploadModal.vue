@@ -87,7 +87,7 @@ import { computed, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { X } from '@lucide/vue'
 import { threadApi } from '@/apis'
-import { useConfigStore } from '@/modules/settings/model/config'
+import { useConfigStore } from '@/modules/settings'
 import FileTypeIcon from '@/shared/ui/FileTypeIcon.vue'
 import OCRSelector from '@/modules/settings/ui/OCRSelector.vue'
 

@@ -221,7 +221,7 @@ import AiTextarea from '@/modules/agents/ui/AiTextarea.vue'
 import EmbeddingModelSelector from '@/modules/settings/ui/EmbeddingModelSelector.vue'
 import ShareConfigForm from '@/modules/agents/ui/ShareConfigForm.vue'
 import { useChunkPresetOptions } from '@/modules/knowledge/model/useChunkPresetOptions'
-import { useConfigStore } from '@/modules/settings/model/config'
+import { useConfigStore } from '@/modules/settings'
 import { useKnowledgeBaseStore } from '@/modules/knowledge/model/knowledgeBase'
 import { getKbTypeIcon, getKbTypeLabel } from '@/modules/knowledge/model/kb_utils'
 import {

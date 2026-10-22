@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, onScopeDispose, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { backgroundJobsApi } from '@/apis/background_jobs'
-import { useUserStore } from '@/modules/identity/model/user'
+import { useUserStore } from '@/modules/identity'
 import { parseToShanghai } from '@/shared/lib/time'
 
 const ACTIVE_STATUSES = new Set(['pending', 'running'])

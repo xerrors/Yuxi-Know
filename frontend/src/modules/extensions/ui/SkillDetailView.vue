@@ -472,7 +472,7 @@ import ExtensionDetailLayout from '@/shared/ui/ExtensionDetailLayout.vue'
 import FileTreeComponent from '@/modules/session/ui/workspace/FileTreeComponent.vue'
 import SkillVersionPanel from '@/modules/extensions/ui/SkillVersionPanel.vue'
 import ShareConfigForm from '@/modules/agents/ui/ShareConfigForm.vue'
-import { cloneShareConfig } from '@/modules/agents/model/shareConfig'
+import { cloneShareConfig } from '@/modules/agents'
 
 const route = useRoute()
 const router = useRouter()

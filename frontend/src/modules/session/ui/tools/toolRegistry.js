@@ -1,67 +1,4 @@
-import {
-  BookOpen,
-  CirclePlus,
-  Clock,
-  FileCheck,
-  Network,
-  Send,
-  Square,
-  Brain,
-  Calculator,
-  Database,
-  FileEdit,
-  FilePen,
-  FileText,
-  Folder,
-  FolderOutput,
-  FolderSearch,
-  Globe,
-  HelpCircle,
-  Image,
-  SquareTerminal
-} from '@lucide/vue'
-
-export const TOOL_ICON_MAP = {
-  ask_user_question: HelpCircle,
-  create_session: CirclePlus,
-  send_message: Send,
-  submit_input: Send,
-  cancel_turn: Square,
-  wait_sessions: Clock,
-  wait_inputs: Clock,
-  get_result: FileCheck,
-  list_sessions: Network,
-  bash: SquareTerminal,
-  calculator: Calculator,
-  cmd: SquareTerminal,
-  edit_file: FilePen,
-  execute: SquareTerminal,
-  find_kb_document: FolderSearch,
-  glob: FolderSearch,
-  grep: FolderSearch,
-  list_directory: Folder,
-  list_kbs: BookOpen,
-  ls: Folder,
-  mysql_describe_table: Database,
-  mysql_list_tables: Database,
-  mysql_query: Database,
-  ocr_parse_file: FileText,
-  open_kb_document: FileText,
-  present_artifacts: FolderOutput,
-  query_kb: BookOpen,
-  read_file: FileText,
-  remember_memory: Brain,
-  replace: FilePen,
-  run_shell_command: SquareTerminal,
-  search_file: FolderSearch,
-  search_file_content: FolderSearch,
-  web_search: Globe,
-  web_fetch: Globe,
-  tavily_search: Globe,
-  doubao_search: Globe,
-  text_to_img_qwen_image: Image,
-  write_file: FileEdit
-}
+export { getToolIcon } from '../../model/toolIcons.js'
 
 export {
   TOOL_NAME_MAP,
@@ -75,7 +12,5 @@ export {
   parseToolCallResult,
   getToolCallStatus,
   getToolCallDisplayStatus,
-  normalizeToolCalls,
+  normalizeToolCalls
 } from '../../model/toolCallProjection.js'
-
-export const getToolIcon = (toolId) => TOOL_ICON_MAP[toolId] || null

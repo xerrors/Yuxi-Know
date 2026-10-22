@@ -348,7 +348,7 @@ import {
   Upload
 } from '@lucide/vue'
 import { evaluationApi } from '@/apis/knowledge_api'
-import { useBackgroundJobsStore } from '@/modules/background-jobs/model/jobs'
+import { useBackgroundJobsStore } from '@/modules/background-jobs'
 import ResourceEmptyState from '@/shared/ui/ResourceEmptyState.vue'
 import BenchmarkUploadModal from '@/modules/knowledge/ui/BenchmarkUploadModal.vue'
 import BenchmarkGenerateModal from '@/modules/knowledge/ui/BenchmarkGenerateModal.vue'

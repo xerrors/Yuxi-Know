@@ -281,11 +281,11 @@
 <script setup>
 import { reactive, ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { message, Modal } from 'ant-design-vue'
-import { useUserStore } from '@/modules/identity/model/user'
+import { useUserStore } from '@/modules/identity'
 import { authApi, departmentApi } from '@/apis'
 import { Plus, SquarePen, Trash2, User, UserLock, UserStar, RefreshCw, Search } from '@lucide/vue'
 import { formatDateTime } from '@/shared/lib/time'
-import { isPasswordLongEnough, MIN_PASSWORD_LENGTH } from '@/modules/identity/model/passwordValidation'
+import { isPasswordLongEnough, MIN_PASSWORD_LENGTH } from '@/modules/identity'
 import FallbackAvatar from '@/shared/ui/FallbackAvatar.vue'
 
 const userStore = useUserStore()

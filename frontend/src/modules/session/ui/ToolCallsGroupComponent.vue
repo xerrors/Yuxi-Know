@@ -60,7 +60,7 @@
 import { computed, ref, watch } from 'vue'
 import { ChevronDown, Atom } from '@lucide/vue'
 import { storeToRefs } from 'pinia'
-import { useAgentStore } from '@/modules/agents/model/agent'
+import { useAgentStore } from '@/modules/agents'
 import ReasoningBlockComponent from '@/modules/session/ui/ReasoningBlockComponent.vue'
 import { ToolCallRenderer } from '@/modules/session/ui/tools/index.js'
 import {

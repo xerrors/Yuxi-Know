@@ -2,9 +2,9 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { authApi } from '@/apis/auth_api'
 import { configureApiAuth } from '@/apis/auth_context'
-import { useAgentStore } from '../../agents/model/agent'
-import { useProjectsStore } from '../../projects/model/projects'
-import { useSessionFeedbackStore } from '../../session/model/sessionFeedback'
+import { useAgentStore } from '@/modules/agents'
+import { useProjectsStore } from '@/modules/projects'
+import { useSessionFeedbackStore } from '@/modules/session'
 
 export const useUserStore = defineStore('user', () => {
   // 状态

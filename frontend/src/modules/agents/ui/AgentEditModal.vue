@@ -30,7 +30,7 @@ import { cloneShareConfig } from '@/modules/agents/model/shareConfig'
 import FallbackAvatar from '@/shared/ui/FallbackAvatar.vue'
 import CollapseTransition from '@/shared/ui/CollapseTransition.vue'
 import { isBuiltinAgent, useAgentStore } from '@/modules/agents/model/agent'
-import { useUserStore } from '@/modules/identity/model/user'
+import { useUserStore } from '@/modules/identity'
 import { MAX_IMAGE_UPLOAD_SIZE_BYTES, MAX_IMAGE_UPLOAD_SIZE_MB } from '@/shared/lib/upload_limits'
 
 const props = defineProps({

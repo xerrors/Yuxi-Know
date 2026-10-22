@@ -164,7 +164,7 @@ import {
   Upload
 } from '@lucide/vue'
 import FallbackAvatar from '@/shared/ui/FallbackAvatar.vue'
-import { useUserStore } from '@/modules/identity/model/user'
+import { useUserStore } from '@/modules/identity'
 import { copyTextToClipboard } from '@/shared/lib/clipboard'
 
 const userStore = useUserStore()

@@ -232,7 +232,7 @@ import { computed, defineComponent, h, nextTick, ref, watch } from 'vue'
 import { CheckCircle2, Circle, LoaderCircle, PackageOpen, X as XIcon, XCircle } from '@lucide/vue'
 import ShareConfigForm from '@/modules/agents/ui/ShareConfigForm.vue'
 import { skillApi } from '@/apis/skill_api'
-import { useUserStore } from '@/modules/identity/model/user'
+import { useUserStore } from '@/modules/identity'
 
 const props = defineProps({
   open: { type: Boolean, default: false },

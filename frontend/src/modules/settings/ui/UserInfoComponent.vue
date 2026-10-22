@@ -87,7 +87,7 @@
 import { computed, inject, ref, useSlots } from 'vue'
 import { useRouter } from 'vue-router'
 import { authApi } from '@/apis/auth_api'
-import { useUserStore } from '@/modules/identity/model/user'
+import { useUserStore } from '@/modules/identity'
 import { useInfoStore } from '@/modules/settings/model/info'
 import DebugComponent from '@/modules/settings/ui/DebugComponent.vue'
 import { message } from 'ant-design-vue'

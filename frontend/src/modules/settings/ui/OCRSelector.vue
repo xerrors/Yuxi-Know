@@ -87,7 +87,7 @@
 import { computed, inject, onMounted, ref } from 'vue'
 import { ChevronDown, ChevronRight, RefreshCw } from '@lucide/vue'
 import { ocrApi } from '@/apis/system_api'
-import { useUserStore } from '@/modules/identity/model/user'
+import { useUserStore } from '@/modules/identity'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
