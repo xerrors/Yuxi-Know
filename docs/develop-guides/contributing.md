@@ -6,7 +6,7 @@
 
 - 先搜索 [Issues](https://github.com/xerrors/Yuxi/issues)，确认问题没有重复。
 - 如果任务来自 GitHub Project，读完任务描述、关联 Issue、验收标准和讨论，并确认任务已经分配给你。
-- 需求会改变架构、权限、持久化、运行生命周期、公开接口或模型可见输入时，先在 Issue 或 [Discussions](https://github.com/xerrors/Yuxi/discussions) 对齐方案，并建立 [工程决策记录](./decisions/README.md)。
+- 判断需求是否非平凡、何时需要 decision，按[工程决策记录](./decisions/README.md#何时需要)和 [Yuxi Spec Loop](./spec-loop.md)执行；需要时先在 Issue 或 [Discussions](https://github.com/xerrors/Yuxi/discussions) 对齐方案。
 - 一个 PR 解决一个清楚的问题。无关的格式化、重构和“顺手优化”请另开 PR。
 
 修改不熟悉的模块前，先读 [ARCHITECTURE.md](https://github.com/xerrors/Yuxi/blob/main/ARCHITECTURE.md)，再从真实的路由、service、repository、Schema、Compose 和测试中定位实现。源码和可执行测试比旧文档、历史 PR 或自动生成 Wiki 更可靠。
@@ -114,10 +114,13 @@ if not await repo.try_lock(turn_id):
 后端常用命令：
 
 ```bash
-docker compose exec api uv run --group test pytest test/unit -m "not slow"
-docker compose exec api uv run --group test pytest test/integration
-docker compose exec api uv run --group test pytest test/e2e -m e2e
+docker compose exec api uv run --no-sync --group test pytest test/unit -m "not slow"
+docker compose exec api uv run --no-sync --group test pytest test/integration/api
+docker compose exec api uv run --no-sync --group test pytest test/integration --ignore=test/integration/api --ignore=test/integration/services/test_background_job_worker_path.py
+backend/test/run_tests.sh e2e
 ```
+
+批次边界、`test_background_job_worker_path.py` 的独立拓扑和容器内跳过部署配置测试的条件由[测试规范](./testing-guidelines.md#常用命令)维护。
 
 前端常用命令：
 
@@ -138,7 +141,7 @@ make format
 ```bash
 python3 scripts/verify_engineering_contracts.py
 python3 -m unittest scripts.test_verify_engineering_contracts
-docker compose exec api uv run --group test pytest test/unit -m "not slow"
+docker compose exec api uv run --no-sync --group test pytest test/unit -m "not slow"
 git diff --check
 ```
 
@@ -146,7 +149,7 @@ git diff --check
 
 ## 5. 提交前 Review
 
-代码变更在 commit 前必须经过一个不继承当前开发上下文的独立 Reviewer。Reviewer 应读取完整需求、规范、完整 diff、相关源码、测试结果和未验证范围，重点检查：
+代码变更在 commit 前必须经过独立 Review。该审阅由不继承本次实现上下文的全新会话 Reviewer Agent 执行，至少读取完整需求、decision、规范、完整 diff、源码、实际测试结果和未验证范围；维护者的确认不替代该审阅。Fork PR 由有写权限的维护者在合并前确认该审阅已经完成。Reviewer 应重点检查：
 
 1. 主路径、边界、错误处理和回归测试是否完整；
 2. 路由、服务、仓储、前端 API 和测试是否位于正确边界；

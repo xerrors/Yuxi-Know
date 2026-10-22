@@ -2,7 +2,7 @@
 
 本页说明如何用 Docker Compose 全新部署 Yuxi 并验证服务状态。重要数据上线前请先在备份环境演练恢复。
 
-当前候选为 `0.8.0.beta2`，功能与不兼容范围见[0.8.0 更新说明](../develop-guides/releases/0.8.0.md)。试用环境使用独立 PostgreSQL、对象存储、向量索引和用户文件目录，保留旧部署及其成套备份。
+0.8 的功能与不兼容范围见[0.8.0 更新说明](../develop-guides/releases/0.8.0.md)。试用环境使用独立 PostgreSQL、对象存储、向量索引和用户文件目录，保留旧部署及其成套备份。
 
 ## 前置条件
 
@@ -27,6 +27,7 @@ export YUXI_ENV=production
 export COMPOSE_PROJECT_NAME=production
 export YUXI_STATE_DIR=./.yuxi/production/state
 export YUXI_INSTANCE_ID=Production
+export SILICONFLOW_API_KEY='<siliconflow-api-key>'
 export CUBE_API_URL='http://<private-node-address>:3000'
 export CUBE_PROXY_NODE_IP='<private-node-address>'
 export CUBE_NODE_USER_DATA_DIR=/data/shared/production/threads
@@ -34,9 +35,11 @@ export CUBE_NODE_SKILL_PROJECTION_DIR=/data/shared/production/skill-projections
 YUXI_INIT_NON_INTERACTIVE=1 ./scripts/init.sh
 ```
 
+初始化脚本当前无条件要求 `SILICONFLOW_API_KEY`；即使生产使用其他供应商，也需提供该变量完成初始化，其他供应商在启动后于「智能体 → 模型供应商」接入。
+
 执行前须按[沙盒配置与运维](./sandbox-operations.md#原生执行节点)准备节点、模板和真实共享挂载。两个节点路径分别共享 `YUXI_STATE_DIR/yuxi/threads`、`YUXI_STATE_DIR/yuxi/skill-projections` 的底层文件；只填写路径不会建立共享。复用节点时为每套环境分配独立共享路径和实例标识，不能把开发环境的用户目录直接交给生产 API。Docker 项目名只接受小写字母、数字、连字符和下划线，因此显示名称 `Production` 对应项目名 `production`。
 
-脚本接受环境变量覆盖，并生成缺失的 PostgreSQL、Neo4j、MinIO 凭据和两个独立应用安全密钥；已有非空安全密钥无效时明确失败，不自动轮换。重建时保留配置文件及原有密钥，避免用临时环境变量覆盖已有生产凭据。开关、优先级和模型 Key 输入见[初始化环境](../intro/quick-start.md#_2-初始化环境)。
+脚本接受环境变量覆盖，并生成缺失的 PostgreSQL、Neo4j、MinIO 凭据和两个独立应用安全密钥；已有非空安全密钥无效时明确失败，不自动轮换。重建时保留配置文件及原有密钥，避免用临时环境变量覆盖已有生产凭据。开关、优先级和模型 Key 输入见[初始化应用配置](../intro/quick-start.md#_3-初始化应用配置)。
 
 也可以复制模板，手动编辑 `.env.prod` 并设置文件权限：
 
@@ -221,7 +224,7 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml restart worker
 
 ### 停机备份与恢复演练
 
-本节适用于同一候选版本、同一组组件版本的整套状态恢复。备份必须同时包含 PostgreSQL、MinIO、Milvus/etcd、Neo4j、Redis、用户 Workspace、Skills 来源及投影，并单独安全保存环境文件、两个应用安全密钥和镜像版本或 digest。应用目录不包含 Cube 节点磁盘和 VM Home；需要保留用户安装的软件与配置时，按[沙盒运维](./sandbox-operations.md#运维与验证)另行备份节点，保留实例身份与原挂载路径。
+本节适用于同一版本、同一组组件版本的整套状态恢复。备份必须同时包含 PostgreSQL、MinIO、Milvus/etcd、Neo4j、Redis、用户 Workspace、Skills 来源及投影，并单独安全保存环境文件、两个应用安全密钥和镜像版本或 digest。应用目录不包含 Cube 节点磁盘和 VM Home；需要保留用户安装的软件与配置时，按[沙盒运维](./sandbox-operations.md#运维与验证)另行备份节点，保留实例身份与原挂载路径。
 
 1. 关闭外部入口，等待正在执行的 Run、待派发 Input、后台作业和沙盒命令收敛；暂停定时任务的触发来源。确认用户 VM 已空闲，按执行节点的停机规程保存节点状态。
 2. 停止 Web、API 和 worker，再停止全部本次部署的存储服务。不要复制仍在写入的 PostgreSQL、etcd、Neo4j 或对象目录。
@@ -283,7 +286,7 @@ Milvus 3.0.2 与 PyMilvus 3.0.2 配套部署，知识库与图向量通过 `MILV
 
 允许丢弃全部数据时，停掉当前 Compose project，在对应环境文件中把 `YUXI_STATE_DIR` 指向一个新的空目录，例如 `/srv/yuxi/state-milvus3`，然后重新构建并启动完整拓扑。开发使用 `docker-compose.yml`，生产使用本页的 `.env.prod` 与 `docker-compose.prod.yml`。新目录同时重置 PostgreSQL、对象存储、图谱、工作区及向量索引；需要重新初始化管理员、模型供应商和知识库，再上传、解析、索引文档。不要把旧的 PostgreSQL 文件记录与空的 Milvus 索引混用。
 
-检查 `storage-init` 和 `app-init` 已成功退出，并确认 `/api/system/ready` 返回就绪。再按[知识库教程](../intro/knowledge-base.md#3-验证检索)确认文件为 `indexed`，三个检索模式返回目标文件的片段。集合的模型或 schema 不匹配时会显式报错，查询不会自动删除集合；需要修正部署状态并重新建立知识库。
+检查 `storage-init` 和 `app-init` 已成功退出，并确认 `/api/system/ready` 返回就绪。再按[知识库教程](../intro/knowledge-base.md#_3-验证检索)确认文件为 `indexed`，三个检索模式返回目标文件的片段。集合的模型或 schema 不匹配时会显式报错，查询不会自动删除集合；需要修正部署状态并重新建立知识库。
 
 ## 第三方组件和许可证
 
@@ -309,10 +312,22 @@ MinIO 的镜像由本仓库构建：MinIO 在 Docker Hub 与 quay.io 上的镜�
 
 商业部署可以评估 Neo4j Enterprise、MinIO 商业订阅或其他兼容替代品，但这会带来新的协议、迁移和运维条件。
 
-需要 Neo4j 企业版功能或商业支持时，可以将图谱服务镜像替换为 `neo4j:5.26-enterprise`，并设置：
+需要 Neo4j 企业版功能或商业支持时，用 Compose override 同时替换图谱服务镜像并注入许可确认；只把变量写进 `.env.prod` 不会生效，因为 `graph` 服务使用显式 `environment` 列表。请自行新建 `docker-compose.enterprise.yml`：
 
-```dotenv
-NEO4J_ACCEPT_LICENSE_AGREEMENT=yes
+```yaml
+services:
+  graph:
+    image: neo4j:5.26.29-enterprise
+    environment:
+      NEO4J_ACCEPT_LICENSE_AGREEMENT: "yes"
 ```
 
-同时按 Neo4j 官方订阅协议确认许可范围；替换镜像不会自动迁移或改变现有数据卷。以上是工程侧边界，不构成法律意见；再分发、修改组件或对外托管前请让法务按具体版本和交付方式确认。
+启动或重建图谱服务时合并该文件，并先验证合并后的配置可解析：
+
+```bash
+docker compose --env-file .env.prod -f docker-compose.prod.yml -f docker-compose.enterprise.yml config --quiet
+docker compose --env-file .env.prod -f docker-compose.prod.yml -f docker-compose.enterprise.yml up -d graph
+docker compose --env-file .env.prod -f docker-compose.prod.yml -f docker-compose.enterprise.yml logs --tail=100 graph
+```
+
+同时按 Neo4j 官方订阅协议确认许可范围；设置该变量表示部署方接受 Neo4j 商业许可，许可获取与合规由部署方负责。替换镜像不会自动迁移或改变现有数据卷。以上是工程侧边界，不构成法律意见；再分发、修改组件或对外托管前请让法务按具体版本和交付方式确认。

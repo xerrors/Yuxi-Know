@@ -37,28 +37,32 @@ The default approval mode requires confirmation for command execution and file w
 
 ## Quick Start
 
+Yuxi application services run with Docker Compose; agent execution uses Cube user VMs on a dedicated Linux/KVM node. Cube is not started by Compose: install and run Cube on the execution node before starting the application.
+
 ### Prerequisites
 
-Install [Docker Engine](https://docs.docker.com/get-docker/) and Docker Compose, prepare a working LLM API, and configure a dedicated Linux/KVM Cube node, user template, and shared Workspace/Skills directories as described in [sandbox operations](docs/advanced/sandbox-operations.md). Applications running on macOS or Windows also need access to this Linux/KVM node.
+Install [Docker Engine](https://docs.docker.com/get-docker/) and Docker Compose, prepare a working LLM API, and prepare an x86_64 Linux/KVM execution node. The node needs `/dev/kvm`, admin access, Docker (to build the user template), and shared Workspace/Skills directories with the application host. Applications running on macOS or Windows also need access to this Linux/KVM node.
 
-The candidate source version is `v0.8.0.beta2`, available from the main repository's `develop/0-8-0` branch; the tag is created after validation. Version 0.8 requires a fresh deployment with separate data directories and provides no automatic upgrade of older databases, indexes, or file layouts. See the [0.8.0 release notes](docs/develop-guides/releases/0.8.0.md).
+This guide uses the `develop/0-8-0` branch. Version 0.8 requires a fresh deployment with separate data directories and provides no automatic upgrade of older databases, indexes, or file layouts. See the [0.8.0 release notes](docs/develop-guides/releases/0.8.0.md).
 
-### 1. Get the Code and Initialize
+### 1. Start the Cube Execution Node
+
+On the dedicated node, follow [sandbox operations](docs/advanced/sandbox-operations.md#原生执行节点) to run `docker/cube/setup-node.sh` and build the `yuxi-user` template. If the same Linux machine runs the application and provides `/dev/kvm`, install Cube directly on it; to run the development node in a separate container or VM, use the [nested development node](docs/advanced/sandbox-operations.md#当前机器的嵌套开发节点) and start the separate Cube Compose project.
+
+Yuxi checks the Cube control plane, user template, and data proxy at startup; if the check fails, the application does not become ready. See the [quick start](docs/intro/quick-start.md) for node setup, shared directories, and platform requirements.
+
+### 2. Get the Code and Initialize
 
 ```bash
 git clone --branch develop/0-8-0 --depth 1 https://github.com/xerrors/Yuxi.git
 cd Yuxi
-
-# Linux/macOS
-./scripts/init.sh
-
-# Windows PowerShell
-.\scripts\init.ps1
 ```
 
-The initialization script creates `.env`, prompts for a SiliconFlow API Key, and generates separate JWT and API Key derivation secrets. You can also copy `.env.template` manually. It does not provision Cube: configure `CUBE_API_URL`, `CUBE_PROXY_NODE_IP`, `CUBE_NODE_USER_DATA_DIR`, and `CUBE_NODE_SKILL_PROJECTION_DIR`, plus `CUBE_API_KEY` when the node requires authentication. Run `docker compose config --quiet` before starting. See the [quick start](docs/intro/quick-start.md) for the complete steps.
+Follow step 3 of the [quick start](docs/intro/quick-start.md) to prepare `.env`, the Cube connection values, and shared directories. Initialize with `./scripts/init.sh` (Linux/macOS) or `.\scripts\init.ps1` (Windows; fill `.env` first because `init.ps1` does not copy `CUBE_*` from the process environment).
 
-### 2. Start the Development Environment
+The initialization script creates `.env`, prompts for a SiliconFlow API Key, and generates separate JWT and API Key derivation secrets. You can also copy `.env.template` manually. It does not provision Cube: `CUBE_API_URL`, `CUBE_PROXY_NODE_IP`, `CUBE_NODE_USER_DATA_DIR`, and `CUBE_NODE_SKILL_PROJECTION_DIR` must be configured before it runs, plus `CUBE_API_KEY` when the node requires authentication. Run `docker compose config --quiet` before starting.
+
+### 3. Start the Development Environment
 
 ```bash
 docker compose up --build -d
@@ -78,7 +82,7 @@ Keep the existing deployment and a consistent backup of PostgreSQL, MinIO, and u
 ## Documentation
 
 - [Project overview](https://xerrors.github.io/Yuxi/intro/project-overview): Capabilities, concepts, and system boundaries.
-- [Quick start](https://xerrors.github.io/Yuxi/intro/quick-start): Set up a local environment from scratch.
+- [Quick start](https://xerrors.github.io/Yuxi/intro/quick-start): Prepare the execution node and start a development environment.
 - [Command-line client](docs/intro/cli.md): Sign in, chat, send attachments, and query knowledge bases.
 - [Public Agent API quick start](docs/intro/agents-api-quickstart.md): Create sessions, submit messages, and read results from external applications.
 - [Model configuration](https://xerrors.github.io/Yuxi/intro/model-config): Connect chat, embedding, and rerank models.
@@ -87,36 +91,9 @@ Keep the existing deployment and a consistent backup of PostgreSQL, MinIO, and u
 - [Production deployment](https://xerrors.github.io/Yuxi/advanced/deployment): Deployment, upgrades, backups, and troubleshooting.
 - [Changelog](https://xerrors.github.io/Yuxi/develop-guides/changelog): Published changes.
 
-## Screenshots
+## Interface Preview
 
-<details>
-<summary>View the workspace, knowledge bases, graphs, agent configuration, files, and team management</summary>
-
-**Agent workspace**: Follow answers, tool activity, cooperating tasks, and file delivery.
-
-> Screenshot placeholder: Agent workspace
-
-**Knowledge bases**: Manage document processing, retrieval tests, and evaluation.
-
-> Screenshot placeholder: Knowledge bases
-
-**Knowledge graphs**: Build entities and relationships, then explore related subgraphs.
-
-> Screenshot placeholder: Knowledge graphs
-
-**Agent configuration**: Select models, prompts, tools, MCP, and Skills.
-
-> Screenshot placeholder: Agent configuration
-
-**Workspace files**: Preview supported HTML, PDF, Markdown, images, and code, and download artifacts.
-
-> Screenshot placeholder: Workspace files
-
-**Team management**: Manage users, departments, and shared resource scopes.
-
-> Screenshot placeholder: User and department management
-
-</details>
+See the [demo video](https://www.bilibili.com/video/BV1erE26iEgv/) for knowledge base and knowledge graph walkthroughs. The [project home](https://xerrors.github.io/Yuxi/) introduces the other interfaces.
 
 ## Contributing
 

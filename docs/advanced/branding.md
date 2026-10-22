@@ -70,7 +70,7 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml \
 - `frontend/src/assets/css/base.dark.css`：暗色模式；
 - `frontend/src/shared/model/theme.js`：主题选择器的默认配置。
 
-优先修改已有 CSS 变量，不要在组件中散落新的硬编码颜色。当前主题的主要变量包括 `--main-1000`、`--main-900` 和 `--main-color`；如果调整主色，还要同步修改 `frontend/src/shared/model/theme.js` 中的 `colorPrimary`，否则 Ant Design 组件和自定义样式可能出现颜色不一致。新增颜色时，同时检查浅色、暗色、hover、focus、禁用和错误状态的对比度。
+优先修改已有 CSS 变量，不要在组件中散落新的硬编码颜色。当前主题的主要变量包括 `--main-1000`、`--main-900` 和 `--main-color`；`frontend/src/shared/model/theme.js` 的 `colorPrimary` 在运行时读取 `--main-color`，因此调整 `base.css` 与 `base.dark.css` 中的 `--main-color` 与 `--main-*` 色阶即可，不需要再修改 `theme.js`。`--main-color` 在浅色模式下引用 `--main-700`，暗色模式单独定义该值；hover、active、link 和 focus 等 token 还使用 `--main-600`、`--main-800`、`--main-900` 和 `--main-100`，需要一起保持一致。新增颜色时，同时检查浅色、暗色、hover、focus、禁用和错误状态的对比度。
 
 开发环境会通过 Vite 热更新样式；生产环境需要重新构建 Web 镜像：
 

@@ -1,6 +1,6 @@
 # Agent 并发容量
 
-本页供部署管理员核算 API、worker、数据库连接和执行节点的容量，并说明如何重新压测。当前参数以 Compose 和运行时约束为准；2026-09-04 的 Docker 沙盒实测单独保留为历史样本，不定义 Cube 用户 VM 的资源规格或并发承诺。
+本页供部署管理员核算 API、worker、数据库连接和执行节点的容量，并说明如何重新压测。当前参数以 Compose 和运行时约束为准；资源规格以目标 Cube 节点和实际压测为准。
 
 ## 当前运行模型
 
@@ -30,56 +30,15 @@ PostgreSQL 是 Input、Turn、Run 和终态的事实来源。Redis Stream、取�
 
 单 API、单 worker 的 PostgreSQL 池预算为 `(120 + 40) + 10 + (120 + 40) + 120 = 450`。增加副本时，API 每份增加最多 170，worker 每份增加最多 280；例如一 API、两 worker 已达到 730，超过数据库默认 600，需要先调整池或数据库容量。这是配置上限的求和，不是已建立连接数或实际峰值。
 
-Redis 256 是单个客户端池的上限，进程可拥有多个客户端池，不能据此推导进程连接总数。历史 100 并发的 36 个客户端连接只适用于下文记录的测试窗口；当前部署应同时观察 SSE、事件发布、缓存、ARQ 和取消轮询的实际连接与等待。
+Redis 256 是单个客户端池的上限，进程可拥有多个客户端池，不能据此推导进程连接总数。当前部署应同时观察 SSE、事件发布、缓存、ARQ 和取消轮询的实际连接与等待。
 
 资源受限部署可以压低该上限，但必须重新跑目标并发并确认没有连接池耗尽或事件缺失。
 
 取消 key 的 200ms 轮询和 PostgreSQL 的约 1 秒补偿检查是 worker 内部协议参数，没有对应的部署开关。容量调整使用已有执行槽和连接池配置，并通过取消终态、事件完整性与连接等待验证。
 
-## 实测基线（2026-09-04 快照）
-
-本节保存 2026-09-04 的 Docker backend、单 worker 和当时模型供应商测试结果。每个 Sandbox 使用独立 Docker 容器及网络，尚未采用当前 Cube 用户 VM。表中的容器数、网络数、内存、连接与时延仅属于该历史拓扑；它们不证明当前版本可承载 100 个用户 VM，也不能换算当前 VM 的内存预算。当前容量按[应用和验证](#应用和验证)重新测量。
-
-当时测试经过真实 HTTP、Request/Run SSE、worker、PostgreSQL、Redis、模型供应商和 core Sandbox。每个虚拟用户创建独立 Thread，模型调用一次 `execute` 执行 20 秒任务；验收包含唯一标记、同一 request/run 标识、完整工具事件和 PostgreSQL `completed` 终态。1、10、20、50、100 每档各跑一轮，共 181/181 成功，排队时间 p95 均为 0。Request/Run 是该次测试使用的协议标识，当前客户端使用 Input/Turn/Run。
-
-延迟从提交 Agent Run 开始计时：
-
-| 并发 | 成功 | 提交 p95 | 准备时间 p50 / p95 | 首 Token p50 / p95 | 整体时延 p50 / p95 |
-|---:|---:|---:|---:|---:|---:|
-| 1 | 1/1 | 28ms | 1.52s / 1.52s | 5.03s / 5.03s | 32.43s / 32.43s |
-| 10 | 10/10 | 103ms | 0.84s / 0.89s | 5.11s / 7.08s | 33.28s / 34.82s |
-| 20 | 20/20 | 247ms | 0.94s / 1.02s | 6.23s / 7.35s | 37.79s / 39.65s |
-| 50 | 50/50 | 642ms | 2.05s / 3.19s | 8.36s / 28.25s | 43.55s / 62.52s |
-| 100 | 100/100 | 1.78s | 4.36s / 5.43s | 34.32s / 57.88s | 105.76s / 114.13s |
-
-这里的准备时间是压测客户端从提交到首个 Run SSE 事件的延迟，不是 Sandbox 单独创建耗时；首 Token 是客户端从提交到首个非空文本、推理或工具调用数据的延迟，包含模型供应商排队与首轮工具调用决策。50 并发以后首 Token 上升明显，而 Request 队列仍为 0，说明本轮主要时延不在 ARQ 排队。一次试验不能把供应商抖动与本机瓶颈完全分离，因此这里只把成功率和资源峰值作为容量证据，不把首 Token 数字当作稳定 SLA。
-
-同一窗口的资源峰值如下。CPU 为 Docker 各容器百分比之和，`3508%` 约等于 35 个逻辑核满载：
-
-| 并发 | Redis 客户端 / PubSub | PG 会话 / active | Sandbox 容器 | Sandbox 内存 | 容器总内存 | CPU 总峰值 | 宿主最低可用内存 |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| 1 | 8 / 0 | 23 / 1 | 1 | 0.17GiB | 2.35GiB | 281% | 40.33GiB |
-| 10 | 17 / 0 | 57 / 2 | 10 | 1.64GiB | 4.01GiB | 335% | 38.55GiB |
-| 20 | 22 / 0 | 73 / 7 | 20 | 3.27GiB | 5.66GiB | 1628% | 36.86GiB |
-| 50 | 25 / 0 | 127 / 21 | 50 | 7.72GiB | 10.34GiB | 2596% | 31.91GiB |
-| 100 | 36 / 0 | 285 / 83 | 100 | 16.33GiB | 19.61GiB | 3508% | 23.35GiB |
-
-同一历史配置随后使用 `alibaba-cn:qwen3.8-flash` 做跨供应商复测：
-
-| 并发 | 严格成功 | 提交 p95 | 客户端准备 p50 / p95 | 客户端首 Token p50 / p95 | 整体时延 p50 / p95 | Redis / PubSub | PG / active | Sandbox / 网络 |
-|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 50 | 50/50 | 557ms | 2.02s / 3.05s | 7.53s / 27.78s | 43.67s / 58.86s | 18 / 0 | 167 / 26 | 50 / 50 |
-| 100 | 96/100 | 1.51s | 3.62s / 4.74s | 28.48s / 55.43s | 102.79s / 110.13s | 32 / 0 | 285 / 95 | 100 / 100 |
-
-100 档的 4 个失败由供应商返回账户级 `AllocationQuota.FreeTierOnly`。该轮观察到 100 个并存 Docker Sandbox 与网络，业务严格成功率为 96%，不能记为容量验收通过。50 档完整通过，两档客户端时延和资源曲线与前一供应商处于同一量级；这组历史结果不替代当前供应商配额、限流和 Cube 节点的独立压测。
-
-移除取消 Pub/Sub 前，同一历史配置的 100 并发基线观察到 Redis 136 个客户端连接，其中 100 个是 Pub/Sub；移除后峰值为 36/0。延迟仍落在此前三轮 100 并发的范围内：准备 p95 4.34–5.60 秒、首 Token p95 57.30–61.44 秒、整体 p95 113.32–116.19 秒。专用实时取消探针在 Run 进入 `running` 后发起取消，235ms 收敛到同一 Run 的 PostgreSQL `cancelled` 终态。
-
-该次测试结束后 `/api/system/ready` 为 200，单 worker healthy，动态 Sandbox 容器和网络均归零。当时的取消 unit、HTTP integration、实时取消探针和完整并发链路记录为通过，未执行 Redis 故障注入或 1000 并发测试。这些状态描述该次测试，不代表当前版本已重跑。
-
 ## Run 内持久时延口径
 
-AgentRun 另行持久保存服务端权威时间点，用于历史诊断；它们与上面的客户端指标互补，不能互换：
+AgentRun 另行持久保存服务端权威时间点，用于历史诊断；它们与客户端指标互补，不能互换：
 
 | API timing 字段 | 计算 | 含义 |
 |---|---|---|
@@ -98,24 +57,26 @@ AgentRun 另行持久保存服务端权威时间点，用于历史诊断；它�
 1. 分别确定 worker 作业并发、活跃用户 VM 数、每棵协作树的 Run 数和模型请求速率。`ARQ_MAX_JOBS` 由所有作业共用，调低上限也会影响恢复与控制工作的执行机会；协作树仍受 4 个执行名额限制。
 2. 核算 PostgreSQL 最坏预算：所有 API/worker 的 SQLAlchemy 与 LangGraph 池之和，必须低于 `POSTGRES_MAX_CONNECTIONS`，并给 migrator、健康检查、连接抖动和人工运维留余量。增加 API 或 worker 副本会按副本数放大对应的两类池。
 3. Redis 池服务短操作，不再按“每 Run 一个订阅连接”计算。仍要覆盖同时进行的 SSE 读取、事件写入、取消 key 读取、缓存和 ARQ 操作；观察 `connected_clients`、连接池错误和 SSE 事件完整性后再收缩。
-4. 按实际 Cube 模板和活跃用户 VM 测量执行节点的 CPU、内存、磁盘与网络，并为宿主、Cube 控制服务和共享文件系统留余量。仓库的模板构建脚本传入 `--cpu 1000 --memory 1024`；已有实例沿用创建时的模板，模板参数不能替代节点实测，历史每容器约 170 MiB 的样本也不能作为 VM 预算。
+4. 按实际 Cube 模板和活跃用户 VM 测量执行节点的 CPU、内存、磁盘与网络，并为宿主、Cube 控制服务和共享文件系统留余量。仓库的模板构建脚本传入 `--cpu 1000 --memory 1024`；已有实例沿用创建时的模板，模板参数不能替代节点实测。
 5. 同一用户的不同 Thread 可共用一个 VM，独立用户会增加 VM 数。压测账号分布需要接近真实负载，验证并发命令的输出归属、取消清理与共享文件正确性；网络和挂载容量由 Cube 节点配置决定。
 
-从低并发逐档增加负载，记录池等待、节点资源和业务结果，再选择执行槽与池大小。连接上限不等于即时连接占用；历史表格也不能线性推导较小部署的配置。
+从低并发逐档增加负载，记录池等待、节点资源和业务结果，再选择执行槽与池大小。连接上限不等于即时连接占用，也不能线性推导较小部署的配置。
 
 扩大并发前，同时评估 worker 数量、模型配额、PostgreSQL 总预算和 Cube 节点资源。按 200ms 间隔计算，1000 个运行中 Run 的取消 key 理论读取量约为 5000 次/秒；该数只估算轮询请求，不证明 Redis、模型或执行节点支持这一负载。
 
 ## 应用和验证
 
-压测会产生真实模型费用、创建会话并使用用户 VM；先在独立测试环境准备凭据、目标 Agent、Cube 节点和共享目录，确认无生产任务。修改 `.env` 后，重新创建实际读取变量的容器；数据库重建连接前需安排停机窗口。生产命令使用原有的环境文件与 Compose 覆盖：
+压测会产生真实模型费用、创建会话并使用用户 VM；先在独立测试环境准备凭据、目标 Agent、Cube 节点和共享目录，确认无生产任务。修改实际使用的环境文件（开发 `.env`、生产 `.env.prod`）后，重新创建读取该变量的容器；数据库重建连接前需安排停机窗口。生产命令显式使用 `.env.prod` 与 `docker-compose.prod.yml`：
 
 ```bash
-docker compose up -d --force-recreate postgres api
-docker compose up -d --force-recreate --scale worker=1 worker
-curl --fail http://localhost:5050/api/system/ready
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --force-recreate postgres api
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --force-recreate --scale worker=1 worker
+curl --fail http://localhost/api/system/ready
 ```
 
-随后从小档位渐进到目标并发：
+就绪地址使用 Web 入口，默认 80 端口；修改 `YUXI_FRONTEND_PORT` 后使用对应端口。
+
+随后从小档位渐进到目标并发。以下示例使用开发环境入口；生产环境把 `--base-url` 改为 Web 入口（默认 `http://localhost`）：
 
 ```bash
 python -m backend.test.performance load \
@@ -126,6 +87,6 @@ python -m backend.test.performance load \
   --collect-local-resources
 ```
 
-通过条件包括 Input/Turn/Run 因果标识一致、SSE 工具生命周期完整、PostgreSQL 权威终态正确、readiness 最终恢复，以及 Run 租约和命令句柄完成清理。Cube 用户 VM 按空闲策略保留并休眠，不以容器或网络归零作为当前验收。`--collect-local-resources` 只采样当前 Compose 与本机资源，远端 Cube 节点需要单独采样。脚本退出码或 HTTP 200 只作为辅助信号，协议、凭据和输出边界见[性能与容量测试](../develop-guides/testing-guidelines.md#性能评测)。
+通过条件包括 Input/Turn/Run 因果标识一致、SSE 工具生命周期完整、PostgreSQL 权威终态正确、readiness 最终恢复，以及 Run 租约和命令句柄完成清理。Cube 用户 VM 按空闲策略保留并休眠，不要求容器或网络归零。`--collect-local-resources` 只采样当前 Compose 与本机资源，远端 Cube 节点需要单独采样。脚本退出码或 HTTP 200 只作为辅助信号，协议、凭据和输出边界见[性能与容量测试](../develop-guides/testing-guidelines.md#性能评测)。
 
 配置由[开发 Compose](https://github.com/xerrors/Yuxi/blob/main/docker-compose.yml)与[生产 Compose](https://github.com/xerrors/Yuxi/blob/main/docker-compose.prod.yml)拥有；连接池实现见 [PostgresManager](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/infrastructure/postgres/manager.py)，协作限额见 [CooperationRepository](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/repositories/cooperation.py)，节点模板规格见[模板构建脚本](https://github.com/xerrors/Yuxi/blob/main/docker/cube/build-template.sh)。

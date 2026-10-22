@@ -5,7 +5,7 @@
 | 页面 | 解决的问题 |
 | --- | --- |
 | [认识 Yuxi](./project-overview.md) | Yuxi 适合什么场景，三个核心概念是什么 |
-| [快速开始](./quick-start.md) | 从克隆到一套可用开发环境 |
+| [快速开始](./quick-start.md) | 从准备 Cube 执行节点到一套可用开发环境 |
 | [配置模型](./model-config.md) | 接入聊天、嵌入和重排模型 |
 | [知识库入门](./knowledge-base.md) | 创建知识库并让智能体检索文档 |
 | [知识库评估](./evaluation.md) | 量化检索质量，决定是否调整分块或参数 |

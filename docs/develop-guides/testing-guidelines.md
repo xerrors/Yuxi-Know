@@ -97,9 +97,9 @@ docker compose logs --tail=100 api
 后台作业启动恢复由 `system-tests.yml` 的现有拓扑步骤单独验证：先停止 worker，保存未发布 intent，再启动 worker 并回读领域结果。`test_background_job_worker_path.py` 的这组跨进程阶段不进入普通 integration 批次；通用脚本不会重启正在使用的服务。完整系统验证须同时完成该拓扑步骤。
 
 ```bash
-docker compose exec api uv run --group test pytest test/unit -m "not slow"
-docker compose exec api uv run --group test pytest test/integration/api
-docker compose exec api uv run --group test pytest test/integration --ignore=test/integration/api --ignore=test/integration/services/test_background_job_worker_path.py
+docker compose exec api uv run --no-sync --group test pytest test/unit -m "not slow"
+docker compose exec api uv run --no-sync --group test pytest test/integration/api
+docker compose exec api uv run --no-sync --group test pytest test/integration --ignore=test/integration/api --ignore=test/integration/services/test_background_job_worker_path.py
 backend/test/run_tests.sh e2e
 backend/test/run_tests.sh all
 ```
@@ -113,7 +113,7 @@ uv run --project backend --no-sync --group test pytest backend/test/unit/config 
 应用共享初始化使用真实 PostgreSQL 隔离 Schema 和临时 Skill 目录验证首次部署、当前版本重跑、管理员值保留、阶段失败重试与并发锁。独立子进程覆盖已有 Schema 的冷启动，并用缺少 ORM 注册的负控复现失败；这些用例接入 `service-integration.yml`：
 
 ```bash
-docker compose exec api uv run --group test pytest test/integration/services/test_app_initialization.py test/integration/services/test_schema_migration_version.py -q
+docker compose exec api uv run --no-sync --group test pytest test/integration/services/test_app_initialization.py test/integration/services/test_schema_migration_version.py -q
 ```
 
 模型重放服务由测试环境启动；依赖共享重放的场景显式读取 `OPENAI_REPLAY_URL` 与 `COOPERATION_REPLAY_URL`。需要独占状态的场景复用 `e2e/conftest.py` 已有的重放 fixture，避免在测试文件内重复启动和回收服务器。
@@ -223,7 +223,7 @@ python -m backend.test.performance --help
 python -m backend.test.performance matrix --help
 python -m backend.test.performance load --help
 python -m backend.test.performance report tmp/load-tests/continuous/final-20260907/matrix.json
-docker compose exec api uv run --group test pytest test/unit/performance -q
+docker compose exec api uv run --no-sync --group test pytest test/unit/performance -q
 ```
 
 `matrix` 测不同用户、固定 Thread、完成后立即补位的闭环调度；`load` 保留通用对话与沙盒容量场景，协议不同，不能混算。两者执行采样会产生真实模型费用。默认矩阵为 3150 请求，小实验通过 `--workers`、`--concurrency`、`--rounds-per-thread` 显式缩减，不自动预热。认证变量、独立槽位与结果边界见[并发优化决策](decisions/archived/0.7.3/12-concurrency/2026-09-07-agent-concurrency-optimization.md)。

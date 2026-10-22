@@ -15,7 +15,7 @@ MCP（Model Context Protocol）让智能体调用外部服务提供的工具。�
 
 平台登录和 MCP 资源授权分别签发凭据；部署密钥、状态与调用隔离的实现见 [MCP 授权与运行身份](../mechanisms/mcp.md)。
 
-注册方式说明配置要求，供应商是否可用还需核对发现协议、PKCE、回调地址与真实工具调用。GitHub、Notion 的最终真实授权兼容性尚未完成验收，配置示例和验证范围见[兼容性核对](../develop-guides/audits/mcp-oauth-compatibility-2026-10-18.md)。
+接入前需确认服务支持发现协议、PKCE、回调地址和真实工具调用。
 
 ## 支持的传输方式
 
@@ -67,17 +67,13 @@ Content-Type: application/json
 
 普通用户打开“扩展 → MCP”，点击服务卡片和“连接”，在授权服务器确认后回到 MCP 页。页面从 PostgreSQL 读取本人连接状态；“需要重新连接”表示配置改变、远端拒绝 token 或刷新失败。“断开”删除本人凭据，旧回调不能恢复它。普通退出 Yuxi 保留长期连接，账号停用后不能继续调用；断开只撤销本地使用能力，远端应用授权可在供应商账号设置中另外撤销。
 
-GitHub 使用 `https://api.githubcopilot.com/mcp/`。超管先按 [GitHub host integration](https://github.com/github/github-mcp-server/blob/main/docs/host-integration.md) 注册 GitHub App、开启用户授权并登记平台回调；使用用户 token，按测试仓库授予最小读取权限。组织资源可能需要组织审批。GitHub 不支持动态注册。注册应用不等于通过 Yuxi 的发现和 PKCE 校验；需核对远端 challenge 和 metadata，真实授权未验收时不能声明可用。
-
-Notion 使用 `https://mcp.notion.com/mcp` 和动态注册，普通授权范围为 `default`。首次连接持久保存客户端注册结果，每次刷新原子保存轮换令牌。用户必须拥有目标 workspace 的访问权限；详见 [Notion 自建 MCP 客户端](https://developers.notion.com/guides/mcp/build-mcp-client)。网络或供应商拦截时页面显示失败，不会改用共享管理员账号。
-
 Yuxi 登录与 MCP 资源授权各自独立，本地账号也可连接自己的资源账号，无需平台企业身份绑定。每个连接只属于发起授权的 Yuxi 用户；资源服务决定该资源账号可访问的数据。企业浏览器会话可以复用，MCP 使用独立签发的资源 token。
 
 ## 规范与接入边界
 
-Yuxi 的所有个人 OAuth MCP 共用发现、客户端注册、授权码、PKCE、token 存储/刷新和 HTTP Bearer 适配，不按 GitHub、Notion 或考勤名称切换实现。不同服务通过地址、Issuer、注册方式和 scope 表达差异。注册方式可以不同，身份 token 也不必都采用 JWT。
+Yuxi 的所有个人 OAuth MCP 共用发现、客户端注册、授权码、PKCE、token 存储/刷新和 HTTP Bearer 适配，不按具体供应商切换实现。不同服务通过地址、Issuer、注册方式和 scope 表达差异。注册方式可以不同，身份 token 也不必都采用 JWT。
 
-考勤是预注册客户端、Keycloak/JWT 与个人资源隔离的最小示例。自建服务参考 [YuxiAuth 考勤示例](https://github.com/xerrors/YuxiAuth/blob/main/docs/mcp-example.md)。MCP 资源服务本身只验证专用 access token，其他标准客户端无需登录 Yuxi 也可调用。
+预注册客户端、Keycloak/JWT 与个人资源隔离是常见的自建服务组合。MCP 资源服务本身只验证专用 access token，其他标准客户端无需登录 Yuxi 也可调用。
 
 | 能力 | 当前支持与限制 |
 | --- | --- |
@@ -86,13 +82,13 @@ Yuxi 的所有个人 OAuth MCP 共用发现、客户端注册、授权码、PKCE
 | scope challenge | scope 由管理员填写；尚未完整解析 challenge scope 和运行时 insufficient_scope，不自动扩大权限 |
 | 客户端注册 | 支持静态预注册及 DCR；尚未内置 CIMD 文档托管。静态示例不要求所有服务支持动态注册 |
 | 信任策略 | 固定 Issuer、端点同源和禁止重定向是平台额外限制，可能拒绝其他合规服务的部署拓扑 |
-| 传输 | 正式接入要求授权端点 HTTPS、回调 HTTPS 或 loopback；公网 HTTP 允许项仅服务于隔离实验，不代表符合规范 |
+| 传输 | 正式接入要求授权端点 HTTPS、回调 HTTPS 或 loopback |
 
-因此不能将“同一授权逻辑”理解为“任意 OAuth MCP 都已兼容”。详细 MUST/SHOULD/MAY 对照、协议证据与未验证范围见 [兼容性核对](../develop-guides/audits/mcp-oauth-compatibility-2026-10-18.md)。
+因此不能将“同一授权逻辑”理解为“任意 OAuth MCP 都已兼容”。
 
 ## 适配一个新的个人 OAuth MCP
 
-符合当前发现与授权协议的服务通过配置接入，不需要新增后端供应商分支。管理员手动填写服务地址与 OAuth 配置，GitHub、Notion 和其他服务使用同一授权流程。
+符合当前发现与授权协议的服务通过配置接入，不需要新增后端供应商分支。管理员手动填写服务地址与 OAuth 配置，所有服务使用同一授权流程。
 
 1. 确认资源 URL。远端提供受保护资源 metadata，其 `resource` 与配置 URL 完全一致，`authorization_servers` 包含配置 Issuer；重定向或尾斜杠差异也需要核对。
 2. 确认授权服务器 metadata。使用 OAuth 授权服务器发现，须声明 PKCE S256，客户端认证方式须与实际注册匹配。
@@ -122,9 +118,9 @@ Yuxi 的所有个人 OAuth MCP 共用发现、客户端注册、授权码、PKCE
 
 动态注册使用 `registration=dynamic`，不预填静态 Client ID/Secret。企业资源服务自行验证 access token 的签名或可信验证结果、目标资源和业务 scope，查询条件从已验证员工身份取得，不接受模型提交的员工参数。SSO 登录本身不会授予另一项业务的资源权限。
 
-资源和授权服务器可以位于不同来源。当前实现要求资源 metadata 与 MCP 同源，授权、token、注册端点与配置 Issuer 同源；OAuth 网络请求不跟随重定向。服务不满足这些条件时先核对实际协议与网络，不能用放宽来源、关闭 PKCE 或转发平台登录 token 代替适配。内网 HTTP 的允许范围见下面的部署说明。
+资源和授权服务器可以位于不同来源。当前实现要求资源 metadata 与 MCP 同源，授权、token、注册端点与配置 Issuer 同源；OAuth 网络请求不跟随重定向。服务不满足这些条件时先核对实际协议与网络，不能用放宽来源、关闭 PKCE 或转发平台登录 token 代替适配。
 
-协议支持的变更在 `oauth_protocol` 及其 HTTP 负向测试中闭合；业务授权状态在 `oauth_service`/repository 中闭合。完整职责和验证入口见 [源码定位与验证](../mechanisms/mcp.md#源码定位与验证)。GitHub 的真实账号授权尚未验收；Notion 和企业示例的实际接入结果见 [实现决定](../develop-guides/decisions/implemented/2026-10-18-mcp-personal-oauth.md)。
+协议支持的变更在 `oauth_protocol` 及其 HTTP 负向测试中闭合；业务授权状态在 `oauth_service`/repository 中闭合。完整职责和验证入口见 [源码定位与验证](../mechanisms/mcp.md#源码定位与验证)。企业示例的接入结果见 [实现决定](../develop-guides/decisions/implemented/2026-10-18-mcp-personal-oauth.md)。
 
 ## 让智能体使用 MCP
 
@@ -147,21 +143,10 @@ API 与 worker 从同一部署环境读取以下变量，配置后重新创建�
 | --- | --- |
 | `YUXI_ENCRYPTION_KEY` | 通用 Fernet 凭据密钥，必须持久保留；缺失时个人授权明确不可用 |
 | `YUXI_PUBLIC_URL` | 浏览器可达的站点来源，如 `https://yuxi.example.com`；MCP 回调固定为 `/api/system/mcp-servers/oauth/callback` |
-| `MCP_OAUTH_LAB_HTTP_ORIGINS` | 仅隔离实验允许的准确 HTTP 来源，逗号分隔；生产留空 |
 
 可以在安全终端使用 `python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'` 生成密钥，写入私有部署环境，勿提交仓库或发送给模型。更换密钥后旧凭据无法解密，需要重新连接；备份和恢复数据库时同步保管密钥。Secret 只写入加密列，管理接口只返回是否已配置。
 
 OAuth 元数据只能使用超管配置的 MCP 来源与授权服务器来源，跨来源重定向会失败。企业内网服务需要浏览器与 API/worker 都能访问准确地址。地址、授权服务器或客户端配置变化后，用户需要重连。数据库结构与新库初始化边界见 [系统架构](https://github.com/xerrors/Yuxi/blob/main/ARCHITECTURE.md)。
-
-## 企业考勤实验
-
-认证中心与考勤服务由独立私有项目 [YuxiAuth](https://github.com/xerrors/YuxiAuth) 维护，按其 README 启用 attendance profile。一个 Keycloak 进程承载主企业和隔离的考勤测试 realm；Yuxi 仓库只保留 MCP 客户端与业务验收。
-
-YuxiAuth 输出 `.private/attendance-yuxi-oidc.env`、`.private/mcp-oauth.env` 和 `.private/attendance-mcp.json`。测试平台加载对应 OIDC 配置；API/worker 共享 MCP 密钥与固定回调。浏览器和服务端通过同一个可达 issuer 访问认证中心，不需要加入认证服务的 Docker 网络；共享入口使用服务器 IP 或 HTTPS 域名，相关端口须通过防火墙和安全组。平台槽位隔离方式见[并行运行环境](../develop-guides/parallel-worktree-environments.md)。
-
-超管从 `.private/attendance-mcp.json` 在 MCP 管理入口配置服务；该文件包含私有客户端凭据，不上传或提交。虚构员工凭据仅保存在实验 `.env`。用户登录 Yuxi，在 MCP 卡片授权自己的企业账号并连接个人考勤，确认后查询 `2026-10-12` 至 `2026-10-13`：默认测试 realm 的研发员工样例含“年假”、产品员工样例含“外勤”。主企业使用自己的员工 subject 和专用客户端，按 YuxiAuth 运维说明配置，不复用同名测试身份。考勤存放在独立 SQLite volume，查询参数只有日期范围，员工由已验证 issuer/subject 决定。
-
-真实授权后可运行 `backend/test/e2e/test_mcp_personal_oauth_e2e.py`；`MCP_LAB_ACCOUNTS_FILE` 指向仅测试进程可读的授权结果文件，包含配置用超管 `admin` 及三种员工身份 `superadmin_employee`、`admin_employee`、`user_employee` 的平台 `access_token` 与 `uid`。该文件仅用于隔离验收，不能提交。测试需要三名员工各自的固定虚构考勤（年假、加班、外勤），使用固定模型协议消费真实 MCP 结果，检查三种角色的数据隔离、直接 MCP 与 Skill 依赖、持久 Turn 和同 Run 工具审计；缺少真实授权材料时明确跳过。
 
 ## 内置远程 MCP
 

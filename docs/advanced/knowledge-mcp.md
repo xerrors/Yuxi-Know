@@ -68,7 +68,7 @@ MCP 初始化返回工具使用指引，每个工具的说明包含参数选择�
 协议与生命周期回归测试位于后端现有 unit 集合：
 
 ```bash
-docker compose exec api uv run --group test pytest test/unit/routers/test_knowledge_mcp.py -q
+docker compose exec api uv run --no-sync --group test pytest test/unit/routers/test_knowledge_mcp.py -q
 ```
 
 真实 HTTP 集成测试位于 `test/integration/api/test_knowledge_mcp.py`，使用[测试规范](../develop-guides/testing-guidelines.md)的标准管理凭据。Fixture 自动创建并回收 Key、私有知识库、用户和持久文档，对比 MCP 与 Public API 的原文结果，验证关键词定位、跨用户不可见及 Key 撤销；不依赖预存知识库或专属 Key。实际向量检索与模型调用另外通过 OpenCode 验证。

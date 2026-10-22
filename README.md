@@ -35,30 +35,32 @@ Yuxi（语析）是一个可私有部署的知识智能体平台，面向需要�
 
 ## 快速启动
 
-语析（Yuxi）的应用服务通过 Docker Compose 启动，Agent 执行环境使用专用 Linux/KVM 节点上的 Cube 用户 VM。
+语析（Yuxi）的应用服务通过 Docker Compose 启动，Agent 执行环境使用专用 Linux/KVM 节点上的 Cube 用户 VM。Cube 不由 Compose 启动；请先在执行节点安装并运行 Cube，再启动应用。
 
 ### 前置条件
 
-安装 [Docker Engine](https://docs.docker.com/get-docker/) 和 Docker Compose，准备一个可用的大模型 API，并按[沙盒配置与运维](docs/advanced/sandbox-operations.md#原生执行节点)配置 Cube 节点、用户模板与共享目录。macOS/Windows 上运行应用也需要可访问的 Linux/KVM 节点。
+安装 [Docker Engine](https://docs.docker.com/get-docker/) 和 Docker Compose，准备一个可用的大模型 API，并准备一台 x86_64 Linux/KVM 执行节点。节点需要 `/dev/kvm`、管理员权限、Docker（构建用户模板），以及与应用主机共享的 Workspace 和 Skills 目录。macOS/Windows 上运行应用也需要一台可访问的 Linux/KVM 节点。
 
-当前候选源码版本为 `v0.8.0.beta2`，从主仓库的 `develop/0-8-0` 分支获取，tag 在验收后创建。0.8 仅面向全新部署，旧数据库、索引和文件布局不提供自动升级；请用独立数据目录试用，见[0.8.0 更新说明](docs/develop-guides/releases/0.8.0.md)。
+本教程使用 `develop/0-8-0` 分支。0.8 仅面向全新部署，旧数据库、索引和文件布局不提供自动升级；请用独立数据目录试用，见[0.8.0 更新说明](docs/develop-guides/releases/0.8.0.md)。
 
-### 1. 获取代码并初始化
+### 1. 准备 Cube 执行节点
+
+在专用节点按[沙盒配置与运维](docs/advanced/sandbox-operations.md#原生执行节点)运行 `docker/cube/setup-node.sh` 并构建 `yuxi-user` 模板。同一台 Linux 机器既运行应用又提供 `/dev/kvm` 时，可以直接在这台机器上安装；需要把开发节点放进独立容器或虚拟机时，按[嵌套开发节点](docs/advanced/sandbox-operations.md#当前机器的嵌套开发节点)启动独立 Cube Compose。
+
+Yuxi 启动时会检查 Cube 控制面、用户模板和数据代理，检查失败不会进入就绪状态。节点安装、共享目录和平台要求见[快速开始](docs/intro/quick-start.md)。
+
+### 2. 获取代码并初始化
 
 ```bash
 git clone --branch develop/0-8-0 --depth 1 https://github.com/xerrors/Yuxi.git
 cd Yuxi
-
-# Linux/macOS
-./scripts/init.sh
-
-# Windows PowerShell
-.\scripts\init.ps1
 ```
 
-初始化脚本创建 `.env`、读取 SiliconFlow API Key，并为 JWT 与 API Key 派生生成独立安全密钥。也可以手动复制 `.env.template`。脚本不部署 Cube 节点；还需填写 `CUBE_API_URL`、`CUBE_PROXY_NODE_IP`、`CUBE_NODE_USER_DATA_DIR` 和 `CUBE_NODE_SKILL_PROJECTION_DIR`，控制面启用认证时填写 `CUBE_API_KEY`。启动前运行 `docker compose config --quiet` 检查配置，完整步骤见[快速开始](docs/intro/quick-start.md)。
+先按[快速开始](docs/intro/quick-start.md)的步骤 3 准备 `.env`、Cube 连接值和共享目录。初始化使用 `./scripts/init.sh`（Linux/macOS）或 `.\scripts\init.ps1`（Windows；需先填写 `.env`，因为 `init.ps1` 不会从进程环境复制 `CUBE_*`）。
 
-### 2. 启动开发环境
+初始化脚本创建 `.env`、读取 SiliconFlow API Key，并为 JWT 与 API Key 派生生成独立安全密钥。也可以手动复制 `.env.template`。脚本不部署 Cube 节点；`CUBE_API_URL`、`CUBE_PROXY_NODE_IP`、`CUBE_NODE_USER_DATA_DIR` 和 `CUBE_NODE_SKILL_PROJECTION_DIR` 必须在运行前配置，控制面启用认证时填写 `CUBE_API_KEY`。启动前运行 `docker compose config --quiet` 检查配置。
+
+### 3. 启动开发环境
 
 ```bash
 docker compose up --build -d
@@ -76,7 +78,7 @@ curl --fail http://localhost:5050/api/system/ready
 ## 文档导航
 
 - [项目介绍](https://xerrors.github.io/Yuxi/intro/project-overview)：了解能力、概念和系统边界。
-- [快速开始](https://xerrors.github.io/Yuxi/intro/quick-start)：从零启动本地环境。
+- [快速开始](https://xerrors.github.io/Yuxi/intro/quick-start)：准备执行节点并启动开发环境。
 - [命令行工具](docs/intro/cli.md)：登录实例、对话、发送附件和查询知识库。
 - [公开 Agent API 入门](docs/intro/agents-api-quickstart.md)：外部应用创建会话、提交消息和读取结果。
 - [模型配置](https://xerrors.github.io/Yuxi/intro/model-config)：接入聊天、嵌入和重排模型。
@@ -87,34 +89,7 @@ curl --fail http://localhost:5050/api/system/ready
 
 ## 界面预览
 
-<details>
-<summary>查看工作台、知识库、图谱、智能体配置、文件和团队管理截图</summary>
-
-**智能体工作台**：查看回答、工具过程、协作任务和文件交付。
-
-> 截图占位：智能体工作台
-
-**知识库**：管理文档处理、检索测试与评估。
-
-> 截图占位：知识库
-
-**知识图谱**：构建实体和关系，查询关联子图。
-
-> 截图占位：知识图谱
-
-**智能体配置**：选择模型、提示词、工具、MCP 和 Skills。
-
-> 截图占位：智能体配置
-
-**工作区文件**：预览受支持的 HTML、PDF、Markdown、图片和代码，下载任务产物。
-
-> 截图占位：工作区文件
-
-**团队管理**：管理用户、部门和共享资源范围。
-
-> 截图占位：用户与部门管理
-
-</details>
+知识库和知识图谱的操作演示见[演示视频](https://www.bilibili.com/video/BV1erE26iEgv/)；其他界面可从[项目主页](https://xerrors.github.io/Yuxi/)进入查看。
 
 ## 参与贡献
 

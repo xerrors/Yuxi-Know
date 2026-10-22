@@ -27,7 +27,7 @@ Yuxi 是一个面向 RAG、知识图谱和多智能体工作流的知识库平�
 
 API 在 `/api/mcp` 提供只读知识库 MCP，与 HTTP API 共用进程和端口。`api/routers/public_v1/knowledge_mcp.py` 与 Knowledge Public HTTP 入口并列，适配协议并复用 Key 认证、Knowledge Schema 与查询服务，MCP manager 随 API lifespan 启停；资源可见性仍由知识库服务拥有。
 
-企业认证中心由独立私有 YuxiAuth 项目部署和维护；Yuxi 仅消费标准 OIDC/MCP 协议，不保存 Keycloak 部署模板或运行认证数据库。
+企业认证中心由部署方现有的 OIDC 服务提供；Yuxi 仅消费标准 OIDC/MCP 协议，不保存 Keycloak 部署模板或运行认证数据库。
 
 ## 后端代码地图
 

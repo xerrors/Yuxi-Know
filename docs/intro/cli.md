@@ -17,7 +17,7 @@ yuxi --version
 
 `yuxi --version` 输出包版本。调试源码时，使用 `npm run build` 后的 `node dist/cli.js` 代替 `yuxi`；修改 TypeScript 后需要重新构建。
 
-维护者发布到 npm 后，也可以使用 `npm install --global @xerrors/yuxi` 安装，或使用 `npx @xerrors/yuxi --help` 临时运行。包的构建与发布规则见[贡献指南](../develop-guides/contributing.md#候选版本与正式发布)。
+维护者发布到 npm 后，也可以使用 `npm install --global @xerrors/yuxi` 安装，或使用 `npx @xerrors/yuxi --help` 临时运行。包的构建与发布规则见[版本发布流程](../develop-guides/contributing.md#候选版本与正式发布)。
 
 ## 连接实例
 

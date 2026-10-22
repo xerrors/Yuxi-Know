@@ -62,7 +62,7 @@ metadata 可以定义展示名称、说明、控件类型、选项和角色权�
 | `mcps` | 直接添加到 Agent 的已启用 MCP 服务器 |
 | `skills` | 选择共享和内置 Skill；个人 Skill 始终可用 |
 | `preload_skills` | 从首轮请求加载完整说明和依赖的 Skill 子集 |
-| `summary_threshold`、`summary_keep_messages` | 上下文压缩的唯一压力阈值和摘要后保留消息数 |
+| `summary_threshold`、`summary_keep_messages` | 上下文压缩的唯一压力阈值（单位 K，默认 256，即约 262144 token）和摘要后保留消息数；换算规则见[上下文压缩](../mechanisms/context-compression.md) |
 | `summary_prompt`、`summary_tool_result_token_limit` | 摘要提示词和工具结果预览上限 |
 | `max_execution_steps` | 单次运行的 LangGraph 执行步数上限，默认 2000，对应 `recursion_limit` |
 | `model_retry_times` | 模型重试次数，默认 2 |

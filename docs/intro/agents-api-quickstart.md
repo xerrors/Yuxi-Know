@@ -44,7 +44,7 @@ TURN_ID=$(printf '%s' "$INPUT" | jq -r '.turn_id // empty')
 printf '%s\n' "$INPUT" | jq .
 ```
 
-取得 Turn ID 后，重复读取 Turn，直到状态为 `completed`、`failed` 或 `cancelled`；等待回答或审批时按[等待点协议](../advanced/agents-public-api.md#等待取消与队列)提交结构化响应。
+取得 Turn ID 后，重复读取 Turn，直到状态为 `completed`、`failed` 或 `cancelled`；等待回答或审批时按[等待点协议](../advanced/agents-public-api.md#等待、取消与队列)提交结构化响应。
 
 ```bash
 curl --fail-with-body "$BASE_URL/api/v1/agents/sessions/$SESSION_ID/turns/$TURN_ID" \

@@ -75,7 +75,7 @@
 ### 【已收敛并复核保留】模式 6：路径与校验规则多处漂移
 
 - **【已修复】** 沙盒绝对路径规整三处实现宽严不一（`tool_approval.py:56` 拒 `..`/`\\`/`://`，`sandbox/backend.py:96` 仅拒 `..`，`sandbox/paths.py:47` 全拒）。 **结果：共用 runtime 路径校验，直接 backend 与审批一致拒绝 `..`、URL、反斜杠和 NUL。**
-- **【已收敛并复核保留】** workspace 路径校验 4 处各自实现（`://` 只有两处检查；子目录名校验三种机制三种错误类型；ELOOP 被翻译成两种异常）。 **结果：scope 与目录名按 owning 文件边界共用；目录 fd 原语保留 ELOOP，普通文件与远端 wire 映射权限异常，差异见 [沙盒机制](../../mechanisms/sandbox.md#挂载和文件-owner)。**
+- **【已收敛并复核保留】** workspace 路径校验 4 处各自实现（`://` 只有两处检查；子目录名校验三种机制三种错误类型；ELOOP 被翻译成两种异常）。 **结果：scope 与目录名按 owning 文件边界共用；目录 fd 原语保留 ELOOP，普通文件与远端 wire 映射权限异常，差异见 [沙盒机制](../../mechanisms/sandbox.md#文件边界)。**
 - **【已修复】** **"用户可见路径" allowlist 三处手写且已漂移**（复核修正）：`present_artifacts.py` 缺 `..` 检查、`agents/services/artifacts.py` 缺 workdir 空值守卫、异常类型各异——`paths.py:88` 的 `is_runtime_path()` 已存在但无人复用。 **结果：产物发布/读取共用 normalize_artifact_path，拒绝跳转与空绑定，保留 HTTP 领域异常和工具 ValueError 的入口表达。**
 
 ### 【已收敛并复核保留】模式 7：同一数据/契约的多份表示
@@ -230,7 +230,7 @@ API Key 创建整个用例在 `api/routers/identity/users.py:150-200` 路由内�
 - **【已收敛】** identity/oidc.py 只保留配置与协议常量，登录与事务已归 services/oidc.py；配置由消费入口读取，API 启动仍执行 required 校验，移除 import 时固化单例。领域异常已统一。
 - **【已收敛】** 密码、OIDC 与初始化共用登录结果和 HTTP Token 模型，头像沿用 User 的公开 URL；真实 HTTP 验证本地/OIDC/个人资料一致。
 - **【已收敛】** `verify_api_key` 与 CLI 重放共用 `APIKey.is_valid()`，用户失效与身份种类仍按入口校验。
-- **【复核保留】** 四种路径表示分别对应 DB 相对标识、Workdir 浏览、uid Workspace 与 runtime 虚拟空间，转换由路径 Owner 明确提供；Workdir 转发将已绑定根附加到每次文件操作，Viewer 使用受限 capability，个人工作区使用 uid 根。relative_path/root_path/workdir_path 分别指相对标识、浏览根与持久绑定，不能混用；依据见 [沙盒机制](../../mechanisms/sandbox.md#挂载和文件-owner)。
+- **【复核保留】** 四种路径表示分别对应 DB 相对标识、Workdir 浏览、uid Workspace 与 runtime 虚拟空间，转换由路径 Owner 明确提供；Workdir 转发将已绑定根附加到每次文件操作，Viewer 使用受限 capability，个人工作区使用 uid 根。relative_path/root_path/workdir_path 分别指相对标识、浏览根与持久绑定，不能混用；依据见 [沙盒机制](../../mechanisms/sandbox.md#文件边界)。
 - **【已收敛并复核保留】** 路径与子目录名共用 owning 校验；files/viewer 条目共同字段和目录优先排序共用 file_entries。异常表达保留用例差异：个人树缺失返回空列表、已绑定 Viewer 缺失返回 404；上传批次回滚、冲突和预览策略由各 service 拥有。不同物理文件协议不新增无人消费的统一抽象。
 - **【复核：已由 OIDC 专项替代】** state/result 已存 Redis 并绑定浏览器，身份与会话存 PostgreSQL；同名兑换函数不存在。保留五分钟授权、一分钟结果重放和撤销回读协议，不另换存储。
 - **【已收敛】** resource_ownership.py 归 system/services 的跨域治理，Agent/Skill 沿用各自发布入口；identity 只提供当前身份查询。

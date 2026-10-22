@@ -48,7 +48,7 @@ Yuxi 是基于 LangGraph、FastAPI、Vue 和多种持久化服务构建的知识
 ```bash
 python3 scripts/verify_engineering_contracts.py
 python3 -m unittest scripts.test_verify_engineering_contracts
-docker compose exec api uv run --group test pytest test/unit -m "not slow"
+docker compose exec api uv run --no-sync --group test pytest test/unit -m "not slow"
 ```
 
 改动面按下表选择最低证据，并按升级条件扩大；不要用低层级结果替代高风险语义。

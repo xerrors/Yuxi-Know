@@ -2,7 +2,7 @@
 
 状态：implemented
 类型：architecture
-Owner：docs/advanced/keycloak-lab.md
+Owner：docs/advanced/third-party-auth.md
 
 ## 问题
 

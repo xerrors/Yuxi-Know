@@ -33,7 +33,7 @@ Run 取消监听直接清理所属命令，超时与 lease 失效清理由持久
 
 用户设置提供 `GET /api/user/sandbox` 和 `POST /api/user/sandbox/rebuild`。认证上下文决定用户身份，没有删除接口或 Public API。正在运行、取消收尾的 Run 和活动操作阻止重建，后端在用户锁内再次检查并返回 409。空闲确认后替换 VM 并增加代次，清除软件和 Home，保留 Workspace 与 Skills。
 
-单节点部署要求见[沙盒配置与运维](../advanced/sandbox-operations.md)。当前验证使用嵌套 KVM 节点，原生节点重启恢复和资源压力隔离尚未验证。后台进程在休眠恢复后的连续运行不是产品承诺。
+单节点部署要求见[沙盒配置与运维](../advanced/sandbox-operations.md)。原生节点重启恢复和资源压力隔离需要按部署环境单独验证。后台进程在休眠恢复后的连续运行不是产品承诺。
 
 用户环境变量由 `services/environment.py` 保存和验证，runner 在开始执行流时使用已有数据库 session 读取一次快照，普通 shell 命令通过执行上下文复用。快照不进入运行清单或 checkpoint，退出后释放，重试 attempt 重新读取。无 Run 操作及手动验证读取最新配置，文件及清理进程使用独立干净环境。`POST /api/user/agent-env/verify` 通过同一持久命令执行器访问当前用户 VM，不改变当前 Run 或已有进程的环境变量；生效时机、结果边界与页面操作见[用户 Agent 环境变量](../advanced/configuration.md#用户-agent-环境变量)。
 

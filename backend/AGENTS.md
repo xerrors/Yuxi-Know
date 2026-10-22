@@ -29,11 +29,12 @@
 ## 验证
 
 ```bash
-docker compose exec api uv run --group test pytest test/unit -m "not slow"
-docker compose exec api uv run --group test pytest test/integration
-docker compose exec api uv run --group test pytest test/e2e -m e2e
-docker compose exec api uv run ruff check yuxi
-docker compose exec api uv run ruff format yuxi --check
+docker compose exec api uv run --no-sync --group test pytest test/unit -m "not slow"
+(cd backend && uv run ruff check yuxi)
+(cd backend && uv run ruff format yuxi --check)
+(cd backend && uv run ruff check --select I yuxi)
 ```
+
+以上三条 ruff 命令各自在 `backend` 工作目录执行，可从仓库根目录连续运行，检查范围与 `ruff.yml` 一致；后端 ruff 属于 `dev` 依赖组，不在只安装 `test` 组的 API 镜像内运行。完整分批、integration/E2E 命令与容器跳过边界见[测试规范](../docs/develop-guides/testing-guidelines.md#常用命令)。
 
 并发、事务、锁、lease、schema 与 PostgreSQL 专属语义必须在真实 PostgreSQL 上验证；API 行为通过真实 HTTP integration 证明；关键 Run/worker/文件副作用通过 E2E 证明。

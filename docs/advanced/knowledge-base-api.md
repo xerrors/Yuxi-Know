@@ -1,6 +1,6 @@
 # 文档导入与查询 API
 
-本页说明如何通过 HTTP 或 CLI 把文档加入知识库，以及如何查询已经处理的内容。它面向管理员和集成开发者；知识库运行机制见[知识库机制](../mechanisms/knowledge-base.md)，图谱运维见[知识图谱](./knowledge-base-graph.md)。
+本页说明如何通过 HTTP 导入文档，以及如何通过 HTTP 或 CLI 查询已经处理的内容。它面向管理员和集成开发者；知识库运行机制见[知识库机制](../mechanisms/knowledge-base.md)，图谱运维见[知识图谱](./knowledge-base-graph.md)。
 
 ## 权限
 
@@ -21,7 +21,16 @@
 
 ## 知识库管理
 
-管理资源使用 `/api/knowledge/knowledge-bases`。创建知识库的请求字段为 `name`、`description`、`kb_type` 与该类型需要的配置；更新同样使用 `name`。知识库身份使用 `kb_id`。
+管理资源使用 `/api/knowledge/knowledge-bases`。创建知识库的请求字段为 `name`、`description`、`kb_type` 与该类型需要的配置。更新请求要求 `name` 和 `description`，`llm_model_spec`、`additional_params`、`share_config` 可选；知识库身份使用 `kb_id`。
+
+更新请求体至少包含：
+
+```json
+{
+  "name": "<new-name>",
+  "description": "<new-description>"
+}
+```
 
 管理员列表与 `/accessible` 可见列表的响应集合字段为 `knowledge_bases`。创建和详情返回知识库对象；更新返回 `message` 与 `knowledge_base`。文档、图谱构建及检索接口位于该资源下，评估资源位于 `/api/evaluation/knowledge-bases/{kb_id}`。完整字段和路由以部署实例的 OpenAPI 为准。
 
@@ -31,7 +40,7 @@
 
 ```http
 POST /api/knowledge/knowledge-bases/{kb_id}/documents
-Authorization: Bearer <admin-token>
+Authorization: Bearer <admin-jwt-or-full-api-key>
 Content-Type: application/json
 
 {
@@ -50,7 +59,7 @@ Content-Type: application/json
 需要在每个阶段检查结果时，按下面顺序调用：
 
 1. `POST /api/knowledge/files/upload?kb_id=<kb-id>` 上传原文件，保存 `file_path`、`content_hash` 和 `size`。
-2. `POST /api/knowledge/knowledge-bases/{kb_id}/documents/add` 创建文件记录；这一步不解析、不索引。
+2. `POST /api/knowledge/knowledge-bases/{kb_id}/documents/add` 创建文件记录，请求体为 `{"items":["<file_path>"],"params":{"content_hashes":{"<file_path>":"<content_hash>"}}}`，其中 `file_path` 与 `content_hash` 来自上一步；这一步不解析、不索引。
 3. `POST /api/knowledge/knowledge-bases/{kb_id}/documents/parse`，请求体可以是文件 ID 数组，也可以是 `{"file_ids":[...],"params":{...}}`；回读状态确认 `parsed`。
 4. `POST /api/knowledge/knowledge-bases/{kb_id}/documents/index`，请求体包含 `file_ids` 和可选 `params`；回读状态确认 `indexed`。
 

@@ -4,7 +4,19 @@
 
 ## 开启前提
 
-在 API/worker 的环境变量中放置一把专用随机密钥，例如 `YUXI_UID_SIGNATURE_SECRET=$(openssl rand -hex 32)`。不要复用 `JWT_SECRET_KEY` 等认证密钥：签名密钥与认证密钥的暴露面不同，混用会让一处泄漏同时放大为两类风险。保存供应商配置时，Yuxi 会校验该变量是否已配置，未配置则拒绝保存并提示配置方法；密钥只从这同一个固定变量读取，不写入数据库。修改容器环境变量后需要重建 API 和 worker，操作见[生产部署](./deployment.md)。
+在 API/worker 共同读取的 `.env`（开发）或 `.env.prod`（生产）中放置一把专用随机密钥。先生成值：
+
+```bash
+openssl rand -hex 32
+```
+
+再把输出写入环境文件：
+
+```dotenv
+YUXI_UID_SIGNATURE_SECRET=<generated-hex-value>
+```
+
+不要复用 `JWT_SECRET_KEY` 等认证密钥：签名密钥与认证密钥的暴露面不同，混用会让一处泄漏同时放大为两类风险。保存供应商配置时，Yuxi 会校验该变量是否已配置，未配置则拒绝保存并提示配置方法；密钥只从这同一个固定变量读取，不写入数据库。修改容器环境变量后需要重建 API 和 worker，操作见[生产部署](./deployment.md)。
 
 开启开关即表示该供应商的请求会携带用户 UID，请确认供应商或中间网关接受这个额外请求头。该头只覆盖 OpenAI 兼容与 Anthropic 供应商；Gemini 不支持此请求头，Yuxi 会禁用该选项并拒绝通过管理 API 开启。知识库抽取、评测等后台系统任务不携带该头，这些用量按系统 API Key 计量。
 

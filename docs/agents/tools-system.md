@@ -66,7 +66,7 @@ def example_tool(text: str) -> str:
 
 收窄工具参数 schema 的部署升级前，需要停止接收新的提问，并完成或取消已有提问等待点，再替换 API 和 worker。LangGraph 恢复会重放 checkpoint 中的原始工具调用参数；旧入口接受的字符串选项等参数会被新 schema 拒绝，即使等待点问题已标准化也不能直接恢复。升级不自动迁移或取消这些调用。
 
-LangGraph checkpoint 保存标准问题结构，执行服务将其投影为持久等待点。Web、CLI 和 API 客户端使用等待点中的 `question_id` 提交回答；Web 只转换展示字段和推导文本、单选、多选类型，不重新生成 ID。恢复沿用同一 Turn，协议入口见 [Public API](../advanced/agents-public-api.md)。参数契约与工具实现在[提问模块](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/tools/builtin/ask_user_question.py)，完整恢复链路由[生命周期 E2E](https://github.com/xerrors/Yuxi/blob/main/backend/test/e2e/test_agent_lifecycle_e2e.py)验证。
+LangGraph checkpoint 保存标准问题结构，执行服务将其投影为持久等待点。Web 和 Public API 客户端使用等待点中的 `question_id` 提交回答；Web 只转换展示字段和推导文本、单选、多选类型，不重新生成 ID。npm CLI 遇到等待点时只提示转到网页继续，不提交回答。恢复沿用同一 Turn，协议入口见 [Public API](../advanced/agents-public-api.md)。参数契约与工具实现在[提问模块](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/tools/builtin/ask_user_question.py)，完整恢复链路由[生命周期 E2E](https://github.com/xerrors/Yuxi/blob/main/backend/test/e2e/test_agent_lifecycle_e2e.py)验证。
 
 ## 内置工具：记录改进线索
 

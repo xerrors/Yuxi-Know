@@ -1,93 +1,169 @@
 # 快速开始
 
-这份教程带你在本机启动一套 Yuxi，并完成第一次登录。走完流程后，你会有一个可以打开的 Web 界面和 API 文档；模型配置、知识库和生产部署分别在后续页面说明。
+本教程完成一次可用的 Yuxi 部署：在一台应用主机上启动 Compose 服务，并连接一台已经运行 Cube 的 Linux/KVM 执行节点。Cube 不由 Yuxi 启动；API 和 worker 启动时会检查 Cube 控制面、用户模板和数据代理，检查失败则服务不会进入就绪状态。
 
-## 你需要准备什么
+## 先确认两台主机的角色
 
-- 已安装 [Docker Engine](https://docs.docker.com/get-docker/) 和 Docker Compose v2。
-- 已按[沙盒配置与运维](../advanced/sandbox-operations.md#原生执行节点)准备专用 Linux/KVM Cube 执行节点、用户模板及与应用共享的 Workspace、Skills 目录。macOS 和 Windows 应用环境也需要可访问的 Linux/KVM 节点。
-- 一个可用的大模型 API。下面的初始化脚本以 SiliconFlow 为例；也可以先复制 `.env.template`，改用其他受支持的供应商。
-- 能够访问 Docker 镜像仓库和模型服务的网络。默认拓扑会启动知识库和图谱依赖，但 OCR 服务只在需要时通过 `all` profile 启动。
+| 角色 | 运行内容 | 要求 |
+| --- | --- | --- |
+| 应用主机 | `api`、`worker`、`frontend`、PostgreSQL、Redis、MinIO、Milvus、Neo4j 等 Compose 服务 | Docker Engine 和 Compose v2；能通过私网访问执行节点的控制面和代理端口 |
+| 执行节点 | Cube v0.7.3 和用户 VM | x86_64 Linux、`/dev/kvm`、管理员权限、Docker（构建用户模板）；与应用主机共享 Workspace 与 Skills 目录 |
 
-默认开发拓扑不要求 GPU。MinerU 和 PP-Structure-V3 等本地 OCR 服务需要 GPU，配置方法见[文档处理与 OCR](../advanced/document-processing.md)。
+两台角色可以在不同机器上，也可以在同一台 Linux 机器上使用嵌套开发节点。两种方式都必须先让 Cube 运行，再启动 Yuxi。如果同一台 Linux 机器既运行应用又提供 `/dev/kvm`，可以直接在这台机器上按方案 A 安装 Cube；方案 B 用于需要把开发节点放进独立容器或虚拟机的场景。
 
-## 1. 获取代码
+## 1. 启动 Cube 执行节点
 
-当前候选源码版本为 `v0.8.0.beta2`，从主仓库的 `develop/0-8-0` 分支获取，tag 在验收后创建。本版本仅支持全新部署，请使用独立数据目录；旧数据库与索引不会自动升级。变化与限制见[0.8.0 更新说明](../develop-guides/releases/0.8.0.md)，数据要求见[生产部署](../advanced/deployment.md)。
+### 方案 A：独立 Linux/KVM 节点（推荐）
+
+在专用节点上执行：
+
+```bash
+test -e /dev/kvm && echo "KVM available"
+
+git clone --branch develop/0-8-0 --depth 1 https://github.com/xerrors/Yuxi.git
+cd Yuxi
+
+sudo bash docker/cube/setup-node.sh
+sudo cp docker/cube/Dockerfile.user docker/cube/build-template.sh /opt/yuxi-cube/
+sudo bash /opt/yuxi-cube/build-template.sh
+
+curl --fail http://127.0.0.1:3000/health
+```
+
+`setup-node.sh` 安装 Cube v0.7.3 并启动控制面；`build-template.sh` 构建 `yuxi-user` 用户模板，默认资源为 `--cpu 1000 --memory 1024`。脚本只用于专用执行节点，不要运行在应用容器或用户 VM 中。Cube 的安装依赖、平台要求和其他安装方式以 [CubeSandbox 官方仓库](https://github.com/TencentCloud/CubeSandbox) 为准；本仓库固定 v0.7.3，并提供上述封装脚本。
+
+执行节点需要把应用主机的 `YUXI_STATE_DIR/yuxi/threads` 和 `YUXI_STATE_DIR/yuxi/skill-projections` 通过 NFS、bind mount 或其他共享文件系统挂到 `/data/shared/yuxi/threads` 和 `/data/shared/yuxi/skill-projections`。只填写环境变量不会创建共享；应用和节点必须看到同一份文件。共享目录的创建与验证见 3.1。
+
+Cube 默认只允许 `/data/shared/` 下的宿主机挂载；使用其他目录时按[沙盒配置与运维](../advanced/sandbox-operations.md#原生执行节点)配置允许前缀。私网放行节点的控制面端口 `3000` 和数据代理端口（默认 `80`），只对应用主机开放。
+
+### 方案 B：当前 Linux 机器的嵌套开发节点
+
+只有一台 Linux 机器时，可以在本机运行嵌套 Cube。先确认本机具备 KVM：
+
+```bash
+test -e /dev/kvm && echo "KVM available"
+grep -Eoc '(vmx|svm)' /proc/cpuinfo
+```
+
+`grep` 结果为 0 表示 CPU 未暴露虚拟化标志。如果 `/dev/kvm` 不存在，或者当前 Linux 本身是虚拟机且宿主机没有开启嵌套虚拟化，本机不能作为 Cube 节点。Docker Desktop 默认不能提供这个节点。此时改用方案 A 的独立 Linux/KVM 主机，或选择支持嵌套虚拟化的 Linux 云主机/裸金属实例。
+
+嵌套模式的 `node.env`、Compose、Guest 内初始化和端口配置见[当前机器的嵌套开发节点](../advanced/sandbox-operations.md#当前机器的嵌套开发节点)。即使在同一台机器上，Cube 仍是独立的 Compose 项目，不由 Yuxi 根 Compose 启动。
+
+## 2. 获取代码（应用主机）
+
+本教程使用 `develop/0-8-0` 分支。0.8 仅支持全新部署，请使用独立数据目录；旧数据库与索引不会自动升级。变化与限制见[0.8.0 更新说明](../develop-guides/releases/0.8.0.md)，数据要求见[生产部署](../advanced/deployment.md)。
 
 ```bash
 git clone --branch develop/0-8-0 --depth 1 https://github.com/xerrors/Yuxi.git
 cd Yuxi
 ```
 
-如果你要参与开发，可以改为克隆 `main`；开发分支的行为可能先于发布版本变化。
+## 3. 初始化应用配置
 
-## 2. 初始化环境
+### 3.1 确认共享目录
 
-Linux/macOS：
+应用和 Cube 节点必须看到同一份 Workspace 与 Skills 文件。默认 `YUXI_STATE_DIR=./docker/volumes`；如果使用其他目录，替换下面的路径。
 
 ```bash
-./scripts/init.sh
+mkdir -p ./docker/volumes/yuxi/threads ./docker/volumes/yuxi/skill-projections
+touch ./docker/volumes/yuxi/threads/.mount-check
 ```
 
 Windows PowerShell：
 
 ```powershell
+New-Item -ItemType Directory -Force docker/volumes/yuxi/threads, docker/volumes/yuxi/skill-projections | Out-Null
+New-Item -ItemType File -Force docker/volumes/yuxi/threads/.mount-check | Out-Null
+```
+
+在执行节点确认：
+
+```bash
+ls /data/shared/yuxi/threads/.mount-check
+```
+
+文件不存在时先修正共享挂载；只填写 `.env` 不会创建共享。
+
+### 3.2 生成 `.env` 并写入 Cube 配置
+
+方案 B 的嵌套节点使用 Docker gateway 的控制端口 13001 和代理端口 18081，按[嵌套开发节点](../advanced/sandbox-operations.md#当前机器的嵌套开发节点)填写，不要套用下面的 3000/80。
+
+Linux/macOS 先把 Cube 连接值导出为环境变量，再运行初始化脚本。脚本会把它们写入 `.env`，并在拉取和构建阶段用于 Compose 插值：
+
+```bash
+export CUBE_API_URL='http://<node-private-ip>:3000'
+export CUBE_API_KEY=''  # 未启用控制面认证时留空
+export CUBE_PROXY_NODE_IP='<node-private-ip>'
+export CUBE_PROXY_PORT_HTTP=80
+export CUBE_TEMPLATE_ID=yuxi-user
+export CUBE_NODE_USER_DATA_DIR=/data/shared/yuxi/threads
+export CUBE_NODE_SKILL_PROJECTION_DIR=/data/shared/yuxi/skill-projections
+
+./scripts/init.sh
+```
+
+Windows PowerShell 先复制模板并填写 `.env`，再运行初始化脚本；`init.ps1` 不会把进程环境里的 `CUBE_*` 写入 `.env`：
+
+```powershell
+Copy-Item .env.template .env
+# 编辑 .env，填写模型 Key、两个安全密钥和下面的 Cube 配置
 .\scripts\init.ps1
 ```
 
-脚本会读取或生成以下内容，并写入项目根目录的 `.env`：
+也可以在任意平台复制 `.env.template` 为 `.env`，手动填写后跳过初始化脚本，直接执行下一步的 `docker compose up --build -d`。
 
-- 必填的 `SILICONFLOW_API_KEY`。
+需要写入 `.env` 的 Cube 配置：
+
+```dotenv
+CUBE_API_URL=http://<node-private-ip>:3000
+# 未启用控制面认证时留空
+CUBE_API_KEY=
+CUBE_PROXY_NODE_IP=<node-private-ip>
+CUBE_PROXY_PORT_HTTP=80
+CUBE_TEMPLATE_ID=yuxi-user
+CUBE_NODE_USER_DATA_DIR=/data/shared/yuxi/threads
+CUBE_NODE_SKILL_PROJECTION_DIR=/data/shared/yuxi/skill-projections
+```
+
+初始化脚本还会生成以下内容：
+
+- 必填的 `SILICONFLOW_API_KEY`；其他供应商在启动后于「智能体 → 模型供应商」接入。
 - `JWT_SECRET_KEY` 和 `API_KEY_DERIVATION_SECRET` 两个相互独立的随机密钥，每个至少 32 个字符。
 - `YUXI_INSTANCE_ID`，用于标识这套部署。
 
-脚本还会拉取基础镜像并构建 MinIO 与 `storage-init`。镜像加速站失败时，Linux/macOS 脚本会提示并尝试原仓库；两处都失败时退出，可在网络恢复后重新运行。它不会把密钥打印到终端，Linux/macOS 下会把环境文件权限设为 `600`。已有配置中的安全密钥在未显式覆盖时保留；升级时请保留 `JWT_SECRET_KEY` 和 `API_KEY_DERIVATION_SECRET`。
+脚本还会拉取基础镜像并构建 MinIO 与 `storage-init`。镜像加速站失败时，Linux/macOS 脚本会提示并尝试原仓库；两处都失败时退出，可在网络恢复后重新运行。它不会把密钥打印到终端，Linux/macOS 下会把环境文件权限设为 `600`。已有配置中的安全密钥在未显式覆盖时保留。
 
-网页搜索与正文抓取在登录后由超级管理员进入「设置 → 网络搜索」配置；初始化无需填写搜索凭据，也可通过环境变量预配置。
-
-Linux/macOS 上的 Agent 或 CI 可以先通过安全的环境注入机制提供 `SILICONFLOW_API_KEY`，再关闭交互：
+最后在应用主机验证节点可达并检查 Compose 配置：
 
 ```bash
-YUXI_INIT_NON_INTERACTIVE=1 ./scripts/init.sh
+curl --fail http://<node-private-ip>:3000/health
+docker compose config --quiet
 ```
 
-环境变量优先于文件，完整输入范围由[初始化脚本](https://github.com/xerrors/Yuxi/blob/main/scripts/init.sh)的配置循环维护。未提供的应用密钥和实例标识自动生成，缺少模型 Key 时明确失败；非空非法安全密钥不会自动轮换。环境变量中的配置值必须为单行，脚本保留美元符等字面值。PowerShell 入口使用交互式流程。
-
-`YUXI_ENV_FILE` 选择目标文件，默认 `.env`；`YUXI_INIT_SKIP_IMAGES=1` 只准备配置，稍后仍需构建镜像。开关只接受 `0` 或 `1`。生产部署使用[独立生产配置](../advanced/deployment.md#_1-准备生产配置)。
-
-不使用初始化脚本时，可以手动开始：
-
-```bash
-cp .env.template .env
-```
-
-然后在 `.env` 中填入模型 API Key 和两个独立的安全密钥。开发 Compose 会为部分基础服务提供默认值；生产部署不要沿用这些默认值。
-
-无论使用脚本还是手动初始化，都需要按[执行节点配置](../advanced/sandbox-operations.md#原生执行节点)在 `.env` 中填写 `CUBE_API_URL`、`CUBE_PROXY_NODE_IP`、`CUBE_NODE_USER_DATA_DIR` 和 `CUBE_NODE_SKILL_PROJECTION_DIR`；控制面启用认证时还需填写节点提供的 `CUBE_API_KEY`。初始化脚本不部署 Cube 节点，也不生成其控制凭据。启动前运行 `docker compose config --quiet`，确认必填配置齐全。
-
-## 3. 启动服务
+## 4. 启动 Yuxi
 
 ```bash
 docker compose up --build -d
 ```
 
-第一次启动需要下载镜像并构建应用，耗时取决于网络和机器性能。用下面的命令查看状态和 API 日志：
+这条命令只启动应用主机上的 Compose 服务，不会启动 Cube。第一次启动需要下载镜像并构建应用，耗时取决于网络和机器性能。用下面的命令查看状态和 API 日志：
 
 ```bash
 docker compose ps
 docker compose logs -f api
 ```
 
-等 API 的健康检查完成后，可直接检查就绪接口：
+等 API 的健康检查完成后，检查就绪接口：
 
 ```bash
 curl --fail http://localhost:5050/api/system/ready
 ```
 
-返回 JSON 且 `status` 为 `ready`，表示 API、PostgreSQL、Redis 和兼容 worker 已达到接流量条件。它只证明启动条件满足，不代替一次真实登录或对话验证。
+返回 JSON 且 `status` 为 `ready`，表示 API、PostgreSQL、Redis 和兼容 worker 已达到接流量条件。它不代替一次真实登录或对话验证，也不证明用户 VM 已经创建成功。
 
-## 4. 打开 Yuxi
+如果 API 或 worker 反复重启，先查看 `sandbox_provider` 启动组件：Cube 不可达、`CUBE_API_KEY` 错误、模板别名不存在或代理端口不可达都会让启动失败。节点侧的健康检查和模板构建结果见步骤 1。
+
+## 5. 打开 Yuxi
 
 | 入口 | 地址 |
 | --- | --- |
@@ -96,11 +172,24 @@ curl --fail http://localhost:5050/api/system/ready
 | API 存活检查 | <http://localhost:5050/api/system/health> |
 | API 就绪检查 | <http://localhost:5050/api/system/ready> |
 
-首次打开 Web 界面时，按页面提示初始化超级管理员账号。登录成功后，在“智能体 → 模型供应商”配置模型，再创建对话并发送测试消息。收到该轮的最终回答后，再按[知识库入门](./knowledge-base.md)添加文档。
+首次打开 Web 界面时，按页面提示初始化超级管理员账号。登录成功后，在「智能体 → 模型供应商」配置模型，再创建对话并发送测试消息。
 
-在对话输入区点击「+」或输入「@」，可从同一个菜单上传附件、添加图片或引用可用资源。附件与图片的用途和处理方式见[文档处理](../advanced/document-processing.md)。
+第一次真正执行 Agent 时才会创建该用户的 Cube VM，启动应用本身不会预创建 VM。首次执行可能比后续请求慢；VM 空闲后按 `SANDBOX_IDLE_SECONDS`（默认 300 秒）休眠，状态在「设置 → Agent 环境」查看。收到该轮的最终回答后，再按[知识库入门](./knowledge-base.md)添加文档。
 
 ## 常见问题
+
+### API 或 worker 启动失败，日志出现 `sandbox_provider`
+
+按顺序检查：
+
+1. 在应用主机执行 `curl --fail http://<node-private-ip>:3000/health`；失败时检查节点是否运行、私网路由和防火墙。
+2. 确认 `CUBE_API_URL` 使用节点的控制面地址，`CUBE_PROXY_NODE_IP` 和 `CUBE_PROXY_PORT_HTTP` 指向数据代理。
+3. 确认模板别名与 `CUBE_TEMPLATE_ID` 一致，默认是 `yuxi-user`；模板构建失败时重新执行步骤 1 的 `build-template.sh`。
+4. 确认两个共享目录在节点上存在且与应用主机看到同一份文件。
+
+### 本机没有 `/dev/kvm` 或无法开启嵌套虚拟化
+
+本机不能运行 Cube。使用独立的 Linux/KVM 主机作为执行节点；云主机需要选择支持嵌套虚拟化的实例类型。macOS 和 Windows 的 Docker Desktop 默认不能替代执行节点。CubeSandbox 的平台要求和安装方式见[官方仓库](https://github.com/TencentCloud/CubeSandbox)。
 
 ### 容器没有变成 healthy
 
@@ -152,4 +241,3 @@ docker compose logs --tail=100 milvus etcd minio graph
 - [知识库与知识图谱](./knowledge-base.md)：上传文档并验证检索。
 - [命令行工具](./cli.md)：用 npm CLI 连接实例、进行终端对话和查询知识库。
 - [生产部署](../advanced/deployment.md)：配置生产环境和验证部署。
-- [机制详解](../mechanisms/index.md)：理解运行、文件和存储边界。
