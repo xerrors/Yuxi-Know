@@ -2,15 +2,13 @@
 
 Yuxi 是基于 LangGraph、FastAPI、Vue 和多种持久化服务构建的知识库与多智能体平台。Docker Compose 是开发拓扑的事实来源；修改不熟悉的模块前先阅读 [ARCHITECTURE.md](ARCHITECTURE.md)，再用符号搜索确认真实实现。
 
-## 每次任务先加载什么
+## 按任务范围加载
 
-- [ARCHITECTURE.md](ARCHITECTURE.md)：稳定边界、主链路和架构不变量。
-- [Yuxi Spec Loop](docs/develop-guides/spec-loop.md)：非平凡变更从提案、证据到收敛的流程。
-- [工程信任系统](docs/develop-guides/engineering-trust.md)：语义 Owner、证据、决策记录、派生审计和 gate 规则。
-- [测试规范](docs/develop-guides/testing-guidelines.md)：unit、integration、E2E 的职责与命令。
-- [贡献指南](docs/develop-guides/contributing.md)：分支、独立 Review、commit 和 PR 流程。
-- [并行工作树与隔离运行环境](docs/develop-guides/parallel-worktree-environments.md)：同时运行多个分支、复用长期数据或处理 Schema 不兼容时加载。
-- 用户在当前任务中的明确要求优先于本文件；修改 `backend/`、`frontend/` 或 `docs/` 时同时遵循该子树的 `AGENTS.md`。子树规则只补充本目录，不复制回根文件。
+- 始终以本文件为准；修改 `backend/`、`frontend/` 或 `docs/` 时，同时读取该子树的 `AGENTS.md`。子树规则只补充本目录，不复制回根文件。
+- 改一个文案、修一个小 bug、机械重命名或等价清理：只读本文件和相关源码，不预加载 `ARCHITECTURE.md` 或 develop-guides。
+- 跨模块设计或实现、改变状态/权限/持久化/外部副作用，或需要选择架构方案：先读 [ARCHITECTURE.md](ARCHITECTURE.md)；非平凡变更再读 [Yuxi Spec Loop](docs/develop-guides/spec-loop.md) 和[工程信任系统](docs/develop-guides/engineering-trust.md)，涉及测试时读[测试规范](docs/develop-guides/testing-guidelines.md)。
+- 提交或创建 PR 前读取[贡献指南](docs/develop-guides/contributing.md)。只有同时运行多个分支、复用长期数据或处理 Schema 不兼容时，才读取[并行工作树与隔离运行环境](docs/develop-guides/parallel-worktree-environments.md)。
+- 用户在当前任务中的明确要求优先于本文件。
 
 ## 任务与决策
 
@@ -43,7 +41,7 @@ Yuxi 是基于 LangGraph、FastAPI、Vue 和多种持久化服务构建的知识
 - Expected output、snapshot 和 fixture 只能显式更新并审阅；CI 不得一边生成 oracle 一边验证 oracle。
 - 实际执行命令、结果和未执行原因写入 PR；未验证不能写成通过。
 
-提交前在仓库根目录至少运行：
+代码变更提交前在仓库根目录至少运行：
 
 ```bash
 python3 scripts/verify_engineering_contracts.py
@@ -51,7 +49,7 @@ python3 -m unittest scripts.test_verify_engineering_contracts
 docker compose exec api uv run --no-sync --group test pytest test/unit -m "not slow"
 ```
 
-改动面按下表选择最低证据，并按升级条件扩大；不要用低层级结果替代高风险语义。
+仅文档或导航改动按下表执行最低证据，不要求运行后端 unit；其他改动按表选择并升级。不要用低层级结果替代高风险语义。
 
 | 改动面 | 最低证据 | 何时升级 |
 |---|---|---|
