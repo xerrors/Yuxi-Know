@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from yuxi.bootstrap.models import load_models
+from yuxi.infrastructure.postgres.models import load_models
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.extensions.tools.knowledge import tools
 from yuxi.modules.knowledge.repositories.bases import KnowledgeBaseRepository

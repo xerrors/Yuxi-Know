@@ -44,3 +44,13 @@ async def list_skill_cards_for_user(
     personal_cards = [replace(item, overrides_shared=item.slug in shared_slugs) for item in personal_items]
     shared_cards = [replace(resolved_shared_skill(item), shadowed_by_personal=item.slug in personal_slugs) for item in shared_items]
     return [*personal_cards, *shared_cards]
+
+
+async def list_managed_shared_skills(db: AsyncSession, user: User) -> list:
+    """返回当前管理员可管理的共享 Skill 原始定义。"""
+    return await SkillRepository(db).list_visible_for_management(user)
+
+
+async def list_builtin_skill_definitions(db: AsyncSession) -> list:
+    """返回内置 Skill 定义。"""
+    return await SkillRepository(db).list_builtin()

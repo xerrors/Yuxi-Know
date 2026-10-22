@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from yuxi.api.dependencies.auth import get_db, get_required_user, get_superadmin_user
 from yuxi.api.uploads import read_upload_with_limit
 from yuxi.modules.agents.permissions import is_builtin_agent, user_can_access_agent, user_can_manage_agent
-from yuxi.modules.agents.repositories.definitions import AgentRepository
 from yuxi.modules.agents.runtime.agent_backends import (
     AgentBackendNotFoundError,
     get_agent_backend,
@@ -19,6 +18,9 @@ from yuxi.modules.agents.services.definitions import (
     create_agent_definition,
     delete_agent_definition,
     ensure_default_agent_definition,
+    get_agent_definition_by_slug,
+    get_visible_agent_definition,
+    list_visible_agent_definitions,
     serialize_agent_definition,
     set_default_agent_definition,
     update_agent_definition,
@@ -114,9 +116,7 @@ async def list_agents(
     current_user: User = Depends(get_required_user),
     db: AsyncSession = Depends(get_db),
 ):
-    repo = AgentRepository(db)
-    await ensure_default_agent_definition(db)
-    items = await repo.list_visible(user=current_user)
+    items = await list_visible_agent_definitions(db, user=current_user)
     backend_info_cache: dict[tuple[str, bool, str], dict] = {}
     agents = [await _serialize_agent(db, item, current_user, backend_info_cache=backend_info_cache) for item in items]
     return {"agents": agents}
@@ -174,9 +174,8 @@ async def _create_agent_response(db, user, payload, *, skill_upload=None):
 
 @agent_router.get("/{agent_id}")
 async def get_agent(agent_id: str, current_user: User = Depends(get_required_user), db: AsyncSession = Depends(get_db)):
-    repo = AgentRepository(db)
     agent_slug = agent_id  # 兼容既有路径参数名；这里实际是 Agent.slug。
-    item = await repo.get_visible_by_slug(slug=agent_slug, user=current_user, for_run=False)
+    item = await get_visible_agent_definition(db, user=current_user, slug=agent_slug)
     if not item:
         raise HTTPException(status_code=404, detail="智能体不存在")
     return {"agent": await _serialize_agent(db, item, current_user, include_configurable_items=True)}
@@ -189,9 +188,8 @@ async def update_agent(
     current_user: User = Depends(get_required_user),
     db: AsyncSession = Depends(get_db),
 ):
-    repo = AgentRepository(db)
     agent_slug = agent_id  # 兼容既有路径参数名；这里实际是 Agent.slug。
-    item = await repo.get_visible_by_slug(slug=agent_slug, user=current_user, for_run=False)
+    item = await get_visible_agent_definition(db, user=current_user, slug=agent_slug)
     if not item:
         raise HTTPException(status_code=404, detail="智能体不存在")
     if not user_can_manage_agent(current_user, item):
@@ -223,9 +221,8 @@ async def update_agent(
 
 @agent_router.delete("/{agent_id}")
 async def delete_agent(agent_id: str, current_user: User = Depends(get_required_user), db: AsyncSession = Depends(get_db)):
-    repo = AgentRepository(db)
     agent_slug = agent_id  # 兼容既有路径参数名；这里实际是 Agent.slug。
-    item = await repo.get_visible_by_slug(slug=agent_slug, user=current_user, for_run=False)
+    item = await get_visible_agent_definition(db, user=current_user, slug=agent_slug)
     if not item:
         raise HTTPException(status_code=404, detail="智能体不存在")
     if not user_can_manage_agent(current_user, item):
@@ -249,9 +246,8 @@ async def set_agent_default(
     current_user: User = Depends(get_superadmin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    repo = AgentRepository(db)
     agent_slug = agent_id  # 兼容既有路径参数名；这里实际是 Agent.slug。
-    item = await repo.get_by_slug(agent_slug)
+    item = await get_agent_definition_by_slug(db, slug=agent_slug)
     if not item:
         raise HTTPException(status_code=404, detail="智能体不存在")
     try:

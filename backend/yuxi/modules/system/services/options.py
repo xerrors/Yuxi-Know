@@ -153,12 +153,6 @@ async def update_option_value(
     for field_key, raw_value in value.items():
         field = fields[field_key]
         updated[field_key] = normalize_option_value(field, raw_value)
-        if key == "system_options" and field_key in {"web_search_provider", "web_fetch_provider"} and updated[field_key]:
-            from yuxi.modules.extensions.options import WEB_PROVIDER_OPTIONS
-
-            credentials = await WEB_PROVIDER_OPTIONS[updated[field_key]].get(db)
-            if not credentials.get("api_key"):
-                raise ValueError("请先配置该供应商的 API Key")
     return await save_option_value(db, record, updated, updated_by)
 
 

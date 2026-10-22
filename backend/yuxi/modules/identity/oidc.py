@@ -11,7 +11,6 @@ COOKIE_NAME = "yuxi_oidc_browser"
 STATE_TTL = 300
 RESULT_TTL = 60
 SESSION_TTL = 3600
-MAX_TOKEN_AGE = 600
 
 
 class OIDCConfig(BaseModel):

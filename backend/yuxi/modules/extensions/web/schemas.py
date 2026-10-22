@@ -6,8 +6,10 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-SearchProvider = Literal["tavily", "deepseek", "doubao"]
-FetchProvider = Literal["tavily", "deepseek"]
+from yuxi.shared.web_providers import FETCH_PROVIDER_IDS, SEARCH_PROVIDER_IDS
+
+SearchProvider = Literal[*SEARCH_PROVIDER_IDS]
+FetchProvider = Literal[*FETCH_PROVIDER_IDS]
 
 
 class SearchInput(BaseModel):

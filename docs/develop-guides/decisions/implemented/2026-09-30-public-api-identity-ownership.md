@@ -4,6 +4,8 @@
 类型：architecture
 Owner：backend/yuxi/modules/identity/services/public_auth.py
 
+实现位置更新：模型注册现由 `backend/yuxi/infrastructure/postgres/models.py` 拥有，见 [2026-10-21 后端边界收敛](./2026-10-21-backend-boundary-and-provider-catalog.md)。本记录保留当次命令与证据。
+
 ## 问题
 
 API Key 校验原位于 HTTP dependency，App 终端用户解析原位于 Agent 目录服务。身份规则分散，其他业务入口需要依赖 agents 才能复用终端用户身份。

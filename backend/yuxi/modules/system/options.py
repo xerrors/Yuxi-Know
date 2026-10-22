@@ -1,6 +1,7 @@
-"""各域配置定义的显式汇总，持久化与运行时读取由各自 Owner 提供。"""
+"""系统配置定义；跨域汇总由 bootstrap 组合根拥有。"""
 
 from yuxi.modules.system.services.options import Option
+from yuxi.shared.web_providers import FETCH_PROVIDER_IDS, SEARCH_PROVIDER_IDS
 
 system_options = Option(
     key="system_options",
@@ -15,14 +16,14 @@ system_options = Option(
                 "type": "string",
                 "environment": "WEB_SEARCH_PROVIDER",
                 "default": "",
-                "choices": ["", "tavily", "deepseek", "doubao"],
+                "choices": ["", *SEARCH_PROVIDER_IDS],
             },
             {
                 "key": "web_fetch_provider",
                 "label": "默认网页抓取供应商",
                 "type": "string",
                 "default": "",
-                "choices": ["", "tavily", "deepseek"],
+                "choices": ["", *FETCH_PROVIDER_IDS],
             },
             {
                 "key": "default_model",
@@ -64,13 +65,3 @@ system_options = Option(
         ],
     },
 )
-
-
-def get_option_definitions() -> dict[str, Option]:
-    """显式汇总各模块配置，系统管理机制不拥有领域定义。"""
-    from yuxi.modules.documents.options import DOCUMENT_OPTIONS
-    from yuxi.modules.extensions.options import WEB_PROVIDER_OPTIONS, remote_skill_source_policy
-
-    return {
-        option.key: option for option in (*DOCUMENT_OPTIONS, *WEB_PROVIDER_OPTIONS.values(), remote_skill_source_policy, system_options)
-    }

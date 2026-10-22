@@ -33,6 +33,10 @@ from yuxi.modules.knowledge.graphs.service import KnowledgeGraphService
 from yuxi.modules.knowledge.read_models import KnowledgeBaseDetail
 from yuxi.modules.knowledge.runtime import knowledge_base as knowledge_base_manager
 from yuxi.modules.knowledge.services import graph_build
+from yuxi.modules.knowledge.services.document_actions import (
+    submit_document_action,
+    submit_pending_document_action,
+)
 from yuxi.modules.knowledge.services.uploads import DuplicateDocumentContentError, stage_document
 from yuxi.modules.knowledge.utils import (
     is_minio_url,
@@ -53,8 +57,6 @@ knowledge = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
 MAX_DIRECT_DOCUMENT_ACTION_FILE_IDS = 1000
 MAX_UPLOAD_SIZE_BYTES = 100 * 1024 * 1024
-PENDING_PARSE_STATUSES = ["uploaded"]
-PENDING_INDEX_STATUSES = ["parsed", "error_indexing"]
 
 
 class UpdateKnowledgeBaseRequest(BaseModel):
@@ -702,19 +704,15 @@ async def _enqueue_document_action_job(
 ) -> dict:
     """提交管理端指定文件的解析或入库任务。"""
     params = _ensure_document_params(params)
-    label = "解析" if action == "parse" else "入库"
     try:
-        job, _ = await submit_job(
-            name=f"文档{label} ({kb_info.name})",
-            job_type=f"knowledge_{action}",
-            payload={
-                "kb_id": kb_id,
-                "file_ids": file_ids,
-                "params": params,
-                "operator_id": operator_id,
-            },
+        return await submit_document_action(
+            kb_id=kb_id,
+            file_ids=file_ids,
+            params=params,
+            operator_id=operator_id,
+            kb_info=kb_info,
+            action=action,
         )
-        return {"message": f"{label}任务已提交", "status": "queued", "job_id": job.id}
     except HTTPException:
         raise
     except Exception as e:
@@ -731,39 +729,14 @@ async def _enqueue_pending_document_action_job(
 ) -> dict:
     """提交管理端按状态全量解析或入库任务。"""
     params = _ensure_document_params(params)
-    if action == "parse":
-        label = "解析"
-        pending_count = kb_info.pending_parse_count
-        statuses = PENDING_PARSE_STATUSES
-    else:
-        label = "入库"
-        pending_count = kb_info.pending_index_count
-        statuses = PENDING_INDEX_STATUSES
-
-    if pending_count <= 0:
-        return {"message": f"没有待{label}文档", "status": "success", "queued_count": 0}
-
     try:
-        job, created = await submit_job(
-            name=f"待{label}文档{label} ({kb_info.name})",
-            job_type=f"knowledge_{action}",
-            payload={
-                "kb_id": kb_id,
-                "scope": "pending",
-                "action": action,
-                "statuses": statuses,
-                "count": pending_count,
-                "params": params,
-                "operator_id": operator_id,
-            },
-            payload_match={"kb_id": kb_id, "scope": "pending", "action": action},
+        return await submit_pending_document_action(
+            kb_id=kb_id,
+            params=params,
+            operator_id=operator_id,
+            kb_info=kb_info,
+            action=action,
         )
-        return {
-            "message": f"{label}任务已提交" if created else f"已有待{label}任务正在执行",
-            "status": "queued",
-            "job_id": job.id,
-            "queued_count": pending_count,
-        }
     except HTTPException:
         raise
     except Exception as e:

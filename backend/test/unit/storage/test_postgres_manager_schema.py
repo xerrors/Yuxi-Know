@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from yuxi.bootstrap.models import load_models
+from yuxi.infrastructure.postgres.models import load_models
 from yuxi.infrastructure.postgres.base import BusinessBase, KnowledgeBase
 from yuxi.infrastructure.postgres import schema as schema_versions
 from yuxi.modules.agents.models.runs import AgentRun

@@ -1,6 +1,7 @@
 """供应商协议、配置选择与网页工具边界。"""
 
 import json
+from typing import get_args
 from unittest.mock import AsyncMock
 
 import httpx
@@ -12,7 +13,7 @@ from yuxi.modules.agents.tool_results import normalize_tool_result
 from yuxi.modules.extensions.options import WEB_PROVIDER_OPTIONS
 from yuxi.modules.extensions.tools.builtin.web_search import web_fetch, web_search
 from yuxi.modules.extensions.tools.registry import get_all_tool_instances
-from yuxi.modules.extensions.web import services
+from yuxi.modules.extensions.web import providers as web_providers, services
 from yuxi.modules.extensions.web.schemas import FetchInput, SearchInput
 from yuxi.shared.errors import InvalidInputError, OperationTimeoutError, UpstreamError
 
@@ -59,7 +60,7 @@ async def test_search_preserves_summary_body_score_and_filters(provider, configu
             }
         },
     }
-    httpx_mock.add_response(url=services._ENDPOINTS[provider, "search"], json=wire[provider])
+    httpx_mock.add_response(url=web_providers.endpoint(provider, "search"), json=wire[provider])
     result = await services.search_web(
         SearchInput(
             query="Python",
@@ -109,7 +110,7 @@ async def test_fetch_returns_markdown_with_requested_url(provider, configured, h
         if provider == "tavily"
         else {"title": "Title", "content": "# Body"}
     )
-    httpx_mock.add_response(url=services._ENDPOINTS[provider, "fetch"], json=wire)
+    httpx_mock.add_response(url=web_providers.endpoint(provider, "fetch"), json=wire)
     result = await services.fetch_web(FetchInput(url="https://example.com"), provider=provider)
     assert result["url"] == "https://example.com"
     assert result["content"] == "# Body"
@@ -238,6 +239,25 @@ def test_tools_register_stably_without_credentials():
     assert tools["web_fetch"] is web_fetch
     assert "provider" not in web_search.args_schema.model_fields
     assert "api_key" not in web_fetch.args_schema.model_fields
+
+
+def test_provider_catalog_drives_settings_options_and_choices():
+    """新增或重命名供应商只需改目录，配置定义与默认选项必须同步派生。"""
+    from yuxi.modules.extensions.web.schemas import FetchProvider, SearchProvider
+    from yuxi.modules.system.options import system_options
+    from yuxi.shared.web_providers import FETCH_PROVIDER_IDS, PROVIDERS_BY_ID, SEARCH_PROVIDER_IDS
+
+    assert get_args(SearchProvider) == SEARCH_PROVIDER_IDS
+    assert get_args(FetchProvider) == FETCH_PROVIDER_IDS
+    fields = {field["key"]: field for field in system_options.fields}
+    assert fields["web_search_provider"]["choices"] == ["", *SEARCH_PROVIDER_IDS]
+    assert fields["web_fetch_provider"]["choices"] == ["", *FETCH_PROVIDER_IDS]
+    for provider_id, option in WEB_PROVIDER_OPTIONS.items():
+        metadata = option.params["provider"]
+        assert metadata["id"] == provider_id
+        assert metadata["supports_fetch"] == PROVIDERS_BY_ID[provider_id].supports_fetch
+        assert metadata["environment"] == PROVIDERS_BY_ID[provider_id].environment
+        assert option.fields[0]["environment"] == PROVIDERS_BY_ID[provider_id].environment
 
 
 @pytest.mark.asyncio

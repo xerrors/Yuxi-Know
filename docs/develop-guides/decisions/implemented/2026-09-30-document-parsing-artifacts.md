@@ -4,6 +4,8 @@
 类型：architecture
 Owner：backend/yuxi/infrastructure/document_parsing/parser.py
 
+实现位置更新：跨域配置汇总现由 `backend/yuxi/bootstrap/options.py` 拥有，见 [2026-10-21 后端边界收敛](./2026-10-21-backend-boundary-and-provider-catalog.md)。本记录保留当次解析边界与证据。
+
 ## 问题
 
 解析引擎在转换过程中上传图片并生成知识库 URL，聊天附件与 OCR 工具无法保存可搬运的完整产物。图片缺少文档级归属，部分引擎吞掉资源失败后仍返回成功文本。
@@ -16,7 +18,7 @@ Owner：backend/yuxi/infrastructure/document_parsing/parser.py
 
 `modules/documents` 解析系统配置和 MinIO 输入；`parse_to_hosted_markdown` 接收明确的上传位置与 URL 构造能力，上传资源后返回 Markdown。知识库在文档下以一次解析的唯一前缀发布资源与 Markdown，持久化结果后回收旧产物，失败回收本次产物。聊天临时解析保存用户隔离的本地目录，确认时完整复制到 Project Workdir，删除附件时删除整个解析目录；OCR 工具同样写入完整目录。
 
-管理员配置定义分别由 documents、extensions 与 system 拥有，system 统一汇总并管理持久化、脱敏和缓存。无产品调用方的独立 Markdown 转换 HTTP 接口删除。项目为全新体系，不提供旧资源迁移或旧 Python 入口兼容。
+管理员配置定义分别由 documents、extensions 与 system 拥有，跨域汇总由 bootstrap 统一承担；持久化、脱敏和缓存仍由 system 管理。无产品调用方的独立 Markdown 转换 HTTP 接口删除。项目为全新体系，不提供旧资源迁移或旧 Python 入口兼容。
 
 ## 替代方案
 
@@ -32,7 +34,7 @@ Owner：backend/yuxi/infrastructure/document_parsing/parser.py
 | 解析目录完整且不上传 MinIO | 图片丢失或隐式上传 | document_parsing | parser unit，回读 Markdown 与图片 | 非法 ZIP 路径、缺失资源、迟到线程写入、特殊文件名 | Passed |
 | 聊天确认和删除覆盖资源目录 | 孤立资源、跨用户读取 | agents/services/attachments.py | 附件 unit 与真实 HTTP 文件链路 | 他人/APP 解析路径、未提交原文件取消回收 | Passed |
 | 知识库资源按文档回收 | 失败残留、误删其他文档 | knowledge/base.py | 真实 worker、MinIO 与 PG 文件记录回读 | 上传取消/失败、真实 PG lease/owner 丢失、其他文档资源隔离 | Passed |
-| 配置定义归属模块且统一管理 | 循环导入、配置失效 | modules/system/options.py | options 与 OCR 配置测试 | 无效 OCR 引擎、缓存过期值 | Passed |
+| 配置定义归属模块且统一管理 | 循环导入、配置失效 | bootstrap/options.py | options 与 OCR 配置测试 | 无效 OCR 引擎、缓存过期值 | Passed |
 
 旧能力不存在：已搜索旧引擎路径、上传回调及 `/files/markdown` 产品入口，真实 HTTP integration 确认路由返回 404。
 

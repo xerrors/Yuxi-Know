@@ -8,8 +8,15 @@ import yuxi.api.routers.knowledge.management as knowledge_router
 from yuxi.modules.knowledge.read_models import KnowledgeBaseDetail
 from yuxi.modules.knowledge.services import graph_build, uploads
 import yuxi.modules.knowledge.services.background_jobs as knowledge_job_service
+import yuxi.modules.knowledge.services.document_actions as document_actions
 
 pytestmark = pytest.mark.asyncio
+
+
+def _patch_submit_job(monkeypatch, fake):
+    """路由与服务共享作业提交入口，测试同时替换，避免按调用路径分叉。"""
+    monkeypatch.setattr(knowledge_router, "submit_job", fake)
+    monkeypatch.setattr(document_actions, "submit_job", fake)
 
 
 def _database_detail(**stats) -> KnowledgeBaseDetail:
@@ -204,7 +211,7 @@ async def test_index_documents_uses_uid_for_operator(monkeypatch):
     )
     monkeypatch.setattr(knowledge_router.knowledge_base_manager, "get_knowledge_base_info", fake_get_knowledge_base_info)
     monkeypatch.setattr(knowledge_router.knowledge_base_manager, "index_file", fake_index_file)
-    monkeypatch.setattr(knowledge_router, "submit_job", fake_enqueue)
+    _patch_submit_job(monkeypatch, fake_enqueue)
 
     result = await knowledge_router.index_documents(
         "kb_1",
@@ -267,7 +274,7 @@ async def test_parse_pending_documents_enqueues_status_scoped_job(monkeypatch):
         fake_list_document_file_ids_by_statuses,
     )
     monkeypatch.setattr(knowledge_router.knowledge_base_manager, "parse_file", fake_parse_file)
-    monkeypatch.setattr(knowledge_router, "submit_job", fake_enqueue_unique_by_payload)
+    _patch_submit_job(monkeypatch, fake_enqueue_unique_by_payload)
 
     result = await knowledge_router.parse_pending_documents(
         "kb_1",
@@ -278,17 +285,17 @@ async def test_parse_pending_documents_enqueues_status_scoped_job(monkeypatch):
     assert result["job_id"] == "job_1"
     assert captured["ensure"] == ("kb_1", "文档解析")
     assert captured["payload_match"] == {"kb_id": "kb_1", "scope": "pending", "action": "parse"}
-    assert captured["payload"]["statuses"] == knowledge_router.PENDING_PARSE_STATUSES
+    assert captured["payload"]["statuses"] == document_actions.PENDING_PARSE_STATUSES
     assert captured["list_calls"] == [
         {
             "kb_id": "kb_1",
-            "statuses": knowledge_router.PENDING_PARSE_STATUSES,
+            "statuses": document_actions.PENDING_PARSE_STATUSES,
             "after_file_id": None,
             "limit": knowledge_job_service.DOCUMENT_ACTION_BATCH_SIZE,
         },
         {
             "kb_id": "kb_1",
-            "statuses": knowledge_router.PENDING_PARSE_STATUSES,
+            "statuses": document_actions.PENDING_PARSE_STATUSES,
             "after_file_id": "file_2",
             "limit": knowledge_job_service.DOCUMENT_ACTION_BATCH_SIZE,
         },
@@ -390,7 +397,7 @@ async def test_index_pending_documents_uses_pending_statuses_and_params(monkeypa
     )
     monkeypatch.setattr(knowledge_router.knowledge_base_manager, "update_file_params", fake_update_file_params)
     monkeypatch.setattr(knowledge_router.knowledge_base_manager, "index_file", fake_index_file)
-    monkeypatch.setattr(knowledge_router, "submit_job", fake_enqueue_unique_by_payload)
+    _patch_submit_job(monkeypatch, fake_enqueue_unique_by_payload)
 
     params = {"chunk_preset_id": "general"}
     result = await knowledge_router.index_pending_documents(
@@ -402,9 +409,9 @@ async def test_index_pending_documents_uses_pending_statuses_and_params(monkeypa
     assert result["status"] == "queued"
     assert captured["ensure"] == ("kb_1", "文档入库")
     assert captured["payload_match"] == {"kb_id": "kb_1", "scope": "pending", "action": "index"}
-    assert captured["payload"]["statuses"] == knowledge_router.PENDING_INDEX_STATUSES
+    assert captured["payload"]["statuses"] == document_actions.PENDING_INDEX_STATUSES
     assert captured["payload"]["params"] == params
-    assert captured["list_calls"][0]["statuses"] == knowledge_router.PENDING_INDEX_STATUSES
+    assert captured["list_calls"][0]["statuses"] == document_actions.PENDING_INDEX_STATUSES
     assert captured["updated"] == [
         {"kb_id": "kb_1", "file_id": "file_1", "params": params, "operator_id": "uid-user"},
         {"kb_id": "kb_1", "file_id": "file_2", "params": params, "operator_id": "uid-user"},
@@ -453,7 +460,7 @@ async def test_add_documents_auto_index_returns_one_final_result_per_item(monkey
     monkeypatch.setattr(knowledge_router.knowledge_base_manager, "parse_file", fake_parse_file)
     monkeypatch.setattr(knowledge_router.knowledge_base_manager, "update_file_params", fake_update_file_params)
     monkeypatch.setattr(knowledge_router.knowledge_base_manager, "index_file", fake_index_file)
-    monkeypatch.setattr(knowledge_router, "submit_job", fake_enqueue)
+    _patch_submit_job(monkeypatch, fake_enqueue)
 
     result = await knowledge_router.add_documents(
         "kb_1",
@@ -501,7 +508,7 @@ async def test_add_documents_passes_source_path_to_file_record(monkeypatch):
     monkeypatch.setattr(knowledge_router.knowledge_base_manager, "get_knowledge_base_info", fake_get_knowledge_base_info)
     monkeypatch.setattr(knowledge_router.knowledge_base_manager, "add_file_record", fake_add_file_record)
     monkeypatch.setattr(knowledge_router.knowledge_base_manager, "parse_file", fake_parse_file)
-    monkeypatch.setattr(knowledge_router, "submit_job", fake_enqueue)
+    _patch_submit_job(monkeypatch, fake_enqueue)
 
     await knowledge_router.add_documents(
         "kb_1",
@@ -585,7 +592,7 @@ async def test_add_uploaded_documents_creates_records_without_job(monkeypatch):
         fake_ensure_knowledge_base_supports_documents,
     )
     monkeypatch.setattr(knowledge_router.knowledge_base_manager, "add_file_record", fake_add_file_record)
-    monkeypatch.setattr(knowledge_router, "submit_job", fail_enqueue)
+    _patch_submit_job(monkeypatch, fail_enqueue)
 
     result = await knowledge_router.add_uploaded_documents(
         "kb_1",
@@ -646,7 +653,7 @@ async def test_parse_documents_accepts_payload_with_params(monkeypatch):
     monkeypatch.setattr(knowledge_router.knowledge_base_manager, "get_knowledge_base_info", fake_get_knowledge_base_info)
     monkeypatch.setattr(knowledge_router.knowledge_base_manager, "update_file_params", fake_update_file_params)
     monkeypatch.setattr(knowledge_router.knowledge_base_manager, "parse_file", fake_parse_file)
-    monkeypatch.setattr(knowledge_router, "submit_job", fake_enqueue)
+    _patch_submit_job(monkeypatch, fake_enqueue)
 
     params = {"ocr_engine": "rapid_ocr"}
     result = await knowledge_router.parse_documents(
@@ -699,7 +706,7 @@ async def test_parse_pending_documents_uses_params(monkeypatch):
     )
     monkeypatch.setattr(knowledge_router.knowledge_base_manager, "update_file_params", fake_update_file_params)
     monkeypatch.setattr(knowledge_router.knowledge_base_manager, "parse_file", fake_parse_file)
-    monkeypatch.setattr(knowledge_router, "submit_job", fake_enqueue_unique_by_payload)
+    _patch_submit_job(monkeypatch, fake_enqueue_unique_by_payload)
 
     params = {"ocr_engine": "rapid_ocr"}
     result = await knowledge_router.parse_pending_documents(

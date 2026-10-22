@@ -7,7 +7,7 @@ import uuid
 import asyncpg
 import pytest
 
-from yuxi.bootstrap.models import load_models
+from yuxi.infrastructure.postgres.models import load_models
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from test.live_api_cleanup import make_test_session_title

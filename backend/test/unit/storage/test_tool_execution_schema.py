@@ -1,6 +1,6 @@
 """工具执行事实的持久化边界。"""
 
-from yuxi.bootstrap.models import load_models
+from yuxi.infrastructure.postgres.models import load_models
 
 
 def test_tool_execution_has_no_independent_legacy_table():

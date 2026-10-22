@@ -12,7 +12,7 @@ import pytest
 from PIL import Image
 
 from yuxi.api.routers.public_v1.agents.schemas import InputMessage, input_messages_to_domain
-from yuxi.bootstrap.models import load_models
+from yuxi.infrastructure.postgres.models import load_models
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.agents.services.inputs import accept_message
@@ -32,7 +32,7 @@ pytestmark = [pytest.mark.asyncio, pytest.mark.e2e, pytest.mark.slow, pytest.mar
 
 def _consume_and_exit(thread_id, claim_lease):
     """在独立进程提交真实消费事务后退出，故意不投递或释放执行租约。"""
-    from yuxi.bootstrap.models import load_models
+    from yuxi.infrastructure.postgres.models import load_models
     from yuxi.infrastructure.postgres.manager import pg_manager
     from yuxi.modules.agents.repositories.runs import AgentRunRepository
     from yuxi.modules.agents.repositories.sessions import SessionRepository

@@ -65,7 +65,14 @@ class _CreateRepo(_ListRepo):
 
 
 def _build_app(monkeypatch, repo_cls, *, role: str = "admin") -> TestClient:
-    monkeypatch.setattr(agent_router_module, "AgentRepository", repo_cls)
+    async def fake_list_visible(db, *, user):
+        return await repo_cls(db).list_visible(user=user)
+
+    async def fake_get_visible(db, *, user, slug):
+        return await repo_cls(db).get_visible_by_slug(slug=slug, user=user, for_run=False)
+
+    monkeypatch.setattr(agent_router_module, "list_visible_agent_definitions", fake_list_visible)
+    monkeypatch.setattr(agent_router_module, "get_visible_agent_definition", fake_get_visible)
 
     async def fake_create_definition(db, *, operator, skill_upload=None, mcp_servers=None, **fields):
         """路由单测隔离创建用例；联合事务由真实 HTTP integration 验证。"""

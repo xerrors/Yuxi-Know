@@ -94,7 +94,7 @@ async def record_schema_version(manager, domain: str, version: int) -> None:
 
 async def create_knowledge_tables(manager):
     """使用当前 ORM metadata 建立知识域 fresh baseline。"""
-    from yuxi.bootstrap.models import load_models
+    from yuxi.infrastructure.postgres.models import load_models
 
     load_models()
     manager._check_initialized()
@@ -105,7 +105,7 @@ async def create_knowledge_tables(manager):
 
 async def create_business_tables(manager):
     """使用当前 ORM metadata 建立业务域 fresh baseline。"""
-    from yuxi.bootstrap.models import load_models
+    from yuxi.infrastructure.postgres.models import load_models
 
     load_models()
     manager._check_initialized()
@@ -155,7 +155,7 @@ async def ensure_business_schema(manager):
 
 async def drop_fresh_schema(manager) -> None:
     """删除未完成的 fresh baseline，使 app-init 可以从零重试。"""
-    from yuxi.bootstrap.models import load_models
+    from yuxi.infrastructure.postgres.models import load_models
 
     load_models()
     manager._check_initialized()

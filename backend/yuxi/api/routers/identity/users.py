@@ -12,11 +12,7 @@ from yuxi.infrastructure.minio import upload_image_to_minio
 from yuxi.modules.agents.services.environment import read_agent_env, verify_agent_env, write_agent_env
 from yuxi.modules.identity.models import User
 from yuxi.modules.identity.preferences import UserConfig, UserConfigSchema
-from yuxi.modules.identity.repositories.api_keys import (
-    APIKeyRepository,
-)
 from yuxi.modules.identity.services import api_keys as api_key_service
-from yuxi.modules.identity.services.api_keys import get_accessible_api_key
 from yuxi.modules.identity.services.preferences import save_user_config
 from yuxi.shared.datetime import format_utc_datetime
 
@@ -128,17 +124,8 @@ async def list_api_keys(
     current_user: User = Depends(get_required_user),
     db: AsyncSession = Depends(get_db),
 ):
-    api_keys, total = await APIKeyRepository(db).list_visible(
-        requester_user_id=current_user.id,
-        is_superadmin=current_user.role == "superadmin",
-        skip=skip,
-        limit=limit,
-    )
-
-    return {
-        "api_keys": [key.to_dict() for key in api_keys],
-        "total": total,
-    }
+    """列出当前用户可见的 API Key。"""
+    return await api_key_service.list_api_keys(db, actor=current_user, skip=skip, limit=limit)
 
 
 @user_router.post("/apikey/", response_model=APIKeyCreateResponse)
@@ -156,8 +143,8 @@ async def get_api_key(
     current_user: User = Depends(get_required_user),
     db: AsyncSession = Depends(get_db),
 ):
-    api_key = await get_accessible_api_key(APIKeyRepository(db), api_key_id, current_user)
-    return {"api_key": api_key.to_dict()}
+    """读取当前用户可访问的 API Key。"""
+    return await api_key_service.get_api_key(db, actor=current_user, api_key_id=api_key_id)
 
 
 @user_router.put("/apikey/{api_key_id}", response_model=dict)

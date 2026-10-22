@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.api.dependencies.auth import get_admin_user, get_db, get_superadmin_user
 from yuxi.modules.identity.models import User
-from yuxi.modules.identity.repositories.departments import DepartmentRepository
 from yuxi.modules.identity.services import administration
 from yuxi.modules.identity.services.administration import IdentityConflictError, create_department_with_admin
 
@@ -58,8 +57,7 @@ class DepartmentResponse(BaseModel):
 @department.get("", response_model=list[DepartmentResponse])
 async def get_departments(current_user: User = Depends(get_admin_user), db: AsyncSession = Depends(get_db)):
     """获取所有部门列表（管理员可访问）"""
-    dept_repo = DepartmentRepository(db)
-    return await dept_repo.list_with_user_count()
+    return await administration.list_departments(db)
 
 
 @department.get("/{department_id}", response_model=DepartmentResponse)
@@ -69,7 +67,7 @@ async def get_department(
     db: AsyncSession = Depends(get_db),
 ):
     """获取指定部门详情"""
-    department = await DepartmentRepository(db).get_with_user_count(department_id)
+    department = await administration.get_department_detail(db, department_id=department_id)
     if department is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="部门不存在")
     return department

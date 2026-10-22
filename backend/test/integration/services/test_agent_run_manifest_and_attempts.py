@@ -12,7 +12,7 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from yuxi.bootstrap.models import load_models
+from yuxi.infrastructure.postgres.models import load_models
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.models.runs import AgentRun, AgentRunAttempt
 from yuxi.shared.datetime import utc_now

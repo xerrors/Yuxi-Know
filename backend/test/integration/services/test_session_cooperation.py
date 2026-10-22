@@ -14,7 +14,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from yuxi.modules.agents.services.run_lifecycle import settle_run
-from yuxi.bootstrap.models import load_models
+from yuxi.infrastructure.postgres.models import load_models
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.agents.models.cooperation import CooperationEvent
 from yuxi.modules.agents.models.definitions import Agent

@@ -1,16 +1,23 @@
-export const WEB_PROVIDERS = [
-  { id: 'tavily', name: 'Tavily', environment: 'TAVILY_API_KEY', fetch: true },
-  { id: 'deepseek', name: 'DeepSeek', environment: 'DEEPSEEK_API_KEY', fetch: true },
-  { id: 'doubao', name: '豆包 Custom', environment: 'DOUBAO_SEARCH_API_KEY', fetch: false }
-]
+const optionProvider = (option) => option?.params?.provider
+
+export const webProviders = (options = []) =>
+  (Array.isArray(options) ? options : [])
+    .filter((option) => optionProvider(option)?.id)
+    .map((option) => ({
+      id: optionProvider(option).id,
+      name: option.name,
+      environment: optionProvider(option).environment,
+      fetch: Boolean(optionProvider(option).supports_fetch),
+      optionKey: option.key
+    }))
 
 export const keyState = (option) =>
   option?.sensitive_state?.api_key || { source: 'none', configured: false }
 
-export const defaultProvider = (operation, config, options) => {
+export const defaultProvider = (operation, config, providers, options) => {
   const selected = config[`web_${operation}_provider`]?.trim().toLowerCase()
   if (selected) return selected
-  return WEB_PROVIDERS.find(
+  return providers.find(
     (provider) => (operation === 'search' || provider.fetch) && keyState(options[provider.id]).configured
   )?.id
 }

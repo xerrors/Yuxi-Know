@@ -17,7 +17,7 @@ from pymilvus import Collection, connections, utility
 from sqlalchemy import select
 
 from test.e2e.e2e_helpers import wait_model_provider_cache
-from yuxi.bootstrap.models import load_models
+from yuxi.infrastructure.postgres.models import load_models
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.knowledge.graphs.extractors import normalize_extraction_result
 from yuxi.modules.knowledge.graphs.graph_utils import graph_entity_collection_name, graph_triple_collection_name

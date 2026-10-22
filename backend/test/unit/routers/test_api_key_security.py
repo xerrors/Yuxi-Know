@@ -10,7 +10,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from test.support.sqlite import create_utc_sqlite_engine
 
 from yuxi.api.routers.identity.auth import delete_user
-from yuxi.api.routers.identity.users import APIKeyCreate, create_api_key, get_accessible_api_key
+from yuxi.api.routers.identity.users import APIKeyCreate, create_api_key
+from yuxi.modules.identity.services.api_keys import get_accessible_api_key
 from yuxi.modules.identity.services.public_auth import verify_api_key
 from yuxi.modules.identity.repositories.api_keys import APIKeyRepository
 from yuxi.modules.identity.models import APIKey, Department, User

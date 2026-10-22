@@ -26,10 +26,10 @@ from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 from yuxi.modules.agents.runtime.agent_backends import get_agent_backend
 from yuxi.modules.agents.runtime_locks import cooperation_lock_key
 from yuxi.modules.agents.scope import ActorScope
-from yuxi.modules.agents.services.queue_control import pause_pending_queue
 from yuxi.modules.agents.services.directory import list_public_agents
 from yuxi.modules.agents.services.input_config import resolve_agent_context_snapshot
 from yuxi.modules.agents.services.inputs import accept_locked
+from yuxi.modules.agents.services.queue_control import pause_pending_queue
 from yuxi.modules.agents.services.run_creation import create_resume_run
 from yuxi.modules.agents.services.run_lifecycle import settle_waiting_cancel
 from yuxi.modules.agents.services.scheduler import Dispatch, deliver, dispatch_next_input

@@ -14,7 +14,7 @@
           <div class="setting-content is-compact">
             <a-select
               :aria-label="operation === 'search' ? '搜索服务' : '网页抓取服务'"
-              :value="defaultProvider(operation, config, options)"
+              :value="defaultProvider(operation, config, providers, options)"
               :options="providerChoices(operation)"
               placeholder="请先配置 API Key"
               :loading="savingDefault === operation"
@@ -28,7 +28,7 @@
       <div class="section-title">服务配置</div>
       <div class="option-list">
         <section
-          v-for="provider in WEB_PROVIDERS"
+          v-for="provider in providers"
           :key="provider.id"
           class="option-card"
           :aria-label="provider.name + ' 配置'"
@@ -105,9 +105,10 @@
 import { onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { configApi, configOptionsApi, webToolsApi } from '@/apis/system_api'
-import { WEB_PROVIDERS, defaultProvider, keyState, testOutcome, testPayload } from '../model/webSearchSettings'
+import { defaultProvider, keyState, testOutcome, testPayload, webProviders } from '../model/webSearchSettings'
 
 const options = reactive({})
+const providers = ref([])
 const config = ref({})
 const editingKey = ref('')
 const draftKey = ref('')
@@ -123,8 +124,10 @@ const load = async () => {
   loadError.value = ''
   try {
     const [optionData, configData] = await Promise.all([configOptionsApi.getOptions(), configApi.getConfig()])
-    for (const provider of WEB_PROVIDERS) {
-      options[provider.id] = optionData.options.find(({ key }) => key === `${provider.id}_search_opts`)
+    const providerOptions = optionData.options.filter(({ params }) => params?.provider?.id)
+    providers.value = webProviders(providerOptions)
+    for (const option of providerOptions) {
+      options[option.params.provider.id] = option
     }
     config.value = configData
   } catch (error) {
@@ -134,7 +137,7 @@ const load = async () => {
   }
 }
 
-const providerChoices = (operation) => WEB_PROVIDERS
+const providerChoices = (operation) => providers.value
   .filter((provider) => operation === 'search' || provider.fetch)
   .map((provider) => ({
     value: provider.id,
@@ -164,7 +167,7 @@ const cancelEditing = () => {
 const saveKey = async (provider) => {
   savingKey.value = provider.id
   try {
-    const data = await configOptionsApi.updateOption(`${provider.id}_search_opts`, { api_key: draftKey.value.trim() })
+    const data = await configOptionsApi.updateOption(provider.optionKey, { api_key: draftKey.value.trim() })
     options[provider.id] = data.option
     delete results[provider.id]
     cancelEditing()

@@ -7,8 +7,9 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import delete, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 
+from yuxi.infrastructure.oidc.client import MAX_TOKEN_AGE
 from yuxi.modules.identity.models import Department, OIDCIdentity, OIDCLogout, OIDCSession, User
-from yuxi.modules.identity.oidc import MAX_TOKEN_AGE, SESSION_TTL
+from yuxi.modules.identity.oidc import SESSION_TTL
 from yuxi.shared.datetime import utc_now
 from yuxi.shared.errors import PermissionDeniedError
 

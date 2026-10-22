@@ -17,7 +17,7 @@ from pypdf import PdfWriter
 
 from test.live_api_cleanup import make_test_session_title
 from test.e2e.e2e_helpers import cleanup_uploaded_chat_attachment
-from yuxi.bootstrap.models import load_models
+from yuxi.infrastructure.postgres.models import load_models
 from yuxi.infrastructure.minio import get_minio_client
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.agents.models.attachments import AgentAttachment

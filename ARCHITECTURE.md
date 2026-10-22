@@ -37,7 +37,7 @@ API 在 `/api/mcp` 提供只读知识库 MCP，与 HTTP API 共用进程和端�
 
 - `yuxi/api/main.py` 创建 FastAPI 应用；`api/routers` 统一注册 HTTP 路由，`api/lifespan.py` 连接 FastAPI 生命周期。
 - `yuxi/workers/main.py` 暴露 ARQ `WorkerSettings`；`workers` 拥有任务入口和健康上报，`bootstrap/worker.py` 装配连接、恢复循环和关闭顺序。
-- `bootstrap/api.py` 装配 API 必需与可选组件；`bootstrap/models.py` 显式导入分域 ORM，维持 business 与 knowledge 两套 metadata。
+- `bootstrap/api.py` 装配 API 必需与可选组件；`infrastructure/postgres/models.py` 显式注册分域 ORM，维持 business 与 knowledge 两套 metadata。
 - `bootstrap/app.py` 是 app-init 入口，调用 `migrations/main.py` 的空库初始化与各域共享内容同步；`migrations/schema.py` 拥有 DDL；`infrastructure/postgres/schema.py` 向 API/worker 提供只读版本检查。
 
 Yuxi 始终交付完整知识能力。API 注册知识库、图谱、评估、Dashboard 与工作区知识路由，并注册 `knowledge-base` Skill 和知识工具；系统 discovery 向 Web 与 CLI 宣告知识能力。聊天附件仅在真实解析动作发生时加载 parser。

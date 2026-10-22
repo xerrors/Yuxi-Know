@@ -9,10 +9,10 @@ from yuxi.bootstrap.environment import load_environment
 
 load_environment()
 
-from yuxi.bootstrap.models import load_models
 from yuxi.bootstrap.options import ensure_options_in_db
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.manager import pg_manager
+from yuxi.infrastructure.postgres.models import load_models
 from yuxi.migrations.main import initialize_schema
 from yuxi.migrations.schema import schema_migration_lock
 from yuxi.modules.agents.services.configuration import initialize_agent_presets

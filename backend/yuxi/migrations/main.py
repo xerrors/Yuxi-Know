@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from sqlalchemy import text
 
-from yuxi.bootstrap.models import load_models
 from yuxi.infrastructure.postgres.base import BusinessBase, KnowledgeBase
 from yuxi.infrastructure.postgres.checkpointer import setup_langgraph_checkpointer
 from yuxi.infrastructure.postgres.manager import PostgresManager
+from yuxi.infrastructure.postgres.models import load_models
 from yuxi.infrastructure.postgres.schema import BUSINESS_SCHEMA_VERSION, KNOWLEDGE_SCHEMA_VERSION, get_schema_versions
 from yuxi.migrations.schema import (
     create_business_tables,

@@ -23,8 +23,8 @@ from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 from yuxi.modules.agents.runtime.sandbox.provider import get_sandbox_provider
 from yuxi.modules.agents.scope import ActorScope
-from yuxi.modules.agents.services.queue_control import pause_pending_queue
 from yuxi.modules.agents.services.cooperation_notifications import notify_turn_state
+from yuxi.modules.agents.services.queue_control import pause_pending_queue
 from yuxi.modules.agents.services.run_creation import create_turn_run
 from yuxi.modules.agents.services.scheduler import Dispatch, dispatch_next_input
 from yuxi.modules.agents.services.thread_access import require_thread

@@ -13,7 +13,6 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
 )
-
 from sqlalchemy.ext.hybrid import hybrid_property
 
 from yuxi.infrastructure.postgres.base import JSON_VALUE

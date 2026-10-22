@@ -21,7 +21,12 @@ from yuxi.modules.extensions.skills.access import (
     user_can_manage_skill,
 )
 from yuxi.modules.extensions.skills.builtin.sync import init_builtin_skills
-from yuxi.modules.extensions.skills.catalog import list_accessible_skills, list_skill_cards_for_user
+from yuxi.modules.extensions.skills.catalog import (
+    list_accessible_skills,
+    list_builtin_skill_definitions,
+    list_managed_shared_skills,
+    list_skill_cards_for_user,
+)
 from yuxi.modules.extensions.skills.content import save_skill_content
 from yuxi.modules.extensions.skills.edit import (
     create_skill_node,
@@ -45,7 +50,6 @@ from yuxi.modules.extensions.skills.personal import (
     read_personal_skill_file,
 )
 from yuxi.modules.extensions.skills.remote import list_remote_skills, search_remote_skills
-from yuxi.modules.extensions.skills.repository import SkillRepository
 from yuxi.modules.extensions.skills.shared import (
     confirm_skill_install_draft,
     delete_skill,
@@ -360,7 +364,7 @@ async def list_skills_route(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        items = await SkillRepository(db).list_visible_for_management(current_user)
+        items = await list_managed_shared_skills(db, current_user)
         return {
             "success": True,
             "data": [_serialize_skill_for_user(item, current_user) for item in items],
@@ -398,7 +402,7 @@ async def list_builtin_skills_route(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        items = await SkillRepository(db).list_builtin()
+        items = await list_builtin_skill_definitions(db)
         return {"success": True, "data": [item.to_dict() for item in items]}
     except ValueError as e:
         _raise_from_value_error(e)

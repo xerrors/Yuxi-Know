@@ -28,7 +28,7 @@ from test.e2e.e2e_helpers import (
     register_replay_provider as _provider,
 )
 from test.live_api_cleanup import make_test_session_title
-from yuxi.bootstrap.models import load_models
+from yuxi.infrastructure.postgres.models import load_models
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.agents.runtime.sandbox import UserSandboxBackend, get_sandbox_provider
 from yuxi.modules.workspace.paths import user_workspace_dir

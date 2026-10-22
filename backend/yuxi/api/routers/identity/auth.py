@@ -19,8 +19,6 @@ from yuxi.api.routers.identity.oidc import (
 )
 from yuxi.api.uploads import read_upload_with_limit
 from yuxi.modules.identity.models import User
-from yuxi.modules.identity.repositories.departments import DepartmentRepository
-from yuxi.modules.identity.repositories.users import UserRepository
 from yuxi.modules.identity.security import AuthUtils
 from yuxi.modules.identity.services import users as user_service
 from yuxi.modules.identity.services.administration import (
@@ -41,7 +39,7 @@ from yuxi.modules.identity.services.cli_auth import (
 from yuxi.modules.identity.services.login import login_result
 from yuxi.modules.identity.services.login_limits import extract_client_ip
 from yuxi.modules.identity.services.password_login import PasswordLoginRejected, login_with_password
-from yuxi.modules.identity.services.usernames import generate_unique_uid, is_valid_phone_number, validate_username
+from yuxi.modules.identity.services.usernames import is_valid_phone_number, validate_username
 
 # 创建路由器
 auth = APIRouter(prefix="/auth", tags=["authentication"])
@@ -284,8 +282,7 @@ async def exchange_cli_session_token(data: CLIAuthTokenRequest, db: AsyncSession
 # 路由：校验是否需要初始化管理员
 @auth.get("/check-first-run")
 async def check_first_run():
-    is_first_run = await UserRepository().is_first_run()
-    return {"first_run": is_first_run}
+    return {"first_run": await user_service.is_first_run()}
 
 
 # 路由：初始化管理员账户
@@ -339,9 +336,8 @@ async def initialize_admin(admin_data: InitializeAdmin, db: AsyncSession = Depen
 async def read_users_me(current_user: User = Depends(get_required_user), db: AsyncSession = Depends(get_db)):
     """获取当前登录用户的个人信息"""
     user_dict = current_user.to_dict()
-
     if current_user.department_id:
-        user_dict["department_name"] = await DepartmentRepository(db).get_name_by_id(current_user.department_id)
+        user_dict["department_name"] = await user_service.get_department_name(db, current_user=current_user)
 
     return user_dict
 
@@ -406,22 +402,7 @@ async def read_users(
     current_user: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    user_repo = UserRepository(db)
-
-    # 部门隔离逻辑
-    if current_user.role == "superadmin":
-        # 超级管理员可以看到所有用户
-        users_with_dept = await user_repo.list_with_department(skip=skip, limit=limit)
-    else:
-        # 普通管理员只能看到本部门用户
-        users_with_dept = await user_repo.list_with_department(skip=skip, limit=limit, department_id=current_user.department_id)
-
-    users = []
-    for user, dept_name in users_with_dept:
-        user_dict = user.to_dict()
-        user_dict["department_name"] = dept_name
-        users.append(user_dict)
-    return users
+    return await user_service.list_users(db, current_user=current_user, skip=skip, limit=limit)
 
 
 @auth.get("/users/access-options", response_model=list[UserAccessOption])
@@ -431,17 +412,7 @@ async def read_user_access_options(
     current_user: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    users_with_dept = await UserRepository(db).list_with_department(skip=skip, limit=limit)
-    return [
-        {
-            "uid": user.uid,
-            "username": user.username,
-            "role": user.role,
-            "department_id": user.department_id,
-            "department_name": dept_name,
-        }
-        for user, dept_name in users_with_dept
-    ]
+    return await user_service.list_access_options(db, skip=skip, limit=limit)
 
 
 # 路由：获取特定用户信息（管理员权限）
@@ -451,13 +422,12 @@ async def read_user(
     current_user: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    user = await UserRepository(db).get_active_by_id(user_id)
+    user = await user_service.get_managed_user(db, current_user=current_user, user_id=user_id)
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="用户不存在",
         )
-    user_service.ensure_user_in_current_department(current_user, user)
     return user.to_dict()
 
 
@@ -500,18 +470,13 @@ async def validate_username_and_generate_uid(
             detail=error_msg,
         )
 
-    # 检查用户名是否已存在
-    user_repository = UserRepository(db)
-    existing_user = await user_repository.get_by_username(validation_data.username)
-    if existing_user:
+    # 检查用户名是否已存在并生成唯一 uid
+    uid = await user_service.suggest_username_uid(db, username=validation_data.username)
+    if uid is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="用户名已存在",
         )
-
-    # 生成唯一的 uid
-    existing_uids = await user_repository.get_all_uids()
-    uid = generate_unique_uid(validation_data.username, existing_uids)
 
     return UidGeneration(username=validation_data.username, uid=uid, is_available=True)
 
@@ -524,7 +489,7 @@ async def check_uid_availability(
     db: AsyncSession = Depends(get_db),
 ):
     """检查 uid 是否可用"""
-    return {"uid": uid, "is_available": not await UserRepository(db).exists_by_uid(uid)}
+    return {"uid": uid, "is_available": await user_service.is_uid_available(db, uid=uid)}
 
 
 # 路由：上传用户头像

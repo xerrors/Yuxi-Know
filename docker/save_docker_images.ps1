@@ -22,7 +22,7 @@ $Images = @(
     "python:3.13-slim",
     "ghcr.io/astral-sh/uv:0.12.6",
     "node:24-slim",
-    "node:24-alpine",
+    "node:22-alpine",
     "nginx:alpine",
     "postgres:16",
     "redis:7.4.10-alpine",

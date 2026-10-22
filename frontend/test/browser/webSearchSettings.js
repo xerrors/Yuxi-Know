@@ -2,8 +2,9 @@
 async page => {
   const check = (condition, message) => { if (!condition) throw new Error(message) }
   const origin = page.url().split('/').slice(0, 3).join('/')
+  const names = { tavily: ['Tavily', 'TAVILY_API_KEY'], deepseek: ['DeepSeek', 'DEEPSEEK_API_KEY'], doubao: ['豆包 Custom', 'DOUBAO_SEARCH_API_KEY'] }
   const options = ['tavily', 'deepseek', 'doubao'].map(id => ({
-    key: `${id}_search_opts`, value: { api_key: '' },
+    key: `${id}_search_opts`, name: names[id][0], params: { provider: { id, supports_fetch: id !== 'doubao', environment: names[id][1] } }, value: { api_key: '' },
     sensitive_state: { api_key: { configured: id !== 'doubao', source: id === 'tavily' ? 'environment' : id === 'deepseek' ? 'database' : 'none', preview: id === 'deepseek' ? 'de*******ey' : null } }
   }))
   const writes = []

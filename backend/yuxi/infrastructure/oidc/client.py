@@ -9,11 +9,11 @@ import time
 import httpx
 import jwt
 
-from yuxi.modules.identity.oidc import MAX_TOKEN_AGE
 from yuxi.shared.errors import PermissionDeniedError, UpstreamError
 
 ALGORITHMS = ("RS256", "RS384", "RS512", "ES256", "ES384", "ES512")
 LOGOUT_EVENT = "http://schemas.openid.net/event/backchannel-logout"
+MAX_TOKEN_AGE = 600
 
 
 class OIDCClient:

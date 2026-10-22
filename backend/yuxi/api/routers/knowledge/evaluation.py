@@ -19,7 +19,6 @@ from yuxi.modules.knowledge.evaluation.benchmark_generation import (
     MAX_BENCHMARK_GENERATION_CONCURRENCY,
 )
 from yuxi.modules.knowledge.evaluation.service import EvaluationService
-from yuxi.modules.knowledge.repositories.evaluation import EvaluationRepository
 
 evaluation = APIRouter(prefix="/evaluation", tags=["evaluation"])
 
@@ -48,7 +47,7 @@ class RunEvaluationRequest(BaseModel):
 async def _get_evaluation_dataset_or_raise(dataset_id: str) -> Any:
     """加载评估数据集，不存在时返回统一的 404。"""
 
-    dataset = await EvaluationRepository().get_dataset(dataset_id)
+    dataset = await EvaluationService().get_dataset(dataset_id)
     if dataset is None:
         raise HTTPException(status_code=404, detail="评估数据集不存在")
     return dataset

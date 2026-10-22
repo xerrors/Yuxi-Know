@@ -1,6 +1,7 @@
 """本模块拥有的管理员配置定义。"""
 
 from yuxi.modules.system.services.options import Option
+from yuxi.shared.web_providers import WEB_PROVIDERS
 
 remote_skill_source_policy = Option(
     key="remote_skill_source_policy",
@@ -20,25 +21,26 @@ remote_skill_source_policy = Option(
 )
 
 WEB_PROVIDER_OPTIONS = {
-    provider: Option(
-        key=f"{provider}_search_opts",
-        name=name,
-        description="网页搜索与正文抓取凭据。" if provider != "doubao" else "豆包 Custom 网页搜索凭据。",
+    provider.id: Option(
+        key=f"{provider.id}_search_opts",
+        name=provider.name,
+        description="网页搜索与正文抓取凭据。" if provider.supports_fetch else f"{provider.name} 网页搜索凭据。",
         params={
+            "provider": {
+                "id": provider.id,
+                "supports_fetch": provider.supports_fetch,
+                "environment": provider.environment,
+            },
             "fields": [
                 {
                     "key": "api_key",
                     "label": "API Key",
                     "type": "password",
                     "sensitive": True,
-                    "environment": environment,
+                    "environment": provider.environment,
                 }
             ],
         },
     )
-    for provider, name, environment in (
-        ("tavily", "Tavily", "TAVILY_API_KEY"),
-        ("deepseek", "DeepSeek", "DEEPSEEK_API_KEY"),
-        ("doubao", "豆包 Custom", "DOUBAO_SEARCH_API_KEY"),
-    )
+    for provider in WEB_PROVIDERS
 }

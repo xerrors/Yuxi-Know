@@ -13,7 +13,7 @@ from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.models.runs import AgentRun, AgentRunAttempt
 from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.infrastructure.postgres.base import Base
-from yuxi.bootstrap.models import load_models
+from yuxi.infrastructure.postgres.models import load_models
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.models.messages import Message
 from yuxi.shared.datetime import utc_now

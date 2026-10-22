@@ -16,7 +16,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from yuxi.api.routers.identity import auth as router
-from yuxi.bootstrap.models import load_models
+from yuxi.infrastructure.postgres.models import load_models
 from yuxi.infrastructure.postgres.base import BusinessBase
 from yuxi.modules.identity.models import Department, User
 from yuxi.modules.identity.security import AuthUtils

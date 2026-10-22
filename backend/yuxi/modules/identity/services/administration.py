@@ -238,3 +238,13 @@ async def delete_department(db: AsyncSession, *, department_id: int) -> dict:
     except BaseException:
         await db.rollback()
         raise
+
+
+async def list_departments(db: AsyncSession) -> list[dict]:
+    """返回部门及其有效用户数量。"""
+    return await DepartmentRepository(db).list_with_user_count()
+
+
+async def get_department_detail(db: AsyncSession, *, department_id: int) -> dict | None:
+    """读取单个部门详情；不存在由调用方映射为拒绝。"""
+    return await DepartmentRepository(db).get_with_user_count(department_id)

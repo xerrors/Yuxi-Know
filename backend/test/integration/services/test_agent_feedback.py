@@ -11,7 +11,7 @@ from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from yuxi.bootstrap.models import load_models
+from yuxi.infrastructure.postgres.models import load_models
 from yuxi.infrastructure.postgres.base import BusinessBase
 from yuxi.modules.agents.models.definitions import Agent
 from yuxi.modules.agents.models.feedback import AgentFeedbackRecord

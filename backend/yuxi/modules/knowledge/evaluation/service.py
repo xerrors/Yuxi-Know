@@ -93,6 +93,10 @@ class EvaluationService:
             "gold_answer": item.gold_answer,
         }
 
+    async def get_dataset(self, dataset_id: str):
+        """读取评估数据集；不存在时返回 None，由入口映射为拒绝。"""
+        return await self.eval_repo.get_dataset(dataset_id)
+
     def _run_item_to_dict(self, item) -> dict[str, Any]:
         return {
             "item_index": item.item_index,

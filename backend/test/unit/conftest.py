@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import event
 
 from yuxi.modules.agents.models.runs import AgentRun
-from yuxi.bootstrap.models import load_models
+from yuxi.infrastructure.postgres.models import load_models
 
 load_models()
 

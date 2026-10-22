@@ -134,6 +134,21 @@ async def get_config(
     return _serialize_system_config(await system_options.get(db))
 
 
+async def _ensure_web_provider_configured(db: AsyncSession, items: dict) -> None:
+    """默认网页供应商必须已有凭据；协议与凭据 Owner 保持在 extensions。"""
+    from yuxi.modules.extensions.options import WEB_PROVIDER_OPTIONS
+
+    for field in ("web_search_provider", "web_fetch_provider"):
+        provider = items.get(field)
+        if not isinstance(provider, str) or not provider.strip():
+            continue
+        option = WEB_PROVIDER_OPTIONS.get(provider.strip().lower())
+        if option is None:
+            continue
+        if not (await option.get(db)).get("api_key"):
+            raise ValueError("请先配置该供应商的 API Key")
+
+
 @system.post("/config")
 async def update_config_single(
     key=Body(...),
@@ -145,6 +160,7 @@ async def update_config_single(
     if not isinstance(key, str) or key not in {field["key"] for field in system_options.fields}:
         raise HTTPException(status_code=400, detail=f"未知配置项: {key}")
     try:
+        await _ensure_web_provider_configured(db, {key: value})
         await save_configuration(db, system_options.key, {key: value}, current_user.username)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -159,6 +175,7 @@ async def update_config_batch(
 ) -> dict:
     """批量更新配置项"""
     try:
+        await _ensure_web_provider_configured(db, items)
         await save_configuration(db, system_options.key, items, current_user.username)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -304,6 +321,8 @@ async def put_config_option(
 
     from yuxi.modules.system.services.options import serialize_option
 
+    if key == system_options.key:
+        raise HTTPException(status_code=404, detail=f"配置项不存在: {key}")
     try:
         record = await save_configuration(db, key, payload.value, current_user.username)
         if record is None:

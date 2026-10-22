@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import yuxi.api.routers.system as system_router
+from yuxi.api.dependencies.auth import get_db, get_superadmin_user
 from yuxi.api.routers.system import system
 
 pytestmark = pytest.mark.unit
@@ -81,3 +84,41 @@ async def test_brand_info_uses_packaged_template_outside_project_directory(monke
         "login_bg": "/login-bg.jpg",
     }
     assert config["footer"]["copyright"].endswith("v0.7.3")
+
+
+@pytest.mark.asyncio
+async def test_web_provider_guard_normalizes_before_lookup(monkeypatch):
+    """带空白的默认供应商不能绕过凭据检查。"""
+    from yuxi.modules.extensions.options import WEB_PROVIDER_OPTIONS
+
+    class FakeOption:
+        def __init__(self, key: str):
+            self.key = key
+
+        async def get(self, db=None):
+            return {"api_key": self.key}
+
+    monkeypatch.setitem(WEB_PROVIDER_OPTIONS, "tavily", FakeOption(""))
+    with pytest.raises(ValueError, match="API Key"):
+        await system_router._ensure_web_provider_configured(None, {"web_search_provider": " tavily "})
+
+    monkeypatch.setitem(WEB_PROVIDER_OPTIONS, "tavily", FakeOption("configured"))
+    assert await system_router._ensure_web_provider_configured(None, {"web_search_provider": " tavily "}) is None
+
+
+def test_generic_option_endpoint_rejects_system_options():
+    """system_options 只能经专用系统配置入口写入。"""
+    app = FastAPI()
+    app.include_router(system, prefix="/api")
+
+    async def fake_db():
+        return None
+
+    app.dependency_overrides[get_db] = fake_db
+    app.dependency_overrides[get_superadmin_user] = lambda: SimpleNamespace(username="admin")
+    response = TestClient(app).put(
+        "/api/system/config/options/system_options",
+        json={"value": {"web_search_provider": "tavily"}},
+    )
+
+    assert response.status_code == 404

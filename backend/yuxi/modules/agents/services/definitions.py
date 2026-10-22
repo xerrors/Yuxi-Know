@@ -211,3 +211,19 @@ async def serialize_agent_definition(
     if include_configurable_items:
         data["configurable_items"] = backend_info.get("configurable_items", {})
     return data
+
+
+async def list_visible_agent_definitions(db, *, user: User) -> list[Agent]:
+    """返回当前用户可见 Agent，并确保默认定义已就绪。"""
+    await ensure_default_agent_definition(db)
+    return await AgentRepository(db).list_visible(user=user)
+
+
+async def get_visible_agent_definition(db, *, user: User, slug: str) -> Agent | None:
+    """按运行期可见性读取 Agent；不存在或不可见返回 None。"""
+    return await AgentRepository(db).get_visible_by_slug(slug=slug, user=user, for_run=False)
+
+
+async def get_agent_definition_by_slug(db, *, slug: str) -> Agent | None:
+    """按标识读取 Agent 定义，供只读管理入口使用。"""
+    return await AgentRepository(db).get_by_slug(slug)

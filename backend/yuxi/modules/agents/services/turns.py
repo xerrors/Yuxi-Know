@@ -14,8 +14,8 @@ from yuxi.modules.agents.repositories.input_receipt import AgentInputReceiptRepo
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 from yuxi.modules.agents.scope import ActorScope
-from yuxi.modules.agents.services.queue_control import pause_pending_queue
 from yuxi.modules.agents.services.cooperation_notifications import notify_turn_state, notify_user_intervention
+from yuxi.modules.agents.services.queue_control import pause_pending_queue
 from yuxi.modules.agents.services.run_creation import create_resume_run
 from yuxi.modules.agents.services.run_lifecycle import settle_waiting_cancel
 from yuxi.modules.agents.services.scheduler import Dispatch, deliver

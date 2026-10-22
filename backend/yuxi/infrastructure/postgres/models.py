@@ -1,4 +1,4 @@
-"""显式注册业务和知识 ORM 映射。"""
+"""显式注册业务和知识 ORM 映射，供 Schema 初始化与测试独立装配。"""
 
 from importlib import import_module
 

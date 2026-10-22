@@ -547,7 +547,7 @@ async def test_runless_forced_summary_uses_current_thread_agent_permission(actor
     """主动摘要没有 Run 时仍按真实 Thread 撤权，并且不发送模型请求。"""
     from langchain_core.messages import HumanMessage
     from langchain_openai import ChatOpenAI
-    from yuxi.bootstrap.models import load_models
+    from yuxi.infrastructure.postgres.models import load_models
     from yuxi.infrastructure.postgres.manager import pg_manager
     from yuxi.modules.agents.runtime.agent_backends.chatbot.context import ChatBotContext
     from yuxi.modules.agents.runtime.middlewares.authorization import AgentExecutionRevoked

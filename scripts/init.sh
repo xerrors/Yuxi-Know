@@ -300,7 +300,7 @@ images=(
     "alpine:3.20"
     "python:3.13-slim"
     "node:24-slim"
-    "node:24-alpine"
+    "node:22-alpine"
     "milvusdb/milvus:v3.0.2"
     "neo4j:5.26.29"
     "ghcr.io/astral-sh/uv:0.12.6"

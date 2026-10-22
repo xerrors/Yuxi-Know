@@ -17,7 +17,7 @@ pytestmark = pytest.mark.e2e
 @pytest_asyncio.fixture
 async def current_loop_pg_manager():
     """让全局 PostgreSQL 引擎绑定到当前测试事件循环。"""
-    from yuxi.bootstrap.models import load_models
+    from yuxi.infrastructure.postgres.models import load_models
 
     load_models()
     if pg_manager.async_engine is not None:

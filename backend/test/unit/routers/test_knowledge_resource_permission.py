@@ -90,14 +90,14 @@ async def test_query_parameter_routes_apply_knowledge_base_acl(monkeypatch):
 async def test_dataset_only_manage_route_checks_the_dataset_knowledge_base(monkeypatch):
     calls = []
 
-    async def fake_get_dataset(_repository, _dataset_id):
+    async def fake_get_dataset(_service, _dataset_id):
         return SimpleNamespace(kb_id="kb-1")
 
     async def fake_ensure_permission(kb_id, current_user, required):
         calls.append((kb_id, current_user, required))
         return {}
 
-    monkeypatch.setattr(knowledge_eval_router.EvaluationRepository, "get_dataset", fake_get_dataset)
+    monkeypatch.setattr(knowledge_eval_router.EvaluationService, "get_dataset", fake_get_dataset)
     monkeypatch.setattr(knowledge_eval_router, "ensure_knowledge_base_permission", fake_ensure_permission)
     admin = SimpleNamespace(uid="admin-1", role="admin", department_id=1)
 
@@ -109,7 +109,7 @@ async def test_dataset_only_manage_route_checks_the_dataset_knowledge_base(monke
 
 @pytest.mark.asyncio
 async def test_dataset_manage_route_rejects_admin_without_manage_permission(monkeypatch):
-    async def fake_get_dataset(_repository, _dataset_id):
+    async def fake_get_dataset(_service, _dataset_id):
         return SimpleNamespace(kb_id="kb-1")
 
     async def fake_get_knowledge_base_info(_kb_id):
@@ -122,7 +122,7 @@ async def test_dataset_manage_route_rejects_admin_without_manage_permission(monk
             },
         }
 
-    monkeypatch.setattr(knowledge_eval_router.EvaluationRepository, "get_dataset", fake_get_dataset)
+    monkeypatch.setattr(knowledge_eval_router.EvaluationService, "get_dataset", fake_get_dataset)
     monkeypatch.setattr(knowledge_permissions.knowledge_base, "get_knowledge_base_info", fake_get_knowledge_base_info)
     admin = SimpleNamespace(uid="other-admin", role="admin", department_id=1)
 

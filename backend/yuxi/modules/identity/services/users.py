@@ -244,6 +244,70 @@ async def upload_avatar(db: AsyncSession, *, current_user: User, content: bytes)
         raise
 
 
+async def is_first_run() -> bool:
+    """系统是否尚未创建任何用户。"""
+    return await UserRepository().is_first_run()
+
+
+async def get_department_name(db: AsyncSession, *, current_user: User) -> str | None:
+    """读取当前用户部门的展示名称。"""
+    if not current_user.department_id:
+        return None
+    return await DepartmentRepository(db).get_name_by_id(current_user.department_id)
+
+
+async def list_users(db: AsyncSession, *, current_user: User, skip: int, limit: int) -> list[dict]:
+    """按管理员可见范围返回用户与部门名称。"""
+    department_id = None if current_user.role == "superadmin" else current_user.department_id
+    users_with_department = await UserRepository(db).list_with_department(
+        skip=skip,
+        limit=limit,
+        department_id=department_id,
+    )
+    result = []
+    for user, department_name in users_with_department:
+        item = user.to_dict()
+        item["department_name"] = department_name
+        result.append(item)
+    return result
+
+
+async def list_access_options(db: AsyncSession, *, skip: int, limit: int) -> list[dict]:
+    """返回授权选择器使用的精简用户列表。"""
+    users_with_department = await UserRepository(db).list_with_department(skip=skip, limit=limit)
+    return [
+        {
+            "uid": user.uid,
+            "username": user.username,
+            "role": user.role,
+            "department_id": user.department_id,
+            "department_name": department_name,
+        }
+        for user, department_name in users_with_department
+    ]
+
+
+async def get_managed_user(db: AsyncSession, *, current_user: User, user_id: int) -> User | None:
+    """读取管理员可见的有效用户并执行部门隔离。"""
+    user = await UserRepository(db).get_active_by_id(user_id)
+    if user is not None:
+        ensure_user_in_current_department(current_user, user)
+    return user
+
+
+async def suggest_username_uid(db: AsyncSession, *, username: str) -> str | None:
+    """用户名可用时生成唯一 UID，已存在时返回 None。"""
+    repository = UserRepository(db)
+    if await repository.get_by_username(username) is not None:
+        return None
+    return generate_unique_uid(username, await repository.get_all_uids())
+
+
+async def is_uid_available(db: AsyncSession, *, uid: str) -> bool:
+    """检查 UID 是否未被占用。"""
+    return not await UserRepository(db).exists_by_uid(uid)
+
+
 def ensure_user_in_current_department(current_user: User, target_user: User) -> None:
     """限制普通管理员的成员可见范围。"""
     if current_user.role == "superadmin":

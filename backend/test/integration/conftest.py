@@ -50,7 +50,7 @@ def _has_shared_integration_tests(request: pytest.FixtureRequest) -> bool:
 @pytest.fixture(scope="session", autouse=True)
 def load_orm_models():
     """独立测试进程显式装配全部 ORM，避免依赖其他测试的导入顺序。"""
-    from yuxi.bootstrap.models import load_models
+    from yuxi.infrastructure.postgres.models import load_models
 
     load_models()
 

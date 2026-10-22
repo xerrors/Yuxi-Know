@@ -8,7 +8,6 @@ from typing import TypedDict
 from dotenv import load_dotenv
 from sqlalchemy import func, select
 
-
 APP_ROOT = Path(__file__).resolve().parents[1]
 if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
@@ -58,10 +57,10 @@ async def ensure_uninitialized(session) -> None:
 
 async def seed_initial_users() -> None:
     """注册完整模型并向尚未初始化的当前 Schema 写入种子用户。"""
-    from yuxi.bootstrap.models import load_models
-    from yuxi.modules.identity.security import AuthUtils
     from yuxi.infrastructure.postgres.manager import pg_manager
+    from yuxi.infrastructure.postgres.models import load_models
     from yuxi.modules.identity.models import Department, User
+    from yuxi.modules.identity.security import AuthUtils
     from yuxi.shared.datetime import utc_now
 
     try:

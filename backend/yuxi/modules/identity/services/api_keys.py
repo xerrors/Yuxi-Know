@@ -48,6 +48,23 @@ async def create_api_key(
         raise
 
 
+async def list_api_keys(db: AsyncSession, *, actor: User, skip: int, limit: int) -> dict:
+    """返回当前用户可见凭据及总数。"""
+    keys, total = await APIKeyRepository(db).list_visible(
+        requester_user_id=actor.id,
+        is_superadmin=actor.role == "superadmin",
+        skip=skip,
+        limit=limit,
+    )
+    return {"api_keys": [key.to_dict() for key in keys], "total": total}
+
+
+async def get_api_key(db: AsyncSession, *, actor: User, api_key_id: int) -> dict:
+    """读取当前用户可访问的单个凭据。"""
+    key = await get_accessible_api_key(APIKeyRepository(db), api_key_id, actor)
+    return {"api_key": key.to_dict()}
+
+
 async def update_api_key(db: AsyncSession, *, actor: User, api_key_id: int, updates: dict) -> dict:
     """校验合并后的凭据能力并提交变更。"""
     try:

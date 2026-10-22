@@ -17,7 +17,7 @@ from yuxi.modules.identity.services.administration import (
     create_department_with_admin,
     initialize_system_admin,
 )
-from yuxi.bootstrap.models import load_models
+from yuxi.infrastructure.postgres.models import load_models
 from yuxi.infrastructure.postgres.base import Base
 from yuxi.modules.identity.models import Department, User
 

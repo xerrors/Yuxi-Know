@@ -4,6 +4,8 @@
 类型：bug-fix
 Owner：backend/test/integration/conftest.py
 
+实现位置更新：模型注册现由 `backend/yuxi/infrastructure/postgres/models.py` 拥有，见 [2026-10-21 后端边界收敛](./2026-10-21-backend-boundary-and-provider-catalog.md)。本记录保留当次测试装配与证据。
+
 ## 问题
 
 独立运行 后台作业 PostgreSQL 测试时，文件只导入当前用例涉及的部分 ORM 类型。SQLAlchemy 配置共享 registry 时仍需要解析 `User.agent_env` 指向的 `AgentEnv`；缺少其定义会使整个 registry 初始化失败。API、worker 和 unit 测试进程已经加载的模型不会跨进程传播，运行环境就绪不代表独立 pytest 进程已经完成装配。Schema 锁并发测试还调用了 manager 上不存在的方法，子任务提前失败，主测试等待进入事件直至超时；锁入口由 `yuxi.migrations.schema` 拥有。
