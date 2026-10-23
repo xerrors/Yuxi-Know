@@ -1,50 +1,35 @@
-"""知识原件暂存：内容去重、对象上传与同名查询。"""
+"""知识库原件暂存；逻辑名称与内容重复在登记用例中处理。"""
 
-import os
-import time
 from dataclasses import dataclass
+from os.path import splitext
 from typing import Literal
+from urllib.parse import quote
+from uuid import uuid4
 
 from yuxi.infrastructure.minio.client import MinIOClient, UploadResult, get_minio_client
-from yuxi.modules.knowledge.runtime import knowledge_base
+from yuxi.modules.knowledge.names import normalize_name
 from yuxi.modules.knowledge.utils import calculate_content_hash
-from yuxi.shared.errors import StateConflictError
-
-
-class DuplicateDocumentContentError(StateConflictError):
-    """知识库已有相同原件内容，由入口保留各自冲突文案。"""
 
 
 @dataclass(frozen=True, slots=True)
 class StagedDocument:
-    """暂存完成的对象与内容事实，尚未创建正式文件或作业。"""
+    """暂存对象及内容指纹，尚未创建正式文件。"""
 
     upload: UploadResult
     content_hash: str
-    same_name_files: list[dict]
 
 
 async def stage_document(*, kb_id: str | None, filename: str, content: bytes, source: Literal["file", "url"] = "file") -> StagedDocument:
-    """复用原件暂存序列，保留文件与 URL 的既有命名和 MIME。"""
-    content_hash = await calculate_content_hash(content)
-    if await knowledge_base.file_exists_in_knowledge_base(kb_id, content_hash):
-        raise DuplicateDocumentContentError("知识库中已经存在了相同内容文件")
-
-    folder = kb_id if kb_id else "unknown"
-    if source == "url":
-        object_name = f"{folder}/upload/{content_hash}.html"
-        display_name = filename
-        content_type = "text/html"
-    else:
-        basename, ext = os.path.splitext(filename)
-        object_name = f"{folder}/upload/{basename}_{int(time.time() * 1000)}{ext}"
-        display_name = filename.lower()
-        content_type = None
+    """每次暂存使用独立对象键，避免同内容或并发同名对象相互覆盖。"""
+    digest = await calculate_content_hash(content)
+    leaf = normalize_name(filename) if source == "file" else "page.html"
+    extension = splitext(leaf)[1]
+    object_name = f"{kb_id or 'unknown'}/upload/{uuid4().hex}/source{extension}"
     uploaded = await get_minio_client().aupload_file(
         bucket_name=MinIOClient.KB_BUCKETS["documents"],
         object_name=object_name,
         data=content,
-        content_type=content_type,
+        content_type="text/html" if source == "url" else None,
+        metadata={"Content-Disposition": "attachment; filename*=UTF-8''" + quote(filename if source == "file" else leaf, safe="")},
     )
-    same_name_files = await knowledge_base.get_same_name_files(kb_id, display_name)
-    return StagedDocument(upload=uploaded, content_hash=content_hash, same_name_files=same_name_files)
+    return StagedDocument(upload=uploaded, content_hash=digest)

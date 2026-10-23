@@ -23,7 +23,6 @@ from yuxi.api.uploads import read_upload_with_limit
 from yuxi.infrastructure.document_parsing import SUPPORTED_FILE_EXTENSIONS, is_supported_file_extension
 from yuxi.infrastructure.minio.client import MinIOClient, StorageError, get_minio_client
 from yuxi.infrastructure.observability.logging import logger
-from yuxi.modules.background_jobs.dispatch import submit_job
 from yuxi.modules.background_jobs.service import job_tracker
 from yuxi.modules.identity.models import User
 from yuxi.modules.identity.permissions import ResourcePermission, resolve_knowledge_base_permission
@@ -37,10 +36,9 @@ from yuxi.modules.knowledge.services.document_actions import (
     submit_document_action,
     submit_pending_document_action,
 )
-from yuxi.modules.knowledge.services.uploads import DuplicateDocumentContentError, stage_document
+from yuxi.modules.knowledge.services.uploads import stage_document
 from yuxi.modules.knowledge.utils import (
     is_minio_url,
-    params_for_uploaded_document,
     parse_minio_url,
 )
 from yuxi.modules.knowledge.utils.kb_utils import PREPROCESSED_UPLOADS_KEY
@@ -75,6 +73,7 @@ class WorkspaceImportRequest(BaseModel):
 class AddUploadedDocumentsRequest(BaseModel):
     items: list[str]
     params: dict | None = None
+    import_id: str | None = None
 
 
 class MoveDocumentRequest(BaseModel):
@@ -169,6 +168,9 @@ def _validate_uploaded_document_items(items: list[str], params: dict) -> None:
     file_sizes = params.get("file_sizes")
     if file_sizes is not None and not isinstance(file_sizes, dict):
         raise HTTPException(status_code=400, detail="params.file_sizes must be an object")
+
+    if "source_paths" in params and not isinstance(params["source_paths"], dict):
+        raise HTTPException(status_code=400, detail="params.source_paths must be an object")
 
     preprocessed_map = params.get(PREPROCESSED_UPLOADS_KEY)
     if preprocessed_map is not None and not isinstance(preprocessed_map, dict):
@@ -496,7 +498,6 @@ async def export_knowledge_base(
 async def list_documents(
     kb_id: str,
     parent_id: str | None = Query(None, description="父文件夹 ID，空值表示根目录"),
-    path_prefix: str | None = Query(None, description="路径型目录前缀，用于懒加载 source_path 形成的虚拟目录"),
     status: str = Query("all", description="文件状态筛选"),
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(100, ge=1, le=500, description="每页数量"),
@@ -509,7 +510,6 @@ async def list_documents(
         return await knowledge_base_manager.list_document_files(
             kb_id,
             parent_id=parent_id,
-            path_prefix=path_prefix,
             status=status,
             page=page,
             page_size=page_size,
@@ -569,6 +569,7 @@ async def add_documents(
     kb_id: str,
     items: list[str] = Body(...),
     params: dict = Body(...),
+    import_id: str | None = Body(None),
     current_user: User = Depends(require_knowledge_base_manage),
 ):
     """添加文档到知识库（上传 -> 解析 -> 可选入库）"""
@@ -584,29 +585,18 @@ async def add_documents(
 
     _validate_uploaded_document_items(items, params)
 
-    try:
-        knowledge_base = await knowledge_base_manager.get_knowledge_base_info(kb_id)
-        job, _ = await submit_job(
-            name=f"知识库文档处理 ({knowledge_base.name})",
-            job_type="knowledge_ingest",
-            payload={
-                "kb_id": kb_id,
-                "items": items,
-                "params": params,
-                "content_type": content_type,
-                "operator_id": current_user.uid,
-            },
-        )
-        return {
-            "message": "作业已提交，请查看文件列表中的状态",
-            "status": "queued",
-            "job_id": job.id,
-        }
-    except HTTPException:
-        raise
-    except Exception as e:  # noqa: BLE001
-        logger.error(f"Failed to enqueue {content_type}s: {e}, {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"Failed to enqueue job: {e}")
+    from yuxi.modules.knowledge.services.imports import register_import
+
+    config = await knowledge_base_manager.get_kb_config(kb_id)
+    return await register_import(
+        kb_id=kb_id,
+        items=items,
+        params=params,
+        operator_id=current_user.uid,
+        import_id=import_id,
+        process=True,
+        additional_params=config.additional_params,
+    )
 
 
 @knowledge.post("/knowledge-bases/{kb_id}/documents/add")
@@ -628,57 +618,17 @@ async def add_uploaded_documents(
 
     _validate_uploaded_document_items(payload.items, params)
 
-    added_items: list[dict] = []
-    failed_items: list[dict] = []
-    for index, item in enumerate(payload.items):
-        try:
-            file_meta = await knowledge_base_manager.add_file_record(
-                kb_id,
-                item,
-                params=params_for_uploaded_document(item, params),
-                operator_id=current_user.uid,
-            )
-            added_items.append(
-                {
-                    "index": index,
-                    "item": item,
-                    "file_id": file_meta["file_id"],
-                    "status": file_meta.get("status"),
-                    "file_meta": file_meta,
-                }
-            )
-        except Exception as add_error:  # noqa: BLE001
-            logger.error(f"添加文件记录失败 {item}: {add_error}")
-            failed_items.append(
-                {
-                    "index": index,
-                    "item": item,
-                    "status": "failed",
-                    "error": f"添加记录失败: {str(add_error)}",
-                    "error_type": "add_failed",
-                }
-            )
+    from yuxi.modules.knowledge.services.imports import register_import
 
-    failed_count = len(failed_items)
-    added_count = len(added_items)
-    if failed_count == 0:
-        status = "success"
-        message = f"已添加 {added_count} 个文件"
-    elif added_count == 0:
-        status = "failed"
-        message = f"文件添加失败，失败 {failed_count} 个"
-    else:
-        status = "partial_failed"
-        message = f"已添加 {added_count} 个文件，失败 {failed_count} 个"
-
-    return {
-        "message": message,
-        "status": status,
-        "items": added_items,
-        "failed_items": failed_items,
-        "added": added_count,
-        "failed": failed_count,
-    }
+    config = await knowledge_base_manager.get_kb_config(kb_id)
+    return await register_import(
+        kb_id=kb_id,
+        items=payload.items,
+        params=params,
+        operator_id=current_user.uid,
+        import_id=payload.import_id,
+        additional_params=config.additional_params,
+    )
 
 
 def _validate_direct_document_action_file_ids(file_ids: list[str]) -> list[str]:
@@ -935,7 +885,7 @@ async def delete_document(kb_id: str, doc_id: str, current_user: User = Depends(
         await knowledge_base_manager.delete_file(kb_id, doc_id)
 
         return {"message": "删除成功"}
-    except HTTPException:
+    except (HTTPException, DomainError):
         raise
     except Exception as e:
         logger.error(f"删除文档失败 {e}, {traceback.format_exc()}")
@@ -1196,7 +1146,7 @@ async def create_folder(
     try:
         await _ensure_knowledge_base_supports_documents(kb_id, "文件夹创建")
         return await knowledge_base_manager.create_folder(kb_id, folder_name, parent_id, current_user.uid)
-    except HTTPException:
+    except (HTTPException, DomainError):
         raise
     except Exception as e:
         logger.error(f"创建文件夹失败 {e}, {traceback.format_exc()}")
@@ -1214,7 +1164,7 @@ async def rename_folder(
     try:
         await _ensure_knowledge_base_supports_documents(kb_id, "文件夹重命名")
         return await knowledge_base_manager.rename_folder(kb_id, folder_id, folder_name)
-    except HTTPException:
+    except (HTTPException, DomainError):
         raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -1235,7 +1185,7 @@ async def move_document(
     try:
         await _ensure_knowledge_base_supports_documents(kb_id, "文件移动")
         return await knowledge_base_manager.move_file(kb_id, doc_id, request.new_parent_id)
-    except HTTPException:
+    except (HTTPException, DomainError):
         raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -1269,13 +1219,9 @@ async def fetch_url(
             "filename": url,  # 原始 URL 作为文件名
             "final_url": final_url,
             "size": len(content_bytes),
-            "has_same_name": bool(staged.same_name_files),
-            "same_name_files": staged.same_name_files,
         }
 
-    except DuplicateDocumentContentError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    except HTTPException:
+    except (HTTPException, DomainError):
         raise
     except ValueError as e:
         logger.warning(f"URL fetch validation failed: {e}")
@@ -1311,10 +1257,7 @@ async def import_workspace_files(
         if not is_supported_file_extension(filename):
             raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
 
-        try:
-            staged = await stage_document(kb_id=kb_id, filename=filename, content=file_bytes)
-        except DuplicateDocumentContentError as exc:
-            raise HTTPException(status_code=409, detail=f"知识库中已经存在了相同内容文件: {filename}") from exc
+        staged = await stage_document(kb_id=kb_id, filename=filename, content=file_bytes)
         results.append(
             {
                 "message": "Workspace file successfully imported",
@@ -1356,13 +1299,7 @@ async def upload_file(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    try:
-        staged = await stage_document(kb_id=kb_id, filename=file.filename, content=file_bytes)
-    except DuplicateDocumentContentError as exc:
-        raise HTTPException(
-            status_code=409,
-            detail="知识库中已经存在了相同内容文件，File with the same content already exists in this knowledge_base",
-        ) from exc
+    staged = await stage_document(kb_id=kb_id, filename=file.filename, content=file_bytes)
     return {
         "message": "File successfully uploaded",
         **serialize_staged_file(staged, kb_id=kb_id, filename=file.filename, size=len(file_bytes)),

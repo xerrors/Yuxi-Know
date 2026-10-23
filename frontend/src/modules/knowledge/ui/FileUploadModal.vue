@@ -243,52 +243,17 @@
           <span>输入 URL 后点击加载，系统将自动抓取网页内容</span>
         </div>
       </div>
-
-      <!-- 同名文件提示 -->
-      <div v-if="sameNameFiles.length > 0" class="conflict-files-panel">
-        <div class="panel-header">
-          <Info :size="14" class="icon-warning" />
-          <span>已存在同名文件 ({{ sameNameFiles.length }})</span>
-        </div>
-        <div class="file-list-scroll">
-          <div v-for="file in sameNameFiles" :key="file.file_id" class="conflict-item">
-            <div class="file-meta">
-              <span class="fname" :title="file.filename">{{ file.filename }}</span>
-              <span class="ftime">{{ formatFileTime(file.created_at) }}</span>
-            </div>
-            <div class="file-actions">
-              <a-button
-                type="text"
-                size="small"
-                class="action-btn download"
-                @click="downloadSameNameFile(file)"
-              >
-                <Download :size="14" />
-              </a-button>
-              <a-button
-                type="text"
-                size="small"
-                danger
-                class="action-btn delete"
-                @click="deleteSameNameFile(file)"
-              >
-                <Trash2 :size="14" />
-              </a-button>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   </a-modal>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, watch, h } from 'vue'
-import { message, Upload, Modal } from 'ant-design-vue'
+import { message, Upload } from 'ant-design-vue'
 import { useUserStore } from '@/modules/identity'
 import { useConfigStore } from '@/modules/settings'
 import { useKnowledgeBaseStore } from '@/modules/knowledge/model/knowledgeBase'
-import { fileApi, documentApi } from '@/apis/knowledge_api'
+import { fileApi } from '@/apis/knowledge_api'
 import {
   FileUp,
   FolderUp,
@@ -296,8 +261,6 @@ import {
   RotateCw,
   CircleHelp,
   Info,
-  Download,
-  Trash2,
   Link,
   X,
   ChevronDown,
@@ -482,7 +445,6 @@ const {
   fileList,
   isSupportedFile: isSupportedUploadFile,
   getKbId: () => kbId.value,
-  isFolderUpload: () => isFolderUpload.value,
   getUploadUrl: fileApi.getUploadUrl,
   getAuthHeaders: () => getAuthHeaders()
 })
@@ -550,7 +512,6 @@ watch(uploadMode, (val) => {
   isFolderUpload.value = val === 'folder'
   // 切换模式时清空已选内容，避免混淆
   fileList.value = []
-  sameNameFiles.value = []
   urlList.value = []
   newUrl.value = ''
   selectedWorkspacePaths.value = []
@@ -563,10 +524,8 @@ watch(uploadMode, (val) => {
 const urlList = ref([])
 const newUrl = ref('')
 const fetchingUrls = ref(false)
-const CONTENT_EXISTS_ERROR_TEXT = '内容已存在于知识库中'
 
 // 同名文件列表（用于显示提示）
-const sameNameFiles = ref([])
 
 // URL 相关功能
 const isValidUrl = (string) => {
@@ -578,22 +537,12 @@ const isValidUrl = (string) => {
   }
 }
 
-const mergeSameNameFiles = (sameNameList = []) => {
-  if (!Array.isArray(sameNameList) || sameNameList.length === 0) {
-    return
-  }
-  const existingIds = new Set(sameNameFiles.value.map((f) => f.file_id))
-  const newConflicts = sameNameList.filter((f) => !existingIds.has(f.file_id))
-  sameNameFiles.value.push(...newConflicts)
-}
-
 const fetchSingleUrlItem = async (item) => {
   item.status = 'fetching'
   try {
     const res = await fileApi.fetchUrl(item.url, kbId.value)
     item.status = 'success'
     item.data = res
-    mergeSameNameFiles(res.same_name_files)
   } catch (error) {
     console.error('Failed to fetch URL:', error)
     item.status = 'error'
@@ -601,12 +550,7 @@ const fetchSingleUrlItem = async (item) => {
     const detailData = error.response?.data?.detail
     const detailMessage =
       (typeof detailData === 'string' ? detailData : detailData?.message) || error.message || ''
-    if (detailMessage.includes('same content') || detailMessage.includes('相同内容')) {
-      item.error = CONTENT_EXISTS_ERROR_TEXT
-      mergeSameNameFiles(detailData?.same_name_files)
-    } else {
-      item.error = detailMessage || '加载失败'
-    }
+    item.error = detailMessage || '加载失败'
   }
 }
 
@@ -797,104 +741,14 @@ const beforeUpload = (file) => {
   return true
 }
 
-const formatFileTime = (timestamp) => {
-  if (!timestamp) return ''
-  try {
-    const date = new Date(timestamp)
-    return date.toLocaleString()
-  } catch {
-    return timestamp
-  }
-}
-
-const showSameNameFilesInUploadArea = (files) => {
-  sameNameFiles.value = files
-  // 可以在这里添加其他逻辑，比如自动滚动到提示区域
-}
-
-const downloadSameNameFile = async (file) => {
-  try {
-    // 获取当前知识库ID
-    const currentKbId = kbId.value
-    if (!currentKbId) {
-      message.error('知识库ID不存在')
-      return
-    }
-
-    message.loading('正在下载文件...', 0)
-    const response = await documentApi.downloadDocument(currentKbId, file.file_id)
-    message.destroy()
-
-    // 创建下载链接
-    const blob = await response.blob() // 从 Response 对象中提取 Blob 数据
-    const url = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = file.filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(url)
-
-    message.success(`文件 ${file.filename} 下载成功`)
-  } catch (error) {
-    message.destroy()
-    console.error('下载文件失败:', error)
-    message.error(`下载文件失败: ${error.message || '未知错误'}`)
-  }
-}
-
-const deleteSameNameFile = (file) => {
-  Modal.confirm({
-    title: '确认删除文件',
-    content: `确定要删除文件 "${file.filename}" 吗？此操作不可恢复。`,
-    okText: '删除',
-    okType: 'danger',
-    cancelText: '取消',
-    onOk: async () => {
-      try {
-        // 获取当前知识库ID
-        const currentKbId = kbId.value
-        if (!currentKbId) {
-          message.error('知识库ID不存在')
-          return
-        }
-
-        message.loading('正在删除文件...', 0)
-        await documentApi.deleteDocument(currentKbId, file.file_id)
-        message.destroy()
-
-        // 从同名文件列表中移除
-        sameNameFiles.value = sameNameFiles.value.filter((f) => f.file_id !== file.file_id)
-
-        message.success(`文件 ${file.filename} 删除成功`)
-      } catch (error) {
-        message.destroy()
-        console.error('删除文件失败:', error)
-        message.error(`删除文件失败: ${error.message || '未知错误'}`)
-      }
-    }
-  })
-}
-
 const handleFileUpload = (info) => {
   if (info?.file?.status === 'error') {
     const file = info.file
     // 尝试多种方式获取错误信息
     const detail = file?.response?.detail || file?.error?.message || ''
-    if (detail.includes('same content') || detail.includes('相同内容')) {
-      message.error(`${file.name} 已是相同内容文件，无需重复上传`)
-    } else {
-      message.error(detail || `文件上传失败：${file.name}`)
-    }
-  }
-
-  // 检查是否有同名文件提示
-  if (info?.file?.status === 'done' && info.file.response) {
-    const response = info.file.response
-    if (response.has_same_name && response.same_name_files && response.same_name_files.length > 0) {
-      showSameNameFilesInUploadArea(response.same_name_files)
-    }
+    message.error(
+      (typeof detail === 'string' ? detail : detail.message) || `文件上传失败：${file.name}`
+    )
   }
 
   fileList.value = info?.fileList ?? []
@@ -953,7 +807,6 @@ const chunkData = async () => {
         items.push(filePath)
         if (item.content_hash) content_hashes[filePath] = item.content_hash
         if (Number.isFinite(item.size)) file_sizes[filePath] = item.size
-        mergeSameNameFiles(item.same_name_files)
 
         const ext = filePath.substring(filePath.lastIndexOf('.')).toLowerCase()
         if (imageExtensions.includes(ext) && !isOcrEnabled.value) {
@@ -971,13 +824,14 @@ const chunkData = async () => {
         Object.assign(params, buildAutoIndexParams())
       }
 
-      await store.addFiles({
+      const accepted = await store.addFiles({
         items,
         contentType: 'file',
         params,
         parentId: selectedFolderId.value
       })
 
+      if (!accepted) return
       emit('success')
       handleCancel()
       selectedWorkspacePaths.value = []
@@ -999,29 +853,6 @@ const chunkData = async () => {
       return
     }
 
-    // 批内按内容哈希去重，避免同一批次重复入库
-    const deduplicatedItems = []
-    const seenKeys = new Set()
-    let skippedDuplicates = 0
-    for (const item of successfulItems) {
-      const dedupKey = item.data?.content_hash || item.data?.file_path || item.url
-      if (seenKeys.has(dedupKey)) {
-        skippedDuplicates += 1
-        continue
-      }
-      seenKeys.add(dedupKey)
-      deduplicatedItems.push(item)
-    }
-
-    if (deduplicatedItems.length === 0) {
-      message.error('URL 内容均为重复项，请更换后重试')
-      return
-    }
-
-    if (skippedDuplicates > 0) {
-      message.warning(`检测到 ${skippedDuplicates} 个重复 URL 内容，已保留首个并跳过其余项`)
-    }
-
     try {
       store.state.chunkLoading = true
       const params = { ...processingParams.value }
@@ -1033,7 +864,7 @@ const chunkData = async () => {
       // 构造 _preprocessed_map 和 items (minio urls)
       const items = []
       const preprocessedMap = {}
-      for (const item of deduplicatedItems) {
+      for (const item of successfulItems) {
         // item.data = { file_path: "http://minio...", content_hash: "...", filename: "...", ... }
         // 注意：fetch-url 返回的 file_path 其实是 MinIO URL
         // 我们需要传递 MinIO URL 给 addDocuments
@@ -1049,13 +880,14 @@ const chunkData = async () => {
       params._preprocessed_map = preprocessedMap
 
       // 调用 addFiles (file mode)
-      await store.addFiles({
+      const accepted = await store.addFiles({
         items: items,
         contentType: 'file', // 重要：这里改为 file，因为我们已经转成了 minio 上的文件
         params,
         parentId: selectedFolderId.value
       })
 
+      if (!accepted) return
       emit('success')
       handleCancel()
       urlList.value = []
@@ -1103,17 +935,17 @@ const chunkData = async () => {
       Object.assign(params, buildAutoIndexParams())
     }
 
-    await store.addFiles({
+    const accepted = await store.addFiles({
       items: metadata.items,
       contentType: 'file',
       params,
       parentId: selectedFolderId.value
     })
 
+    if (!accepted) return
     emit('success')
     handleCancel()
     fileList.value = []
-    sameNameFiles.value = []
   } catch (error) {
     console.error('文件上传失败:', error)
     message.error('文件上传失败: ' + (error.message || '未知错误'))

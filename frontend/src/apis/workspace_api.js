@@ -24,7 +24,6 @@ export const getWorkspaceKnowledgeTree = (kbId, params = {}) => {
   const query = buildQuery({
     kb_id: kbId,
     parent_id: params.parentId,
-    path_prefix: params.pathPrefix,
     page: params.page,
     page_size: params.pageSize,
     recursive: params.recursive || false,

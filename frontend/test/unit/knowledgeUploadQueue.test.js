@@ -11,7 +11,7 @@ function setup(t, { count = 1, folder = false, kbId = 'kb-test', throwAt } = {})
   const files = Array.from({ length: count }, (_, index) => {
     const file = new File([`body-${index}`], `${index}.txt`)
     file.uid = `file-${index}`
-    file.webkitRelativePath = `folder/sub/${file.name}`
+    file.webkitRelativePath = folder ? `folder/sub/${file.name}` : ''
     return file
   })
   const fileList = ref(files)
@@ -32,7 +32,6 @@ function setup(t, { count = 1, folder = false, kbId = 'kb-test', throwAt } = {})
       fileList,
       isSupportedFile: (file) => !file.name.startsWith('.') && file.name.endsWith('.txt'),
       getKbId: () => kbId,
-      isFolderUpload: () => folder,
       getUploadUrl: (id) => `/api/knowledge/files/upload?kb_id=${id}`,
       getAuthHeaders: () => ({ Authorization: 'Bearer test-token' }),
       createXhr: () => {
@@ -112,19 +111,20 @@ test('最多十个文件并发，失败释放槽位并按入队顺序继续', as
 })
 
 for (const folder of [false, true]) {
-  test(`multipart 保持${folder ? '目录相对路径' : '原文件名'}、端点、认证头与成功响应`, async (t) => {
+  test(`multipart 使用叶子名，${folder ? '目录上传保留独立相对路径' : '普通上传保持原文件名'}及字节`, async (t) => {
     const h = setup(t, { folder })
     await h.enqueue()
     const xhr = h.requests[0]
     assert.equal(xhr.method, 'POST')
     assert.equal(xhr.url, '/api/knowledge/files/upload?kb_id=kb-test')
     assert.deepEqual(xhr.headers, { Authorization: 'Bearer test-token' })
-    assert.equal(xhr.body.get('file').name, folder ? 'folder/sub/0.txt' : '0.txt')
+    assert.equal(xhr.body.get('file').name, '0.txt')
+    assert.equal(h.files[0].webkitRelativePath, folder ? 'folder/sub/0.txt' : '')
     assert.equal(await xhr.body.get('file').text(), 'body-0')
     const response = {
       file_path: 'minio://test/item',
-      has_same_name: true,
-      same_name_files: [{ file_id: 'old' }]
+      content_hash: 'content-fingerprint',
+      filename: '0.txt'
     }
     xhr.respond(200, response)
     await setImmediate()

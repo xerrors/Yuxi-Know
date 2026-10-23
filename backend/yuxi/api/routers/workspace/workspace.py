@@ -77,7 +77,6 @@ async def get_workspace_file(
 async def get_workspace_knowledge_tree(
     kb_id: str = Query(..., description="知识库 ID"),
     parent_id: str | None = Query(None, description="父文件夹 ID"),
-    path_prefix: str | None = Query(None, description="虚拟目录路径前缀"),
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(100, ge=1, le=500, description="每页数量"),
     recursive: bool = Query(False, description="是否递归返回子目录文件"),
@@ -90,7 +89,6 @@ async def get_workspace_knowledge_tree(
         data = await _get_knowledge_base().list_document_files(
             kb_id=kb_id,
             parent_id=parent_id,
-            path_prefix=path_prefix,
             page=page,
             page_size=page_size,
             recursive=recursive,
@@ -105,7 +103,6 @@ async def get_workspace_knowledge_tree(
             "total": data.get("total", 0),
             "has_more": bool(data.get("has_more")),
             "parent_id": data.get("parent_id"),
-            "path_prefix": data.get("path_prefix", ""),
         }
     except ValueError as error:
         _raise_knowledge_read_error(error)
@@ -249,12 +246,8 @@ def _raise_knowledge_read_error(error: ValueError) -> None:
 
 def _workspace_knowledge_entry(kb_id: str, item: dict) -> dict:
     is_dir = bool(item.get("is_folder"))
-    is_virtual_folder = bool(item.get("is_virtual_folder"))
     file_id = item.get("file_id")
-    path_prefix = item.get("path_prefix") or ""
-    if is_virtual_folder:
-        path = f"/knowledge/{kb_id}/virtual/{quote(path_prefix, safe='')}"
-    elif is_dir:
+    if is_dir:
         path = f"/knowledge/{kb_id}/folder/{file_id}/"
     else:
         path = f"/knowledge/{kb_id}/file/{file_id}"
@@ -274,8 +267,6 @@ def _workspace_knowledge_entry(kb_id: str, item: dict) -> dict:
         "status": item.get("status") or "done",
         "has_original_file": bool(item.get("has_original_file")),
         "has_parsed_markdown": bool(item.get("has_parsed_markdown")),
-        "is_virtual_folder": is_virtual_folder,
-        "path_prefix": path_prefix,
     }
 
 

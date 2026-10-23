@@ -328,7 +328,7 @@
       </template>
 
       <template #cell-created_by="{ row }">
-        <span v-if="row.is_virtual_folder || !row.created_by" class="file-creator-empty">-</span>
+        <span v-if="!row.created_by" class="file-creator-empty">-</span>
         <a-tooltip v-else :title="row.created_by_name || row.created_by">
           <span class="file-creator">
             <FallbackAvatar
@@ -344,16 +344,15 @@
         </a-tooltip>
       </template>
 
-      <template #cell-created_at="{ row, text }">
+      <template #cell-created_at="{ text }">
         <span class="file-time-cell">
-          {{ row.is_virtual_folder ? '-' : formatFileTableTime(text) }}
+          {{ formatFileTableTime(text) }}
         </span>
       </template>
 
       <template #row-actions="{ row }">
         <div class="table-row-actions">
           <a-popover
-            v-if="!row.is_virtual_folder"
             placement="bottomRight"
             trigger="click"
             overlayClassName="file-action-popover"
@@ -454,7 +453,6 @@
             </template>
             <a-button type="text" :icon="h(Ellipsis)" class="action-trigger-btn" />
           </a-popover>
-          <span v-else class="action-placeholder"></span>
         </div>
       </template>
     </FileBrowserTable>
@@ -522,15 +520,10 @@ const applyFilters = async (overrides = {}) => {
   const nextStatus = overrides.status ?? statusFilter.value
   const recursive = nextStatus !== 'all'
   const currentFolder = folderBreadcrumbs.value[folderBreadcrumbs.value.length - 1]
-  const isVirtualFolder = Boolean(currentFolder?.is_virtual_folder)
-  const parentId = isVirtualFolder
-    ? currentFolder?.parent_id || null
-    : currentFolder?.file_id || null
-  const pathPrefix = isVirtualFolder ? currentFolder?.path_prefix || '' : ''
+  const parentId = currentFolder?.file_id || null
   await store.loadDocumentFiles({
     page: 1,
     parentId: recursive ? null : parentId,
-    pathPrefix: recursive ? '' : pathPrefix,
     status: nextStatus,
     recursive
   })
@@ -575,11 +568,10 @@ const fileBreadcrumbItems = computed(() =>
     ...item,
     key: item.file_id || `root-${index}`,
     name: item.filename || '全部文件',
-    dropDisabled: Boolean(item.is_virtual_folder)
+    dropDisabled: false
   }))
 )
 const isFilteredView = computed(() => Boolean(store.fileBrowser.recursive))
-const isVirtualPathView = computed(() => Boolean(store.fileBrowser.pathPrefix))
 const refreshing = computed(() => store.state.knowledgeBaseLoading || store.fileBrowser.loading)
 const lock = computed(() => store.state.lock)
 const batchDeleting = computed(() => store.state.batchDeleting)
@@ -708,7 +700,7 @@ const renamedFolderName = ref('')
 const folderBeingRenamed = ref(null)
 
 const showRenameFolderModal = (record) => {
-  if (!canUseFileMutations.value || record.is_virtual_folder) return
+  if (!canUseFileMutations.value) return
   closePopover(record.file_id)
   folderBeingRenamed.value = record
   renamedFolderName.value = record.filename || ''
@@ -744,8 +736,7 @@ const canUseFileMutations = computed(() =>
   canMutateKnowledgeFiles({
     readonly: readonly.value,
     locked: lock.value,
-    filtered: isFilteredView.value,
-    virtualPath: isVirtualPathView.value
+    filtered: isFilteredView.value
   })
 )
 
@@ -787,7 +778,7 @@ const handleDragLeave = (event, target) => {
 }
 
 const moveDocument = async (record, targetFolderId) => {
-  if (!canUseFileMutations.value || !record || record.is_virtual_folder) return
+  if (!canUseFileMutations.value || !record) return
   try {
     await documentApi.moveDocument(store.kbId, record.file_id, targetFolderId)
     message.success(`已将“${record.filename}”移动到目标文件夹`)

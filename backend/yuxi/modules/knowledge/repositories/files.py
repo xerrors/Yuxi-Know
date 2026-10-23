@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
-from types import SimpleNamespace
 from typing import Any
 
-from sqlalchemy import DateTime, String, case, cast, func, literal, or_, select, union_all, update
+from sqlalchemy import case, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.infrastructure.postgres.manager import pg_manager
@@ -19,24 +18,6 @@ SQL_IN_BATCH_SIZE = 10_000
 
 
 class KnowledgeFileRepository:
-    @staticmethod
-    def normalize_path_prefix(path_prefix: str | None) -> str:
-        """规范化文档目录前缀，拒绝绝对路径和父目录引用。"""
-        if not path_prefix:
-            return ""
-        normalized = path_prefix.strip().replace("\\", "/")
-        while normalized.startswith("./"):
-            normalized = normalized[2:]
-        if normalized.startswith("/"):
-            raise ValueError("path_prefix must be relative")
-
-        parts = [part for part in normalized.split("/") if part and part != "."]
-        if any(part == ".." for part in parts):
-            raise ValueError("path_prefix must not contain parent directory references")
-        if not parts:
-            return ""
-        return "/".join(parts) + "/"
-
     @asynccontextmanager
     async def lock_file_tree(self, kb_id: str) -> AsyncIterator[None]:
         """按知识库串行化目录树结构修改。"""
@@ -212,25 +193,6 @@ class KnowledgeFileRepository:
             )
             return list(result.scalars().all())
 
-    async def list_same_name_files(self, *, kb_id: str, filename: str) -> list[KnowledgeFile]:
-        normalized_filename = filename.strip()
-        if not normalized_filename:
-            return []
-
-        async with pg_manager.get_async_session_context() as session:
-            result = await session.execute(
-                select(KnowledgeFile)
-                .where(
-                    KnowledgeFile.kb_id == kb_id,
-                    KnowledgeFile.is_folder.is_(False),
-                    KnowledgeFile.deleted_at.is_(None),
-                    func.lower(KnowledgeFile.filename) == normalized_filename.lower(),
-                    or_(KnowledgeFile.status.is_(None), KnowledgeFile.status != "failed"),
-                )
-                .order_by(KnowledgeFile.created_at.desc())
-            )
-            return list(result.scalars().all())
-
     async def list_file_ids_by_filename_contains(
         self,
         *,
@@ -257,25 +219,6 @@ class KnowledgeFileRepository:
                 .limit(min(max(int(limit or 100), 1), 10_000))
             )
             return [str(file_id) for file_id in result.scalars().all()]
-
-    async def exists_by_content_hash(self, *, kb_id: str, content_hash: str) -> bool:
-        normalized_hash = content_hash.strip()
-        if not normalized_hash:
-            return False
-
-        async with pg_manager.get_async_session_context() as session:
-            result = await session.execute(
-                select(KnowledgeFile.file_id)
-                .where(
-                    KnowledgeFile.kb_id == kb_id,
-                    KnowledgeFile.is_folder.is_(False),
-                    KnowledgeFile.content_hash == normalized_hash,
-                    KnowledgeFile.deleted_at.is_(None),
-                    or_(KnowledgeFile.status.is_(None), KnowledgeFile.status != "failed"),
-                )
-                .limit(1)
-            )
-            return result.scalar_one_or_none() is not None
 
     async def count_all(self) -> int:
         async with pg_manager.get_async_session_context() as session:
@@ -310,19 +253,23 @@ class KnowledgeFileRepository:
             return [str(file_id) for file_id in result.scalars().all()]
 
     async def exists_by_filename(self, *, kb_id: str, filename: str) -> bool:
+        """沿真实父关系解析已有文件的根相对路径。"""
+        from yuxi.modules.knowledge.names import source_segments
+        from yuxi.modules.knowledge.repositories.directories import DirectoryRepository
+
+        segments = source_segments(filename)
+        parent_id = None
         async with pg_manager.get_async_session_context() as session:
-            result = await session.execute(
-                select(KnowledgeFile.file_id)
-                .where(
-                    KnowledgeFile.kb_id == kb_id,
-                    KnowledgeFile.filename == filename,
-                    KnowledgeFile.deleted_at.is_(None),
-                    KnowledgeFile.is_folder.is_not(True),
-                    or_(KnowledgeFile.status.is_(None), KnowledgeFile.status != "failed"),
-                )
-                .limit(1)
-            )
-            return result.scalar_one_or_none() is not None
+            for index, segment in enumerate(segments):
+                node = await DirectoryRepository().named(session, kb_id, parent_id, segment)
+                if node is None:
+                    return False
+                if index == len(segments) - 1:
+                    return not node.is_folder
+                if not node.is_folder:
+                    return False
+                parent_id = node.file_id
+        return False
 
     @staticmethod
     def _status_condition(status: str | None):
@@ -334,11 +281,6 @@ class KnowledgeFileRepository:
         if parent_id:
             return KnowledgeFile.parent_id == parent_id
         return KnowledgeFile.parent_id.is_(None)
-
-    @staticmethod
-    def _like_prefix(value: str) -> str:
-        escaped = value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        return f"{escaped}%"
 
     def _document_filters(
         self,
@@ -362,110 +304,11 @@ class KnowledgeFileRepository:
 
         return filters
 
-    async def _list_directory_documents(
-        self,
-        *,
-        kb_id: str,
-        parent_id: str | None,
-        path_prefix: str,
-        page: int,
-        page_size: int,
-        files_only: bool,
-    ) -> tuple[list[Any], int]:
-        offset = (page - 1) * page_size
-        parent_condition = self._parent_condition(parent_id)
-        base_filters = [
-            KnowledgeFile.kb_id == kb_id,
-            KnowledgeFile.deleted_at.is_(None),
-            parent_condition,
-            KnowledgeFile.filename.is_not(None),
-        ]
-        if path_prefix:
-            base_filters.append(KnowledgeFile.filename.like(self._like_prefix(path_prefix), escape="\\"))
-            remainder = func.substr(KnowledgeFile.filename, len(path_prefix) + 1)
-        else:
-            # 根目录直接使用 filename 表达式，匹配部分索引 idx_kf_kb_parent_segment/idx_kf_kb_parent_flat
-            remainder = KnowledgeFile.filename
-        immediate_name = remainder.label("filename")
-        segment = func.split_part(remainder, "/", 1)
-        virtual_path_prefix = (literal(path_prefix) + segment + literal("/")).label("path_prefix")
-        virtual_file_id = (literal("__virtual_folder__:") + literal(parent_id or "root") + literal(":") + virtual_path_prefix).label(
-            "file_id"
-        )
-
-        real_select = select(
-            KnowledgeFile.file_id.label("file_id"),
-            immediate_name,
-            KnowledgeFile.file_type.label("file_type"),
-            KnowledgeFile.status.label("status"),
-            KnowledgeFile.created_at.label("created_at"),
-            KnowledgeFile.updated_at.label("updated_at"),
-            KnowledgeFile.file_size.label("file_size"),
-            KnowledgeFile.chunk_count.label("chunk_count"),
-            KnowledgeFile.token_count.label("token_count"),
-            KnowledgeFile.created_by.label("created_by"),
-            KnowledgeFile.is_folder.label("is_folder"),
-            KnowledgeFile.parent_id.label("parent_id"),
-            KnowledgeFile.path.label("path"),
-            KnowledgeFile.minio_url.label("minio_url"),
-            KnowledgeFile.markdown_file.label("markdown_file"),
-            literal(False).label("is_virtual_folder"),
-            cast(literal(None), String).label("path_prefix"),
-            literal(0).label("virtual_children_count"),
-        ).where(*base_filters, remainder != "", func.strpos(remainder, "/") == 0)
-
-        virtual_select = (
-            select(
-                virtual_file_id,
-                segment.label("filename"),
-                literal("folder").label("file_type"),
-                literal("done").label("status"),
-                cast(literal(None), DateTime(timezone=True)).label("created_at"),
-                cast(literal(None), DateTime(timezone=True)).label("updated_at"),
-                literal(0).label("file_size"),
-                literal(0).label("chunk_count"),
-                literal(0).label("token_count"),
-                cast(literal(None), String).label("created_by"),
-                literal(True).label("is_folder"),
-                cast(literal(parent_id), String).label("parent_id"),
-                cast(literal(None), String).label("path"),
-                cast(literal(None), String).label("minio_url"),
-                cast(literal(None), String).label("markdown_file"),
-                literal(True).label("is_virtual_folder"),
-                virtual_path_prefix,
-                func.count().label("virtual_children_count"),
-            )
-            .where(*base_filters, remainder != "", func.strpos(remainder, "/") > 0)
-            .group_by(segment)
-        )
-
-        if files_only:
-            directory_query = real_select.where(KnowledgeFile.is_folder.is_(False)).subquery()
-        else:
-            directory_query = union_all(real_select, virtual_select).subquery()
-
-        async with pg_manager.get_async_session_context() as session:
-            total_result = await session.execute(select(func.count()).select_from(directory_query))
-            total = int(total_result.scalar_one() or 0)
-            result = await session.execute(
-                select(directory_query)
-                .order_by(
-                    directory_query.c.is_folder.desc(),
-                    func.lower(directory_query.c.filename).asc(),
-                    directory_query.c.created_at.desc().nullslast(),
-                    directory_query.c.file_id.asc(),
-                )
-                .offset(offset)
-                .limit(page_size)
-            )
-            return [SimpleNamespace(**dict(row)) for row in result.mappings().all()], total
-
     async def list_documents(
         self,
         *,
         kb_id: str,
         parent_id: str | None = None,
-        path_prefix: str | None = None,
         status: str | None = None,
         page: int = 1,
         page_size: int = 100,
@@ -475,19 +318,8 @@ class KnowledgeFileRepository:
         page = max(int(page or 1), 1)
         page_size = min(max(int(page_size or 100), 1), 500)
         offset = (page - 1) * page_size
-        normalized_path_prefix = self.normalize_path_prefix(path_prefix)
         has_status_filter = self._status_condition(status) is not None
         effective_recursive = recursive and has_status_filter
-        if not effective_recursive and not has_status_filter:
-            return await self._list_directory_documents(
-                kb_id=kb_id,
-                parent_id=parent_id,
-                path_prefix=normalized_path_prefix,
-                page=page,
-                page_size=page_size,
-                files_only=files_only,
-            )
-
         filters = self._document_filters(
             kb_id=kb_id,
             parent_id=parent_id,
@@ -811,31 +643,39 @@ class KnowledgeFileRepository:
         return len(affected)
 
     async def mark_deleted(self, *, kb_id: str, file_id: str) -> str | None:
-        """先提交 PostgreSQL 删除事实，再由投影任务清理外部索引。"""
-        event_key: str | None = None
+        """串行化目录修改，先提交删除事实和外部清理意图。"""
+        from yuxi.modules.knowledge.repositories.directories import DirectoryRepository
+
         async with pg_manager.get_async_session_context() as session:
+            await DirectoryRepository().lock(session, kb_id)
             record = await session.scalar(
                 select(KnowledgeFile).where(KnowledgeFile.kb_id == kb_id, KnowledgeFile.file_id == file_id).with_for_update()
             )
             if record is None:
                 return None
-            generation = int(record.generation or 1)
-            event_key = f"file:{file_id}:g{generation}:deleted"
-            record.deleted_at = utc_now()
-            record.status = FileStatus.DELETED
-            record.projection_status = "pending"
-            record.projection_error = None
-            existing = await session.scalar(select(KnowledgeProjectionOutbox).where(KnowledgeProjectionOutbox.event_key == event_key))
-            if existing is None:
-                session.add(
-                    KnowledgeProjectionOutbox(
-                        event_key=event_key,
-                        kb_id=kb_id,
-                        aggregate_id=file_id,
-                        generation=generation,
-                        operation="file_deleted",
-                    )
+            return await self.mark_deleted_in_session(session, record)
+
+    async def mark_deleted_in_session(self, session: AsyncSession, record: KnowledgeFile) -> str:
+        """调用方持有树及节点锁，在同一事务登记 tombstone 和幂等 outbox。"""
+        file_id, kb_id = record.file_id, record.kb_id
+
+        generation = int(record.generation or 1)
+        event_key = f"file:{file_id}:g{generation}:deleted"
+        record.deleted_at = utc_now()
+        record.status = FileStatus.DELETED
+        record.projection_status = "pending"
+        record.projection_error = None
+        existing = await session.scalar(select(KnowledgeProjectionOutbox).where(KnowledgeProjectionOutbox.event_key == event_key))
+        if existing is None:
+            session.add(
+                KnowledgeProjectionOutbox(
+                    event_key=event_key,
+                    kb_id=kb_id,
+                    aggregate_id=file_id,
+                    generation=generation,
+                    operation="file_deleted",
                 )
+            )
         return event_key
 
     async def delete(self, file_id: str) -> None:

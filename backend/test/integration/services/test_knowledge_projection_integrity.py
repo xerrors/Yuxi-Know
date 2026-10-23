@@ -378,13 +378,16 @@ async def test_tombstones_are_absent_from_tree_names_hashes_and_counts(database)
         },
     )
     assert len(await repo.list_children(kb_id="kb-test", parent_id="folder")) == 1
+    assert await repo.exists_by_filename(kb_id="kb-test", filename="folder/child.md")
     await repo.mark_deleted(kb_id="kb-test", file_id="child")
     assert await repo.list_children(kb_id="kb-test", parent_id="folder") == []
     assert await repo.count_children_by_parent_ids(kb_id="kb-test", parent_ids=["folder"]) == {}
-    assert await repo.list_same_name_files(kb_id="kb-test", filename="child.md") == []
+    from yuxi.modules.knowledge.repositories.directories import DirectoryRepository
+
+    async with database() as observer:
+        assert await DirectoryRepository().named(observer, "kb-test", "folder", "child.md") is None
     assert await repo.list_file_ids_by_filename_contains(kb_id="kb-test", filename_pattern="child") == []
-    assert not await repo.exists_by_filename(kb_id="kb-test", filename="child.md")
-    assert not await repo.exists_by_content_hash(kb_id="kb-test", content_hash="hash")
+    assert not await repo.exists_by_filename(kb_id="kb-test", filename="folder/child.md")
     await repo.mark_deleted(kb_id="kb-test", file_id="folder")
     assert await repo.list_children(kb_id="kb-test", parent_id=None) == []
     assert await repo.count_all() == 0

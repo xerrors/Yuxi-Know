@@ -1,12 +1,12 @@
 import hashlib
-import time
-from urllib.parse import quote
+from urllib.parse import quote, unquote, urlsplit
+from uuid import uuid4
 
 from yuxi.infrastructure.minio.object_urls import is_minio_url, parse_minio_url
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.modules.knowledge.chunking.presets import resolve_chunk_processing_params
+from yuxi.modules.knowledge.names import normalize_name
 from yuxi.shared.datetime import utc_isoformat
-from yuxi.shared.hashing import hashstr
 
 # Web 上传请求与持久 Job payload 的既有协议键；只在上传元数据边界读取。
 PREPROCESSED_UPLOADS_KEY = "_preprocessed_map"
@@ -16,6 +16,9 @@ _DROPPED_PROCESSING_PARAM_KEYS = {
     "auto_index",
     "content_hashes",
     "file_sizes",
+    "source_paths",
+    "source_path",
+    "parent_id",
     "enable_ocr",
     "ocr_engine_config",
 }
@@ -80,19 +83,13 @@ async def prepare_item_metadata(item: str, content_type: str, kb_id: str, params
         # 使用预处理信息
         filename = pre_info.get("filename", item)  # 通常是原始 URL
 
-        # 截断文件名以适应数据库限制 (512 chars)，保留部分后缀信息如果可能
-        if len(filename) > 500:
-            filename_display = filename[:400] + "..." + filename[-90:]
-        else:
-            filename_display = filename
-
-        file_type = "html"  # 强制转换为 html 类型，以便后续作为文件处理
-        item_path = pre_info["path"]  # MinIO path
+        source_url = urlsplit(filename)
+        title = unquote(source_url.path.rsplit("/", 1)[-1]) or source_url.hostname or "page"
+        filename_display = normalize_name(title[:480] + ".html")
+        file_type = "html"
+        item_path = pre_info["path"]
         content_hash = pre_info["content_hash"]
-
-        # 使用 item(url) 生成 ID，保证同一 URL 即使多次添加 ID 也不同（配合 time）
-        # 或者我们应该基于 hash？不，基于 time 更符合上传逻辑
-        file_id = f"file_{hashstr(item + str(time.time()), 6)}"
+        file_id = f"file_{uuid4().hex}"
 
         metadata = {
             "kb_id": kb_id,
@@ -112,7 +109,7 @@ async def prepare_item_metadata(item: str, content_type: str, kb_id: str, params
             # 覆盖 content_type 为 file，确保后续解析走文件流程（MinIO 下载 -> HTML 解析）
             # 而不是再次尝试作为 URL 抓取
             safe_params["content_type"] = "file"
-            safe_params["original_source"] = item  # 保存完整 URL 到 JSON 字段，避免数据库字段长度限制
+            safe_params["original_source"] = filename  # 保存完整 URL 到 JSON 字段，避免数据库字段长度限制
             metadata["processing_params"] = safe_params
 
         return metadata
@@ -125,15 +122,7 @@ async def prepare_item_metadata(item: str, content_type: str, kb_id: str, params
         _, object_name = parse_minio_url(item)
         filename = object_name.rsplit("/", 1)[-1]
 
-        import re
-
-        timestamp_pattern = r"^(.+)_(\d{13})(\.[^.]+)$"
-        match = re.match(timestamp_pattern, filename)
-        filename_display = match.group(1) + match.group(3) if match else filename
-        source_path = _normalize_source_path(params.get("source_path")) if params else None
-        if source_path:
-            filename_display = source_path
-
+        filename_display = normalize_name(filename)
         file_type = filename_display.rsplit(".", 1)[-1].lower() if "." in filename_display else ""
         item_path = item
 
@@ -148,7 +137,7 @@ async def prepare_item_metadata(item: str, content_type: str, kb_id: str, params
         if not isinstance(file_sizes, dict):
             file_sizes = {}
         file_size = file_sizes.get(item)
-        file_id = f"file_{hashstr(str(item_path) + str(time.time()), 6)}"
+        file_id = f"file_{uuid4().hex}"
 
     else:
         raise ValueError(f"Unsupported content_type: {content_type}")
@@ -171,29 +160,6 @@ async def prepare_item_metadata(item: str, content_type: str, kb_id: str, params
         metadata["processing_params"] = sanitize_processing_params(params)
 
     return metadata
-
-
-def _normalize_source_path(value: object) -> str | None:
-    """归一化客户端传入的上传源路径，仅用于知识库文件树中的展示文件名。
-
-    source_path 用来保留 CLI 目录上传时的相对层级。这里不会把它当作真实
-    存储路径使用：反斜杠会转成斜杠，开头的 "./" 会被去掉，绝对路径和
-    ".." 父目录跳转会被拒绝。
-    """
-    if not isinstance(value, str):
-        return None
-    normalized = value.strip().replace("\\", "/")
-    while normalized.startswith("./"):
-        normalized = normalized[2:]
-    if not normalized or normalized.startswith("/"):
-        return None
-    parts = [part for part in normalized.split("/") if part and part != "."]
-    if not parts or any(part == ".." for part in parts):
-        return None
-    display_path = "/".join(parts)
-    if len(display_path) > 512:
-        raise ValueError("source_path is too long")
-    return display_path
 
 
 def merge_processing_params(metadata_params: dict | None, request_params: dict | None) -> dict:

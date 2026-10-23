@@ -18,7 +18,6 @@ from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.background_jobs.models import BackgroundJobRecord
 from yuxi.modules.identity.models import User
 from yuxi.modules.knowledge.models import KnowledgeFile
-from yuxi.shared.datetime import utc_now
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
@@ -34,8 +33,6 @@ FILE_FIELDS = {
     "minio_filename",
     "object_name",
     "bucket_name",
-    "same_name_files",
-    "has_same_name",
 }
 
 
@@ -54,11 +51,10 @@ async def _assert_file(payload, *, kb_id, filename, content, staged_objects, wor
     staged_objects.add((payload["bucket_name"], payload["object_name"]))
     expected_fields = FILE_FIELDS | ({"workspace_path"} if workspace_path else set())
     assert set(payload) == expected_fields
-    base, ext = filename.rsplit(".", 1)
-    assert re.fullmatch(re.escape(base) + r"_\d{13}\." + re.escape(ext), payload["minio_filename"])
+    assert re.fullmatch(r"[a-f0-9]{32}/source" + re.escape("." + filename.rsplit(".", 1)[-1]), payload["minio_filename"])
     assert payload["object_name"] == f"{kb_id or 'unknown'}/upload/{payload['minio_filename']}"
     assert payload["file_path"] == payload["minio_path"]
-    assert payload["filename"] == filename.lower() and payload["original_filename"] == base
+    assert payload["filename"] == filename and payload["original_filename"] == filename
     assert payload["kb_id"] == kb_id and payload["bucket_name"] == "knowledgebases"
     assert payload["content_hash"] == sha256(content).hexdigest() and payload["size"] == len(content)
     assert payload["message"] == ("Workspace file successfully imported" if workspace_path else "File successfully uploaded")
@@ -90,7 +86,6 @@ async def test_file_and_workspace_staging_preserve_bytes_without_registering(
     )
     assert response.status_code == 200, response.text
     await _assert_file(response.json(), kb_id=kb_id, filename=filename, content=content, staged_objects=staged_objects)
-    assert response.json()["same_name_files"] == [] and not response.json()["has_same_name"]
     await _assert_no_registration(postgres_sessions, kb_id)
 
     workspace_name, workspace_content = f"Workspace-{uuid4().hex}.MD", b"# workspace source\n"
@@ -110,72 +105,36 @@ async def test_file_and_workspace_staging_preserve_bytes_without_registering(
             await _assert_file(
                 item, kb_id=kb_id, filename=workspace_name, content=workspace_content, staged_objects=staged_objects, workspace_path=path
             )
-            assert item["same_name_files"] == [] and not item["has_same_name"]
         await _assert_no_registration(postgres_sessions, kb_id)
     finally:
         removed = await test_client.delete("/api/workspace/file", params={"path": path}, headers=admin_headers)
         assert removed.status_code in {200, 404}, removed.text
 
 
-async def test_staging_uses_existing_pg_content_same_names_and_tombstones(
+async def test_registered_content_can_be_staged_again(
     test_client, admin_headers, knowledge_base_resource, postgres_sessions, staged_objects
 ):
-    """正式登记后才命中内容去重，不同内容返回同名，tombstone 不再参与两类查询。"""
+    """登记后的相同内容仍允许独立暂存，不在未知父目录时决定最终名称。"""
     kb_id = knowledge_base_resource["kb_id"]
-    filename, content = f"same-name-{uuid4().hex}.txt", b"registered content\n"
-    initial = await test_client.post(
+    filename, content = f"repeat-{uuid4().hex}.txt", b"repeat source"
+    first = await test_client.post(
         "/api/knowledge/files/upload", params={"kb_id": kb_id}, files={"file": (filename, content)}, headers=admin_headers
     )
-    assert initial.status_code == 200, initial.text
-    payload = initial.json()
+    assert first.status_code == 200
+    payload = first.json()
     staged_objects.add((payload["bucket_name"], payload["object_name"]))
-    added = await test_client.post(
+    registered = await test_client.post(
         f"/api/knowledge/knowledge-bases/{kb_id}/documents/add",
         json={"items": [payload["file_path"]], "params": {"content_hashes": {payload["file_path"]: payload["content_hash"]}}},
         headers=admin_headers,
     )
-    assert added.status_code == 200 and added.json()["added"] == 1, added.text
-    file_id = added.json()["items"][0]["file_id"]
-    storage = get_minio_client()
-
-    async def object_names():
-        """只观察本测试知识库的对象前缀。"""
-        return await asyncio.to_thread(
-            lambda: {item.object_name for item in storage.client.list_objects("knowledgebases", prefix=f"{kb_id}/upload/")}
-        )
-
-    before = await object_names()
-    duplicate = await test_client.post(
-        "/api/knowledge/files/upload", params={"kb_id": kb_id}, files={"file": ("different-name.txt", content)}, headers=admin_headers
-    )
-    assert duplicate.status_code == 409, duplicate.text
-    assert duplicate.json()["detail"] == "知识库中已经存在了相同内容文件，File with the same content already exists in this knowledge_base"
-    assert await object_names() == before
-    renamed = await test_client.post(
-        "/api/knowledge/files/upload", params={"kb_id": kb_id}, files={"file": (filename.upper(), b"new revision")}, headers=admin_headers
-    )
-    assert renamed.status_code == 200, renamed.text
-    item = renamed.json()
-    staged_objects.add((item["bucket_name"], item["object_name"]))
-    assert item["has_same_name"] and len(item["same_name_files"]) == 1
-    existing = item["same_name_files"][0]
-    assert set(existing) == {"file_id", "filename", "size", "created_at", "content_hash"}
-    assert (existing["file_id"], existing["filename"], existing["size"], existing["content_hash"]) == (
-        file_id,
-        filename,
-        len(content),
-        sha256(content).hexdigest(),
-    )
-    async with postgres_sessions() as observer:
-        stored = await observer.scalar(select(KnowledgeFile).where(KnowledgeFile.file_id == file_id))
-        stored.deleted_at = utc_now()
-        await observer.commit()
-    retry = await test_client.post(
+    assert registered.status_code == 200 and registered.json()["added"] == 1, registered.text
+    second = await test_client.post(
         "/api/knowledge/files/upload", params={"kb_id": kb_id}, files={"file": (filename, content)}, headers=admin_headers
     )
-    assert retry.status_code == 200, retry.text
-    staged_objects.add((retry.json()["bucket_name"], retry.json()["object_name"]))
-    assert retry.json()["same_name_files"] == [] and not retry.json()["has_same_name"]
+    assert second.status_code == 200, second.text
+    await _assert_file(second.json(), kb_id=kb_id, filename=filename, content=content, staged_objects=staged_objects)
+    assert second.json()["object_name"] != payload["object_name"]
 
 
 async def test_upload_without_kb_uses_unknown_and_rejects_unauthenticated(test_client, admin_headers, staged_objects):
@@ -200,12 +159,6 @@ async def test_url_asgi_projection_uses_real_pg_and_minio(
     assert me.status_code == 200, me.text
     async with postgres_sessions() as observer:
         user = await observer.scalar(select(User).where(User.uid == me.json()["uid"]))
-        observer.add(
-            KnowledgeFile(
-                file_id=f"url_{uuid4().hex}", kb_id=kb_id, filename=original, file_size=7, content_hash=sha256(b"earlier").hexdigest()
-            )
-        )
-        await observer.commit()
     app = FastAPI()
     app.include_router(router.knowledge, prefix="/api")
     app.dependency_overrides[router.get_admin_user] = lambda: user
@@ -224,14 +177,14 @@ async def test_url_asgi_projection_uses_real_pg_and_minio(
             "filename",
             "final_url",
             "size",
-            "has_same_name",
-            "same_name_files",
         }
         assert payload["status"] == "success" and payload["filename"] == original and payload["final_url"] == final
         assert payload["content_hash"] == digest and payload["size"] == len(content)
         assert payload["file_path"] == payload["minio_url"]
-        assert payload["has_same_name"] and payload["same_name_files"][0]["filename"] == original
-        key = f"{kb_id}/upload/{digest}.html"
+        from yuxi.infrastructure.minio.object_urls import parse_minio_url
+
+        _, key = parse_minio_url(payload["file_path"])
+        assert key.startswith(f"{kb_id}/upload/") and key.endswith("/source.html")
         staged_objects.add(("knowledgebases", key))
         storage = get_minio_client()
         assert await storage.adownload_file("knowledgebases", key) == content

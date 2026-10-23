@@ -12,7 +12,7 @@ MCP 授权、展示清理、身份策略和 UID 容量产生连续的一次性�
 
 ### 实现方案
 
-业务域与知识域版本均为 1。ORM、索引和当前基线 DDL 拥有完整结构，包含 MCP 个人授权表、工具结果约束、活动 Run 唯一索引及知识库名称约束。[app-init](./2026-10-18-app-initialization.md) 在 advisory lock 内初始化空库、恢复自身未完成的空库初始化并同步共享内容；API/worker 只读校验准确版本。LangGraph 自有的 checkpoint setup 拥有其初始表结构。
+业务域版本为 1，知识域版本为 2；知识域目录与导入回执的版本调整及显式离线转换由[目录与导入决定](./2026-08-24-knowledge-folder-materialization.md)补充。ORM、索引和当前基线 DDL 拥有完整结构，包含 MCP 个人授权表、工具结果约束、活动 Run 唯一索引及知识库名称约束。[app-init](./2026-10-18-app-initialization.md) 在 advisory lock 内初始化空库、恢复自身未完成的空库初始化并同步共享内容；API/worker 只读校验准确版本。LangGraph 自有的 checkpoint setup 拥有其初始表结构。
 
 删除历史增量脚本与版本分支，不增加版本别名、自动重标记或旧库兼容入口。部署侧对已有库的处理独立于应用初始化，不能仅凭相同的版本编号判定实际结构就绪。
 

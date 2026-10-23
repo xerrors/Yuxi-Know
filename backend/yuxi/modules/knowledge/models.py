@@ -60,6 +60,21 @@ class KnowledgeFile(Base):
 
     __tablename__ = "knowledge_files"
     __table_args__ = (
+        Index(
+            "uq_knowledge_files_active_name",
+            "kb_id",
+            "parent_id",
+            text("normalize(lower(normalize(btrim(filename), NFC)), NFC)"),
+            unique=True,
+            postgresql_nulls_not_distinct=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ).ddl_if(dialect="postgresql"),
+        CheckConstraint(
+            "deleted_at IS NOT NULL OR (filename = btrim(filename) AND filename NOT IN ('', '.', '..') "
+            "AND strpos(filename, '/') = 0 AND strpos(filename, chr(92)) = 0 "
+            "AND filename !~ '[[:cntrl:]]' AND filename = normalize(filename, NFC))",
+            name="ck_knowledge_files_leaf_name",
+        ).ddl_if(dialect="postgresql"),
         UniqueConstraint("file_id", name="uq_knowledge_files_file_id"),
         UniqueConstraint("file_id", "kb_id", name="uq_knowledge_files_file_id_kb"),
         ForeignKeyConstraint(
@@ -103,6 +118,21 @@ class KnowledgeFile(Base):
     projection_status = Column(String(16), nullable=False, default="pending", server_default=text("'pending'"))
     projection_error = Column(Text)
     updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+
+class KnowledgeImport(Base):
+    """持久导入回执；删除文件或知识库不能复活同一请求。"""
+
+    __tablename__ = "knowledge_imports"
+    __table_args__ = (UniqueConstraint("operator_id", "import_id", name="uq_knowledge_import_identity"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    operator_id = Column(String(128), nullable=False)
+    import_id = Column(String(128), nullable=False)
+    kb_id = Column(String(80), nullable=False)
+    fingerprint = Column(String(64), nullable=False)
+    response = Column(JSON_VALUE, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
 
 
 class KnowledgeProjectionOutbox(Base):

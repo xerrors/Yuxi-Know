@@ -1,7 +1,6 @@
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
-from test.unit.support.knowledge import FakeKnowledgeBase
 
 
 @pytest.mark.unit
@@ -49,84 +48,3 @@ class TestMinIOClientStatFile:
 
         result = await client.astat_file("knowledgebases", "db/upload/test.pdf")
         assert result == 2048
-
-
-@pytest.mark.unit
-class TestAddFileRecordSizeFallback:
-    """Test that add_file_record fills size from MinIO when not provided."""
-
-    def _make_test_kb(self, work_dir="/tmp/test_kb"):
-        kb = FakeKnowledgeBase(work_dir=work_dir)
-        kb._persist_file_meta = AsyncMock()
-        return kb
-
-    @pytest.mark.asyncio
-    async def test_add_file_record_fetches_size_from_minio_when_missing(self):
-        kb = self._make_test_kb()
-
-        item = "minio://knowledgebases/db1/upload/test_1234567890123.pdf"
-        params = {
-            "content_type": "file",
-            "content_hashes": {item: "abc123"},
-        }
-
-        mock_minio = AsyncMock()
-        mock_minio.astat_file.return_value = 9999
-
-        with patch("yuxi.infrastructure.minio.get_minio_client", return_value=mock_minio):
-            metadata = await kb.add_file_record(
-                "db1",
-                item,
-                params=params,
-                additional_params={},
-            )
-
-            assert metadata["size"] == 9999
-            mock_minio.astat_file.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_add_file_record_keeps_provided_size(self):
-        kb = self._make_test_kb()
-
-        item = "minio://knowledgebases/db1/upload/test_1234567890123.pdf"
-        params = {
-            "content_type": "file",
-            "content_hashes": {item: "abc123"},
-            "file_sizes": {item: 5555},
-        }
-
-        mock_minio = AsyncMock()
-
-        with patch("yuxi.infrastructure.minio.get_minio_client", return_value=mock_minio):
-            metadata = await kb.add_file_record(
-                "db1",
-                item,
-                params=params,
-                additional_params={},
-            )
-
-            assert metadata["size"] == 5555
-            mock_minio.astat_file.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_add_file_record_size_fallback_handles_error_gracefully(self):
-        kb = self._make_test_kb()
-
-        item = "minio://knowledgebases/db1/upload/test_1234567890123.pdf"
-        params = {
-            "content_type": "file",
-            "content_hashes": {item: "abc123"},
-        }
-
-        mock_minio = AsyncMock()
-        mock_minio.astat_file.side_effect = Exception("MinIO connection error")
-
-        with patch("yuxi.infrastructure.minio.get_minio_client", return_value=mock_minio):
-            metadata = await kb.add_file_record(
-                "db1",
-                item,
-                params=params,
-                additional_params={},
-            )
-
-            assert metadata.get("size") is None

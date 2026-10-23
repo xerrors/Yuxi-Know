@@ -129,7 +129,9 @@ class MinIOClient:
         except StorageError:
             raise
 
-    def upload_file(self, bucket_name: str, object_name: str, data: bytes, content_type: str | None = None) -> UploadResult:
+    def upload_file(
+        self, bucket_name: str, object_name: str, data: bytes, content_type: str | None = None, metadata: dict | None = None
+    ) -> UploadResult:
         """上传文件到 MinIO"""
         try:
             self.ensure_bucket_exists(bucket_name=bucket_name)
@@ -142,13 +144,14 @@ class MinIOClient:
                 data=data_stream,
                 length=len(data),
                 content_type=resolved_content_type,
+                metadata=metadata,
             )
 
             assert result is not None
             if bucket_name in self.PUBLIC_READ_BUCKETS:
                 url = f"{self.public_base_url}/{bucket_name}/{quote(object_name, safe='/')}"
             else:
-                url = f"http://{self.public_endpoint}/{bucket_name}/{object_name}"
+                url = f"http://{self.public_endpoint}/{bucket_name}/{quote(object_name, safe='/')}"
 
             return UploadResult(url, bucket_name, object_name)
 
@@ -163,15 +166,23 @@ class MinIOClient:
         object_name: str,
         data: bytes,
         content_type: str | None = None,
+        metadata: dict | None = None,
     ) -> UploadResult:
+        """在线程内上传字节及可选对象元数据。"""
         result = await asyncio.to_thread(
             self.upload_file,
             bucket_name=bucket_name,
             object_name=object_name,
             data=data,
             content_type=content_type,
+            metadata=metadata,
         )
         return result
+
+    async def object_metadata(self, bucket_name: str, object_name: str) -> dict[str, str]:
+        """回读对象来源元数据，不从物理键猜测逻辑文件名。"""
+        stat = await asyncio.to_thread(self.client.stat_object, bucket_name, object_name)
+        return {key.lower(): value for key, value in stat.metadata.items()}
 
     def download_file(self, bucket_name: str, object_name: str, *, max_bytes: int | None = None) -> bytes:
         """读取对象；指定上限时最多读取上限加一字节以判断超限。"""

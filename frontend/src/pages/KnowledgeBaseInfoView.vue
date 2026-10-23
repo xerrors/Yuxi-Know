@@ -604,9 +604,7 @@ const onUploadMenuOutsideClick = (event) => {
 const folderTree = computed(() => {
   const roots = []
   let currentLevel = roots
-  for (const item of (store.folderBreadcrumbs || [])
-    .slice(1)
-    .filter((node) => !node.is_virtual_folder)) {
+  for (const item of (store.folderBreadcrumbs || []).slice(1)) {
     const node = {
       file_id: item.file_id,
       filename: item.filename,

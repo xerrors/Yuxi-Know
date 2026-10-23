@@ -23,7 +23,10 @@ Yuxi 通过 `KnowledgeBaseManager` 读取知识库配置、解析权限并选择
 ```mermaid
 flowchart LR
     UI["Web / API"] --> Router["路由：认证和输入校验"]
-    Router -->|解析和索引| Task["PostgreSQL BackgroundJob"]
+    Router -->|目录和导入登记| Import["knowledge services：目录、名称、持久回执"]
+    Import --> PG
+    Import --> Task["PostgreSQL BackgroundJob"]
+    Router -->|解析和索引| Task
     Router -->|配置和读取| Manager
     Task --> Worker["ARQ worker"]
     Worker --> Handler["knowledge services：领域作业流程"]
@@ -58,7 +61,7 @@ Milvus 执行器持有 `KnowledgeGraphService`，首次图检索在线程内初�
 
 分块入口和配置位于 `chunking/dispatcher.py` 与 `chunking/presets.py`。`ragflow_like` 是借鉴 RAGFlow 思路并经过本地修改的适配实现；其中 parser 使用 Yuxi 的 `source_spans` 保留原文定位，不能按未修改的第三方 vendor 整体替换。语义分块通过 `chunk_parser_config.embed_model_id` 接收模型 spec；索引用例在未指定时注入系统 embedding 配置。缺失模型或装配故障使索引失败，不产出普通切分结果。固定输入的分块和来源范围由 parser 测试拥有。
 
-摄取 chunk 字典、PostgreSQL 行、Milvus 列数组与检索结果各自服务不同边界：dispatcher 生成内容与来源范围，Milvus 执行器明确转换为 PG 字段和向量列，检索再从 PG 补全当前可见文件来源。文件元数据、目录投影和 HTTP 列表保持各自需要的字段，不把虚拟目录当作持久化文件。运行时查询以 `MilvusRetrievalConfig` 为默认值，再叠加持久化选项和本次请求；面板使用同一默认配置。已有显式配置继续生效，未保存的阈值与 BM25 数量分别取 0.0 和 50。
+摄取 chunk 字典、PostgreSQL 行、Milvus 列数组与检索结果各自服务不同边界：dispatcher 生成内容与来源范围，Milvus 执行器明确转换为 PG 字段和向量列，检索再从 PG 补全当前可见文件来源。文件元数据、真实目录树和 HTTP 列表保持各自需要的字段，父关系来自持久化记录。运行时查询以 `MilvusRetrievalConfig` 为默认值，再叠加持久化选项和本次请求；面板使用同一默认配置。已有显式配置继续生效，未保存的阈值与 BM25 数量分别取 0.0 和 50。
 
 知识库软删除由 `KnowledgeBaseRepository.mark_deleted` 在一个事务中写入 KB、文件 tombstone 和批量 outbox，清理任务完成外部删除后调用 `purge`。评估成功/失败钩子在后台任务的 owning transaction 中调用 repository 持久化，筛选和分页由 PostgreSQL 执行。
 
@@ -110,11 +113,15 @@ Milvus 索引会把 chunk 写入 PostgreSQL 和 Milvus。它不是跨存储事�
 
 ## 后台作业 和恢复
 
-JobTracker 保存任务登记、执行方上报的进度与结果摘要，并提供管理员查询和取消请求。知识库和评估 service 拥有业务结论：文档导入遇到任一失败会结束为失败，批量解析或索引可以执行完成并报告失败计数。进度达到 100 不决定任务终态。后台作业只展示有限资源引用和计数，完整结果从业务资源读取。
+JobTracker 保存任务登记、执行方上报的进度与结果摘要，并提供管理员查询和取消请求。知识库和评估 service 拥有业务结论：导入登记分别返回成功与失败项，只为成功项登记处理作业；该作业遇到解析或入库失败会结束为失败，批量解析或索引可以执行完成并报告失败计数。进度达到 100 不决定任务终态。后台作业只展示有限资源引用和计数，完整结果从业务资源读取。
 
-普通上传、URL 抓取和工作区导入由 `knowledge/services/uploads.py` 同步暂存原件：计算内容哈希，查询知识库未删除文件的相同内容，写入 MinIO，再查询同名文件。路由校验权限、调用来源安全读取入口并适配响应；Workspace filesystem 拥有 no-follow 和有界读取，URL fetcher 拥有白名单与 SSRF 检查。暂存结果包含对象与预处理信息，正式文件由后续添加入口登记。批量添加、解析、索引和图谱构建把 `job_type`、Handler 版本和可序列化 payload 保存到 PostgreSQL。提交后 API 只发布 `job_id`，ARQ worker 从 registry 加载领域 Handler。
+普通上传、URL 抓取和工作区导入由 `knowledge/services/uploads.py` 同步暂存原件，计算内容哈希并使用独立对象键。原始名称保存在对象元数据，物理键不承载目录或展示名称；相同内容允许独立文件条目。路由校验权限、调用来源安全读取入口并适配响应；Workspace filesystem 拥有 no-follow 和有界读取，URL fetcher 拥有白名单与 SSRF 检查。
 
-浏览器文件与目录上传通过 `useKnowledgeUploadQueue` 管理 XHR 并发、进度与列表状态，并同步返回 Ant Upload 的取消句柄。主动取消不弹出失败提示；同步准备失败在受控列表刷新后投影为错误，结束的请求忽略迟到回调。`FileUploadModal` 拥有来源选择、文件过滤、同名提示与正式提交；URL 抓取和个人空间导入沿各自的读取与提交时点执行。
+`knowledge/services/imports.py` 在目录事务前回读原件及指纹、校验来源清单，每次最多登记 500 项。事务内复用或创建真实目录链、分配叶子名称、保存文件、持久导入回执及可选解析作业，提交后投递。回执绑定操作者、知识库、目标、条目及参数；显式 `import_id` 区分主动重新导入，未提供时同一暂存对象清单视为同一意图。重试返回原登记，标识对应不同请求返回 409，文件删除不清除回执。worker 使用已登记文件 ID 解析与索引，不创建额外文件。
+
+文件与目录共享同级有效名称空间，根目录也受 PostgreSQL 唯一索引保护。名称执行 NFC、去首尾 ASCII 空格并按数据库 lower 比较，展示保留大小写。上传文件自动分配保留最后扩展名的最小可用整数后缀；中间路径复用同名目录，普通文件占位时明确失败。手动创建、重命名和移动撞名返回 409，删除目录与其他结构写入共享目录树事务。软删除释放名称，失败文件继续占名。完整路径由真实父关系表达，列表读取不创建目录。
+
+浏览器文件与目录上传通过 `useKnowledgeUploadQueue` 管理 XHR 并发、进度与列表状态，并同步返回 Ant Upload 的取消句柄。主动取消不弹出失败提示；同步准备失败在受控列表刷新后投影为错误，结束的请求忽略迟到回调。`FileUploadModal` 拥有来源选择、文件过滤与正式提交；URL 抓取和个人空间导入沿各自的读取与提交时点执行。
 
 提交端在事务完成后发布作业 ID；worker 从共享作业定义加载 Handler，拥有领取、执行、超时和失联检测，用唯一 attempt token claim 作业 并续租 lease；重复投递和失权 worker 的迟到写入会被 PostgreSQL 拒绝。首次发布失败时，pending 作业 保留，启动和周期 publisher 会补发。所有 后台作业 在 owner 中断或 lease 过期后都会明确失败，不自动重放未知外部副作用。领域 failure hook 由 worker 在终态事务中调用，JobTracker 的观察和取消入口不调用这些 Hook。
 
@@ -156,7 +163,7 @@ Agent 的 `knowledges` 只能缩小用户已有权限。协作成员沿用执行
 | 维护任务 | 起点与职责 | 继续追踪 |
 | --- | --- | --- |
 | 管理配置、文件列表和检索调度 | [Manager](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/knowledge/manager.py) 读取配置、查询可见性并选择 executor | repositories 拥有持久查询；base 与 implementations 拥有文件处理和具体存储操作 |
-| 暂存上传、URL 和工作区原件 | [原件暂存 service](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/knowledge/services/uploads.py) 组织内容去重、对象写入和同名查询 | 路由校验权限、调用来源安全读取入口并适配响应；正式文件和后台作业由后续添加、解析入口登记 |
+| 暂存上传、URL 和工作区原件 | [原件暂存 service](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/knowledge/services/uploads.py) 计算内容指纹并写入独立对象和原始名称元数据 | 路由校验权限、调用来源安全读取入口并适配响应；正式文件、目录、导入回执和后台作业由导入 service 登记 |
 | 异步导入、解析、索引和图谱构建 | [知识库作业 service](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/knowledge/services/background_jobs.py) 组织领域动作、进度和失败结论 | background_jobs registry/worker 拥有调度与 lease；文档处理由 Manager 分派，图谱构建直接调用 KnowledgeGraphService |
 | Agent 或 Public API 的知识能力 | [访问 service](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/knowledge/services/access.py) 计算当前权限与所选范围的交集；[工具 service](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/knowledge/services/tools.py) 组织领域工具操作 | extensions 工具与 Public 路由适配调用，执行时复查可见性与文档归属 |
 

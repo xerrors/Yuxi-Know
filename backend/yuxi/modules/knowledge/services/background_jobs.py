@@ -12,7 +12,6 @@ from yuxi.modules.knowledge.models import KnowledgeProjectionOutbox
 from yuxi.modules.knowledge.repositories.files import KnowledgeFileRepository
 from yuxi.modules.knowledge.repositories.projections import knowledge_projection_lock
 from yuxi.modules.knowledge.runtime import knowledge_base
-from yuxi.modules.knowledge.utils import params_for_uploaded_document
 
 if TYPE_CHECKING:
     from yuxi.workers.background_job_context import BackgroundJobContext
@@ -91,7 +90,8 @@ async def run_knowledge_ingest(context: BackgroundJobContext) -> dict:
     """从持久 payload 重建文档添加、解析和可选索引流程。"""
     payload = context.payload
     kb_id = payload["kb_id"]
-    items = list(payload["items"])
+    added_files = [{**record, "index": index} for index, record in enumerate(payload["files"])]
+    items = [record["item"] for record in added_files]
     params = dict(payload.get("params") or {})
     operator_id = payload["operator_id"]
     auto_index = bool(params.get("auto_index", False))
@@ -104,38 +104,7 @@ async def run_knowledge_ingest(context: BackgroundJobContext) -> dict:
     await context.set_progress(5.0, "准备处理文档")
     total = len(items)
     processed_items: list[dict | None] = [None] * total
-    added_files: list[dict] = []
-
     try:
-        for index, item in enumerate(items, 1):
-            await context.raise_if_cancelled()
-            await context.set_progress(5.0 + (index / total) * 25.0, f"[1/3] 添加记录 {index}/{total}")
-            try:
-                file_meta = await knowledge_base.add_file_record(
-                    kb_id,
-                    item,
-                    params=params_for_uploaded_document(item, params),
-                    operator_id=operator_id,
-                )
-                added_files.append(
-                    {
-                        "index": index - 1,
-                        "item": item,
-                        "file_id": file_meta["file_id"],
-                        "file_meta": file_meta,
-                    }
-                )
-            except Exception as exc:
-                logger.error("添加文件记录失败 %s: %s", item, exc)
-                error_type = "timeout" if isinstance(exc, TimeoutError) else "add_failed"
-                error_message = "添加超时" if isinstance(exc, TimeoutError) else "添加记录失败"
-                processed_items[index - 1] = {
-                    "item": item,
-                    "status": "failed",
-                    "error": f"{error_message}: {exc}",
-                    "error_type": error_type,
-                }
-
         parse_end = 60.0 if auto_index else 95.0
         for index, record in enumerate(added_files, 1):
             await context.raise_if_cancelled()

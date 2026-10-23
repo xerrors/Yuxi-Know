@@ -101,7 +101,6 @@ async def test_nested_mcp_connection_preserves_http_exception(monkeypatch):
 async def test_document_submission_preserves_http_exception(monkeypatch, pending):
     """请求共用的提交函数不能把 HTTP 拒绝包装成成功状态码。"""
     error = HTTPException(503, "队列不可用", headers={"Retry-After": "30"})
-    monkeypatch.setattr(knowledge_router, "submit_job", AsyncMock(side_effect=error))
     monkeypatch.setattr(document_actions, "submit_job", AsyncMock(side_effect=error))
     kwargs = {
         "kb_id": "kb-1",

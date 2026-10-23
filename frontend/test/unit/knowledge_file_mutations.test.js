@@ -12,52 +12,37 @@ globalThis.localStorage = {
   clear: () => storageValues.clear()
 }
 
-test('知识库文件修改守卫拒绝只读、锁定、筛选和虚拟目录场景', async () => {
+test('知识库文件修改守卫拒绝只读、锁定和筛选场景', async () => {
   const server = await createTestServer({ server: { middlewareMode: true }, appType: 'custom' })
   try {
     const { canDropOnFileBreadcrumb } = await server.ssrLoadModule('/src/shared/lib/fileDrop.js')
-    const {
-      canMutateKnowledgeFiles,
-      canDragKnowledgeFile,
-      canDropKnowledgeFileIntoFolder
-    } = await server.ssrLoadModule('/src/modules/knowledge/model/knowledgeFileMutations.js')
+    const { canMutateKnowledgeFiles, canDragKnowledgeFile, canDropKnowledgeFileIntoFolder } =
+      await server.ssrLoadModule('/src/modules/knowledge/model/knowledgeFileMutations.js')
 
     assert.equal(canMutateKnowledgeFiles({}), true)
-    for (const blockedState of [
-      { readonly: true },
-      { locked: true },
-      { filtered: true },
-      { virtualPath: true }
-    ]) {
+    for (const blockedState of [{ readonly: true }, { locked: true }, { filtered: true }]) {
       assert.equal(canMutateKnowledgeFiles(blockedState), false)
     }
 
-    const realFile = { file_id: 'file-1', is_virtual_folder: false }
-    const realFolder = { file_id: 'folder-1', is_folder: true, is_virtual_folder: false }
-    const virtualFolder = { file_id: 'virtual-1', is_folder: true, is_virtual_folder: true }
+    const realFile = { file_id: 'file-1' }
+    const realFolder = { file_id: 'folder-1', is_folder: true }
     assert.equal(
-      canDragKnowledgeFile({ enabled: true, record: realFile, breadcrumbs: [], files: [realFolder] }),
+      canDragKnowledgeFile({
+        enabled: true,
+        record: realFile,
+        breadcrumbs: [],
+        files: [realFolder]
+      }),
       true
     )
     assert.equal(canDropKnowledgeFileIntoFolder(realFile, realFolder), true)
-    assert.equal(
-      canDropOnFileBreadcrumb({ enabled: true, item: {}, index: 0, count: 2 }),
-      true
-    )
-    assert.equal(
-      canDragKnowledgeFile({ enabled: true, record: virtualFolder, breadcrumbs: [], files: [realFolder] }),
-      false
-    )
-    assert.equal(canDropKnowledgeFileIntoFolder(realFile, virtualFolder), false)
+    assert.equal(canDropOnFileBreadcrumb({ enabled: true, item: {}, index: 0, count: 2 }), true)
     assert.equal(canDropKnowledgeFileIntoFolder(realFolder, realFolder), false)
     assert.equal(
       canDropOnFileBreadcrumb({ enabled: true, item: { dropDisabled: true }, index: 0, count: 2 }),
       false
     )
-    assert.equal(
-      canDropOnFileBreadcrumb({ enabled: true, item: {}, index: 1, count: 2 }),
-      false
-    )
+    assert.equal(canDropOnFileBreadcrumb({ enabled: true, item: {}, index: 1, count: 2 }), false)
   } finally {
     await server.close()
   }

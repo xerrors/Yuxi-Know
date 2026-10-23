@@ -198,4 +198,4 @@ Dashboard 先定分层与数据能力，再统一组件与统计口径；用户�
 - [移除内容审查](13-removals/2026-09-03-remove-content-guard.md) 取代 [面向读者的文档写作](01-engineering-trust-and-docs/2026-08-26-human-centered-documentation.md) 中内容审查参考页及其稳定路径；[性能与构建优化](14-frontend-ux/2026-09-08-performance-and-bundle-optimization.md) 部分取代 [依赖漏洞修复](02-dependency-governance/2026-09-05-dependency-vulnerability-remediation.md) 的 PDF 读取路径。
 - [并发时延优化](12-concurrency/2026-09-07-agent-concurrency-optimization.md) 对[并发容量基线](12-concurrency/2026-09-04-agent-concurrency-capacity.md)是延伸而非取代：后者仍是容量、SSE 轮询、取消协议与五个持久时间点的 Owner；前者接管并删除的八份更早并发决策已不在仓库。
 - [状态面板展示](14-frontend-ux/2026-08-25-state-panel-display.md) 的子任务状态来源被仍在 `implemented/` 的 [SubAgent 独立观察](../../archived/2026-09-17-subagent-independent-observation.md)取代；[共享智能体资源选择](09-skill-cli/2026-09-05-shared-agent-resource-selection.md) 的完整选择协议由 [统一资源选择决策](../../implemented/2026-09-27-explicit-resource-selection.md)继续拥有。
-- 知识库新目录上传的自动实体化提案未随本版本实现，仍由 [proposed 记录](../../proposed/2026-08-24-knowledge-folder-materialization.md)跟踪。
+- 知识库新目录上传的自动实体化提案未随本版本实现，仍由 [proposed 记录](../../implemented/2026-08-24-knowledge-folder-materialization.md)跟踪。

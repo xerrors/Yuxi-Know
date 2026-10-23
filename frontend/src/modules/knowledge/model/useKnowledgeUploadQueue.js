@@ -7,7 +7,6 @@ export function useKnowledgeUploadQueue({
   fileList,
   isSupportedFile,
   getKbId,
-  isFolderUpload,
   getUploadUrl,
   getAuthHeaders,
   createXhr = () => new XMLHttpRequest()
@@ -178,9 +177,7 @@ export function useKnowledgeUploadQueue({
 
       try {
         const formData = new FormData()
-        const filename =
-          isFolderUpload() && file.webkitRelativePath ? file.webkitRelativePath : file.name
-        formData.append('file', file, filename)
+        formData.append('file', file, file.name)
 
         const currentKbId = getKbId()
         if (!currentKbId) {

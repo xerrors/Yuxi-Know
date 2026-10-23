@@ -698,7 +698,7 @@ class KnowledgeBaseManager:
     ) -> dict:
         child_counts = child_counts or {}
         file_id = getattr(record, "file_id")
-        child_count = int(getattr(record, "virtual_children_count", 0) or child_counts.get(file_id, 0))
+        child_count = int(child_counts.get(file_id, 0))
         created_by = getattr(record, "created_by", None)
         created_at_value = getattr(record, "created_at", None)
         updated_at_value = getattr(record, "updated_at", None)
@@ -723,8 +723,6 @@ class KnowledgeBaseManager:
             "children_count": child_count,
             "has_original_file": bool(getattr(record, "minio_url", None) or getattr(record, "path", None)),
             "has_parsed_markdown": bool(getattr(record, "markdown_file", None)),
-            "is_virtual_folder": bool(getattr(record, "is_virtual_folder", False)),
-            "path_prefix": getattr(record, "path_prefix", None),
         }
 
     async def get_knowledge_base_info(self, kb_id: str, include_files: bool = False) -> KnowledgeBaseDetail | None:
@@ -776,7 +774,6 @@ class KnowledgeBaseManager:
         kb_id: str,
         *,
         parent_id: str | None = None,
-        path_prefix: str | None = None,
         status: str | None = None,
         page: int = 1,
         page_size: int = 100,
@@ -810,7 +807,6 @@ class KnowledgeBaseManager:
                 repo.list_documents(
                     kb_id=kb_id,
                     parent_id=parent_id,
-                    path_prefix=path_prefix,
                     status=status,
                     page=normalized_page,
                     page_size=normalized_page_size,
@@ -823,7 +819,6 @@ class KnowledgeBaseManager:
             records, total = await repo.list_documents(
                 kb_id=kb_id,
                 parent_id=parent_id,
-                path_prefix=path_prefix,
                 status=status,
                 page=normalized_page,
                 page_size=normalized_page_size,
@@ -850,7 +845,6 @@ class KnowledgeBaseManager:
             "page_size": normalized_page_size,
             "has_more": normalized_page * normalized_page_size < total,
             "parent_id": parent_id,
-            "path_prefix": repo.normalize_path_prefix(path_prefix),
             "recursive": effective_recursive,
         }
         if stats is not None:
@@ -1031,48 +1025,6 @@ class KnowledgeBaseManager:
         await self._require_kb_supports_documents(kb_id, "download")
         kb_instance = await self.get_kb_executor(kb_id)
         return await kb_instance.get_file_download(kb_id, file_id, variant)
-
-    async def get_same_name_files(self, kb_id: str, filename: str) -> list[dict]:
-        """获取同一知识库中同名文件列表
-        基于原始文件名直接比较
-        返回基础信息：文件名、大小、上传时间
-
-        Args:
-            kb_id: 知识库ID
-            filename: 要检测的文件名（原始文件名）
-
-        Returns:
-            同名文件列表，每项包含：
-            - filename: 文件名
-            - size: 文件大小
-            - created_at: 上传时间
-            - file_id: 文件ID（用于下载）
-        """
-        if not kb_id or not filename:
-            return []
-
-        from yuxi.modules.knowledge.repositories.files import KnowledgeFileRepository
-
-        records = await KnowledgeFileRepository().list_same_name_files(kb_id=kb_id, filename=filename)
-        return [
-            {
-                "file_id": record.file_id,
-                "filename": record.filename,
-                "size": int(record.file_size or 0),
-                "created_at": utc_isoformat(record.created_at) if record.created_at else "",
-                "content_hash": record.content_hash or "",
-            }
-            for record in records
-        ]
-
-    async def file_exists_in_knowledge_base(self, kb_id: str | None, content_hash: str | None) -> bool:
-        """检查指定知识库中是否存在相同内容哈希的文件"""
-        if not kb_id or not content_hash:
-            return False
-
-        from yuxi.modules.knowledge.repositories.files import KnowledgeFileRepository
-
-        return await KnowledgeFileRepository().exists_by_content_hash(kb_id=kb_id, content_hash=content_hash)
 
     async def update_knowledge_base(
         self,

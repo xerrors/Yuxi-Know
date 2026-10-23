@@ -5,17 +5,16 @@ import pytest
 from fastapi import HTTPException, UploadFile
 
 import yuxi.api.routers.knowledge.management as knowledge_router
-from yuxi.modules.knowledge.read_models import KnowledgeBaseDetail
-from yuxi.modules.knowledge.services import graph_build, uploads
 import yuxi.modules.knowledge.services.background_jobs as knowledge_job_service
 import yuxi.modules.knowledge.services.document_actions as document_actions
+from yuxi.modules.knowledge.read_models import KnowledgeBaseDetail
+from yuxi.modules.knowledge.services import graph_build, uploads
 
 pytestmark = pytest.mark.asyncio
 
 
 def _patch_submit_job(monkeypatch, fake):
     """路由与服务共享作业提交入口，测试同时替换，避免按调用路径分叉。"""
-    monkeypatch.setattr(knowledge_router, "submit_job", fake)
     monkeypatch.setattr(document_actions, "submit_job", fake)
 
 
@@ -422,112 +421,6 @@ async def test_index_pending_documents_uses_pending_statuses_and_params(monkeypa
     ]
 
 
-async def test_add_documents_auto_index_returns_one_final_result_per_item(monkeypatch):
-    """成功入库的文件元数据会携带 error=None，不应被统计为失败 (#793)。"""
-    context = FakeBackgroundJobContext()
-    item = "minio://knowledgebases/kb_1/upload/demo.txt"
-
-    async def fake_ensure_knowledge_base_supports_documents(kb_id: str, operation: str) -> None:
-        return None
-
-    async def fake_get_knowledge_base_info(kb_id: str) -> KnowledgeBaseDetail:
-        return _database_detail()
-
-    async def fake_add_file_record(kb_id: str, item_path: str, params: dict, operator_id: str | None = None):
-        return {"file_id": "file_1", "status": "indexing"}
-
-    async def fake_parse_file(kb_id: str, file_id: str, operator_id: str | None = None, **_kwargs):
-        return {"file_id": file_id, "status": "parsed", "error": None}
-
-    async def fake_update_file_params(kb_id: str, file_id: str, params: dict, operator_id: str | None = None):
-        return None
-
-    async def fake_index_file(kb_id: str, file_id: str, operator_id: str | None = None, params: dict | None = None, **_kwargs):
-        return {"file_id": file_id, "status": "indexed", "error": None}
-
-    async def fake_enqueue(name: str, job_type: str, payload: dict):
-        context.payload = payload
-        await knowledge_job_service.run_knowledge_ingest(context)
-        return SimpleNamespace(id="job_1"), True
-
-    monkeypatch.setattr(
-        knowledge_router,
-        "_ensure_knowledge_base_supports_documents",
-        fake_ensure_knowledge_base_supports_documents,
-    )
-    monkeypatch.setattr(knowledge_router.knowledge_base_manager, "get_knowledge_base_info", fake_get_knowledge_base_info)
-    monkeypatch.setattr(knowledge_router.knowledge_base_manager, "add_file_record", fake_add_file_record)
-    monkeypatch.setattr(knowledge_router.knowledge_base_manager, "parse_file", fake_parse_file)
-    monkeypatch.setattr(knowledge_router.knowledge_base_manager, "update_file_params", fake_update_file_params)
-    monkeypatch.setattr(knowledge_router.knowledge_base_manager, "index_file", fake_index_file)
-    _patch_submit_job(monkeypatch, fake_enqueue)
-
-    result = await knowledge_router.add_documents(
-        "kb_1",
-        [item],
-        params={"content_type": "file", "auto_index": True, "content_hashes": {item: "hash_1"}},
-        current_user=SimpleNamespace(uid="uid-user"),
-    )
-
-    assert result["status"] == "queued"
-    assert context.result["submitted"] == 1
-    assert context.result["failed"] == 0
-    assert context.result["items"] == [{"file_id": "file_1", "status": "indexed", "error": None}]
-
-
-async def test_add_documents_passes_source_path_to_file_record(monkeypatch):
-    """验证包含 source_paths 的批量上传会将单文件 source_path 传递给 add_file_record。"""
-    context = FakeBackgroundJobContext()
-    item1 = "minio://knowledgebases/kb_1/upload/doc1.txt"
-    item2 = "minio://knowledgebases/kb_1/upload/doc2.txt"
-    captured_records = []
-
-    async def fake_ensure_knowledge_base_supports_documents(kb_id: str, operation: str) -> None:
-        return None
-
-    async def fake_get_knowledge_base_info(kb_id: str) -> KnowledgeBaseDetail:
-        return _database_detail()
-
-    async def fake_add_file_record(kb_id: str, item_path: str, params: dict, operator_id: str | None = None):
-        captured_records.append({"kb_id": kb_id, "item": item_path, "params": params, "operator_id": operator_id})
-        return {"file_id": f"file_{len(captured_records)}", "status": "uploaded"}
-
-    async def fake_parse_file(kb_id: str, file_id: str, operator_id: str | None = None, **_kwargs):
-        return {"file_id": file_id, "status": "parsed", "error": None}
-
-    async def fake_enqueue(name: str, job_type: str, payload: dict):
-        context.payload = payload
-        await knowledge_job_service.run_knowledge_ingest(context)
-        return SimpleNamespace(id="job_1"), True
-
-    monkeypatch.setattr(
-        knowledge_router,
-        "_ensure_knowledge_base_supports_documents",
-        fake_ensure_knowledge_base_supports_documents,
-    )
-    monkeypatch.setattr(knowledge_router.knowledge_base_manager, "get_knowledge_base_info", fake_get_knowledge_base_info)
-    monkeypatch.setattr(knowledge_router.knowledge_base_manager, "add_file_record", fake_add_file_record)
-    monkeypatch.setattr(knowledge_router.knowledge_base_manager, "parse_file", fake_parse_file)
-    _patch_submit_job(monkeypatch, fake_enqueue)
-
-    await knowledge_router.add_documents(
-        "kb_1",
-        [item1, item2],
-        params={
-            "content_type": "file",
-            "content_hashes": {item1: "hash_1", item2: "hash_2"},
-            "source_paths": {item1: "folder_a/sub/doc1.txt", item2: "folder_a/doc2.txt"},
-        },
-        current_user=SimpleNamespace(uid="uid-user"),
-    )
-
-    assert len(captured_records) == 2
-    assert captured_records[0]["params"]["source_path"] == "folder_a/sub/doc1.txt"
-    assert "source_paths" not in captured_records[0]["params"]
-    assert captured_records[1]["params"]["source_path"] == "folder_a/doc2.txt"
-    assert "source_paths" not in captured_records[1]["params"]
-
-
 @pytest.mark.parametrize(
     ("payload", "error_detail"),
     [
@@ -567,60 +460,6 @@ async def test_add_uploaded_documents_rejects_invalid_payload(monkeypatch, paylo
 
     assert exc_info.value.status_code == 400
     assert exc_info.value.detail == error_detail
-
-
-async def test_add_uploaded_documents_creates_records_without_job(monkeypatch):
-    item = "minio://knowledgebases/kb_1/upload/demo.txt"
-    captured = {}
-
-    async def fake_ensure_knowledge_base_supports_documents(kb_id: str, operation: str) -> None:
-        return None
-
-    async def fake_add_file_record(kb_id: str, item_path: str, params: dict, operator_id: str | None = None):
-        captured["kb_id"] = kb_id
-        captured["item"] = item_path
-        captured["params"] = params
-        captured["operator_id"] = operator_id
-        return {"file_id": "file_1", "status": "uploaded", "filename": "demo.txt"}
-
-    async def fail_enqueue(*_args, **_kwargs):
-        raise AssertionError("documents/add must not enqueue job_tracker work")
-
-    monkeypatch.setattr(
-        knowledge_router,
-        "_ensure_knowledge_base_supports_documents",
-        fake_ensure_knowledge_base_supports_documents,
-    )
-    monkeypatch.setattr(knowledge_router.knowledge_base_manager, "add_file_record", fake_add_file_record)
-    _patch_submit_job(monkeypatch, fail_enqueue)
-
-    result = await knowledge_router.add_uploaded_documents(
-        "kb_1",
-        knowledge_router.AddUploadedDocumentsRequest(
-            items=[item],
-            params={
-                "content_hashes": {item: "hash_1"},
-                "file_sizes": {item: 4},
-                "source_paths": {item: "docs/demo.txt"},
-            },
-        ),
-        current_user=SimpleNamespace(uid="uid-user"),
-    )
-
-    assert result["status"] == "success"
-    assert result["added"] == 1
-    assert result["failed"] == 0
-    assert result["items"][0]["file_id"] == "file_1"
-    assert captured == {
-        "kb_id": "kb_1",
-        "item": item,
-        "params": {
-            "content_hashes": {item: "hash_1"},
-            "file_sizes": {item: 4},
-            "source_path": "docs/demo.txt",
-        },
-        "operator_id": "uid-user",
-    }
 
 
 async def test_parse_documents_accepts_payload_with_params(monkeypatch):

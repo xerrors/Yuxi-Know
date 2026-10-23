@@ -40,13 +40,11 @@ class FakeKnowledgeBase:
         return {
             "items": [
                 {
-                    "file_id": "__virtual_folder__:root:资料/",
+                    "file_id": "folder_1",
                     "filename": "资料",
                     "status": "done",
                     "is_folder": True,
                     "parent_id": None,
-                    "is_virtual_folder": True,
-                    "path_prefix": "资料/",
                     "created_at": None,
                     "updated_at": None,
                     "file_size": 0,
@@ -57,8 +55,6 @@ class FakeKnowledgeBase:
                     "status": "indexed",
                     "is_folder": False,
                     "parent_id": None,
-                    "is_virtual_folder": False,
-                    "path_prefix": None,
                     "created_at": "2026-06-20T00:00:00Z",
                     "updated_at": "2026-06-20T01:00:00Z",
                     "file_size": 2048,
@@ -71,7 +67,6 @@ class FakeKnowledgeBase:
             "total": 2,
             "has_more": False,
             "parent_id": kwargs["parent_id"],
-            "path_prefix": kwargs["path_prefix"] or "",
         }
 
 
@@ -96,7 +91,6 @@ def test_workspace_knowledge_tree_uses_paginated_document_listing(monkeypatch):
         params={
             "kb_id": "kb_1",
             "parent_id": "folder_1",
-            "path_prefix": "资料/",
             "page": 2,
             "page_size": 100,
             "files_only": True,
@@ -108,7 +102,6 @@ def test_workspace_knowledge_tree_uses_paginated_document_listing(monkeypatch):
         {
             "kb_id": "kb_1",
             "parent_id": "folder_1",
-            "path_prefix": "资料/",
             "page": 2,
             "page_size": 100,
             "recursive": False,
@@ -119,8 +112,7 @@ def test_workspace_knowledge_tree_uses_paginated_document_listing(monkeypatch):
     payload = response.json()
     assert payload["page"] == 2
     assert payload["total"] == 2
-    assert payload["entries"][0]["is_virtual_folder"] is True
-    assert payload["entries"][0]["path"] == "/knowledge/kb_1/virtual/%E8%B5%84%E6%96%99%2F"
+    assert payload["entries"][0]["path"] == "/knowledge/kb_1/folder/folder_1/"
     assert payload["entries"][1]["path"] == "/knowledge/kb_1/file/file_1"
     assert payload["entries"][1]["size"] == 2048
     assert payload["entries"][1]["modified_at"] == "2026-06-20T01:00:00Z"

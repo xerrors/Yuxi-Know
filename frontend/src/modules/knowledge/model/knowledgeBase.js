@@ -25,7 +25,7 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
   const kbId = ref(null)
   const fileDetailFileId = ref(null)
   const documentFiles = ref([])
-  const folderBreadcrumbs = ref([{ file_id: null, filename: '全部文件', path_prefix: '' }])
+  const folderBreadcrumbs = ref([{ file_id: null, filename: '全部文件' }])
 
   const queryParams = ref([])
   const meta = reactive({})
@@ -37,7 +37,6 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
     pageSize: 100,
     total: 0,
     hasMore: false,
-    pathPrefix: '',
     status: 'all',
     recursive: false
   })
@@ -77,7 +76,7 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
   function resetFileBrowser() {
     fileBrowserContextId += 1
     documentFiles.value = []
-    folderBreadcrumbs.value = [{ file_id: null, filename: '全部文件', path_prefix: '' }]
+    folderBreadcrumbs.value = [{ file_id: null, filename: '全部文件' }]
     selectedRowKeys.value = []
     Object.assign(fileBrowser, {
       loading: false,
@@ -86,7 +85,6 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
       pageSize: 100,
       total: 0,
       hasMore: false,
-      pathPrefix: '',
       status: 'all',
       recursive: false
     })
@@ -373,14 +371,12 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
       : options.parentId === null
         ? null
         : (options.parentId ?? fileBrowser.parentId)
-    const nextPathPrefix = nextRecursive ? '' : (options.pathPrefix ?? fileBrowser.pathPrefix)
     const nextPage = Number(options.page ?? fileBrowser.page) || 1
     const nextPageSize = Number(options.pageSize ?? fileBrowser.pageSize) || 100
     const contextChanged =
       fileBrowser.parentId !== nextParentId ||
       fileBrowser.page !== nextPage ||
       fileBrowser.pageSize !== nextPageSize ||
-      fileBrowser.pathPrefix !== nextPathPrefix ||
       fileBrowser.status !== nextStatus ||
       fileBrowser.recursive !== nextRecursive
     if (contextChanged) fileBrowserContextId += 1
@@ -390,7 +386,6 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
       parentId: nextParentId,
       page: nextPage,
       pageSize: nextPageSize,
-      pathPrefix: nextPathPrefix,
       status: nextStatus,
       recursive: nextRecursive
     })
@@ -408,9 +403,6 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
       }
       if (!nextRecursive && nextParentId) {
         params.parent_id = nextParentId
-      }
-      if (!nextRecursive && nextPathPrefix) {
-        params.path_prefix = nextPathPrefix
       }
 
       const data = await documentApi.listDocuments(kbIdValue, params)
@@ -432,7 +424,6 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
         pageSize: data?.page_size || nextPageSize,
         total: data?.total || 0,
         hasMore: Boolean(data?.has_more),
-        pathPrefix: data?.path_prefix || nextPathPrefix,
         status: nextStatus,
         recursive: nextRecursive
       })
@@ -458,23 +449,18 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
   }
 
   async function enterFolder(folder) {
-    if (!folder?.is_folder) return
-    const isVirtualFolder = Boolean(folder.is_virtual_folder)
-    const currentParentId = fileBrowser.parentId
+    if (!folder?.is_folder || folderBreadcrumbs.value.at(-1)?.file_id === folder.file_id) return
     folderBreadcrumbs.value = [
       ...folderBreadcrumbs.value,
       {
         file_id: folder.file_id,
         filename: folder.filename,
-        is_virtual_folder: isVirtualFolder,
-        parent_id: isVirtualFolder ? currentParentId : folder.file_id,
-        path_prefix: isVirtualFolder ? folder.path_prefix || '' : ''
+        parent_id: folder.file_id
       }
     ]
     selectedRowKeys.value = []
     await loadDocumentFiles({
-      parentId: isVirtualFolder ? currentParentId : folder.file_id,
-      pathPrefix: isVirtualFolder ? folder.path_prefix || '' : '',
+      parentId: folder.file_id,
       page: 1,
       status: 'all',
       recursive: false
@@ -486,10 +472,8 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
     const target = nextBreadcrumbs[nextBreadcrumbs.length - 1]
     folderBreadcrumbs.value = nextBreadcrumbs
     selectedRowKeys.value = []
-    const isVirtualFolder = Boolean(target?.is_virtual_folder)
     await loadDocumentFiles({
-      parentId: isVirtualFolder ? target?.parent_id || null : target?.file_id || null,
-      pathPrefix: isVirtualFolder ? target?.path_prefix || '' : '',
+      parentId: target?.file_id || null,
       page: 1,
       status: 'all',
       recursive: false
@@ -524,7 +508,8 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
       if (data.status === 'success' || data.status === 'queued') {
         const itemType = contentType === 'file' ? '文件' : 'URL'
         enableAutoRefresh('auto')
-        message.success(data.message || `${itemType}已提交处理，请查看文件列表中的状态`)
+        if (data.failed) message.warning(data.message)
+        else message.success(data.message || `${itemType}已提交处理，请查看文件列表中的状态`)
         if (data.job_id) {
           registerJob({ job_id: data.job_id })
         }

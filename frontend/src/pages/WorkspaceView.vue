@@ -331,7 +331,6 @@ const INLINE_PREVIEW_MIN_WIDTH = 960
 const AGENTS_WORKSPACE_PATH = '/agents'
 const knowledgeFileBrowser = reactive({
   parentId: null,
-  pathPrefix: '',
   page: 1,
   pageSize: 100,
   total: 0,
@@ -549,13 +548,7 @@ const buildWorkspaceBreadcrumbItems = () => {
 
 const loadKnowledgeEntries = async (
   knowledgeBase,
-  {
-    parentId = null,
-    pathPrefix = '',
-    page = 1,
-    pageSize = knowledgeFileBrowser.pageSize,
-    breadcrumbs = null
-  } = {}
+  { parentId = null, page = 1, pageSize = knowledgeFileBrowser.pageSize, breadcrumbs = null } = {}
 ) => {
   if (!knowledgeBase?.kb_id) return
 
@@ -563,7 +556,6 @@ const loadKnowledgeEntries = async (
   try {
     const response = await getWorkspaceKnowledgeTree(knowledgeBase.kb_id, {
       parentId,
-      pathPrefix,
       page,
       pageSize
     })
@@ -572,15 +564,12 @@ const loadKnowledgeEntries = async (
       {
         name: knowledgeBase.name || '知识库',
         path: '/',
-        parentId: null,
-        pathPrefix: '',
-        isVirtualFolder: false
+        parentId: null
       }
     ]
     currentPath.value = knowledgeBreadcrumbItems.value.at(-1)?.path || '/'
     Object.assign(knowledgeFileBrowser, {
       parentId: response.parent_id || parentId || null,
-      pathPrefix: response.path_prefix || pathPrefix || '',
       page: response.page || page,
       pageSize: response.page_size || pageSize,
       total: response.total || 0,
@@ -642,7 +631,6 @@ const selectKnowledgeBreadcrumb = async (item, index) => {
   const breadcrumbs = knowledgeBreadcrumbItems.value.slice(0, index + 1)
   await loadKnowledgeEntries(selectedKnowledgeBase.value, {
     parentId: item.parentId || null,
-    pathPrefix: item.pathPrefix || '',
     page: 1,
     breadcrumbs
   })
@@ -670,18 +658,13 @@ const openKnowledgeDirectory = async (entry) => {
   clearWorkspaceSelection()
   const parentPath = knowledgeBreadcrumbItems.value.at(-1)?.path || '/'
   const nextPath = parentPath === '/' ? `/${entry.name}` : `${parentPath}/${entry.name}`
-  const currentBreadcrumb = knowledgeBreadcrumbItems.value.at(-1)
-  const isVirtualFolder = Boolean(entry.is_virtual_folder)
   const nextBreadcrumb = {
     name: entry.name,
     path: nextPath,
-    parentId: isVirtualFolder ? currentBreadcrumb?.parentId || null : entry.file_id,
-    pathPrefix: isVirtualFolder ? entry.path_prefix || '' : '',
-    isVirtualFolder
+    parentId: entry.file_id
   }
   await loadKnowledgeEntries(selectedKnowledgeBase.value, {
     parentId: nextBreadcrumb.parentId,
-    pathPrefix: nextBreadcrumb.pathPrefix,
     page: 1,
     breadcrumbs: [...knowledgeBreadcrumbItems.value, nextBreadcrumb]
   })
@@ -694,7 +677,6 @@ const handleKnowledgePageChange = async ({ page, pageSize }) => {
   const currentBreadcrumb = knowledgeBreadcrumbItems.value.at(-1)
   await loadKnowledgeEntries(selectedKnowledgeBase.value, {
     parentId: currentBreadcrumb?.parentId || null,
-    pathPrefix: currentBreadcrumb?.pathPrefix || '',
     page,
     pageSize,
     breadcrumbs: [...knowledgeBreadcrumbItems.value]

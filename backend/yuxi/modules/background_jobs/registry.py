@@ -41,12 +41,12 @@ class JobDefinition:
         return handler
 
 
-def get_job_definition(job_type: str, handler_version: int = 1) -> JobDefinition:
+def get_job_definition(job_type: str, handler_version: int | None = None) -> JobDefinition:
     """返回当前 shipping JobDefinition，并拒绝未知类型或版本。"""
     definition = JOB_DEFINITIONS.get(job_type)
     if definition is None:
         raise ValueError(f"Unknown job type: {job_type}")
-    if definition.version != handler_version:
+    if handler_version is not None and definition.version != handler_version:
         raise ValueError(f"Unsupported handler version for {job_type}: {handler_version}; expected {definition.version}")
     return definition
 
@@ -58,6 +58,7 @@ JOB_DEFINITIONS = {
             "knowledge_ingest",
             "yuxi.modules.knowledge.services.background_jobs",
             "run_knowledge_ingest",
+            version=2,
             failure_function="fail_knowledge_file_job",
         ),
         JobDefinition(

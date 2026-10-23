@@ -24,7 +24,7 @@ Owner：backend/package/yuxi/services/knowledge_folder_service.py
 
 ## 后果
 
-迁移允许部分完成且可重复执行，数据库已提交批次是恢复事实。检测接口和 warning 卡在剩余路径归零后消失。新的目录上传自动实体化仍由[路径型目录实体化提案](../../../proposed/2026-08-24-knowledge-folder-materialization.md)跟踪。
+迁移允许部分完成且可重复执行，数据库已提交批次是恢复事实。检测接口和 warning 卡在剩余路径归零后消失。新的目录上传自动实体化仍由[路径型目录实体化提案](../../../implemented/2026-08-24-knowledge-folder-materialization.md)跟踪。
 
 ## 验证
 

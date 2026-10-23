@@ -56,7 +56,8 @@ class KnowledgeExecutor(ABC):
         self.work_dir = work_dir
         os.makedirs(work_dir, exist_ok=True)
 
-    def _file_record_to_meta(self, record: Any) -> dict:
+    @staticmethod
+    def _file_record_to_meta(record: Any) -> dict:
         return {
             "file_id": record.file_id,
             "kb_id": record.kb_id,
@@ -145,56 +146,21 @@ class KnowledgeExecutor(ABC):
         *,
         additional_params: dict[str, Any],
     ) -> dict:
-        """
-        Add a file record to metadata (Status: UPLOADED)
+        """单文件调用也使用持久导入登记。"""
+        from yuxi.modules.knowledge.services.imports import register_import
 
-        Args:
-            kb_id: Knowledge base ID
-            item: File path or URL
-            params: Parameters
-            operator_id: Operator ID who created the file
-
-        Returns:
-            File metadata record
-        """
-        from yuxi.modules.knowledge.utils.kb_utils import prepare_item_metadata
-
-        params = params or {}
-        content_type = params.get("content_type", "file")
-
-        # Prepare metadata
-        metadata = await prepare_item_metadata(item, content_type, kb_id, params=params)
-        file_id = metadata["file_id"]
-        metadata["processing_params"] = resolve_processing_params(
-            kb_additional_params=additional_params,
-            file_processing_params=metadata.get("processing_params"),
+        response = await register_import(
+            kb_id=kb_id,
+            items=[item],
+            params=params or {},
+            operator_id=operator_id or "system",
+            additional_params=additional_params,
         )
+        if response["failed_items"]:
+            from yuxi.shared.errors import StateConflictError
 
-        # Fallback: fetch file size from MinIO if not provided
-        if metadata.get("size") is None and content_type == "file":
-            try:
-                from yuxi.infrastructure.minio import get_minio_client
-                from yuxi.infrastructure.minio.object_urls import is_minio_url, parse_minio_url
-
-                file_path = metadata.get("path") or item
-                if is_minio_url(file_path):
-                    bucket_name, obj_name = parse_minio_url(file_path)
-                    minio_client = get_minio_client()
-                    file_size = await minio_client.astat_file(bucket_name, obj_name)
-                    if file_size is not None:
-                        metadata["size"] = file_size
-            except Exception as exc:
-                logger.warning(f"Failed to stat file size from MinIO for {item}: {exc}")
-
-        # Initial status
-        metadata["status"] = FileStatus.UPLOADED
-        metadata["created_at"] = utc_isoformat()
-        if operator_id:
-            metadata["created_by"] = operator_id
-
-        await self._persist_file_meta(file_id, metadata)
-
-        return metadata
+            raise StateConflictError(response["failed_items"][0]["error"])
+        return response["items"][0]["file_meta"]
 
     async def parse_file(
         self,
@@ -773,53 +739,16 @@ class KnowledgeExecutor(ABC):
         parent_id: str | None = None,
         operator_id: str | None = None,
     ) -> dict:
-        """创建文件夹并记录操作者。"""
-        import uuid
+        """通过共享目录用例创建文件夹。"""
+        from yuxi.modules.knowledge.services.directories import create_folder
 
-        if parent_id:
-            parent_meta = await self._load_file_meta(kb_id, parent_id)
-            if not parent_meta.get("is_folder"):
-                raise ValueError("Parent is not a folder")
-
-        folder_id = f"folder-{uuid.uuid4()}"
-
-        folder_meta = {
-            "file_id": folder_id,
-            "filename": folder_name,
-            "is_folder": True,
-            "parent_id": parent_id,
-            "kb_id": kb_id,
-            "created_at": utc_isoformat(),
-            "status": FileStatus.FOLDER_READY,
-            "path": folder_name,
-            "file_type": "folder",
-            "created_by": operator_id,
-        }
-        await self._persist_file_meta(folder_id, folder_meta)
-        return folder_meta
+        return await create_folder(kb_id, folder_name, parent_id, operator_id)
 
     async def rename_folder(self, kb_id: str, folder_id: str, folder_name: str) -> dict:
-        """重命名真实文件夹，不改写其子记录。"""
-        normalized_name = folder_name.strip()
-        if not normalized_name:
-            raise ValueError("Folder name cannot be empty")
-        if "/" in normalized_name or "\\" in normalized_name:
-            raise ValueError("Folder name cannot contain path separators")
+        """通过共享目录事务重命名文件夹。"""
+        from yuxi.modules.knowledge.services.directories import change_node
 
-        meta = await self._load_file_meta(kb_id, folder_id)
-        if not meta.get("is_folder"):
-            raise ValueError("Document is not a folder")
-
-        from yuxi.modules.knowledge.repositories.files import KnowledgeFileRepository
-
-        record = await KnowledgeFileRepository().update_fields(
-            file_id=folder_id,
-            kb_id=kb_id,
-            data={"filename": normalized_name, "path": normalized_name},
-        )
-        if record is None:
-            raise ValueError(f"File {folder_id} not found")
-        return self._file_record_to_meta(record)
+        return await change_node(kb_id, folder_id, name=folder_name)
 
     @abstractmethod
     async def aquery(
@@ -888,70 +817,16 @@ class KnowledgeExecutor(ABC):
         return {"options": defaults}
 
     async def delete_folder(self, kb_id: str, folder_id: str) -> None:
-        """
-        Recursively delete a folder and its content.
+        """在目录事务中原子删除整个子树。"""
+        from yuxi.modules.knowledge.services.directories import delete_folder
 
-        Args:
-            kb_id: Knowledge base ID
-            folder_id: Folder ID to delete
-        """
-        from yuxi.modules.knowledge.repositories.files import KnowledgeFileRepository
-
-        children = await KnowledgeFileRepository().list_children(kb_id=kb_id, parent_id=folder_id)
-        for child in children:
-            child_id = child.file_id
-            if child.is_folder:
-                await self.delete_folder(kb_id, child_id)
-            else:
-                await self.delete_file(kb_id, child_id)
-
-        # Delete the folder itself
-        # We call delete_file which should handle the actual removal.
-        # Implementations should ensure they handle folder deletion gracefully (e.g. skip vector deletion)
-        await self.delete_file(kb_id, folder_id)
+        await delete_folder(kb_id, folder_id)
 
     async def move_file(self, kb_id: str, file_id: str, new_parent_id: str | None) -> dict:
-        """
-        Move a file or folder to a new parent folder.
+        """在共享目录事务内移动节点。"""
+        from yuxi.modules.knowledge.services.directories import change_node
 
-        Args:
-            kb_id: Knowledge base ID
-            file_id: File/Folder ID to move
-            new_parent_id: New parent folder ID (None for root)
-
-        Returns:
-            dict: Updated metadata
-        """
-        from yuxi.modules.knowledge.repositories.files import KnowledgeFileRepository
-
-        async with KnowledgeFileRepository().lock_file_tree(kb_id):
-            meta = await self._load_file_meta(kb_id, file_id)
-
-            if meta.get("is_folder") and new_parent_id:
-                if new_parent_id == file_id:
-                    raise ValueError("Cannot move a folder into itself")
-
-                current = new_parent_id
-                while current:
-                    parent_meta = await self._load_file_meta(kb_id, current)
-                    if current == new_parent_id and not parent_meta.get("is_folder"):
-                        raise ValueError("Parent is not a folder")
-                    if current == file_id:
-                        raise ValueError("Cannot move a folder into its own subfolder")
-                    current = parent_meta.get("parent_id")
-            elif new_parent_id:
-                parent_meta = await self._load_file_meta(kb_id, new_parent_id)
-                if not parent_meta.get("is_folder"):
-                    raise ValueError("Parent is not a folder")
-
-            record = await KnowledgeFileRepository().update_fields(
-                file_id=file_id,
-                kb_id=kb_id,
-                data={"parent_id": new_parent_id},
-            )
-            if record is None:
-                raise ValueError(f"File {file_id} not found")
-            return self._file_record_to_meta(record)
+        return await change_node(kb_id, file_id, parent_id=new_parent_id, move=True)
 
     async def delete_file(self, kb_id: str, file_id: str) -> None:
         """先提交删除事实，再清理派生存储；失败时保留可重试 outbox。"""

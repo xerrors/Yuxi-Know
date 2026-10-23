@@ -182,6 +182,7 @@ jobs:
             uv run --no-sync --no-dev pytest \
               test/integration/api/test_background_jobs_router.py::test_enqueue_document_creates_job \
               test/integration/api/test_knowledge_upload_staging.py \
+              test/integration/api/test_knowledge_directory_imports.py \
               test/integration/api/test_graph_build_status.py -q
       - name: Runtime logs on failure
         if: failure() || cancelled()

@@ -268,8 +268,8 @@ async def test_folder_mutations_reject_invalid_name_and_directory_cycle(test_cli
         json={"folder_name": "invalid/name"},
         headers=admin_headers,
     )
-    assert invalid_rename.status_code == 400, invalid_rename.text
-    assert "path separators" in invalid_rename.json()["detail"]
+    assert invalid_rename.status_code == 422, invalid_rename.text
+    assert "分隔符" in invalid_rename.json()["detail"]
 
     cycle_move = await test_client.put(
         f"/api/knowledge/knowledge-bases/{kb_id}/documents/{parent['file_id']}/move",

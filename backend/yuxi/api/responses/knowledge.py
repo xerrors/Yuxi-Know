@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 from yuxi.modules.identity.permissions import ResourcePermission
@@ -14,20 +13,17 @@ from yuxi.shared.datetime import utc_isoformat
 
 def serialize_staged_file(staged: StagedDocument, *, kb_id: str | None, filename: str, size: int) -> dict:
     """投影普通上传和工作区导入共用的既有文件字段。"""
-    basename, _ext = os.path.splitext(filename)
     return {
         "file_path": staged.upload.url,
         "minio_path": staged.upload.url,
         "kb_id": kb_id,
         "content_hash": staged.content_hash,
-        "filename": filename.lower(),
-        "original_filename": basename,
+        "filename": filename,
+        "original_filename": filename,
         "size": size,
         "minio_filename": staged.upload.object_name[len(f"{kb_id or 'unknown'}/upload/") :],
         "object_name": staged.upload.object_name,
         "bucket_name": staged.upload.bucket_name,
-        "same_name_files": staged.same_name_files,
-        "has_same_name": bool(staged.same_name_files),
     }
 
 

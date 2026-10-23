@@ -17,9 +17,10 @@ def test_minio_upload_uses_shared_fallback_and_preserves_explicit_type(monkeypat
     class ObjectStore:
         """保存上传协议结果，作为对象内容与类型的 oracle。"""
 
-        def put_object(self, *, bucket_name, object_name, data, length, content_type):
+        def put_object(self, *, bucket_name, object_name, data, length, content_type, metadata=None):
             """读取真实输入流并保存协议媒体类型。"""
             content = data.read()
+            assert metadata is None
             assert len(content) == length
             objects[(bucket_name, object_name)] = (content, content_type)
             return object()

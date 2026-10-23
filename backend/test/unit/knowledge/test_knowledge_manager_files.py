@@ -1,15 +1,9 @@
 from types import SimpleNamespace
 
 import pytest
-import pytest_asyncio
-from sqlalchemy.ext.asyncio import async_sessionmaker
 
-import yuxi.modules.knowledge.repositories.files as repository_module
-from yuxi.modules.knowledge.models import KnowledgeBase, KnowledgeFile
-from yuxi.modules.knowledge.manager import KnowledgeBaseManager
-from yuxi.modules.knowledge.repositories.files import KnowledgeFileRepository
 from yuxi.modules.identity.permissions import ResourcePermission
-from test.support.sqlite import create_utc_sqlite_engine
+from yuxi.modules.knowledge.manager import KnowledgeBaseManager
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.unit]
 
@@ -50,7 +44,6 @@ class FakeKnowledgeBaseRepository:
 
 
 class FakeKnowledgeFileRepository:
-    normalize_path_prefix = staticmethod(KnowledgeFileRepository.normalize_path_prefix)
     list_calls = []
     exists_calls = []
     action_id_calls = []
@@ -285,7 +278,6 @@ async def test_get_knowledge_bases_by_user_sets_permission_and_redacts_readonly_
             {
                 "kb_id": "kb_1",
                 "parent_id": "folder_1",
-                "path_prefix": None,
                 "status": "indexed",
                 "page": 2,
                 "page_size": 50,
@@ -299,7 +291,6 @@ async def test_get_knowledge_bases_by_user_sets_permission_and_redacts_readonly_
             {
                 "kb_id": "kb_1",
                 "parent_id": None,
-                "path_prefix": None,
                 "status": None,
                 "page": 1,
                 "page_size": 100,
@@ -313,7 +304,6 @@ async def test_get_knowledge_bases_by_user_sets_permission_and_redacts_readonly_
             {
                 "kb_id": "kb_1",
                 "parent_id": None,
-                "path_prefix": None,
                 "status": None,
                 "page": 1,
                 "page_size": 100,
@@ -353,36 +343,6 @@ async def test_list_document_files_passes_expected_parameters(scenario, kwargs, 
         assert result["recursive"] is False
 
 
-async def test_list_document_files_keeps_virtual_folder_contract():
-    manager = KnowledgeBaseManager("/tmp/yuxi-test")
-    virtual_record = SimpleNamespace(
-        file_id="__virtual_folder__:root:资料/",
-        kb_id="kb_1",
-        parent_id=None,
-        filename="资料",
-        file_type="folder",
-        status="done",
-        is_folder=True,
-        is_virtual_folder=True,
-        path_prefix="资料/",
-        virtual_children_count=3,
-        path=None,
-        minio_url=None,
-        markdown_file=None,
-        created_at=None,
-        updated_at=None,
-        file_size=0,
-    )
-
-    item = manager._file_record_list_item(virtual_record)
-
-    assert item["is_folder"] is True
-    assert item["is_virtual_folder"] is True
-    assert item["path_prefix"] == "资料/"
-    assert item["has_children"] is True
-    assert item["children_count"] == 3
-
-
 async def test_document_file_exists_delegates_exact_filename_to_repository():
     manager = KnowledgeBaseManager("/tmp/yuxi-test")
 
@@ -413,110 +373,3 @@ async def test_list_document_file_ids_by_statuses_delegates_to_repository():
             "limit": 500,
         }
     ]
-
-
-@pytest.mark.parametrize(("source", "expected"), [(None, ""), (" ./资料\\章节// ", "资料/章节/"), ("./", "")])
-async def test_document_list_returns_repository_normalized_path(source, expected):
-    """列表响应使用公开路径契约，结果与查询目录语义一致。"""
-    result = await KnowledgeBaseManager("/tmp/yuxi-test").list_document_files("kb_1", path_prefix=source)
-    assert result["path_prefix"] == expected
-
-
-@pytest.mark.parametrize("source", ["/etc", "../private", "资料/../private"])
-async def test_public_path_contract_rejects_non_relative_prefix(source):
-    """公开契约保留现有相对目录边界。"""
-    with pytest.raises(ValueError, match="path_prefix"):
-        KnowledgeFileRepository.normalize_path_prefix(source)
-
-
-class _AsyncSessionContext:
-    """为文件仓储单测提供事务型异步会话上下文。"""
-
-    def __init__(self, db):
-        self.db = db
-
-    async def __aenter__(self):
-        return self.db
-
-    async def __aexit__(self, exc_type, *_args):
-        if exc_type is None:
-            await self.db.commit()
-        else:
-            await self.db.rollback()
-        return False
-
-
-@pytest_asyncio.fixture
-async def knowledge_session(monkeypatch):
-    """为精确文件名查询构造临时 SQLite 表。"""
-    engine = create_utc_sqlite_engine()
-    async with engine.begin() as conn:
-        await conn.run_sync(KnowledgeBase.__table__.create)
-        await conn.run_sync(KnowledgeFile.__table__.create)
-
-    session_factory = async_sessionmaker(engine, expire_on_commit=False)
-    async with session_factory() as session:
-        monkeypatch.setattr(
-            repository_module.pg_manager,
-            "get_async_session_context",
-            lambda: _AsyncSessionContext(session),
-        )
-        yield session
-
-    await engine.dispose()
-
-
-async def test_exists_by_filename_matches_active_file_exactly(knowledge_session):
-    """精确查询只命中同库有效的文件记录。"""
-    existing_name = "google_drive/shared_drives/engineering/serving-runtime/dsid_e4ff04ebc2a14c1982abc4987753790c__playbook.txt"
-    knowledge_session.add_all(
-        [
-            KnowledgeBase(kb_id="kb_1", name="KB 1", description="", kb_type="milvus"),
-            KnowledgeBase(kb_id="kb_2", name="KB 2", description="", kb_type="milvus"),
-            KnowledgeFile(
-                file_id="file_active",
-                kb_id="kb_1",
-                filename=existing_name,
-                status="uploaded",
-                is_folder=False,
-            ),
-            KnowledgeFile(
-                file_id="file_other_kb",
-                kb_id="kb_2",
-                filename=existing_name,
-                status="uploaded",
-                is_folder=False,
-            ),
-            KnowledgeFile(
-                file_id="file_failed",
-                kb_id="kb_1",
-                filename="failed.txt",
-                status="failed",
-                is_folder=False,
-            ),
-            KnowledgeFile(
-                file_id="folder_same_name",
-                kb_id="kb_1",
-                filename="folder",
-                status="done",
-                is_folder=True,
-            ),
-            KnowledgeFile(
-                file_id="legacy_file",
-                kb_id="kb_1",
-                filename="legacy.txt",
-                status="indexed",
-                is_folder=None,
-            ),
-        ]
-    )
-    await knowledge_session.commit()
-
-    repo = KnowledgeFileRepository()
-
-    assert await repo.exists_by_filename(kb_id="kb_1", filename=existing_name) is True
-    assert await repo.exists_by_filename(kb_id="kb_1", filename=existing_name.upper()) is False
-    assert await repo.exists_by_filename(kb_id="kb_1", filename="failed.txt") is False
-    assert await repo.exists_by_filename(kb_id="kb_1", filename="folder") is False
-    assert await repo.exists_by_filename(kb_id="kb_1", filename="legacy.txt") is True
-    assert await repo.exists_by_filename(kb_id="missing", filename=existing_name) is False
