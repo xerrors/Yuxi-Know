@@ -107,25 +107,27 @@ def copy_skill_snapshot(
     parsed = parse_skill_dir_metadata(target_dir)
     if expected_slug and parsed["slug"] != expected_slug:
         raise ValueError("Skill slug 在复制过程中发生变化")
+    if final_slug is None and not is_valid_skill_slug(parsed["name"]):
+        final_slug = parsed["slug"]
     if final_slug:
         skill_md = target_dir / "SKILL.md"
-        skill_md.write_text(
-            rewrite_frontmatter_slug(skill_md.read_text(encoding="utf-8"), final_slug),
-            encoding="utf-8",
-        )
-        parsed = parse_skill_dir_metadata(target_dir)
+        content = skill_md.read_text(encoding="utf-8")
+        _slug, _name, _description, metadata = parse_skill_markdown(content)
+        if parsed["slug"] != final_slug or not metadata.get("slug"):
+            skill_md.write_text(rewrite_frontmatter_slug(content, final_slug), encoding="utf-8")
+            parsed = parse_skill_dir_metadata(target_dir)
     return parsed
 
 
 def copy_skill_tree_no_symlinks(source_dir: Path, target_dir: Path) -> None:
     """复制不含符号链接的 Skill 目录到 staging。"""
     if source_dir.is_symlink():
-        raise ValueError(f"Skill 来源只允许普通文件和目录: {source_dir}")
+        raise ValueError("Skill 来源只允许普通文件和目录")
     source_dir = source_dir.resolve()
     if not source_dir.is_dir():
         raise FileNotFoundError(source_dir)
     if skill_tree_contains_symlink(source_dir):
-        raise ValueError(f"Skill 来源只允许普通文件和目录: {source_dir}")
+        raise ValueError("Skill 来源只允许普通文件和目录")
     try:
         shutil.copytree(source_dir, target_dir, symlinks=False)
     except BaseException:
@@ -216,11 +218,11 @@ def _load_skill_frontmatter(raw: str) -> dict[str, Any]:
             count=1,
         )
         if folded == raw:
-            raise ValueError(f"SKILL.md frontmatter YAML 解析失败: {error}") from error
+            raise ValueError("SKILL.md frontmatter YAML 解析失败，请检查 YAML 语法") from error
         try:
             data = yaml.safe_load(folded)
         except yaml.YAMLError as folded_error:
-            raise ValueError(f"SKILL.md frontmatter YAML 解析失败: {folded_error}") from folded_error
+            raise ValueError("SKILL.md frontmatter YAML 解析失败，请检查 YAML 语法") from folded_error
     if not isinstance(data, dict):
         raise ValueError("SKILL.md frontmatter 必须是对象")
     return data

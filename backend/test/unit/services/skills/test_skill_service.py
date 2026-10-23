@@ -12,6 +12,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from yuxi.services.skills import package as skill_package
 from yuxi.agents.toolkits import service as tool_service
 from yuxi.repositories.skill_repository import SkillRepository as RealSkillRepository
 from yuxi.services.skills import catalog
@@ -2163,3 +2164,24 @@ def test_resolved_shared_skill_captures_original_version_and_hash(monkeypatch, t
     assert resolved.version == "v1"
     assert resolved.content_hash == "hash-v1"
     assert resolved.source_scope == "shared"
+
+def test_copy_skill_snapshot_preserves_explicit_slug_content(tmp_path):
+    """标识未变时保留注释和换行，避免改变文件修订。"""
+    source = tmp_path / "source"
+    source.mkdir()
+    content = b"---\r\n# keep comment\r\nslug: demo\r\nname: Demo\r\ndescription: demo\r\n---\r\n# Demo\r\n"
+    (source / "SKILL.md").write_bytes(content)
+    target = tmp_path / "target"
+    skill_package.copy_skill_snapshot(source, target, expected_slug="demo", final_slug="demo")
+    assert (target / "SKILL.md").read_bytes() == content
+
+
+@pytest.mark.parametrize(
+    "metadata",
+    ['name: demo\ndescription: "PRIVATE_YAML_MARKER', 'name: "PRIVATE_YAML_MARKER\ndescription:\n  note: value'],
+)
+def test_parse_skill_yaml_error_does_not_echo_input(metadata):
+    """YAML 解析失败不回显原始输入片段。"""
+    with pytest.raises(ValueError, match="SKILL.md frontmatter YAML 解析失败，请检查 YAML 语法") as failure:
+        svc.parse_skill_markdown(f"---\n{metadata}\n---\n")
+    assert "PRIVATE_YAML_MARKER" not in str(failure.value)
