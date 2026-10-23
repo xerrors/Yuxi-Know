@@ -2760,7 +2760,6 @@ const handleApprovalWithStream = async (answer) => {
     return
   }
 
-  const pendingInterrupt = threadState.pendingInterrupt
   threadState.approvalSubmitting = true
 
   try {
@@ -2786,12 +2785,7 @@ const handleApprovalWithStream = async (answer) => {
     }
     await startRunStream(threadId, runId, null, { turnId })
   } catch (error) {
-    if (pendingInterrupt) {
-      threadState.pendingInterrupt = pendingInterrupt
-      restorePendingInterruptForThread(threadId)
-    }
-    threadState.isStreaming = false
-    threadState.replyLoadingVisible = false
+    // 接收前保留原审批供重试；失败不能回滚期间推进的 Run 或等待点。
     handleChatError(error, 'resume')
   } finally {
     threadState.approvalSubmitting = false
