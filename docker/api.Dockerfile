@@ -44,25 +44,26 @@ RUN set -ex \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# 复制项目配置文件
-COPY backend/pyproject.toml /app/pyproject.toml
-COPY backend/.python-version /app/.python-version
-COPY backend/uv.lock /app/uv.lock
+# 复制项目配置文件。显式 --chown：构建上下文若为 0600 等严格权限，
+# 默认 root 属主会让 USER 1000 读失败（#1109）。
+COPY --chown=1000:1000 backend/pyproject.toml /app/pyproject.toml
+COPY --chown=1000:1000 backend/.python-version /app/.python-version
+COPY --chown=1000:1000 backend/uv.lock /app/uv.lock
 
 # 先复制 package 目录，因为 pyproject.toml 中 yuxi = { path = "package", editable = true }
-COPY backend/package /app/package
+COPY --chown=1000:1000 backend/package /app/package
 
 # 如果网络还是不好，可以在后面添加 --index-url https://pypi.tuna.tsinghua.edu.cn/simple
 RUN uv sync --no-cache --group test --no-dev --frozen
 
 # 复制 server 代码
-COPY backend/server /app/server
-COPY docker/api-entrypoint.sh /usr/local/bin/yuxi-entrypoint
+COPY --chown=1000:1000 backend/server /app/server
+COPY --chown=1000:1000 docker/api-entrypoint.sh /usr/local/bin/yuxi-entrypoint
 
 RUN groupadd --gid 1000 yuxi \
     && useradd --uid 1000 --gid 1000 --create-home yuxi \
     && mkdir -p /app/runtime /home/yuxi/.cache/rapidocr/models \
-    && chown -R 1000:1000 /app/runtime /home/yuxi \
+    && chown -R 1000:1000 /app/runtime /home/yuxi /app/package \
     && chmod 0755 /usr/local/bin/yuxi-entrypoint
 
 ENV HOME=/home/yuxi \

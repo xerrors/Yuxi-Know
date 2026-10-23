@@ -259,13 +259,57 @@ def test_workspace_consumers_use_fixed_runtime_identity_after_root_migration(fil
 def test_api_image_applies_owner_only_umask_before_dropping_to_runtime_identity() -> None:
     """镜像身份与 umask 必须由 shipping 入口显式拥有。"""
     root = _project_root()
-    dockerfile = (root / "docker/api.Dockerfile").read_text()
-    entrypoint = (root / "docker/api-entrypoint.sh").read_text()
+    dockerfile = (root / "docker/api.Dockerfile").read_text(encoding="utf-8")
+    entrypoint = (root / "docker/api-entrypoint.sh").read_text(encoding="utf-8")
 
     assert "USER 1000:1000" in dockerfile
     assert 'ENTRYPOINT ["/usr/local/bin/yuxi-entrypoint"]' in dockerfile
     assert "umask 077" in entrypoint
     assert 'exec "$@"' in entrypoint
+
+
+def _api_dockerfile_app_copy_lines(dockerfile: str) -> list[str]:
+    """收集会进入 /app 或入口脚本、并在 USER 1000 下被读取的 COPY 行。"""
+    required_sources = (
+        "backend/pyproject.toml",
+        "backend/.python-version",
+        "backend/uv.lock",
+        "backend/package",
+        "backend/server",
+        "docker/api-entrypoint.sh",
+    )
+    lines = []
+    for line in dockerfile.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("COPY "):
+            continue
+        if any(source in stripped for source in required_sources):
+            lines.append(stripped)
+    return lines
+
+
+def test_api_dockerfile_copy_app_content_with_runtime_uid() -> None:
+    """应用内容 COPY 必须带 --chown=1000:1000，避免严格权限位下 uid 1000 无法读取。"""
+    dockerfile = (_project_root() / "docker/api.Dockerfile").read_text(encoding="utf-8")
+    copy_lines = _api_dockerfile_app_copy_lines(dockerfile)
+
+    assert len(copy_lines) == 6
+    assert all("--chown=1000:1000" in line for line in copy_lines)
+
+
+def test_api_dockerfile_copy_chown_guard_detects_omitted_owner() -> None:
+    """负控证明去掉 --chown 后契约检查会失败。"""
+    dockerfile = (_project_root() / "docker/api.Dockerfile").read_text(encoding="utf-8")
+    broken = dockerfile.replace(
+        "COPY --chown=1000:1000 backend/pyproject.toml /app/pyproject.toml",
+        "COPY backend/pyproject.toml /app/pyproject.toml",
+        1,
+    )
+    copy_lines = _api_dockerfile_app_copy_lines(broken)
+
+    assert any(
+        "backend/pyproject.toml" in line and "--chown=1000:1000" not in line for line in copy_lines
+    )
 
 
 def test_workspace_owners_do_not_reintroduce_cross_uid_permission_patches() -> None:
