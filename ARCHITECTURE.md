@@ -26,7 +26,7 @@ Yuxi 是一个面向 RAG、知识图谱和多智能体工作流的知识库平�
 - `graph`：Neo4j 知识图谱。
 - `mineru-api`、`paddlex`：通过 `all` profile 可选启动的文档解析和 OCR 服务。
 
-API 在 `/api/mcp` 提供只读知识库 MCP，与 HTTP API 共用进程和端口。`api/routers/public_v1/knowledge_mcp.py` 与 Knowledge Public HTTP 入口并列，适配协议并复用 Key 认证、Knowledge Schema 与查询服务，MCP manager 随 API lifespan 启停；资源可见性仍由知识库服务拥有。
+API 在 `/api/mcp` 提供只读知识库 MCP，与 HTTP API 共用进程和端口。`api/routers/public_v1/knowledge_mcp.py` 与 Knowledge Public HTTP 入口并列；外部客户端使用 API Key，内部 Agent 使用绑定运行用户与会话选择的五分钟委托 Token。Knowledge 每次调用复核当前用户权限并与委托范围取交集。Agent 工具、知识库选择器和来源标注通过 HTTP MCP 读取知识数据。MCP manager 随 API lifespan 启停，关闭 Knowledge 时不装配路由与 manager。
 
 企业认证中心由部署方现有的 OIDC 服务提供；Yuxi 仅消费标准 OIDC/MCP 协议，不保存 Keycloak 部署模板或运行认证数据库。
 
@@ -41,7 +41,7 @@ API 在 `/api/mcp` 提供只读知识库 MCP，与 HTTP API 共用进程和端�
 - `bootstrap/api.py` 装配 API 必需与可选组件；`infrastructure/postgres/models.py` 显式注册分域 ORM，维持 business 与 knowledge 两套 metadata。
 - `bootstrap/app.py` 是 app-init 入口，调用 `migrations/main.py` 的空库初始化与各域共享内容同步；`migrations/schema.py` 拥有 DDL；`infrastructure/postgres/schema.py` 向 API/worker 提供只读版本检查。
 
-Yuxi 始终交付完整知识能力。API 注册知识库、图谱、评估、Dashboard 与工作区知识路由，并注册 `knowledge-base` Skill 和知识工具；系统 discovery 向 Web 与 CLI 宣告知识能力。聊天附件仅在真实解析动作发生时加载 parser。
+Yuxi 默认交付完整知识能力。部署开关 `YUXI_KNOWLEDGE_ENABLED` 由启动装配读取；显式关闭时 API 不装配知识库、图谱、评估及知识视图入口，discovery 宣告知识能力关闭，worker 暂停知识作业派发和投影清理，保留持久数据与待执行意图。`knowledge-base` Skill 和工具仍可加载，使用知识能力时按 MCP 不可用处理，普通聊天保持可用。Compose 切换方式由[部署指南](docs/advanced/deployment.md)维护。聊天附件仅在真实解析动作发生时加载 parser。
 
 ### 业务模块
 
@@ -118,7 +118,7 @@ Yuxi 始终交付完整知识能力。API 注册知识库、图谱、评估、Da
 - 智能体能力通过 context、middleware、toolkits、Skills、MCP 和 backends 组合；不要把知识库、沙盒或扩展逻辑硬编码进单个页面或路由。
 - 受管理 Skill 的当前完整内容由 PostgreSQL 目录引用拥有；内容更新先准备不可变包再提交引用，专属历史记录复用该包。内容保存由运行准备刷新用户投影；权限撤销在授权提交前撤下旧投影。内容读取与引用清理共同使用资源锁，当前或历史引用的目录不能清理。
 - Skill 的依赖工具只有在对应 Skill 被显式预加载或动态激活后才对模型开放；基础工具与受 Skill 门控的工具保持边界。
-- Shipping 进程始终装配知识库、图谱和评估能力；解析器等只服务实际动作的重运行时继续保持惰性加载。
+- Shipping 默认装配知识库、图谱和评估能力；显式关闭 Knowledge 时集中停止相关入口与后台工作，保留数据库结构和数据，Agent 通过 MCP 不可用路径继续运行；实际动作使用的解析器保持惰性加载。
 - 文件边界只使用三种跨层路径：数据库中的 Project `workdir_path`、Viewer 当前 scope 相对 `/foo`、Agent/artifact runtime 绝对 `/home/user/workspace/...`；宿主 `Path` 由 `yuxi.modules.workspace` 持有，普通 Service/Repository 不得取得。
 - 沙盒虚拟路径由当前 Project Workdir、Workspace 与共享 Skills 根共同约束；个人 Skill 保存在 UserWorkspace 的 `agents/skills`，共享与内置 Skill 才投影到只读 `/home/user/skills`。Cube 的惰性创建与恢复不得绕过 uid、代次及 Run/attempt owner 校验。Run 终态必须确认所属命令清理；用户环境在无活动 Run 与命令时空闲五分钟休眠。重建保留 Workspace 与 Skills，文件工具访问其他 VM 路径会自动唤醒。用户可见路径、对象存储 URL 与宿主机真实路径不能混用。
 - 面向用户和外部系统的输入在边界校验；内部服务优先依赖已有类型、事务和仓储约束，避免用静默回退掩盖设计错误。

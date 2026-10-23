@@ -14,7 +14,7 @@ external 查询仅在未版本化的 `/api/knowledge/databases/external*` 提供
 
 Public v1 注册现有五个 external 查询操作，路径为 `/api/v1/knowledge/databases/external*`；另注册六个与 Agent 工具同名的只读操作，路径为 `/api/v1/knowledge/tools/{name}`。查询逻辑归 `yuxi.services.knowledge.tools`，Agent toolkit 保留 LangGraph 上下文与输出适配，Public 路由只组装 HTTP 输入与响应。CLI external 调用使用新路径；前端 API 层提供相同的五个 external 调用，管理与上传调用仍使用原路径。旧 external 路径暂保留并标记弃用。
 
-普通用户 JWT、full Key 和 knowledge Key 均可访问这些 Public 查询。`knowledge` Key 只可进入 external 查询子树和明确列出的六个工具路径；`auth_middleware.py` 拥有 API 面限制，service 以绑定用户查询可见知识库，Agent 会话还受其启用范围约束。Knowledge 不处理 `End-User-Id`。`download_kb_file` 依赖 Agent 会话沙盒，因此只留在 Agent 工具中。`models_business.py`、`manager.py` 与 `storage_migration.py` 拥有持久化约束，从当前 main 的 business Schema v9 一次升级到 v10。前端管理路由没有迁入 Public v1。
+普通用户 JWT、full Key 和 knowledge Key 均可访问这些 Public 查询。`knowledge` Key 只可进入 external 查询子树和明确列出的六个工具路径；`auth_middleware.py` 拥有 API 面限制，service 以绑定用户查询可见知识库，Agent 会话还受其启用范围约束。Knowledge 不处理 `End-User-Id`。Agent 与外部 MCP 仅提供五个查询工具，不提供原件下载；范围由[工具边界收敛决策](./2026-10-23-knowledge-mcp-simplification.md)拥有。`models_business.py`、`manager.py` 与 `storage_migration.py` 拥有持久化约束，从当前 main 的 business Schema v9 一次升级到 v10。前端管理路由没有迁入 Public v1。
 
 ## 替代方案
 

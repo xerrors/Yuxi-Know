@@ -7,6 +7,7 @@ import uuid
 from functools import partial
 from typing import Any
 
+from yuxi.bootstrap.capabilities import knowledge_enabled
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.modules.background_jobs.dispatch import (
     BACKGROUND_JOB_DEFAULT_TIMEOUT_SECONDS,
@@ -19,6 +20,7 @@ from yuxi.workers.background_job_context import BackgroundJobContext
 JOB_LEASE_SECONDS = 30.0
 JOB_HEARTBEAT_SECONDS = 10.0
 BACKGROUND_JOB_MAX_RUNNING = 4
+KNOWLEDGE_JOB_MODULE_PREFIX = "yuxi.modules.knowledge."
 
 
 async def process_background_job(ctx: dict[str, Any], job_id: str) -> None:
@@ -38,6 +40,9 @@ async def process_background_job(ctx: dict[str, Any], job_id: str) -> None:
         failure_handler = definition.load_failure_handler()
         before_cancel = partial(failure_handler, error="任务已取消") if failure_handler is not None else None
         await repo.confirm_pending_cancel(job_id, before_cancel=before_cancel)
+        return
+
+    if not knowledge_enabled() and definition.module.startswith(KNOWLEDGE_JOB_MODULE_PREFIX):
         return
 
     process_identity = str(ctx.get("worker_id") or "job-worker")
@@ -195,11 +200,13 @@ async def publish_pending_jobs(*, limit: int = 200) -> list[str]:
             await repository.fail_pending(record.id, error=str(exc))
             continue
         try:
-            get_job_definition(record.type, handler_version)
+            definition = get_job_definition(record.type, handler_version)
         except ValueError as exc:
             error = str(exc)
             logger.error("Cannot rebuild durable job: job_id=%s, type=%s", record.id, record.type)
             await repository.fail_pending(record.id, error=error)
+            continue
+        if not knowledge_enabled() and definition.module.startswith(KNOWLEDGE_JOB_MODULE_PREFIX):
             continue
         await publish_job(record.id)
         published.append(record.id)

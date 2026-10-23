@@ -232,7 +232,6 @@ def test_shipping_skills_keep_required_dependencies():
         "find_kb_document",
         "open_kb_document",
         "search_file",
-        "download_kb_file",
     ]
     assert found["deep-research"]["skill_dependencies"] == []
     assert found["mysql-reporter"]["mcp_dependencies"] == []

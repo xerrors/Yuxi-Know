@@ -15,6 +15,8 @@ MCP（Model Context Protocol）让智能体调用外部服务提供的工具。�
 
 平台登录和 MCP 资源授权分别签发凭据；部署密钥、状态与调用隔离的实现见 [MCP 授权与运行身份](../mechanisms/mcp.md)。
 
+平台自带 Knowledge 由内置 `knowledge-base` Skill 的工具适配自动调用，使用内部短期用户委托，无需按本页添加服务器或连接 OAuth。对外客户端仍使用 `knowledge` API Key，见[知识库 MCP 接入](../advanced/knowledge-mcp.md)；内部身份与会话范围见[知识库机制](../mechanisms/knowledge-base.md#agent-如何看到知识库)。
+
 接入前需确认服务支持发现协议、PKCE、回调地址和真实工具调用。
 
 ## 支持的传输方式

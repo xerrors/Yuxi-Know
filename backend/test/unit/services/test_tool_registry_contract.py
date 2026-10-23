@@ -32,7 +32,7 @@ def test_registry_and_catalog_reads_do_not_expose_mutable_global_containers(monk
 
 
 def test_documented_knowledge_tool_collection_uses_registered_instances():
-    """正式 Python 扩展入口继续返回六个已注册知识库工具。"""
+    """正式 Python 扩展入口继续返回五个已注册知识库工具。"""
     from yuxi.modules.extensions.tools.knowledge.tools import get_common_kb_tools
 
     tools = get_common_kb_tools()
@@ -42,7 +42,6 @@ def test_documented_knowledge_tool_collection_uses_registered_instances():
         "find_kb_document",
         "open_kb_document",
         "search_file",
-        "download_kb_file",
     }
     registered = registry.get_all_tool_instances()
     assert all(any(tool is item for item in registered) for tool in tools)

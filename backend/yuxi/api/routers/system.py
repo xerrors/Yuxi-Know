@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from yuxi import get_version
 from yuxi.api.dependencies.auth import get_db, get_required_user, get_superadmin_user
 from yuxi.api.routers.agents.feedback import FeedbackPage
+from yuxi.bootstrap.capabilities import knowledge_enabled
 from yuxi.infrastructure.observability.logging import LOG_FILE, logger
 from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.agents.services.feedback import list_feedback
@@ -51,12 +52,13 @@ async def readiness_check(request: Request):
 @system.get("/discovery")
 async def discovery():
     """系统能力发现接口（公开接口）"""
+    enabled = knowledge_enabled()
     return {
         "name": "Yuxi",
         "version": get_version(),
         "api_prefix": "/api",
         "capabilities": {
-            "features": {"knowledge": True},
+            "features": {"knowledge": enabled},
             "cli": {
                 "min_cli_version": "0.1.0",
                 "browser_login": True,
@@ -64,11 +66,11 @@ async def discovery():
                 "remote_config": True,
                 "agent_list": True,
                 "agent_show": True,
-                "kb_list": True,
-                "kb_files": True,
-                "kb_query": True,
-                "kb_open": True,
-                "kb_find": True,
+                "kb_list": enabled,
+                "kb_files": enabled,
+                "kb_query": enabled,
+                "kb_open": enabled,
+                "kb_find": enabled,
             },
         },
         "endpoints": {

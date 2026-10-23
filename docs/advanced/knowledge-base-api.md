@@ -95,7 +95,7 @@ URL 导入需要管理员身份和目标知识库的管理权限。先调用 `PO
 | `POST` | `/api/v1/knowledge/tools/find_kb_document` | `{"kb_id":"ID","file_id":"ID","patterns":["词"]}` |
 | `POST` | `/api/v1/knowledge/tools/search_file` | `{"kb_id":"ID","query":"文件名","offset":0,"limit":300}` |
 
-`search_file` 至少需要 `kb_id`、`kb_name` 或 `query`，查询词只匹配文件名。指定知识库时可省略查询词以列出文件；同时传 ID 与名称时需同时匹配。`open_kb_document` 默认读取 1800 行，`window_size` 最大 2000；`find_kb_document` 返回匹配窗口。不可见资源返回 `404`；业务条件不满足时返回 `400`，请求体字段缺失或数值越界时返回 `422`。Agent 的 `download_kb_file` 依赖会话沙盒路径，只提供 Agent 内部入口；原有文件下载 API 的权限不变。
+`search_file` 至少需要 `kb_id`、`kb_name` 或 `query`，查询词只匹配文件名。指定知识库时可省略查询词以列出文件；同时传 ID 与名称时需同时匹配。`open_kb_document` 默认读取 1800 行，`window_size` 最大 2000；`find_kb_document` 返回匹配窗口。不可见资源返回 `404`；业务条件不满足时返回 `400`，请求体字段缺失或数值越界时返回 `422`。原件下载由知识库管理文件接口提供，沿用资源权限校验。
 
 Dify 和 Notion 只提供外部检索能力。它们不支持 Yuxi 的文档上传、解析、索引和全文打开；调用不支持的接口时，服务会明确返回错误。
 

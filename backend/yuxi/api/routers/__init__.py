@@ -28,10 +28,10 @@ from yuxi.api.routers.workspace.projects import projects
 from yuxi.api.routers.workspace.viewer import filesystem_router
 from yuxi.api.routers.workspace.workspace import workspace as workspace_routes
 from yuxi.api.routers.workspace.workspace import workspace_knowledge
+from yuxi.bootstrap.capabilities import knowledge_enabled
 
 router = APIRouter()
 router.include_router(public_agents_router)
-router.include_router(public_knowledge_router)
 
 # 基础系统接口：健康检查、配置、认证与聊天主链路。
 router.include_router(system_routes)  # /api/system/* 系统状态与全局配置
@@ -60,8 +60,10 @@ router.include_router(filesystem_router)  # /api/viewer/filesystem/* 工作台�
 router.include_router(workspace_routes)  # /api/workspace/* 用户个人工作区
 router.include_router(mention_router)  # /api/mention/* 提及文件搜索接口
 
-router.include_router(knowledge_dashboard)  # /api/dashboard/stats/knowledge 知识域仪表盘
-router.include_router(knowledge_routes)  # /api/knowledge/* 知识库管理
-router.include_router(evaluation)  # /api/evaluation/* 知识库评估
-router.include_router(graph)  # /api/graph/* 图谱查询与管理
-router.include_router(workspace_knowledge)  # /api/workspace/knowledge/* 工作区知识文件只读视图
+if knowledge_enabled():
+    router.include_router(public_knowledge_router)
+    router.include_router(knowledge_dashboard)  # /api/dashboard/stats/knowledge 知识域仪表盘
+    router.include_router(knowledge_routes)  # /api/knowledge/* 知识库管理
+    router.include_router(evaluation)  # /api/evaluation/* 知识库评估
+    router.include_router(graph)  # /api/graph/* 图谱查询与管理
+    router.include_router(workspace_knowledge)  # /api/workspace/knowledge/* 工作区知识文件只读视图

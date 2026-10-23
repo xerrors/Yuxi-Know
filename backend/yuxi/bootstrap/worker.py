@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 
+from yuxi.bootstrap.capabilities import knowledge_enabled
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.infrastructure.postgres.schema import require_current_schema
@@ -24,7 +26,7 @@ from yuxi.modules.agents.services.leases import (
     reconcile_pending_runtime_cleanups,
 )
 from yuxi.modules.agents.services.scheduler import recover_pending_dispatches
-from yuxi.modules.identity.security import AuthUtils
+from yuxi.modules.identity.security import AuthUtils, require_knowledge_delegation_config
 from yuxi.modules.schedules.service import claim_and_dispatch_due_jobs, recover_scheduled_dispatches
 from yuxi.workers.background_jobs import reconcile_and_publish_jobs
 
@@ -40,6 +42,9 @@ async def _worker_startup(ctx):
 
     if not isinstance(ctx, dict):
         raise TypeError("ARQ worker context 必须是字典")
+    knowledge = knowledge_enabled()
+    if knowledge:
+        require_knowledge_delegation_config()
     AuthUtils.require_security_secrets()
     from yuxi.modules.agents.runtime.sandbox import check_sandbox_provider
 
@@ -51,6 +56,14 @@ async def _worker_startup(ctx):
     from yuxi.modules.system.services.options import invalidate_option_cache
 
     await invalidate_option_cache(system_options.key)
+    if knowledge:
+        from yuxi.infrastructure.neo4j import get_shared_neo4j_connection
+        from yuxi.modules.knowledge.runtime import knowledge_base
+
+        # ARQ 消费与 pending 补发必须晚于后端就绪，启动失败保留持久任务意图。
+        await knowledge_base.initialize()
+        await asyncio.to_thread(get_shared_neo4j_connection)
+
     await _reconcile_agent_runs_once()
     await reconcile_and_publish_jobs()
     await _publish_job_reconciliation_health()
@@ -73,12 +86,19 @@ async def _worker_shutdown(ctx):
             task.cancel()
         if reconciliation_tasks:
             await asyncio.gather(*reconciliation_tasks, return_exceptions=True)
+    from yuxi.infrastructure.neo4j import close_shared_neo4j_connection
     from yuxi.infrastructure.redis.queue import close_queue_clients
 
     # ARQ 在 on_shutdown 返回后关闭自己的消费池，单个清理失败不能中断该阶段。
-    for component, close in (("queue_clients", close_queue_clients), ("postgres", pg_manager.close)):
+    for component, close in (
+        ("queue_clients", close_queue_clients),
+        ("neo4j", close_shared_neo4j_connection),
+        ("postgres", pg_manager.close),
+    ):
         try:
-            await close()
+            result = close()
+            if inspect.isawaitable(result):
+                await result
         except Exception as exc:
             logger.error(f"Worker shutdown failed: component={component}, error_type={type(exc).__name__}")
 

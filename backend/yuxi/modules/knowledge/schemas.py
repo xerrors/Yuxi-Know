@@ -3,6 +3,12 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
+class ListInputSchema(BaseModel):
+    """可选读取文档能力供平台资源选择与引用使用。"""
+
+    include_capabilities: bool = False
+
+
 class SearchFileInput(BaseModel):
     """Agent 与 Public API 共用的文件搜索条件。"""
 

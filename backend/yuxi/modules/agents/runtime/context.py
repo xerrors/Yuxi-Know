@@ -445,10 +445,15 @@ async def resolve_agent_resource_options(
             if tool.get("slug")
         ]
     if "knowledges" in fields_to_load:
-        from yuxi.modules.knowledge.runtime import knowledge_base
+        from yuxi.modules.extensions.tools.knowledge.client import KnowledgeMCPError, list_knowledge_bases
 
-        knowledge_bases = await knowledge_base.get_knowledge_bases_by_user(user)
-        options["knowledges"] = [_resource_option(item.kb_id, item.name, item.description) for item in knowledge_bases if item.kb_id]
+        try:
+            knowledge_bases = await list_knowledge_bases(user.uid)
+        except KnowledgeMCPError:
+            knowledge_bases = []
+        options["knowledges"] = [
+            _resource_option(item["kb_id"], item["name"], item["description"]) for item in knowledge_bases if item["kb_id"]
+        ]
     if "mcps" in fields_to_load:
         from yuxi.modules.extensions.mcp.service import get_enabled_mcp_servers
 
@@ -479,11 +484,13 @@ async def normalize_agent_context_config(
     resource_fields = schema.get_resource_fields()
     for field_name in resource_fields:
         normalized[field_name] = validate_resource_selection(field_name, normalized.get(field_name, getattr(defaults, field_name)))
-    fields_to_load = {kind for name, kind in resource_fields.items() if name != "preload_skills" and normalized[name]}
+    # Knowledge 的当前权限由 MCP 执行；服务关闭不能抹掉原会话选择。
+    excluded_fields = {"preload_skills", "knowledges"}
+    fields_to_load = {kind for name, kind in resource_fields.items() if name not in excluded_fields and normalized[name]}
     if fields_to_load:
         resource_options = await resolve_agent_resource_options(fields_to_load, db=db, user=user)
         for name, kind in resource_fields.items():
-            if name != "preload_skills" and normalized[name]:
+            if name not in excluded_fields and normalized[name]:
                 normalized[name] = _resolve_resource_selection(normalized[name], [option["key"] for option in resource_options[kind]])
 
     if "preload_skills" in resource_fields:

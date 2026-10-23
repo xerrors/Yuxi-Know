@@ -11,6 +11,12 @@ import yuxi.bootstrap.api as api_bootstrap
 pytestmark = [pytest.mark.asyncio, pytest.mark.unit]
 
 
+@pytest.fixture(autouse=True)
+def shared_instance(monkeypatch):
+    """默认启用知识库时，API 测试也提供显式共享身份。"""
+    monkeypatch.setenv("YUXI_INSTANCE_ID", "api-startup-test")
+
+
 async def test_optional_startup_component_failure_is_structured_without_raw_message() -> None:
     app = FastAPI()
     app.state.startup_components = {}
@@ -32,6 +38,7 @@ async def test_optional_startup_component_failure_is_structured_without_raw_mess
 async def test_invalid_security_secrets_fail_before_database_startup(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("YUXI_KNOWLEDGE_ENABLED", "false")
     monkeypatch.delenv("API_KEY_DERIVATION_SECRET", raising=False)
 
     def forbidden_initialize() -> None:
@@ -122,3 +129,40 @@ async def test_invalid_oidc_configuration_blocks_startup_before_database(monkeyp
         await api_bootstrap._startup(app)
     assert app.state.startup_complete is False
     assert app.state.startup_components["oidc_config"] == {"status": "error", "required": True, "code": "ValueError"}
+
+
+async def test_disabled_knowledge_does_not_initialize_existing_backends(monkeypatch):
+    """关闭部署跳过已有知识库连接，但仍完成其余必需组件装配。"""
+    from types import SimpleNamespace
+
+    from yuxi.modules.system.services import options
+
+    initialized = []
+
+    async def initialize(app, *, name, required, operation):
+        """只执行装配选择，不取得本测试无关的真实资源。"""
+        if name == "knowledge_base":
+            raise AssertionError("关闭知识库后不应初始化已有知识库后端")
+        initialized.append(name)
+        app.state.startup_components[name] = {"status": "ok", "required": required}
+
+    async def done(*args):
+        """替换本测试不涉及的共享依赖。"""
+
+    async def redis():
+        """提供预热 Redis 的最小协议。"""
+        return SimpleNamespace(ping=done)
+
+    monkeypatch.setenv("YUXI_KNOWLEDGE_ENABLED", "false")
+    monkeypatch.setattr(api_bootstrap, "_initialize_startup_component", initialize)
+    monkeypatch.setattr(api_bootstrap.pg_manager, "initialize", lambda: None)
+    monkeypatch.setattr(api_bootstrap, "require_current_schema", done)
+    monkeypatch.setattr(options, "invalidate_option_cache", done)
+    monkeypatch.setattr(api_bootstrap, "get_redis_client", redis)
+    app = FastAPI()
+
+    await api_bootstrap._startup(app)
+
+    assert app.state.startup_complete is True
+    assert app.state.startup_components["knowledge_base"] == {"status": "disabled", "required": False}
+    assert initialized == ["security_secrets", "oidc_config", "model_cache", "sandbox_provider"]

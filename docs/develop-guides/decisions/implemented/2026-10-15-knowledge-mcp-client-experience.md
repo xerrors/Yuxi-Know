@@ -12,7 +12,7 @@ Owner：backend/yuxi/api/routers/public_v1/knowledge_mcp.py
 
 ### 实现方案
 
-协议适配器为五个工具发布用途、参数选择、结果串联和分页说明，并在初始化 instructions 中明确检索与核对来源流程。成功响应保留 JSON text，同时提供标准 MCP structuredContent；list_kbs 的数组在结构化字段中包装为 `{"knowledge_bases": [...]}`，其余对象直接发布。输入 Schema、领域结果与资源权限由现有知识库服务负责。当前协议见[知识库 MCP 接入](../../../advanced/knowledge-mcp.md)。
+协议适配器为外部客户端的五个工具发布用途、参数选择、结果串联和分页说明，并在初始化 instructions 中明确检索与核对来源流程。成功响应保留 JSON text，同时提供标准 MCP structuredContent；list_kbs 的数组在结构化字段中包装为 `{"knowledge_bases": [...]}`，其余对象直接发布。输入 Schema、领域结果与资源权限由现有知识库服务负责。当前协议见[知识库 MCP 接入](../../../advanced/knowledge-mcp.md)。
 
 业务错误在适配器映射为固定的可操作说明：400 提示核对参数/知识库支持情况，404 提示重新发现可见资源，500 提示稍后重试。SDK 的输入 Schema 校验仍提供参数级错误；适配器不公开底层异常或输入正文。
 
@@ -20,7 +20,7 @@ Owner：backend/yuxi/api/routers/public_v1/knowledge_mcp.py
 
 维持仅文本结果与简短说明可以减少协议元数据，但模型使用成本留给每个客户端。独立端点、知识库级凭据、工具组、限流和管理页面涉及新的持久化与授权流程，需要独立需求。写入、问答会话与多库聚合也不属于当前只读检索目标。
 
-API 进程与权限接线由[内置 MCP 决策](./2026-10-15-knowledge-mcp.md)拥有。
+API 进程与外部 Key 接线由[内置 MCP 决策](./2026-10-15-knowledge-mcp.md)拥有；内部短期委托与可选启停由[Agent MCP 与可选 Knowledge](./2026-10-23-knowledge-mcp-optional.md)补充，内部与外部调用共享五个只读工具。
 
 ## 后果
 

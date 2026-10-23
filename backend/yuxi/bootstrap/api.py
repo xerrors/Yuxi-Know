@@ -6,13 +6,14 @@ from collections.abc import Callable
 from fastapi import FastAPI
 
 from yuxi import get_version
+from yuxi.bootstrap.capabilities import knowledge_enabled
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.infrastructure.postgres.schema import require_current_schema
 from yuxi.modules.agents.runtime.sandbox import check_sandbox_provider
 from yuxi.modules.agents.services.transport import get_redis_client
 from yuxi.modules.identity.oidc import get_oidc_config
-from yuxi.modules.identity.security import AuthUtils
+from yuxi.modules.identity.security import AuthUtils, require_knowledge_delegation_config
 
 
 class RequiredStartupComponentError(RuntimeError):
@@ -29,6 +30,15 @@ async def _startup(app: FastAPI) -> None:
 
     app.state.startup_complete = False
     app.state.startup_components = {}
+    knowledge = knowledge_enabled()
+
+    if knowledge:
+        await _initialize_startup_component(
+            app,
+            name="knowledge_delegation_config",
+            required=True,
+            operation=require_knowledge_delegation_config,
+        )
 
     await _initialize_startup_component(
         app,
@@ -71,15 +81,17 @@ async def _startup(app: FastAPI) -> None:
         operation=initialize_model_cache,
     )
 
-    # 初始化知识库管理器
-    from yuxi.modules.knowledge.runtime import knowledge_base
+    if knowledge:
+        from yuxi.modules.knowledge.runtime import knowledge_base
 
-    await _initialize_startup_component(
-        app,
-        name="knowledge_base",
-        required=True,
-        operation=knowledge_base.initialize,
-    )
+        await _initialize_startup_component(
+            app,
+            name="knowledge_base",
+            required=True,
+            operation=knowledge_base.initialize,
+        )
+    else:
+        app.state.startup_components["knowledge_base"] = {"status": "disabled", "required": False}
 
     # 预热 Redis（run 队列）
     try:

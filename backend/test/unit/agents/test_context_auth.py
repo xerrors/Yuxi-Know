@@ -174,8 +174,8 @@ async def test_resolve_agent_resource_options_empty_fields_loads_nothing(monkeyp
 
     monkeypatch.setitem(
         sys.modules,
-        "yuxi.modules.knowledge.runtime",
-        types.SimpleNamespace(knowledge_base=types.SimpleNamespace(get_knowledge_bases_by_user=fail_if_loaded)),
+        "yuxi.modules.extensions.tools.knowledge.client",
+        types.SimpleNamespace(list_knowledge_bases=fail_if_loaded, KnowledgeMCPError=RuntimeError),
     )
 
     assert await context_module.resolve_agent_resource_options(set(), db=object(), user=object()) == {}
@@ -184,7 +184,7 @@ async def test_resolve_agent_resource_options_empty_fields_loads_nothing(monkeyp
 @pytest.mark.asyncio
 async def test_normalize_agent_context_config_defaults_mcps_off_and_filters_explicit_lists(monkeypatch):
     async def fake_get_knowledge_bases_by_user(_user):
-        return [_knowledge_summary("kb-a"), _knowledge_summary("kb-b")]
+        return [{"kb_id": "kb-a", "name": "kb-a", "description": ""}, {"kb_id": "kb-b", "name": "kb-b", "description": ""}]
 
     async def fake_get_all_mcp_servers(_db):
         return [
@@ -213,8 +213,8 @@ async def test_normalize_agent_context_config_defaults_mcps_off_and_filters_expl
     )
     monkeypatch.setitem(
         sys.modules,
-        "yuxi.modules.knowledge.runtime",
-        types.SimpleNamespace(knowledge_base=types.SimpleNamespace(get_knowledge_bases_by_user=fake_get_knowledge_bases_by_user)),
+        "yuxi.modules.extensions.tools.knowledge.client",
+        types.SimpleNamespace(list_knowledge_bases=fake_get_knowledge_bases_by_user, KnowledgeMCPError=RuntimeError),
     )
     monkeypatch.setitem(
         sys.modules,
@@ -254,7 +254,7 @@ async def test_normalize_agent_context_config_defaults_mcps_off_and_filters_expl
     )
 
     assert normalized["tools"] == ["ask_user_question", "web_search"]
-    assert normalized["knowledges"] == ["kb-b"]
+    assert normalized["knowledges"] == ["kb-b", "missing"]
     assert normalized["mcps"] == []
     assert normalized["skills"] == []
     assert normalized["preload_skills"] == []
@@ -314,7 +314,7 @@ async def test_prepare_agent_runtime_context_filters_resources_and_derives_runti
     monkeypatch.setattr(context_module, "_load_workspace_agent_context", lambda uid: "workspace policy")
 
     async def fake_get_knowledge_bases_by_user(_user):
-        return [_knowledge_summary("kb-a"), _knowledge_summary("kb-b")]
+        return [{"kb_id": "kb-a", "name": "kb-a", "description": ""}, {"kb_id": "kb-b", "name": "kb-b", "description": ""}]
 
     async def fake_get_all_mcp_servers(_db):
         return [types.SimpleNamespace(slug="mcp-a", name="MCP A", description="", enabled=True)]
@@ -401,8 +401,8 @@ async def test_prepare_agent_runtime_context_filters_resources_and_derives_runti
     )
     monkeypatch.setitem(
         sys.modules,
-        "yuxi.modules.knowledge.runtime",
-        types.SimpleNamespace(knowledge_base=types.SimpleNamespace(get_knowledge_bases_by_user=fake_get_knowledge_bases_by_user)),
+        "yuxi.modules.extensions.tools.knowledge.client",
+        types.SimpleNamespace(list_knowledge_bases=fake_get_knowledge_bases_by_user, KnowledgeMCPError=RuntimeError),
     )
     monkeypatch.setitem(
         sys.modules,
@@ -433,7 +433,7 @@ async def test_prepare_agent_runtime_context_filters_resources_and_derives_runti
     prepared = await context_module.prepare_agent_runtime_context(context)
 
     assert prepared.tools == ["ask_user_question"]
-    assert prepared.knowledges == ["kb-a"]
+    assert prepared.knowledges == ["kb-a", "missing"]
     assert prepared.mcps == []
     assert prepared.skills == ["skill-a"]
     assert prepared.preload_skills == ["skill-a"]

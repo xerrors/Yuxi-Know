@@ -111,9 +111,12 @@ async def _run_agent(middleware, tool_name: str) -> dict:
         model=model,
         tools=[parse_sandbox_file, ask_human, cancel_now, kb_tools.query_kb],
         middleware=list(middleware),
+        context_schema=dict,
     )
     config = {"configurable": {"thread_id": f"thread-{tool_name}"}, "recursion_limit": 6}
-    return await agent.ainvoke({"messages": [HumanMessage("解析这个文件")]}, config=config)
+    return await agent.ainvoke(
+        {"messages": [HumanMessage("解析这个文件")]}, config=config, context=SimpleNamespace(uid="user", knowledges="all")
+    )
 
 
 async def test_tool_runtime_error_becomes_tool_message_and_run_continues():
@@ -326,13 +329,11 @@ async def test_cancel_waits_for_tool_effect_before_releasing_execution():
     assert effects == ["finished"]
 
 
-@pytest.mark.parametrize("failure_type", [RuntimeError, kb_tools.knowledge_tools.KnowledgeToolError])
+@pytest.mark.parametrize("failure_type", [RuntimeError, ValueError])
 async def test_knowledge_query_failure_uses_error_message_and_public_projection(monkeypatch, caplog, failure_type):
     """真实工具和中间件装配保留失败状态，并隐藏底层错误内容。"""
     private_detail = "private-provider-credential"
-    monkeypatch.setattr(kb_tools, "_resolve_visible_knowledge_bases_for_query", AsyncMock(return_value=[]))
-    monkeypatch.setattr(kb_tools, "_get_knowledge_base", lambda: object())
-    monkeypatch.setattr(kb_tools.knowledge_tools, "query_kb", AsyncMock(side_effect=failure_type(private_detail)))
+    monkeypatch.setattr(kb_tools, "call_knowledge_mcp", AsyncMock(side_effect=failure_type(private_detail)))
 
     state = await _run_agent([ToolErrorGuardMiddleware()], "query_kb")
 
@@ -347,9 +348,7 @@ async def test_knowledge_query_failure_uses_error_message_and_public_projection(
 
 async def test_knowledge_empty_query_remains_success(monkeypatch):
     """空检索结果与执行失败保持不同状态。"""
-    monkeypatch.setattr(kb_tools, "_resolve_visible_knowledge_bases_for_query", AsyncMock(return_value=[]))
-    monkeypatch.setattr(kb_tools, "_get_knowledge_base", lambda: object())
-    monkeypatch.setattr(kb_tools.knowledge_tools, "query_kb", AsyncMock(return_value={"results": []}))
+    monkeypatch.setattr(kb_tools, "call_knowledge_mcp", AsyncMock(return_value={"results": []}))
     state = await _run_agent([ToolErrorGuardMiddleware()], "query_kb")
     [result] = [message for message in state["messages"] if isinstance(message, ToolMessage)]
     assert result.status == "success"

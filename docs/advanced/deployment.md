@@ -117,6 +117,28 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml --profile all up 
 
 `app-init` 以 UID/GID 1000 运行，等待 PostgreSQL 健康与 `storage-init` 成功后，在数据库锁内完成 Schema 和共享内容初始化。它为确认空库建立 business 版本 1 与 knowledge 版本 1 基线，包含当前表、索引、约束和 LangGraph checkpoint 表；当前版本跳过建表，其他版本不匹配会明确失败。随后同步系统配置定义、内置模型供应商、Agent、MCP 和 Skill 来源文件，API 与 worker 等待全部步骤成功。应用不提供历史迁移脚本。[版本 1 基线决定](../develop-guides/decisions/implemented/2026-10-19-schema-baseline-one.md)说明当前结构和历史升级路径的收敛；编号重置不代表旧库已完成结构变更，历史 `1/1` 标记也不能作为结构完整的证明。
 
+### 可选关闭知识库
+
+知识库默认开启。需要停用知识库时，在同一项目叠加关闭配置；PostgreSQL、Redis、MinIO、代码和数据保持原位：
+
+```bash
+docker compose --env-file .env.prod -f docker-compose.prod.yml -f docker-compose.no-knowledge.yml up -d --no-build
+```
+
+开发环境使用 `docker compose -f docker-compose.yml -f docker-compose.no-knowledge.yml up -d`。关闭配置将 Milvus、etcd、Neo4j 的副本数设为 0，并为 API、worker 和初始化器设置 `YUXI_KNOWLEDGE_ENABLED=false`。同项目已有的三个容器也会停止，无需删除数据卷。切换前停止提交知识库任务，并等待正在执行的任务结束；意外中断的任务仍按已有租约恢复规则收敛，尚未执行的知识库任务和投影清理意图保留，重新开启后继续处理。
+
+关闭时，API 不初始化知识库执行器，不注册知识库管理、图谱、评估、公开知识库与 `/api/mcp` 路由；这些路径返回 404。系统能力发现报告知识库不可用，Agent、MCP 配置和 Skill 定义仍保留。Agent 实际使用知识库工具时会报告 MCP 不可用，普通对话不依赖知识库后端。初始化器仍建立、校验原有两域 Schema 并同步内置内容，不清理知识库记录。
+
+重新开启时使用原有完整命令，不叠加关闭配置：
+
+```bash
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --no-build
+```
+
+确认环境文件中的 `YUXI_KNOWLEDGE_ENABLED` 为 `true` 或未设置，然后检查就绪状态并检索已有文档。该开关不是热切换；修改后需要重新创建 API 和 worker。仅设置环境开关不会停止存储容器，停启本地容器应使用上面的 Compose 叠加配置。
+
+API 与 worker 必须共享持久化的 `JWT_SECRET_KEY` 和 `YUXI_INSTANCE_ID`，用于内部 MCP 短期用户委托。启用 Knowledge 时，两种进程在连接数据库前校验显式委托配置，不使用各进程临时生成的身份；worker 还会在派发知识任务前连接已有知识库后端与 Neo4j，因此完整部署必须启动 Milvus、etcd 和 Neo4j。容器内 MCP 地址默认为 `http://api:5050/api/mcp`；直接在宿主运行后端时，通过 `YUXI_KNOWLEDGE_MCP_URL` 指向实际 API 地址。
+
 ### 共享内容更新与失败重试
 
 应用初始化每次部署都需要执行；当前 Schema 不变也会同步内置内容。系统配置值、Agent 名称与配置、供应商凭据与地址、MCP 和 Skill 启用状态按各业务域规则保留；代码拥有的定义和内置 Skill 文件按当前镜像刷新。初始化只挂载 Skill 来源目录，不访问用户工作区或 Milvus 数据。

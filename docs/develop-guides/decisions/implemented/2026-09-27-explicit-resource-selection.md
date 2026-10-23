@@ -12,7 +12,7 @@ Owner：backend/yuxi/modules/agents/runtime/context.py
 
 ### 实现方案
 
-Context 的资源字段统一声明 `Literal["all"] | list[str]`，空数组表示不选择。工具、知识库和共享 Skill 默认 all，子智能体默认 `["general-purpose"]`，MCP 与预加载 Skill 默认空数组；全部字段都支持显式 all。创建时省略字段使用默认值，局部更新时省略字段保留已有值。repository 校验写入形状和授权并保留已有不可见引用；运行准备时才按执行用户展开 all。前端保留独立的全部模式，手动勾满仍保存固定数组；没有候选项也没有历史固定选择的分组隐藏，但不改写保存值。CLI 区分全部与禁用。子智能体中间件只使用已解析的允许列表，空列表不注册工具。
+Context 的资源字段统一声明 `Literal["all"] | list[str]`，空数组表示不选择。工具、知识库和共享 Skill 默认 all，子智能体默认 `["general-purpose"]`，MCP 与预加载 Skill 默认空数组；全部字段都支持显式 all。创建时省略字段使用默认值，局部更新时省略字段保留已有值。repository 校验写入形状和授权并保留已有不可见引用；运行准备时才按执行用户展开 all；知识库选择保留原值，按[可选 Knowledge 决定](./2026-10-23-knowledge-mcp-optional.md)在 MCP 执行时与当前权限取交集，服务关闭不清空选择。前端保留独立的全部模式，手动勾满仍保存固定数组；没有候选项也没有历史固定选择的分组隐藏，但不改写保存值。CLI 区分全部与禁用。子智能体中间件只使用已解析的允许列表，空列表不注册工具。
 
 Context 字段类型和 `metadata.kind` 拥有资源声明；运行准备、repository 和 service 读取实际后端 schema，前端读取派生的 `supports_all` 与默认值。MCP 和预加载 Skill 复用资源选择校验与展开规则。预加载候选项只来自已选且授权的共享和内置 Skill；其依赖闭包及文件读取由 Skill runtime 负责，显式 all 保留动态意图。
 

@@ -14,6 +14,7 @@ on:
       - 'docker/**'
       - 'docker-compose.yml'
       - 'docker-compose.prod.yml'
+      - 'docker-compose.no-knowledge.yml'
       - 'scripts/ci_prepare_system_tests_env.sh'
       - 'scripts/ci_build_topology_images.sh'
       - '.github/workflows/system-tests.yml'
@@ -32,6 +33,7 @@ on:
       - 'docker/**'
       - 'docker-compose.yml'
       - 'docker-compose.prod.yml'
+      - 'docker-compose.no-knowledge.yml'
       - 'scripts/ci_prepare_system_tests_env.sh'
       - 'scripts/ci_build_topology_images.sh'
       - '.github/workflows/system-tests.yml'
@@ -115,7 +117,7 @@ jobs:
           docker compose run --rm --no-deps --user 0:0 api \
             install -d -o 1000 -g 1000 -m 0700 /app/user-data /app/skill-sources /app/skill-projections
       - name: Start background-job runtime topology
-        run: docker compose up -d postgres redis minio etcd milvus sandbox-runner api worker
+        run: docker compose up -d postgres redis minio etcd milvus graph sandbox-runner api worker
       - name: Wait for background-job topology readiness
         run: |
           for attempt in $(seq 1 60); do
@@ -368,7 +370,7 @@ jobs:
       - name: Verify MCP management connection contract
         run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_mcp_router.py -q
       - name: Verify knowledge MCP authentication and persisted documents
-        run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_knowledge_mcp.py -q
+        run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_knowledge_mcp.py test/integration/api/test_knowledge_mcp_delegation.py -q
       - name: Verify module failure and permission boundaries
         run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_module_failure_boundaries.py -q
       - name: Verify roles, grants and private Agent HTTP boundaries
@@ -385,6 +387,36 @@ jobs:
         run: docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_agent_create_resources.py -q
       - name: Verify Milvus 3 text retrieval through worker
         run: docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_milvus_text_retrieval_e2e.py -q --durations=10
+      - name: Verify Agent knowledge MCP tools and sources
+        run: docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_knowledge_mcp_agent.py -q
+      - name: Verify optional Knowledge deployment and chat recovery
+        timeout-minutes: 8
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.no-knowledge.yml up -d --no-build app-init api worker milvus etcd graph
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://localhost:5050/api/system/ready >/dev/null; then
+              break
+            fi
+            if [ "$attempt" = 60 ]; then exit 1; fi
+            sleep 2
+          done
+          docker compose exec -T api uv run --no-sync --no-dev python - <<'PY'
+          import httpx
+          ready = httpx.get("http://localhost:5050/api/system/ready").json()
+          assert ready["status"] == "ready" and ready["components"]["knowledge_base"]["status"] == "disabled", ready
+          for path in ("/api/mcp", "/api/knowledge/knowledge-bases"):
+              assert httpx.get("http://localhost:5050" + path).status_code == 404, path
+          PY
+          if docker compose ps --services --status running | rg '^(milvus|etcd|graph)$'; then exit 1; fi
+          docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD api uv run --no-sync --no-dev pytest test/e2e/test_knowledge_mcp_agent.py::test_worker_preserves_selection_and_completes_after_knowledge_error -q
+          docker compose -f docker-compose.yml up -d --no-build app-init api worker milvus etcd graph
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://localhost:5050/api/system/ready >/dev/null && docker compose exec -T milvus curl -fsS http://localhost:9091/healthz >/dev/null; then
+              break
+            fi
+            if [ "$attempt" = 60 ]; then exit 1; fi
+            sleep 2
+          done
       - name: Verify Input attachment persistence and object storage
         run: docker compose exec -T -e TEST_BASE_URL=http://127.0.0.1:1 -e CUBE_API_URL=http://127.0.0.1:1 -e TEST_USERNAME=fixture-probe -e TEST_PASSWORD=fixture-probe api uv run --no-sync --no-dev pytest test/integration/services/test_input_attachments.py -q
       - name: Verify Turn result causality

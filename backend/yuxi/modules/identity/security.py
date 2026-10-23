@@ -168,3 +168,70 @@ class AuthUtils:
             raise ValueError("令牌已过期")
         except jwt.InvalidTokenError:
             raise ValueError("无效的令牌")
+
+
+KNOWLEDGE_MCP_AUDIENCE = "yuxi-knowledge-mcp"
+KNOWLEDGE_MCP_PURPOSE = "agent-knowledge-read"
+KNOWLEDGE_DELEGATION_SECONDS = 300
+
+
+def create_knowledge_token(*, uid: str, selection: str | list[str], run_id: str | None = None) -> str:
+    """仅供可信运行上下文签发五分钟知识库只读委托。"""
+    if not uid or not _valid_knowledge_selection(selection):
+        raise ValueError("知识库委托缺少用户或有效选择范围")
+    secret, issuer = require_knowledge_delegation_config()
+    now = utc_now()
+    return jwt.encode(
+        {
+            "sub": uid,
+            "iss": issuer,
+            "aud": KNOWLEDGE_MCP_AUDIENCE,
+            "purpose": KNOWLEDGE_MCP_PURPOSE,
+            "selection": selection,
+            "run_id": run_id,
+            "iat": now,
+            "exp": now + timedelta(seconds=KNOWLEDGE_DELEGATION_SECONDS),
+        },
+        secret,
+        algorithm=JWT_ALGORITHM,
+    )
+
+
+def verify_knowledge_token(token: str) -> dict[str, Any]:
+    """拒绝登录 Token、其他用途和不合法委托范围。"""
+    secret, issuer = require_knowledge_delegation_config()
+    try:
+        payload = jwt.decode(
+            token,
+            secret,
+            algorithms=[JWT_ALGORITHM],
+            issuer=issuer,
+            audience=KNOWLEDGE_MCP_AUDIENCE,
+            options={"require": ["sub", "iss", "aud", "purpose", "selection", "iat", "exp"]},
+        )
+        if (
+            payload["purpose"] != KNOWLEDGE_MCP_PURPOSE
+            or not payload["sub"]
+            or not _valid_knowledge_selection(payload["selection"])
+            or not 0 < payload["exp"] - payload["iat"] <= KNOWLEDGE_DELEGATION_SECONDS
+        ):
+            raise ValueError("无效的知识库委托")
+        return payload
+    except (jwt.PyJWTError, TypeError, KeyError) as exc:
+        raise ValueError("无效或过期的知识库委托") from exc
+
+
+def require_knowledge_delegation_config() -> tuple[str, str]:
+    """委托跨进程使用部署密钥和实例标识，禁止隐式随机配置。"""
+    secret = _validate_configured_security_secrets(required_names=("JWT_SECRET_KEY",))["JWT_SECRET_KEY"]
+    instance_id = os.environ.get("YUXI_INSTANCE_ID", "").strip()
+    if not instance_id:
+        raise ValueError("Knowledge MCP 委托需要配置共享 YUXI_INSTANCE_ID")
+    return secret, f"yuxi-know:{instance_id}"
+
+
+def _valid_knowledge_selection(selection: object) -> bool:
+    """接受 all 或全为非空字符串的列表，显式空列表保持空范围。"""
+    if selection == "all":
+        return True
+    return isinstance(selection, list) and all(isinstance(item, str) and item.strip() for item in selection)

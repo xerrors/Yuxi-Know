@@ -15,6 +15,7 @@ keys = ("JWT_SECRET_KEY", "API_KEY_DERIVATION_SECRET", "SILICONFLOW_API_KEY", "O
 values = {key: os.environ[key] for key in keys if os.environ.get(key)}
 state = Path(os.environ["RUNNER_TEMP"]) / "yuxi-state"
 values.update(
+    YUXI_INSTANCE_ID="ci-system-tests",
     YUXI_STATE_DIR=str(state),
     COMPOSE_PROFILES="container",
     SANDBOX_BACKEND="container",

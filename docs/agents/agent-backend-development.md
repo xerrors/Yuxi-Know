@@ -31,7 +31,7 @@ PRESET = AgentPreset(
 
 ## 后端放在哪里
 
-Agent 定义保存角色配置，执行后端提供 Context schema、构图、流式执行与恢复接口。执行后端按运行 Context 装配模型、工具和 middleware；沙盒文件与命令能力由 `runtime/sandbox/` 提供，文件工具策略由 `runtime/middlewares/filesystem.py` 拥有。Context 在 `runtime/context.py` 装配知识资源，知识库可见范围解析与查询由 knowledge service 执行；工具执行时复查当前读取权限。共享 Skill 投影由 extensions/skills 的运行时入口在每次构图前刷新。
+Agent 定义保存角色配置，执行后端提供 Context schema、构图、流式执行与恢复接口。执行后端按运行 Context 装配模型、工具和 middleware；沙盒文件与命令能力由 `runtime/sandbox/` 提供，文件工具策略由 `runtime/middlewares/filesystem.py` 拥有。Context 在 `runtime/context.py` 保留知识库选择，资源选项和工具读取经 HTTP MCP 取得；Knowledge 侧每次调用复查当前读取权限与会话范围，见[知识库机制](../mechanisms/knowledge-base.md#agent-如何看到知识库)。共享 Skill 投影由 extensions/skills 的运行时入口在每次构图前刷新。
 
 随服务发布的 Agent 后端放在：
 
