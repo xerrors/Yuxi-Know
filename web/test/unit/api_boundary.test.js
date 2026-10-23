@@ -227,6 +227,53 @@ test('用户 Store 的普通错误传播链不附着或记录服务端任意响�
   })
 })
 
+test('业务错误 detail 透传 code/message 且 resolveApiErrorMessage 可读', async () => {
+  await withServer(async (server) => {
+    storageValues.clear()
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          detail: {
+            code: 'skill_request_invalid',
+            message: 'SKILL.md frontmatter.slug 必须是小写字母/数字/短横线',
+            context: { secret: 'should-drop' }
+          }
+        }),
+        {
+          status: 400,
+          headers: { 'content-type': 'application/json' }
+        }
+      )
+
+    setActivePinia(createPinia())
+    const { useUserStore } = await server.ssrLoadModule('/src/stores/user.js')
+    const userStore = useUserStore()
+    userStore.token = 'test-token'
+    userStore.userId = 1
+    const { apiRequest, resolveApiErrorMessage } = await server.ssrLoadModule('/src/apis/base.js')
+
+    await assert.rejects(
+      apiRequest('/api/skills/import/prepare', { method: 'POST', body: new FormData() }),
+      (error) => {
+        assert.equal(error.status, 400)
+        assert.equal(error.message, 'SKILL.md frontmatter.slug 必须是小写字母/数字/短横线')
+        assert.deepEqual(error.response.data, {
+          detail: {
+            code: 'skill_request_invalid',
+            message: 'SKILL.md frontmatter.slug 必须是小写字母/数字/短横线'
+          }
+        })
+        assert.equal(
+          resolveApiErrorMessage(error, '解析 Skill 失败'),
+          'SKILL.md frontmatter.slug 必须是小写字母/数字/短横线'
+        )
+        assert.equal(JSON.stringify(error.response.data).includes('should-drop'), false)
+        return true
+      }
+    )
+  })
+})
+
 test('用户管理分页 API 只请求当前页并编码服务端筛选条件', async () => {
   await withServer(async (server) => {
     storageValues.set('user_token', 'test-token')

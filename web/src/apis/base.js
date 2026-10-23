@@ -69,6 +69,20 @@ function extractBusinessErrorDetail(errorData) {
   return { code: detail.code, message: detail.message }
 }
 
+/**
+ * 从 apiRequest 抛出的错误中取出可展示文案。
+ * 优先业务 detail.message，其次字符串 detail，最后 error.message。
+ */
+export function resolveApiErrorMessage(error, fallback = '请求失败') {
+  const detail = error?.response?.data?.detail
+  if (typeof detail === 'string' && detail.trim()) return detail
+  if (detail && typeof detail === 'object' && typeof detail.message === 'string' && detail.message.trim()) {
+    return detail.message
+  }
+  if (typeof error?.message === 'string' && error.message.trim()) return error.message
+  return fallback
+}
+
 function publicErrorMessage(url, status, headers, requiresAuth) {
   const path = safeRequestMetadata(url, {}).path
   if (status === 400) return '请求参数错误'

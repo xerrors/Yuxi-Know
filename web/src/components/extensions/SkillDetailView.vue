@@ -402,6 +402,7 @@ import {
   ChevronDown,
   ChevronRight
 } from '@lucide/vue'
+import { resolveApiErrorMessage } from '@/apis/base'
 import { skillApi } from '@/apis/skill_api'
 import AgentFilePreview from '@/components/AgentFilePreview.vue'
 import ExtensionDetailLayout from '@/components/shared/ExtensionDetailLayout.vue'
@@ -763,7 +764,7 @@ const loadSkillFile = async (skillSlug, path = 'SKILL.md') => {
     selectedTreeKeys.value = [path]
     return true
   } catch (error) {
-    if (requestId === fileLoadId) message.error(error?.response?.data?.detail || '读取文件失败')
+    if (requestId === fileLoadId) message.error(resolveApiErrorMessage(error, '读取文件失败'))
     return false
   } finally {
     if (requestId === fileLoadId) pendingFileLoad.value = false
@@ -833,7 +834,7 @@ const saveCurrentFile = async (content = fileContent.value) => {
     if (selectedPath.value === 'SKILL.md') rootRevision.value = fileRevision.value
     message.success('已保存')
   } catch (error) {
-    message.error(error?.response?.data?.detail || '保存失败，修改仍保留在编辑器中')
+    message.error(resolveApiErrorMessage(error, '保存失败，修改仍保留在编辑器中'))
   } finally {
     savingFile.value = false
   }
@@ -933,7 +934,7 @@ const saveShareConfig = async () => {
     }
     message.success('设置已保存')
   } catch (error) {
-    message.error(error?.response?.data?.detail || error.message || '保存设置失败')
+    message.error(resolveApiErrorMessage(error, '保存设置失败'))
   } finally {
     savingShareConfig.value = false
   }
@@ -997,12 +998,12 @@ const saveDependencies = async () => {
               fileRevision.value = data.revision || ''
             }
           } catch (reloadError) {
-            message.error(reloadError?.response?.data?.detail || '加载最新文件失败')
+            message.error(resolveApiErrorMessage(reloadError, '加载最新文件失败'))
           }
         }
       })
     } else {
-      message.error(error?.response?.data?.detail || '更新失败，依赖选择仍保留')
+      message.error(resolveApiErrorMessage(error, '更新失败，依赖选择仍保留'))
     }
   } finally {
     savingDependencies.value = false
