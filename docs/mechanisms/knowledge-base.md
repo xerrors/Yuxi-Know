@@ -105,6 +105,8 @@ stateDiagram-v2
 
 知识库解析先生成本地 Markdown 目录，再将图片和 Markdown 写入该文档本次解析的独占 MinIO 前缀。文件记录提交 `parsed` 与新 Markdown 路径后，服务回收旧尝试；失败或 owner 丢失只回收未发布的当前尝试，旧产物保持可读。取消发生在结果发布后的旧资源回收阶段时，已发布结果仍然有效。删除文档按文档前缀回收解析资源，其他文档的资源保留。
 
+DOCX 解析在 VML 输入边界区分图片资源与空图形元数据：仅无正文、无子节点，且属性为空或只有 Office 标题的 `imagedata` 不生成图片项。有引用属性（包括空引用）、未知属性或内容的节点继续执行图片提取；资源缺失仍使解析失败并回收本次输出，不发布缺图的部分结果。分类不改写原件。
+
 Milvus 索引会把 chunk 写入 PostgreSQL 和 Milvus。它不是跨存储事务：任一侧失败时会尝试补偿并把文件置为 `error_indexing`，排查时需要同时查看两侧。
 
 分块时保存 `chunk_index`、`start_line` 和 `end_line`，行号以 MinIO 保存的完整解析文本为基准，从 1 开始且包含首尾行；空行也计数，Markdown 和 TXT 使用同一规则。切片、合并与重叠携带原始字符位置，生成的标题与问答前缀不作为原文行。HTML 表格转键值对后的片段保留原表格块范围，CSV 解码后的问答及其子块保留完整 record 范围。检索从当前 active generation 的 PostgreSQL chunk 补齐行号与文件名。当前知识域 Schema 持有这些行号列，部署前提见[部署参考](../advanced/deployment.md#_3-数据库与文件目录)。

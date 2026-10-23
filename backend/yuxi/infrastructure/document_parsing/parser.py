@@ -31,9 +31,28 @@ from yuxi.infrastructure.document_parsing.artifacts import (
 )
 from yuxi.infrastructure.document_parsing.pdf_utils import validate_pdf_page_tree_loadable
 from yuxi.infrastructure.filesystem import await_io
+from yuxi.infrastructure.observability.logging import logger
+
+
+class WordDocumentBackend(MsWordDocumentBackend):
+    """将无引用的 VML 图形元数据与真正的图片资源分开处理。"""
+
+    def _handle_vml_pictures(self, vml_imagedatas, doc: DoclingDocument):
+        """仅排除空或只有标题的节点，未知属性及无效引用仍严格处理。"""
+        image_nodes = []
+        for node in vml_imagedatas:
+            metadata_only = all(key == "{urn:schemas-microsoft-com:office:office}title" for key in node.attrib)
+            if metadata_only and len(node) == 0 and not (node.text or "").strip():
+                continue
+            image_nodes.append(node)
+        omitted = len(vml_imagedatas) - len(image_nodes)
+        if omitted:
+            logger.info(f"DOCX 识别到 {omitted} 个无图片引用的 VML 图形元数据节点")
+        return super()._handle_vml_pictures(image_nodes, doc)
+
 
 _OFFICE_BACKENDS = {
-    ".docx": (InputFormat.DOCX, MsWordDocumentBackend),
+    ".docx": (InputFormat.DOCX, WordDocumentBackend),
     ".pptx": (InputFormat.PPTX, MsPowerpointDocumentBackend),
     ".xlsx": (InputFormat.XLSX, MsExcelDocumentBackend),
     ".xls": (InputFormat.XLS, MsExcelDocumentBackend),
