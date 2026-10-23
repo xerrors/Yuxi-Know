@@ -114,6 +114,38 @@ def test_workspace_routes_convert_multipart_and_reject_oversize(monkeypatch, mod
         assert "detail" in response.json()
 
 
+def test_workspace_upload_route_passes_relative_paths_in_file_order(monkeypatch):
+    """multipart 相对路径必须与文件列表逐项对齐后交给服务层。"""
+    app = FastAPI()
+    app.include_router(workspace_router.workspace)
+    app.dependency_overrides[workspace_router.get_required_user] = lambda: SimpleNamespace(uid="user-1")
+    observed = {}
+
+    async def consume(*, parent_path, files, relative_paths, current_user):
+        """记录协议边界实际收到的最小事实。"""
+        observed.update(
+            parent_path=parent_path,
+            filenames=[file.filename for file in files],
+            relative_paths=relative_paths,
+        )
+        return {"success": True}
+
+    monkeypatch.setattr(workspace_router, "upload_workspace_files", consume)
+    with TestClient(app) as client:
+        response = client.post(
+            f"{workspace_router.workspace.prefix}/upload",
+            data={"parent_path": "/", "relative_paths": ["root/a.txt", "root/sub/b.txt"]},
+            files=[("files", ("a.txt", b"a")), ("files", ("b.txt", b"b"))],
+        )
+
+    assert response.status_code == 200, response.text
+    assert observed == {
+        "parent_path": "/",
+        "filenames": ["a.txt", "b.txt"],
+        "relative_paths": ["root/a.txt", "root/sub/b.txt"],
+    }
+
+
 def test_uploadfile_is_only_used_in_api_layer():
     """恢复任何非 API 层 UploadFile 使用都会违反协议边界。"""
     root = Path(__file__).resolve().parents[3] / "yuxi"

@@ -34,6 +34,14 @@
       multiple
       @change="handleUploadInputChange"
     />
+    <input
+      ref="folderUploadInputRef"
+      class="upload-input"
+      type="file"
+      webkitdirectory
+      multiple
+      @change="handleFolderUploadInputChange"
+    />
 
     <GlobalSearchModal
       v-model:open="fileSearchOpen"
@@ -74,6 +82,7 @@
           @select-knowledge-base="selectKnowledgeBase"
           @select-path="selectWorkspacePath"
           @upload-file="openUploadFilePicker"
+          @upload-folder="openUploadFolderPicker"
           @create-directory="openCreateDirectoryModal"
         />
       </div>
@@ -227,6 +236,12 @@ import AgentFilePreview from '@/modules/session/ui/workspace/AgentFilePreview.vu
 import WorkspaceFileList from '@/modules/workspace/ui/WorkspaceFileList.vue'
 import WorkspacePreviewPane from '@/modules/workspace/ui/WorkspacePreviewPane.vue'
 import WorkspaceSidebar from '@/modules/workspace/ui/WorkspaceSidebar.vue'
+import {
+  WORKSPACE_UPLOAD_MAX_FILES,
+  buildFolderUploadBatches,
+  collectFolderUploadEntries,
+  validateFolderUploadEntries
+} from '@/modules/workspace'
 import { knowledgeBaseApi } from '@/apis/knowledge_api'
 import { useUserStore } from '@/modules/identity/model/user'
 import {
@@ -306,13 +321,13 @@ const creatingDirectory = ref(false)
 const uploadingFile = ref(false)
 const uploadError = ref('')
 const uploadInputRef = ref(null)
+const folderUploadInputRef = ref(null)
 const deletingPaths = ref([])
 const sidebarCollapsed = ref(false)
 const previewWidthPercent = ref(50)
 const isPreviewResizing = ref(false)
 const previewRequestId = ref(0)
 const INLINE_PREVIEW_MIN_WIDTH = 960
-const MAX_WORKSPACE_UPLOAD_FILES = 50
 const AGENTS_WORKSPACE_PATH = '/agents'
 const knowledgeFileBrowser = reactive({
   parentId: null,
@@ -805,8 +820,8 @@ const openUploadFilePicker = () => {
 const handleUploadInputChange = async (event) => {
   const files = Array.from(event.target?.files || [])
   if (!files.length || uploadingFile.value) return
-  if (files.length > MAX_WORKSPACE_UPLOAD_FILES) {
-    message.warning(`一次最多上传 ${MAX_WORKSPACE_UPLOAD_FILES} 个文件`)
+  if (files.length > WORKSPACE_UPLOAD_MAX_FILES) {
+    message.warning(`一次最多上传 ${WORKSPACE_UPLOAD_MAX_FILES} 个文件`)
     event.target.value = ''
     return
   }
@@ -825,6 +840,89 @@ const handleUploadInputChange = async (event) => {
   } finally {
     uploadingFile.value = false
     event.target.value = ''
+  }
+}
+
+const openUploadFolderPicker = () => {
+  if (activeSourceKey.value !== 'personal' || isReadonlyWorkspacePath.value || uploadingFile.value)
+    return
+  if (folderUploadInputRef.value) {
+    folderUploadInputRef.value.value = ''
+    folderUploadInputRef.value.click()
+  }
+}
+
+const formatFolderUploadFailure = (failed, batchCount, uploadedCount) => {
+  const names = failed.batch
+    .slice(0, 3)
+    .map((entry) => entry.relativePath)
+    .join('、')
+  const remainder = failed.batch.length > 3 ? ` 等 ${failed.batch.length} 个文件` : ''
+  const hint =
+    failed.error?.status === 413
+      ? ' 文件过大，请压缩或拆分后重试。'
+      : failed.error?.status === 400
+        ? ' 请检查目标路径是否已存在同名文件或目录；已成功批次不会回滚，重试前请删除已上传文件后重选整个根文件夹。'
+        : ''
+  return `已上传 ${uploadedCount} 个文件；第 ${failed.index + 1}/${batchCount} 批失败：${names}${remainder}。${failed.error?.message || '请重试'}${hint}`
+}
+
+const handleFolderUploadInputChange = async (event) => {
+  const input = event.target
+  const files = Array.from(input?.files || [])
+  if (uploadingFile.value) {
+    input.value = ''
+    return
+  }
+  if (!files.length) {
+    input.value = ''
+    message.info('文件夹中没有可上传的文件；空文件夹不会被上传')
+    return
+  }
+
+  let batches
+  try {
+    const entries = collectFolderUploadEntries(files)
+    validateFolderUploadEntries(entries)
+    batches = buildFolderUploadBatches(entries)
+  } catch (error) {
+    uploadError.value = error?.message || '文件夹内容无效'
+    message.error(uploadError.value)
+    input.value = ''
+    return
+  }
+
+  const parentPath = currentPath.value
+  uploadingFile.value = true
+  uploadError.value = ''
+  let uploadedCount = 0
+  let failed = null
+  try {
+    for (const [index, batch] of batches.entries()) {
+      try {
+        await uploadWorkspaceFiles(
+          parentPath,
+          batch.map((entry) => entry.file),
+          batch.map((entry) => entry.relativePath)
+        )
+        uploadedCount += batch.length
+      } catch (error) {
+        failed = { index, batch, error }
+        break
+      }
+    }
+    if (activeSourceKey.value === 'personal' && currentPath.value === parentPath) {
+      await loadWorkspaceEntries(parentPath)
+    }
+    if (failed) {
+      uploadError.value = formatFolderUploadFailure(failed, batches.length, uploadedCount)
+      message.error(uploadError.value)
+    } else {
+      message.success(`${uploadedCount} 个文件上传成功`)
+    }
+  } finally {
+    uploadingFile.value = false
+    input.value = ''
   }
 }
 

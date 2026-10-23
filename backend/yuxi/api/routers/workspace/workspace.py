@@ -183,6 +183,7 @@ async def create_workspace_directory_route(
 @workspace.post("/upload", response_model=dict)
 async def upload_workspace_files_route(
     parent_path: str = Form(..., description="父目录路径"),
+    relative_paths: list[str] | None = Form(None, description="与 files 顺序对齐的相对路径"),
     files: list[UploadFile] = File(..., description="上传文件列表"),
     current_user: User = Depends(get_required_user),
 ):
@@ -194,7 +195,12 @@ async def upload_workspace_files_route(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return await upload_workspace_files(parent_path=parent_path, files=inputs, current_user=current_user)
+    return await upload_workspace_files(
+        parent_path=parent_path,
+        files=inputs,
+        relative_paths=relative_paths,
+        current_user=current_user,
+    )
 
 
 @workspace.get("/download")

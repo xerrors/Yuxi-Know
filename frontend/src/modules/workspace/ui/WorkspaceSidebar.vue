@@ -35,6 +35,15 @@
               type="button"
               class="file-action-menu-item"
               role="menuitem"
+              @click="onUploadFolderAction"
+            >
+              <FolderUp :size="14" />
+              <span>上传文件夹</span>
+            </button>
+            <button
+              type="button"
+              class="file-action-menu-item"
+              role="menuitem"
               @click="onCreateFolderAction"
             >
               <FolderPlus :size="14" />
@@ -122,7 +131,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { ChevronDown, FolderPlus, Loader2, Upload } from '@lucide/vue'
+import { ChevronDown, FolderPlus, FolderUp, Loader2, Upload } from '@lucide/vue'
 import FileTypeIcon from '@/shared/ui/FileTypeIcon.vue'
 import { useOutsidePointerdown } from '@/shared/lib/useOutsidePointerdown'
 
@@ -155,6 +164,7 @@ const emit = defineEmits([
   'select-knowledge-base',
   'select-path',
   'upload-file',
+  'upload-folder',
   'create-directory'
 ])
 
@@ -169,6 +179,11 @@ const toggleUploadActionMenu = () => {
 const onUploadAction = () => {
   uploadActionMenuOpen.value = false
   emit('upload-file')
+}
+
+const onUploadFolderAction = () => {
+  uploadActionMenuOpen.value = false
+  emit('upload-folder')
 }
 
 const onCreateFolderAction = () => {

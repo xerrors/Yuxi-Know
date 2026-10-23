@@ -14,7 +14,9 @@ test('工作区上传菜单暴露展开状态和菜单语义', () => {
   assert.match(trigger, /aria-haspopup="menu"/)
   assert.match(trigger, /:aria-expanded="uploadActionMenuOpen"/)
   assert.match(menu, /class="file-action-menu" role="menu"/)
-  assert.equal((menu.match(/role="menuitem"/g) || []).length, 2)
+  assert.equal((menu.match(/role="menuitem"/g) || []).length, 3)
+  assert.match(menu, /上传文件夹/)
+  assert.match(menu, /onUploadFolderAction/)
 })
 
 test('项目创建目录选择器包含尚未绑定的项目目录', () => {

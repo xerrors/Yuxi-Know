@@ -59,10 +59,13 @@ export const createWorkspaceDirectory = (parentPath, name) => {
   })
 }
 
-export const uploadWorkspaceFiles = (parentPath, files) => {
+export const uploadWorkspaceFiles = (parentPath, files, relativePaths = null) => {
   const formData = new FormData()
   formData.append('parent_path', parentPath)
   files.forEach((file) => formData.append('files', file))
+  if (relativePaths) {
+    relativePaths.forEach((relativePath) => formData.append('relative_paths', relativePath))
+  }
   return apiPost('/api/workspace/upload', formData)
 }
 

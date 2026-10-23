@@ -440,6 +440,33 @@ test('四个 API 模块复用查询参数边界并保持 endpoint 问号语义',
   })
 })
 
+test('个人空间文件夹上传发送根目录和逐文件相对路径，普通上传保留原协议', async () => {
+  await withServer(async (server) => {
+    storageValues.set('user_token', 'test-token')
+    const requests = []
+    globalThis.fetch = async (url, options) => {
+      requests.push({ url, options })
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { 'content-type': 'application/json' }
+      })
+    }
+    const { uploadWorkspaceFiles } = await server.ssrLoadModule('/src/apis/workspace_api.js')
+    const files = [new File(['alpha'], 'same.txt'), new File(['beta'], 'same.txt')]
+    const paths = [' 根目录/甲/same.txt', ' 根目录/乙/same.txt']
+
+    await uploadWorkspaceFiles('/目标目录', files, paths)
+    await uploadWorkspaceFiles('/目标目录', files.slice(0, 1))
+
+    assert.equal(requests[0].url, '/api/workspace/upload')
+    assert.equal(requests[0].options.body.get('parent_path'), '/目标目录')
+    assert.deepEqual(requests[0].options.body.getAll('relative_paths'), paths)
+    const sent = requests[0].options.body.getAll('files')
+    assert.deepEqual(sent.map((file) => file.name), ['same.txt', 'same.txt'])
+    assert.deepEqual(await Promise.all(sent.map((file) => file.text())), ['alpha', 'beta'])
+    assert.equal(requests[1].options.body.has('relative_paths'), false)
+  })
+})
+
 test('Project 与 Workspace API 按 xhome 契约构造请求', async () => {
   await withServer(async (server) => {
     storageValues.set('user_token', 'test-token')

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import errno
 import os
 import tempfile
 from pathlib import Path, PurePosixPath
@@ -30,6 +31,10 @@ from yuxi.shared.files import MAX_FILE_PREVIEW_BYTES, FileInput, PreparedFile, P
 EDITABLE_WORKSPACE_SUFFIXES = {".md", ".markdown", ".mdx", ".txt"}
 MAX_WORKSPACE_UPLOAD_SIZE_BYTES = 100 * 1024 * 1024
 MAX_WORKSPACE_UPLOAD_FILES = 50
+# 完整虚拟路径（含 parent_path）的段数上限，避免创建既有递归删除无法回收的目录树。
+MAX_WORKSPACE_UPLOAD_PATH_DEPTH = 64
+MAX_WORKSPACE_UPLOAD_NAME_BYTES = 255
+MAX_WORKSPACE_UPLOAD_PATH_BYTES = 4096
 MAX_WORKSPACE_DOWNLOAD_SIZE_BYTES = 1024 * 1024 * 1024
 
 # 搜索返回条数上限，避免超大工作区一次性返回过多结果
@@ -250,12 +255,20 @@ async def create_workspace_directory(*, parent_path: str, name: str, current_use
     return {"success": True, "entry": _entry_from_metadata(target, item)}
 
 
-async def upload_workspace_files(*, parent_path: str, files: list[FileInput], current_user: User) -> dict:
+async def upload_workspace_files(
+    *,
+    parent_path: str,
+    files: list[FileInput],
+    relative_paths: list[str] | None = None,
+    current_user: User,
+) -> dict:
     """把借用的文件流写入用户工作区，失败时撤销本批次已写入文件。"""
     if not files:
         raise InvalidOperationError("请选择至少一个文件")
     if len(files) > MAX_WORKSPACE_UPLOAD_FILES:
         raise InvalidOperationError(f"一次最多上传 {MAX_WORKSPACE_UPLOAD_FILES} 个文件")
+    if relative_paths is not None and len(relative_paths) != len(files):
+        raise InvalidInputError("相对路径数量与文件数量不一致")
 
     backend = _workspace_backend(current_user)
     parent = _workspace_path(parent_path)
@@ -267,15 +280,29 @@ async def upload_workspace_files(*, parent_path: str, files: list[FileInput], cu
         raise PermissionDeniedError("Access denied") from exc
     if not parent_stat["is_dir"]:
         raise InvalidOperationError("目标路径不是目录")
-    seen_names = set()
+    parent_depth = len(PurePosixPath(parent).parts) - 1
+    if parent_depth >= MAX_WORKSPACE_UPLOAD_PATH_DEPTH:
+        raise InvalidInputError("目标目录层级过深")
+    seen_targets: set[str] = set()
     upload_targets: list[tuple[FileInput, str]] = []
 
-    for file in files:
-        file_name = _validate_child_name(Path(file.filename or "").name, field_name="文件名")
-        if file_name in seen_names:
-            raise InvalidOperationError(f"选择的文件中存在重复文件名: {file_name}")
-        seen_names.add(file_name)
-        upload_targets.append((file, f"{parent.rstrip('/')}/{file_name}"))
+    for index, file in enumerate(files):
+        if relative_paths is None:
+            file_name = _validate_child_name(Path(file.filename or "").name, field_name="文件名")
+            target = f"{parent.rstrip('/')}/{file_name}"
+        else:
+            relative_path = _normalize_upload_relative_path(relative_paths[index], parent_depth=parent_depth)
+            target = f"{parent.rstrip('/')}/{relative_path}"
+        if target in seen_targets:
+            raise InvalidOperationError(f"上传目标重复: {target}")
+        seen_targets.add(target)
+        upload_targets.append((file, target))
+
+    for _file, target in upload_targets:
+        if any(str(ancestor) in seen_targets for ancestor in PurePosixPath(target).parents):
+            raise InvalidOperationError(f"文件与文件夹路径冲突: {target}", code="workspace_upload_path_conflict")
+
+    await _ensure_upload_targets_available(backend, upload_targets)
 
     completed_entries: list[tuple[str, dict]] = []
     try:
@@ -365,6 +392,37 @@ def _validate_child_name(name: str, *, field_name: str) -> str:
     return clean_name
 
 
+def _normalize_upload_relative_path(value: str, *, parent_depth: int = 0) -> str:
+    """校验文件夹上传的相对路径，只接受普通 POSIX 路径组件。"""
+    raw = str(value or "")
+    if not raw or raw.startswith("/") or raw.endswith("/") or "\\" in raw or "\0" in raw:
+        raise InvalidInputError("相对路径无效")
+    parts = raw.split("/")
+    if any(part in {"", ".", ".."} for part in parts):
+        raise InvalidInputError("相对路径无效")
+    if parent_depth + len(parts) > MAX_WORKSPACE_UPLOAD_PATH_DEPTH:
+        raise InvalidInputError("相对路径层级过深")
+    try:
+        raw_bytes = raw.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise InvalidInputError("相对路径无效") from exc
+    if len(raw_bytes) > MAX_WORKSPACE_UPLOAD_PATH_BYTES:
+        raise InvalidInputError("相对路径过长")
+    if len(parts[0]) == 2 and parts[0][1] == ":" and parts[0][0].isalpha():
+        raise InvalidInputError("相对路径无效")
+    for part in parts:
+        # scope 的既有规范化会裁掉路径尾部空白，目录也必须能单独寻址。
+        if part[-1].isspace():
+            raise InvalidInputError("路径组件不能以空白字符结尾", code="workspace_upload_path_invalid")
+        if len(part.encode("utf-8")) > MAX_WORKSPACE_UPLOAD_NAME_BYTES:
+            raise InvalidInputError("相对路径组件过长")
+        try:
+            validate_directory_name(part)
+        except ValueError as exc:
+            raise InvalidInputError("相对路径无效") from exc
+    return raw
+
+
 def _entry_from_metadata(workspace_path: str, item: dict) -> dict:
     entry = file_entry(workspace_path, item)
     entry["virtual_path"] = runtime_workspace_path(workspace_path)
@@ -390,6 +448,22 @@ def _list_workspace_directory(
     return sort_file_entries(entries)
 
 
+async def _ensure_upload_targets_available(backend: Workspace, upload_targets: list[tuple[FileInput, str]]) -> None:
+    """写入前拒绝已存在的目标和类型冲突，避免留下半批文件。"""
+    for _file, target in upload_targets:
+        try:
+            await asyncio.to_thread(backend.stat_authorized_path, target, root=WORKSPACE_SCOPE_ROOT)
+        except FileNotFoundError:
+            continue
+        except (PermissionError, NotADirectoryError, ValueError) as exc:
+            raise InvalidOperationError(f"目标路径不可用: {target}") from exc
+        except OSError as exc:
+            if exc.errno == errno.ENAMETOOLONG:
+                raise InvalidInputError("文件路径过长") from exc
+            raise
+        raise InvalidOperationError(f"同名文件或文件夹已存在: {target}")
+
+
 async def _write_workspace_upload(file: FileInput, backend: Workspace, target: str) -> dict:
     """等待文件 I/O 完成后归还输入流，保留原子写入与冲突语义。"""
     try:
@@ -403,7 +477,9 @@ async def _write_workspace_upload(file: FileInput, backend: Workspace, target: s
             )
         )
     except FileExistsError as exc:
-        raise InvalidOperationError("同名文件或文件夹已存在") from exc
+        raise InvalidOperationError(f"同名文件或文件夹已存在: {target}") from exc
+    except NotADirectoryError as exc:
+        raise InvalidOperationError(f"目标路径与已有文件冲突: {target}") from exc
     except FileTransferLimitError as exc:
         raise InvalidOperationError("文件过大，当前仅支持 100 MB 以内的文件") from exc
     except (ValueError, PermissionError) as exc:
