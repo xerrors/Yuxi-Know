@@ -562,7 +562,7 @@ def _write_tool_result(backend, path: str, content: str) -> str:
         raise RuntimeError(f"Cannot save tool result to {path}: backend is unavailable")
     result = backend.write(path, content)
     error = getattr(result, "error", None)
-    if not error or "already exists" in str(error).lower():
+    if not error:
         return path
     raise RuntimeError(f"Failed to write tool result to {path}: {error}")
 
