@@ -18,7 +18,13 @@ Agent 图以 `astream`/`ainvoke` 运行，文件系统工具因此只调用 back
 
 ## 决策
 
-- 原生 sandbox 文件 API 是本 backend 的唯一实现口径：`als`/`awrite`/`aedit`/`aglob` 显式用 `asyncio.to_thread` 委托同名同步方法，恢复 0.6.7 时代协议默认的转发语义；路径归一化、读写根边界、父目录创建与错误文案只在同步方法里各存在一份。`agrep` 保留上游已有的线程化实现，不在本次改动。
+### 实现方案
+
+主链路：Agent 文件工具的异步调用经 `CompositeBackend` 进入 `ProvisionerSandboxBackend`，异步方法一律 `asyncio.to_thread` 转发到同名同步方法，再经路径归一化与读写根判定（`_can_write_path` / `_readable_search_paths`）落到 provisioner 文件 API（`write_file`/`list_path`/`find_files`/`str_replace_editor`/`download_file`）。改动集中在 `backend.py`：新增 `als`/`awrite`/`aedit`/`aglob` 委托；`write()` 由 create-only 改覆盖，`summary._write_tool_result` 的失败判定随之收窄为 `result.error`；`edit()` 预检以 `download_files` 原始字节按 LF 口径计数，下发 LF 形态 old/new；`glob()`/`aglob()` 的 `path` 接受 `None` 并按 `/` 处理。无新增接口、持久化或迁移。
+
+### 口径
+
+- 原生 sandbox 文件 API 是本 backend 的唯一实现口径：`als`/`awrite`/`aedit`/`aglob` 显式用 `asyncio.to_thread` 委托同名同步方法，恢复 0.6.7 时代协议默认的转发语义；路径归一化、读写根边界、父目录创建与错误文案只在同步方法里各存在一份。`agrep` 保留 Yuxi 既有的线程化实现（2026-09-24 grep 传输记录引入），不在本次改动。
 - 写入按 0.7 契约执行：`write()` 与 `awrite()` 对已存在文件整体替换，不再做 create-only 拒绝；`summary._write_tool_result` 同时去掉为 create-only 碰撞准备的 `already exists` 容忍分支。
 - `edit()` 的匹配判定以原始字节为事实：用 `download_file` 取精确内容，按 LF 口径归一后计数，再把 LF 形态的 old/new 交给远端 `str_replace_editor`。远端编辑器先归一化为 LF 再字面匹配（实测传 CRLF 形态被拒、传 LF 形态成功且写回为 LF），也实测 `FIRST` 模式对多匹配静默只替换第一处，因此唯一性与缺失判定必须留在本地。
 - `glob` 的 `path` 改为 `str | None = None` 并按 `/` 处理，对齐 `CompositeBackend.glob`/`aglob` 在模型省略 path 时把 `None` 传给 default backend 的契约。
@@ -38,12 +44,12 @@ Agent 图以 `astream`/`ainvoke` 运行，文件系统工具因此只调用 back
 
 ## 验证
 
-| 验收主张 | 语义 Owner | 直接证据 | 负向案例 | 结果 |
-|---|---|---|---|---|
-| 异步编辑经 `CompositeBackend.aedit` 命中原生 `str_replace_editor`，错误文本不含脚本回显 | `ProvisionerSandboxBackend.aedit` | `test/unit/backends/test_sandbox_backends.py::test_provisioner_aedit_replaces_through_native_editor` | 删除异步委托后失败信息为 `Error editing file ...: unexpected server response: python3 -c "`（原分支实测，口径与本次移植一致） | Passed |
-| 异步写入/列举/glob 走原生 `write_file`/`list_path`/`find_files`，不执行沙箱命令 | `awrite` / `als` / `aglob` | 同文件 `test_provisioner_awrite_creates_through_native_write_file`、`test_provisioner_als_lists_through_native_list_path`、`test_provisioner_aglob_searches_readable_roots_through_native_find_files` | 去掉委托后 `awrite` 落上传通道（content 变 base64）、`als` 返回空、`aglob` 报 `glob helper emitted unexpected output: python3 -c "`（原分支实测） | Passed |
-| `write_file` 重复写同一路径整体替换，不再报 create-only | `write` / `awrite` | 同文件 `test_provisioner_awrite_replaces_existing_file_by_contract`；真实 sandbox `test/integration/services/test_sandbox_async_file_tools.py::test_async_write_and_edit_use_native_sandbox_semantics` 回读第二次写入内容 | 恢复 create-only 预检后第二次写入得到 `Error: File '.../notes.md' already exists` 且原生 `write_file` 只被调用一次（原分支实测） | Passed |
-| 末行以换行结尾与 CRLF 文件的编辑都能命中，非 UTF-8 内容给出稳定提示 | `edit` 的 LF 归一口径 | 同文件 `test_provisioner_aedit_matches_old_string_ending_at_file_eof`、`test_provisioner_aedit_normalizes_crlf_file_to_lf`、`test_provisioner_aedit_reports_non_utf8_file_without_reaching_editor` | 预检退回行窗口读取时 EOF 用例得到 `Error: String not found in file: '    return 1\n'`；把 CRLF 变体下发给编辑器时真实 sandbox 返回 `No replacement was performed, old_str \`alpha\r\nomega\` did not appear verbatim`（原分支实测） | Passed |
-| 真实 Sandbox 上越界异步调用只给出权限提示，不泄漏 Skill 投影与 `/etc` 内容，大 payload 编辑成功 | `ProvisionerSandboxBackend` 的异步委托 | `test/integration/services/test_sandbox_async_file_tools.py` 4 个用例在真实 provisioner sandbox 全部通过；全量 `test/unit` 2480 passed / 60 skipped | 回退委托后分别失败于"`python3 -c \"...skills/probe...` 代替 `permission denied for write`"与"`already exists` 断言得到 `None`"；实测越界 `aglob("*", path="/etc")` 返回 481 条匹配、超过 50_000 字节的异步编辑返回 `permission_denied`（原分支实测） | Passed |
+| 验收主张 | 失败面 | 语义 Owner | 直接证据 / 命令 | 负向案例 | 当前结果 |
+|---|---|---|---|---|---|
+| 异步编辑经 `CompositeBackend.aedit` 命中原生 `str_replace_editor`，错误文本不含脚本回显 | 异步编辑落回 `BaseSandbox` 上传脚本通道 | `ProvisionerSandboxBackend.aedit` | `test/unit/backends/test_sandbox_backends.py::test_provisioner_aedit_replaces_through_native_editor` | 删除异步委托后失败信息为 `Error editing file ...: unexpected server response: python3 -c "`（原分支实测，口径与本次移植一致） | Passed |
+| 异步写入/列举/glob 走原生 `write_file`/`list_path`/`find_files`，不执行沙箱命令 | 异步写入/列举/glob 落回沙箱脚本或上传通道 | `awrite` / `als` / `aglob` | 同文件 `test_provisioner_awrite_creates_through_native_write_file`、`test_provisioner_als_lists_through_native_list_path`、`test_provisioner_aglob_searches_readable_roots_through_native_find_files` | 去掉委托后 `awrite` 落上传通道（content 变 base64）、`als` 返回空、`aglob` 报 `glob helper emitted unexpected output: python3 -c "`（原分支实测） | Passed |
+| `write_file` 重复写同一路径整体替换，不再报 create-only | 重复写同一路径被 create-only 预检拒绝 | `write` / `awrite` | 同文件 `test_provisioner_awrite_replaces_existing_file_by_contract`；真实 sandbox `test/integration/services/test_sandbox_async_file_tools.py::test_async_write_and_edit_use_native_sandbox_semantics` 回读第二次写入内容 | 恢复 create-only 预检后第二次写入得到 `Error: File '.../notes.md' already exists` 且原生 `write_file` 只被调用一次（原分支实测） | Passed |
+| 末行以换行结尾与 CRLF 文件的编辑都能命中，非 UTF-8 内容给出稳定提示 | 行窗口预检对 EOF 末行与 CRLF 文件假阴性 | `edit` 的 LF 归一口径 | 同文件 `test_provisioner_aedit_matches_old_string_ending_at_file_eof`、`test_provisioner_aedit_normalizes_crlf_file_to_lf`、`test_provisioner_aedit_reports_non_utf8_file_without_reaching_editor` | 预检退回行窗口读取时 EOF 用例得到 `Error: String not found in file: '    return 1\n'`；把 CRLF 变体下发给编辑器时真实 sandbox 返回 `No replacement was performed, old_str \`alpha\r\nomega\` did not appear verbatim`（原分支实测） | Passed |
+| 真实 Sandbox 上越界异步调用只给出权限提示，不泄漏 Skill 投影与 `/etc` 内容，大 payload 编辑成功 | 越界异步调用先执行沙箱命令，stdout 泄漏给模型 | `ProvisionerSandboxBackend` 的异步委托 | `test/integration/services/test_sandbox_async_file_tools.py` 4 个用例在真实 provisioner sandbox 全部通过；全量 `test/unit` 2480 passed / 60 skipped | 回退委托后分别失败于"`python3 -c \"...skills/probe...` 代替 `permission denied for write`"与"`already exists` 断言得到 `None`"；实测越界 `aglob("*", path="/etc")` 返回 481 条匹配、超过 50_000 字节的异步编辑返回 `permission_denied`（原分支实测） | Passed |
 
 未覆盖范围：真实 Run 链路（E2E 回放）未在本次复跑；异步委托口径在真实 provisioner sandbox 上的行为以集成用例为准。
