@@ -113,7 +113,7 @@ def copy_skill_snapshot(
         skill_md = target_dir / "SKILL.md"
         content = skill_md.read_text(encoding="utf-8")
         _slug, _name, _description, metadata = parse_skill_markdown(content)
-        if parsed["slug"] != final_slug or not metadata.get("slug"):
+        if parsed["slug"] != final_slug or (not metadata.get("slug") and not is_valid_skill_slug(parsed["name"])):
             skill_md.write_text(rewrite_frontmatter_slug(content, final_slug), encoding="utf-8")
             parsed = parse_skill_dir_metadata(target_dir)
     return parsed

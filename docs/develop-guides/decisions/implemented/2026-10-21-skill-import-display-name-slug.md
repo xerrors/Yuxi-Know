@@ -14,7 +14,7 @@ Issue #1073：上传仅含中文等展示名、未声明 `slug` 的 Skill ZIP �
 
 `parse_skill_markdown` 在缺少 `slug` 时：若 `name` 本身符合 slug 规则则沿用；否则用已有 `pypinyin` 从展示名派生稳定 slug，失败再哈希兜底。`rewrite_frontmatter_slug` 始终写入 `slug` 字段，仅当 `name` 曾充当 slug 身份时同步改写 `name`，保留中文等展示名。Skill 路由的 ValueError 以 `{code, message}` 业务 detail 返回；前端 Skill 相关 UI 通过 `resolveApiErrorMessage` 展示 `message`。
 
-显式 slug 未改变时保留原文件字节，避免改变注释、换行与内容修订。YAML 解析失败只返回语法提示，远程 CLI 失败只返回通用错误，不将原始输入或命令输出标记为可展示业务消息。
+显式 slug 或旧式合法 name 标识未改变时保留原文件字节，避免改变注释、换行与内容修订。YAML 解析失败只返回语法提示，远程 CLI 失败只返回通用错误，不将原始输入或命令输出标记为可展示业务消息。
 
 ## 替代方案
 

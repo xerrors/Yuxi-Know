@@ -1485,9 +1485,8 @@ async def test_skill_md_prepare_confirm_creates_single_file_skill(tmp_path: Path
     assert FakeRepo.created_item.name == "demo"
     installed = (tmp_path / "skill-sources/shared" / "demo" / "SKILL.md").read_text(encoding="utf-8")
     assert "name: demo" in installed
-    assert "slug: demo" in installed
     assert "description: this is demo" in installed
-    assert installed.endswith("# Demo\n")
+    assert installed == skill_md
 
 
 def test_skill_dependency_scope_covers_read_and_manage_audiences():
@@ -2165,11 +2164,13 @@ def test_resolved_shared_skill_captures_original_version_and_hash(monkeypatch, t
     assert resolved.content_hash == "hash-v1"
     assert resolved.source_scope == "shared"
 
-def test_copy_skill_snapshot_preserves_explicit_slug_content(tmp_path):
+@pytest.mark.parametrize("explicit_slug", [False, True])
+def test_copy_skill_snapshot_preserves_existing_identity_content(tmp_path, explicit_slug):
     """标识未变时保留注释和换行，避免改变文件修订。"""
     source = tmp_path / "source"
     source.mkdir()
-    content = b"---\r\n# keep comment\r\nslug: demo\r\nname: Demo\r\ndescription: demo\r\n---\r\n# Demo\r\n"
+    identity = "slug: demo\r\nname: Demo" if explicit_slug else "name: demo"
+    content = f"---\r\n# keep comment\r\n{identity}\r\ndescription: demo\r\n---\r\n# Demo\r\n".encode()
     (source / "SKILL.md").write_bytes(content)
     target = tmp_path / "target"
     skill_package.copy_skill_snapshot(source, target, expected_slug="demo", final_slug="demo")
