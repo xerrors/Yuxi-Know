@@ -118,6 +118,16 @@ def test_development_backends_do_not_reload_on_source_changes() -> None:
     assert _backend_reload_services(load_compose()) == set()
 
 
+@pytest.mark.parametrize("consumer", ["api", "worker", "app-init"])
+def test_minio_consumers_share_server_credential_interpolation(consumer):
+    """客户端与 MinIO 服务使用相同的凭据插值及空值默认规则。"""
+    services = load_compose()["services"]
+    client = services[consumer]["environment"]
+    server = services["minio"]["environment"]
+    assert client["MINIO_ACCESS_KEY"] == server["MINIO_ACCESS_KEY"]
+    assert client["MINIO_SECRET_KEY"] == server["MINIO_SECRET_KEY"]
+
+
 @pytest.mark.parametrize(
     ("service_name", "command"),
     [

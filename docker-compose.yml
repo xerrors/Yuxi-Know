@@ -14,6 +14,8 @@ x-api-worker-env: &api-worker-env
   MILVUS_TOKEN: ${MILVUS_TOKEN:-}
   MILVUS_DB: ${MILVUS_DB:-yuxi}
   MINIO_URI: ${MINIO_URI:-http://minio:9000}
+  MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+  MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
   # 文档解析
   MINERU_API_URI: ${MINERU_API_URI:-http://mineru-api:30001}
   PADDLEX_URI: ${PADDLEX_URI:-http://paddlex:8080}
