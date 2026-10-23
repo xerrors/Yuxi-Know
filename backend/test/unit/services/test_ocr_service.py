@@ -34,7 +34,44 @@ async def test_task_resolution_uses_database_option(db_session):
 
     resolved = await ocr_service.resolve_ocr_task_params({"ocr_engine": "mineru_ocr"}, db_session)
 
-    assert resolved["_ocr_processor_kwargs"] == {"server_url": "http://mineru-config:30001/"}
+    assert resolved["_ocr_processor_kwargs"] == {
+        "server_url": "http://mineru-config:30001/",
+        "backend": "hybrid-engine",
+        "effort": "medium",
+    }
+
+
+@pytest.mark.asyncio
+async def test_mineru_task_resolution_uses_saved_defaults_and_keeps_task_overrides(db_session):
+    """管理员配置作为引擎默认值，单次任务参数保持独立。"""
+    await update_option_value(
+        db_session,
+        "mineru_ocr_host_opts",
+        {"backend": "vlm-engine", "effort": "high"},
+        "tester",
+    )
+
+    resolved = await ocr_service.resolve_ocr_task_params(
+        {"ocr_engine": "mineru_ocr", "backend": "hybrid-engine", "effort": "medium"}, db_session
+    )
+
+    assert resolved["_ocr_processor_kwargs"]["backend"] == "vlm-engine"
+    assert resolved["_ocr_processor_kwargs"]["effort"] == "high"
+    assert resolved["backend"] == "hybrid-engine"
+    assert resolved["effort"] == "medium"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("saved", "expected"), [({}, "pipeline"), ({"model_version": "vlm"}, "vlm")])
+async def test_mineru_official_resolves_model_default_with_environment_credentials(db_session, monkeypatch, saved, expected):
+    """模型默认值与环境凭据一同传递，单次模型选择保持独立。"""
+    monkeypatch.setenv("MINERU_API_KEY", "fixture-key")
+    await update_option_value(db_session, "mineru_official_api_opts", saved, "tester")
+
+    resolved = await ocr_service.resolve_ocr_task_params({"ocr_engine": "mineru_official", "model_version": "pipeline"}, db_session)
+
+    assert resolved["_ocr_processor_kwargs"] == {"api_key": "fixture-key", "model_version": expected}
+    assert resolved["model_version"] == "pipeline"
 
 
 @pytest.mark.asyncio

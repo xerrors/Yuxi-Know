@@ -6,6 +6,9 @@ import asyncio
 import io
 import threading
 import zipfile
+from copy import deepcopy
+from email.parser import BytesParser
+from email.policy import default
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import PurePosixPath
 from urllib.parse import quote
@@ -14,6 +17,7 @@ from uuid import uuid4
 import pytest
 from PIL import Image
 from pypdf import PdfWriter
+from sqlalchemy import update
 
 from test.live_api_cleanup import make_test_session_title
 from test.e2e.e2e_helpers import cleanup_uploaded_chat_attachment
@@ -23,6 +27,9 @@ from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.agents.models.attachments import AgentAttachment
 from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.knowledge.repositories.files import KnowledgeFileRepository
+from yuxi.modules.system.models import ConfigOption
+from yuxi.modules.system.repositories.options import get_option
+from yuxi.modules.system.services.options import invalidate_option_cache
 from yuxi.modules.workspace.filesystem import Workspace
 
 load_models()
@@ -39,6 +46,86 @@ def _result_archive() -> tuple[bytes, bytes]:
         output.writestr("full.md", "# Artifact replay\n\n![chart](images/chart.png)")
         output.writestr("images/chart.png", image.getvalue())
     return archive.getvalue(), image.getvalue()
+
+
+@pytest.mark.parametrize(("backend", "effort"), [("hybrid-engine", "high"), ("vlm-engine", "medium")])
+async def test_mineru_options_reach_draft_parser_and_preserve_artifacts(e2e_client, e2e_headers, e2e_agent_context, backend, effort):
+    """真实设置与解析入口证明默认参数到达引擎，正文和图片完整落盘。"""
+    archive, image = _result_archive()
+    requests_received = []
+
+    class MinerUReplay(BaseHTTPRequestHandler):
+        """在真实 HTTP 边界读取解析参数并返回固定产物。"""
+
+        def do_POST(self):
+            """读取 multipart 请求，保留可独立断言的字段。"""
+            body = self.rfile.read(int(self.headers.get("Content-Length", "0")))
+            envelope = f"Content-Type: {self.headers['Content-Type']}\r\nMIME-Version: 1.0\r\n\r\n".encode() + body
+            parts = BytesParser(policy=default).parsebytes(envelope)
+            requests_received.append(
+                {
+                    part.get_param("name", header="content-disposition"): part.get_content()
+                    for part in parts.iter_parts()
+                    if part.get_filename() is None
+                }
+            )
+            self.send_response(200)
+            self.send_header("Content-Type", "application/zip")
+            self.end_headers()
+            self.wfile.write(archive)
+
+        def log_message(self, *args):
+            """测试不记录 HTTP 访问日志。"""
+
+    replay = ThreadingHTTPServer(("127.0.0.1", 0), MinerUReplay)
+    threading.Thread(target=replay.serve_forever, daemon=True).start()
+    pg_manager.initialize()
+    async with pg_manager.get_async_session_context() as db:
+        previous = await get_option(db, "mineru_ocr_host_opts")
+        previous_state = {"value": deepcopy(previous.value), "updated_by": previous.updated_by, "updated_at": previous.updated_at}
+    uploaded_id = None
+    try:
+        configured = await e2e_client.put(
+            "/api/system/config/options/mineru_ocr_host_opts",
+            json={"value": {"server_url": f"http://127.0.0.1:{replay.server_port}", "backend": backend, "effort": effort}},
+            headers=e2e_headers,
+        )
+        assert configured.status_code == 200, configured.text
+        source = io.BytesIO()
+        writer = PdfWriter()
+        writer.add_blank_page(width=100, height=100)
+        writer.write(source)
+        uploaded = await e2e_client.post(
+            "/api/v1/agents/files", files={"file": ("source.pdf", source.getvalue(), "application/pdf")}, headers=e2e_headers
+        )
+        assert uploaded.status_code == 201, uploaded.text
+        uploaded_id = uploaded.json()["id"]
+        parsed = await e2e_client.post(f"/api/agent/files/{uploaded_id}/parse", json={"parse_method": "mineru_ocr"}, headers=e2e_headers)
+        assert parsed.status_code == 200, parsed.text
+        assert len(requests_received) == 1
+        assert requests_received[0]["backend"] == backend
+        assert requests_received[0]["effort"] == effort
+        assert requests_received[0]["image_analysis"].lower() == "true"
+        async with pg_manager.get_async_session_context() as db:
+            draft = await db.get(AgentAttachment, uploaded_id)
+            assert draft.status == "draft" and draft.parsed_source
+            workspace = Workspace(e2e_agent_context["uid"])
+            markdown = workspace.read_authorized_file(f"/{draft.parsed_source}", 1024).decode()
+            image_path = PurePosixPath(draft.parsed_source).parent / "images/images/chart.png"
+            assert "![chart](images/images/chart.png)" in markdown
+            assert workspace.read_authorized_file(f"/{image_path}", 1024) == image
+    finally:
+        async with pg_manager.get_async_session_context() as db:
+            await db.execute(update(ConfigOption).where(ConfigOption.key == "mineru_ocr_host_opts").values(**previous_state))
+        await invalidate_option_cache("mineru_ocr_host_opts")
+        if uploaded_id:
+            deleted = await e2e_client.delete(f"/api/v1/agents/files/{uploaded_id}", headers=e2e_headers)
+            assert deleted.status_code == 200 and deleted.json()["deleted"] is True, deleted.text
+            async with pg_manager.get_async_session_context() as db:
+                assert await db.get(AgentAttachment, uploaded_id) is None
+        await asyncio.to_thread(replay.shutdown)
+        replay.server_close()
+        await pg_manager.close()
 
 
 async def test_private_draft_parse_send_and_delete_preserve_complete_local_directory(

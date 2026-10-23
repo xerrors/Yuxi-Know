@@ -152,11 +152,9 @@ async def check_all_ocr_health(db: AsyncSession) -> dict[str, Any]:
 
 async def _build_processor_kwargs(db: AsyncSession, engine_id: str) -> dict[str, Any]:
     if engine_id == "mineru_ocr":
-        opts = await mineru_ocr_host_opts.get(db)
-        return {"server_url": opts["server_url"]} if opts["server_url"] else {}
+        return await mineru_ocr_host_opts.get(db)
     if engine_id == "mineru_official":
-        opts = await mineru_official_api_opts.get(db)
-        return {"api_key": opts["api_key"]} if opts["api_key"] else {}
+        return await mineru_official_api_opts.get(db)
     if engine_id == "pp_structure_v3_ocr":
         opts = await pp_structure_v3_ocr_host_opts.get(db)
         return {"server_url": opts["server_url"]} if opts["server_url"] else {}

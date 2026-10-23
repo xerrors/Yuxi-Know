@@ -24,14 +24,15 @@ class MinerUOfficialParser(DocumentEngine):
 
     engine_id = "mineru_official"
 
-    def __init__(self, api_key: str | None = None, api_base: str | None = None):
-        """使用配置中心解析后的凭证和官方端点初始化解析器。"""
+    def __init__(self, api_key: str | None = None, api_base: str | None = None, model_version: str = "pipeline"):
+        """使用配置凭据与默认模型初始化，单次解析参数优先。"""
 
         self.api_key = api_key or os.getenv("MINERU_API_KEY")
         if not self.api_key:
             raise DocumentParserException("MINERU_API_KEY 环境变量未设置", "mineru_official", "missing_api_key")
 
         self.api_base = (api_base or "https://mineru.net/api/v4").rstrip("/")
+        self.model_version = model_version
         self.headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}",
@@ -58,7 +59,7 @@ class MinerUOfficialParser(DocumentEngine):
                 - enable_table: 是否启用表格识别 (默认: True)
                 - language: 文档语言 (默认: "ch")
                 - page_ranges: 页码范围 (默认: None)
-                - model_version: 模型版本 "pipeline" 或 "vlm" (默认: "pipeline")
+                - model_version: 模型版本 "pipeline" 或 "vlm" (默认使用实例配置)
 
         Returns:
             str: 提取的 Markdown 文本
@@ -124,6 +125,7 @@ class MinerUOfficialParser(DocumentEngine):
             data_id = data_id[:30] + "_" + hashstr(data_id, length=8)
 
         upload_data = {
+            "model_version": params.get("model_version", self.model_version),
             "enable_formula": params.get("enable_formula", True),
             "enable_table": params.get("enable_table", True),
             "language": params.get("language", "ch"),

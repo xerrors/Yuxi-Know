@@ -22,9 +22,12 @@ class MinerUParser(DocumentEngine):
 
     engine_id = "mineru_ocr"
 
-    def __init__(self, server_url: str | None = None):
+    def __init__(self, server_url: str | None = None, backend: str = "hybrid-engine", effort: str = "medium"):
+        """接收服务配置作为默认值，单次解析参数优先。"""
         self.server_url = (server_url or os.getenv("MINERU_API_URI") or "http://localhost:30001").rstrip("/")
         self.parse_endpoint = f"{self.server_url}/file_parse"
+        self.backend = backend
+        self.effort = effort
 
     def check_health(self) -> dict:
         """检查 MinerU 服务健康状态"""
@@ -94,7 +97,8 @@ class MinerUParser(DocumentEngine):
             file_path: 文件路径
             params: 处理参数
                 - lang_list: 语言列表 (默认: ["ch"])
-                - backend: 后端类型 (默认: "hybrid-auto-engine")
+                - backend: 后端类型 (默认使用实例配置)
+                - effort: Hybrid 解析强度 (默认使用实例配置)
                 - parse_method: 解析方法 (默认: "auto")
                 - start_page_id: 起始页码 (默认: 0)
                 - end_page_id: 结束页码 (默认: 99999)
@@ -118,7 +122,8 @@ class MinerUParser(DocumentEngine):
 
         data = {
             "lang_list": params.get("lang_list", ["ch"]),
-            "backend": params.get("backend", "hybrid-auto-engine"),
+            "backend": params.get("backend", self.backend),
+            "effort": params.get("effort", self.effort),
             "parse_method": params.get("parse_method", "auto"),
             "formula_enable": params.get("formula_enable", True),
             "table_enable": params.get("table_enable", True),
@@ -137,7 +142,10 @@ class MinerUParser(DocumentEngine):
         try:
             start_time = time.time()
 
-            logger.info(f"MinerU 开始处理: {os.path.basename(file_path)} (backend={data['backend']}, lang={data['lang_list']})")
+            logger.info(
+                f"MinerU 开始处理: {os.path.basename(file_path)} "
+                f"(backend={data['backend']}, effort={data['effort']}, lang={data['lang_list']})"
+            )
 
             # 打开文件并发送请求
             with open(file_path, "rb") as f:

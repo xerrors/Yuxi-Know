@@ -180,6 +180,54 @@ async def test_config_option_update_is_visible_and_restored(test_client, admin_h
         assert restore_response.status_code == 200, restore_response.text
 
 
+@pytest.mark.parametrize(
+    ("key", "values", "invalid_values"),
+    [
+        ("mineru_ocr_host_opts", {"backend": "vlm-engine", "effort": "high"}, [{"backend": "unsupported"}, {"effort": "extreme"}]),
+        ("mineru_official_api_opts", {"model_version": "vlm"}, [{"model_version": "hybrid"}, {"model_version": ""}]),
+    ],
+)
+async def test_mineru_defaults_round_trip_and_reject_invalid_choices(
+    test_client, admin_headers, postgres_sessions, key, values, invalid_values
+):
+    """通过真实 HTTP 保存默认值，独立回读 PG 并确认非法值不改变配置。"""
+    async with postgres_sessions() as db:
+        record = await get_option(db, key)
+        previous = {"value": deepcopy(record.value), "updated_by": record.updated_by, "updated_at": record.updated_at}
+
+    try:
+        saved = await test_client.put(
+            f"/api/system/config/options/{key}",
+            json={"value": values},
+            headers=admin_headers,
+        )
+        assert saved.status_code == 200, saved.text
+        reloaded = await test_client.get("/api/system/config/options", headers=admin_headers)
+        assert reloaded.status_code == 200, reloaded.text
+        option = next(item for item in reloaded.json()["options"] if item["key"] == key)
+        for field, value in values.items():
+            assert option["value"][field] == value
+        if key == "mineru_official_api_opts":
+            assert option["value"]["api_key"] == ""
+
+        for invalid in invalid_values:
+            rejected = await test_client.put(f"/api/system/config/options/{key}", json={"value": invalid}, headers=admin_headers)
+            assert rejected.status_code == 400, rejected.text
+            assert "不支持的" in rejected.text
+
+        async with postgres_sessions() as db:
+            record = await get_option(db, key)
+            for field, value in values.items():
+                assert record.value[field] == value
+            unchanged = all(record.value.get(field) == value for field, value in (previous["value"] or {}).items() if field not in values)
+            assert unchanged, "更新模型不得改变凭据或其他配置"
+    finally:
+        async with postgres_sessions() as db:
+            await db.execute(update(ConfigOption).where(ConfigOption.key == key).values(**previous))
+            await db.commit()
+        await invalidate_option_cache(key)
+
+
 async def test_remote_skill_policy_explicit_empty_list_is_visible_and_restored(test_client, admin_headers):
     engine = create_async_engine(os.environ["POSTGRES_URL"])
     session_factory = async_sessionmaker(engine, expire_on_commit=False)

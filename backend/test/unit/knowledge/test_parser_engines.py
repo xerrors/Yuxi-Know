@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import io
+import zipfile
+from types import SimpleNamespace
+
 import pytest
 
 import re
@@ -18,6 +22,42 @@ def test_mineru_parser_normalizes_trailing_slash():
     assert parser.parse_endpoint == "http://mineru-api:30001/file_parse"
 
 
+@pytest.mark.parametrize(
+    ("defaults", "params", "expected"),
+    [
+        ({}, {}, ("hybrid-engine", "medium")),
+        ({"backend": "vlm-engine", "effort": "high"}, {}, ("vlm-engine", "high")),
+        (
+            {"backend": "vlm-engine", "effort": "high"},
+            {"backend": "hybrid-engine", "effort": "medium"},
+            ("hybrid-engine", "medium"),
+        ),
+    ],
+)
+def test_mineru_request_uses_configured_defaults_and_task_overrides(tmp_path, monkeypatch, defaults, params, expected):
+    """断言出站参数和真实 ZIP 解包正文，避免只检查调用次数。"""
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"pdf")
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w") as output:
+        output.writestr("full.md", "# MinerU result")
+    captured = {}
+
+    def post(url, *, files, data, timeout):
+        """捕获解析器提交的协议参数并返回固定产物。"""
+        captured.update(data)
+        return SimpleNamespace(status_code=200, content=archive.getvalue(), headers={})
+
+    monkeypatch.setattr("yuxi.infrastructure.document_parsing.engines.mineru.requests.post", post)
+    parser = MinerUParser(**defaults)
+    result = parser.process_file(str(source), tmp_path / "parsed", params)
+
+    assert (captured["backend"], captured["effort"]) == expected
+    assert captured["image_analysis"] is True
+    assert captured["return_images"] is True
+    assert result == "# MinerU result"
+
+
 def test_mineru_official_health_check_does_not_create_task(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
         "yuxi.infrastructure.document_parsing.engines.mineru_official.requests.post",
@@ -27,6 +67,41 @@ def test_mineru_official_health_check_does_not_create_task(monkeypatch: pytest.M
     health = MinerUOfficialParser(api_key="test-key").check_health()
 
     assert health["status"] == "configured"
+
+
+@pytest.mark.parametrize(
+    ("defaults", "params", "expected"),
+    [({}, {}, "pipeline"), ({"model_version": "vlm"}, {}, "vlm"), ({"model_version": "vlm"}, {"model_version": "pipeline"}, "pipeline")],
+)
+def test_mineru_official_sends_model_default_and_task_override(tmp_path, monkeypatch, defaults, params, expected):
+    """检查上传 JSON 的模型字段，并回读实际解包正文。"""
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"pdf")
+    archive = tmp_path / "result.zip"
+    with zipfile.ZipFile(archive, "w") as output:
+        output.writestr("full.md", "# Official model result")
+    captured = {}
+
+    def post(url, *, headers, json, timeout):
+        """在请求边界捕获官方上传参数。"""
+        captured.update(json)
+        return SimpleNamespace(
+            status_code=200, json=lambda: {"code": 0, "data": {"batch_id": "fixture-batch", "file_urls": ["https://example.test/upload"]}}
+        )
+
+    monkeypatch.setattr("yuxi.infrastructure.document_parsing.engines.mineru_official.requests.post", post)
+    monkeypatch.setattr(
+        "yuxi.infrastructure.document_parsing.engines.mineru_official.requests.put", lambda *a, **kw: SimpleNamespace(status_code=200)
+    )
+    parser = MinerUOfficialParser(api_key="fixture-key", **defaults)
+    monkeypatch.setattr(parser, "_poll_batch_result", lambda *a, **kw: {"state": "done", "full_zip_url": "https://example.test/result.zip"})
+    monkeypatch.setattr(parser, "_download_zip", lambda *a: str(archive))
+
+    result = parser.process_file(str(source), tmp_path / "parsed", params)
+
+    assert captured["model_version"] == expected
+    assert captured["files"][0]["is_ocr"] is True
+    assert result == "# Official model result"
 
 
 def test_mineru_official_parsing_uses_shared_zip_processor(
