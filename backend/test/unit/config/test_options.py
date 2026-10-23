@@ -9,6 +9,7 @@ from test.support.sqlite import create_utc_sqlite_engine
 from yuxi.bootstrap.options import ensure_options_in_db
 from yuxi.infrastructure.postgres.base import Base
 from yuxi.modules.documents.options import mineru_official_api_opts
+from yuxi.modules.models.providers.builtin import BUILTIN_PROVIDERS
 from yuxi.modules.system.options import system_options
 from yuxi.modules.system.services import options
 
@@ -16,7 +17,16 @@ from yuxi.modules.system.services import options
 @pytest.mark.parametrize("key", ["default_model", "fast_model"])
 def test_system_chat_model_defaults_to_deepseek_flash(key):
     """未配置的对话与快速模型使用硅基流动 DeepSeek Flash。"""
-    assert system_options.resolve({})[key] == "siliconflow-cn:deepseek-ai/DeepSeek-V4-Flash"
+    assert system_options.resolve({})[key] == "siliconflow-cn:deepseek-ai/DeepSeek-V4.1-Flash"
+
+
+def test_system_chat_model_defaults_are_enabled_builtin_models():
+    """默认模型必须存在于内置硅基流动模型列表，否则新部署会引用不可用模型。"""
+    siliconflow = next(provider for provider in BUILTIN_PROVIDERS if provider["provider_id"] == "siliconflow-cn")
+    enabled_specs = {f"siliconflow-cn:{model['id']}" for model in siliconflow["enabled_models"]}
+    resolved = system_options.resolve({})
+
+    assert {resolved["default_model"], resolved["fast_model"]} <= enabled_specs
 
 
 @pytest.mark.parametrize("key", ["default_model", "fast_model"])

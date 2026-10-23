@@ -29,13 +29,13 @@ system_options = Option(
                 "key": "default_model",
                 "label": "默认对话模型",
                 "type": "model",
-                "default": "siliconflow-cn:deepseek-ai/DeepSeek-V4-Flash",
+                "default": "siliconflow-cn:deepseek-ai/DeepSeek-V4.1-Flash",
             },
             {
                 "key": "fast_model",
                 "label": "快速响应模型",
                 "type": "model",
-                "default": "siliconflow-cn:deepseek-ai/DeepSeek-V4-Flash",
+                "default": "siliconflow-cn:deepseek-ai/DeepSeek-V4.1-Flash",
             },
             {
                 "key": "embed_model",
