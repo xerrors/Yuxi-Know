@@ -38,6 +38,12 @@ system_options = Option(
                 "default": "siliconflow-cn:deepseek-ai/DeepSeek-V4.1-Flash",
             },
             {
+                "key": "reference_model",
+                "label": "来源标注模型",
+                "type": "model",
+                "default": "",
+            },
+            {
                 "key": "embed_model",
                 "label": "默认 Embedding 模型",
                 "type": "model",

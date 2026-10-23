@@ -38,22 +38,20 @@
             <X :size="14" />
           </button>
           <div v-if="resolvedSize !== 'nano' && modelType === 'chat'" class="model-status-controls">
-            <span
-              v-if="state.currentModelStatus"
-              class="model-status-indicator"
-              :class="state.currentModelStatus.status"
-              :title="getCurrentModelStatusTitle()"
-              >{{ modelStatusIcon }}</span
-            >
             <a-button
               :size="buttonSize"
               type="text"
-              :loading="state.checkingStatus"
+              :class="state.checkingStatus ? '' : state.currentModelStatus?.status"
+              :aria-busy="state.checkingStatus"
+              :aria-label="state.checkingStatus ? '正在检查模型' : modelCheckLabel"
+              :title="getCurrentModelStatusTitle()"
               @click.stop="checkCurrentModelStatus"
-              :disabled="props.disabled || state.checkingStatus"
+              :disabled="props.disabled || !props.model_spec || state.checkingStatus"
               class="status-check-button"
-              >{{ state.checkingStatus ? '检查中...' : '检查' }}</a-button
             >
+              <a-spin v-if="state.checkingStatus" size="small" aria-hidden="true" />
+              <span v-else>{{ modelCheckLabel }}</span>
+            </a-button>
           </div>
         </template>
       </ActionTrigger>
@@ -403,13 +401,14 @@ const displayModelTitle = computed(() => props.model_spec || props.placeholder)
 
 // 检查当前模型状态
 const checkCurrentModelStatus = async () => {
-  if (props.disabled) return
+  if (props.disabled || state.checkingStatus) return
   const spec = props.model_spec
   if (!spec) return
 
   try {
     state.checkingStatus = true
     const response = await modelProviderApi.getModelStatusBySpec(spec)
+    if (props.model_spec !== spec) return
     if (response.data) {
       state.currentModelStatus = response.data
     } else {
@@ -417,24 +416,21 @@ const checkCurrentModelStatus = async () => {
     }
   } catch (error) {
     console.error(`检查模型 ${spec} 状态失败:`, error)
-    state.currentModelStatus = { status: 'error', message: error.message }
+    if (props.model_spec === spec) state.currentModelStatus = { status: 'error', message: error.message }
   } finally {
     state.checkingStatus = false
   }
 }
 
-const modelStatusIcon = computed(() => {
+const modelCheckLabel = computed(() => {
   const status = state.currentModelStatus
-  if (!status) return '○'
-  if (status.status === 'available') return '✓'
-  if (status.status === 'unavailable') return '✗'
-  if (status.status === 'error') return '⚠'
-  return '○'
+  if (!status) return '检查'
+  return status.status === 'available' ? '通过' : '异常'
 })
 
 const getCurrentModelStatusTitle = () => {
   const status = state.currentModelStatus
-  if (!status) return '状态未知'
+  if (!status) return '检查模型是否可用'
 
   let statusText = ''
   if (status.status === 'available') statusText = '可用'
@@ -442,7 +438,7 @@ const getCurrentModelStatusTitle = () => {
   else if (status.status === 'error') statusText = '错误'
 
   const message = status.message || '无详细信息'
-  return `${statusText}: ${message}`
+  return `${statusText}: ${message}；点击重新检查`
 }
 
 // 选择 v2 模型的方法
@@ -466,8 +462,7 @@ const handleClear = () => {
   color: var(--gray-500);
   font-size: 12px;
 }
-.model-status-icon,
-.model-status-indicator {
+.model-status-icon {
   font-size: 11px;
   &.available {
     color: var(--color-success-500);
@@ -528,8 +523,22 @@ const handleClear = () => {
 
 // 状态检查按钮
 .status-check-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
   font-size: 12px;
   padding: 0 4px;
+
+  &.available {
+    color: var(--color-success-700);
+  }
+
+  &.unavailable,
+  &.error {
+    color: var(--color-error-700);
+  }
 }
 
 // 缓存刷新按钮

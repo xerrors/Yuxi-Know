@@ -4,6 +4,8 @@
 类型：feature
 Owner：backend/yuxi/modules/agents/services/references.py
 
+模型选择与可标注内容范围由[来源标注模型与内容范围](2026-10-23-reference-model-and-content-scope.md)部分取代；新标注使用管理员配置，空值沿用快速响应模型。
+
 ## 问题
 
 用户能查看检索结果，但回答中的具体结论与知识库、网页证据尚无可恢复的对应关系。来源提取依赖旧知识库工具名，且 Run 分组会漏掉同一 Turn 在恢复前取得的证据。

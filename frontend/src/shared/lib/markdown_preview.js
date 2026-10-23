@@ -187,12 +187,27 @@ const ensureLanguages = async (highlighter, languages) => {
 
 /** 把 Markdown block 的原始行范围交给预览定位，不改写源文本。 */
 const markdownSourceLines = (md) => {
-  md.core.ruler.push('source_lines', (state) => {
+  // 在 taskLists 注入 checkbox HTML 前判断原始正文类型。
+  md.core.ruler.after('inline', 'source_lines', (state) => {
     if (!state.env.sourceLines) return
-    for (const token of state.tokens) {
+    for (const [index, token] of state.tokens.entries()) {
       if (!token.map || token.nesting === -1 || token.type === 'inline') continue
       token.attrSet('data-source-start', String(token.map[0] + 1))
       token.attrSet('data-source-end', String(token.map[1]))
+      if (token.type === 'heading_open') token.attrSet('data-reference-excluded', '')
+      if (!['paragraph_open', 'tr_open'].includes(token.type)) continue
+      const target = token.hidden ? state.tokens[index - 1] : token
+      if (token.type === 'paragraph_open') {
+        const children = state.tokens[index + 1].children || []
+        if (children.some((child) => child.type === 'html_inline') ||
+          !children.some((child) => child.type === 'image' || (child.type === 'text' && child.content.trim()))) {
+          target.attrSet('data-reference-excluded', '')
+          continue
+        }
+      }
+      // 紧凑列表隐藏 paragraph 标签，标注范围仍由正文拥有，不能扩大到同项代码或组件。
+      target.attrSet('data-reference-start', String(token.map[0] + 1))
+      target.attrSet('data-reference-end', String(token.map[1]))
     }
   })
   for (const type of ['fence', 'code_block', 'html_block', 'frontmatter_card', 'math_block']) {
@@ -209,7 +224,7 @@ const markdownSourceLines = (md) => {
       }
       const map = token.map
       return env.sourceLines && map
-        ? `<div data-source-start="${map[0] + 1}" data-source-end="${map[1]}">${html}</div>`
+        ? `<div data-source-start="${map[0] + 1}" data-source-end="${map[1]}" data-reference-excluded>${html}</div>`
         : html
     }
   }

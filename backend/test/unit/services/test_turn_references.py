@@ -2,10 +2,12 @@
 
 import json
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
-from yuxi.modules.agents.services.references import collect_reference_sources, validate_reference_matches
+from yuxi.modules.agents.services.references import collect_reference_sources, reference_answer_lines, validate_reference_matches
+from yuxi.shared.errors import OperationTimeoutError
 
 
 def tool(name, payload, *, kb_id="kb-a", message_id=1):
@@ -179,3 +181,88 @@ def test_normalized_search_and_fetch_provide_citable_content():
         set(),
     )
     assert [source["content"] for source in sources] == ["相关片段", "# 网页正文"]
+
+
+def test_reference_input_keeps_original_lines_for_text_images_and_complete_tables():
+    """排除内容不发送给标注模型，表格分隔行和过滤后的原始行号保留。"""
+    answer = (
+        '# 标题\n\n- 正文 `code` 与 $x$。\n\n  ```widget\n  {"type":"Card","children":[]}\n  ```\n\n'
+        "![图片](https://example.org/a.png)\n\n| 项目 | 结果 |\n| --- | --- |\n| A | B |\n\n$$\nx^2\n$$\n\n后续"
+    )
+    lines = reference_answer_lines(answer)
+    assert [line["line"] for line in lines] == [3, 9, 11, 12, 13, 19]
+    assert [line["text"] for line in lines] == [
+        "- 正文 `code` 与 $x$。",
+        "![图片](https://example.org/a.png)",
+        "| 项目 | 结果 |",
+        "| --- | --- |",
+        "| A | B |",
+        "后续",
+    ]
+    citations = validate_reference_matches(match(answer_start_line=11, answer_end_line=13), answer, [{"id": "s1", "content": "证据"}])
+    assert (citations[0]["answer_start_line"], citations[0]["answer_end_line"]) == (11, 13)
+
+
+def test_task_list_text_remains_citable():
+    """任务列表中的文字属于正文，不因前端生成 checkbox 而丢失标注。"""
+    answer = "- [x] 文字结论\n- [ ] 后续结论"
+    assert [line["line"] for line in reference_answer_lines(answer)] == [1, 2]
+    assert validate_reference_matches(match(answer_end_line=2), answer, [{"id": "s1", "content": "证据"}])[0]["answer_end_line"] == 2
+
+
+@pytest.mark.parametrize(
+    "excluded",
+    [
+        "```python\nprint(1)\n```",
+        '```widget\n{"type":"Card","children":[{"type":"Text","value":"文字"}]}\n```',
+        "$$\nx^2\n$$",
+        "$$\nx^2",
+        "$$x^2$$ $$y^2$$",
+        "    code",
+        "<div>HTML 预览</div>",
+        "仅有 <span>HTML</span>",
+        "$x$",
+        "`code`",
+        "---\nname: metadata\n---",
+    ],
+)
+def test_excluded_answer_types_cannot_be_cited_or_included_in_cross_block_ranges(excluded):
+    """合法行号不能绕过内容白名单，包括跨排除内容的范围。"""
+    assert reference_answer_lines(excluded) == []
+    answer = f"正文\n\n{excluded}\n\n后续"
+    sources = [{"id": "s1", "content": "证据"}]
+    for start, end in [(3, 3), (1, len(answer.splitlines()))]:
+        with pytest.raises(ValueError, match="只能标注"):
+            validate_reference_matches(match(answer_start_line=start, answer_end_line=end), answer, sources)
+
+
+async def test_annotation_timeout_explains_model_configuration_and_keeps_answer_unmodified(monkeypatch):
+    """超时保留失败语义与原回答，并给出管理员调整模型的方向。"""
+    from yuxi.modules.agents.services import references
+
+    message = SimpleNamespace(content="正文", extra_metadata={"keep": "original"})
+    repository = SimpleNamespace(try_lock=AsyncMock(return_value=True))
+    monkeypatch.setattr(references, "require_thread", AsyncMock())
+    monkeypatch.setattr(references, "TurnReferenceRepository", lambda _db: repository)
+    monkeypatch.setattr(
+        references,
+        "_load_reference_input",
+        AsyncMock(return_value=(message, SimpleNamespace(id="run-a"), [{"id": "s1", "content": "证据"}])),
+    )
+    monkeypatch.setattr(
+        references,
+        "system_options",
+        SimpleNamespace(get=AsyncMock(return_value={"reference_model": "provider:refs", "fast_model": "provider:fast"})),
+    )
+    monkeypatch.setattr(
+        references, "load_chat_model", lambda *_args, **_kwargs: SimpleNamespace(ainvoke=AsyncMock(side_effect=TimeoutError))
+    )
+
+    with pytest.raises(OperationTimeoutError, match="设置中选择关闭思考或思考强度较低的来源标注模型") as error:
+        await references.annotate_turn_references(
+            db=SimpleNamespace(), scope=SimpleNamespace(uid="user-a"), thread_id="thread-a", turn_id="turn-a"
+        )
+
+    assert error.value.code == "references_timeout"
+    assert message.content == "正文"
+    assert message.extra_metadata == {"keep": "original"}

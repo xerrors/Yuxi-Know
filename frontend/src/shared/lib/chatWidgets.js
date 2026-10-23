@@ -392,7 +392,7 @@ export function widgetFencePlugin(md) {
     const closing = new RegExp(`^ {0,3}${token.markup[0]}{${token.markup.length},}\\s*$`)
     const closed = closing.test(lastLine)
     const lines = env.sourceLines
-      ? ` data-source-start="${token.map[0] + 1}" data-source-end="${token.map[1]}"`
+      ? ` data-source-start="${token.map[0] + 1}" data-source-end="${token.map[1]}" data-reference-excluded`
       : ''
     return `<div class="widget-preview-render"${lines}><pre class="widget-source" hidden>${md.utils.escapeHtml(token.content)}</pre><div class="widget-mount" data-widget-closed="${closed}"></div></div>`
   }

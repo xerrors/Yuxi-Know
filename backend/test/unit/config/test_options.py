@@ -5,6 +5,7 @@ import json
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import async_sessionmaker
+
 from test.support.sqlite import create_utc_sqlite_engine
 from yuxi.bootstrap.options import ensure_options_in_db
 from yuxi.infrastructure.postgres.base import Base
@@ -34,6 +35,12 @@ def test_system_chat_model_preserves_saved_selection(key):
     """默认值更新不覆盖管理员已保存的模型选择。"""
     saved_model = "siliconflow-cn:Pro/MiniMaxAI/MiniMax-M2.5"
     assert system_options.resolve({key: saved_model})[key] == saved_model
+
+
+def test_reference_model_defaults_to_empty_and_keeps_admin_selection():
+    """空标注配置由用例沿用快速模型，管理员显式选择保持独立。"""
+    assert system_options.resolve({})["reference_model"] == ""
+    assert system_options.resolve({"reference_model": "provider:references"})["reference_model"] == "provider:references"
 
 
 class FakeRedis:

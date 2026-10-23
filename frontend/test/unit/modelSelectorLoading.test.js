@@ -152,6 +152,70 @@ test('模型弹层的加载、关闭和失败重试', async (t) => {
         ])
       }
     })
+
+    await t.test('检查结果替换原文字，通过和异常都能再次检查', async () => {
+      const component = await setup({ size: 'small', model_spec: 'fixture:chat' })
+      let statusRequest
+      globalThis.__modelSelectorApi.getModelStatusBySpec = () => statusRequest.promise
+      assert.equal(component.modelCheckLabel.value, '检查')
+      for (const status of ['available', 'unavailable', 'available']) {
+        statusRequest = deferred()
+        const pending = component.checkCurrentModelStatus()
+        assert.equal(component.state.checkingStatus, true)
+        statusRequest.resolve({ data: { status, message: '测试结果' } })
+        await pending
+        assert.equal(component.state.checkingStatus, false)
+        assert.equal(component.modelCheckLabel.value, status === 'available' ? '通过' : '异常')
+        assert.match(component.getCurrentModelStatusTitle(), /测试结果；点击重新检查/)
+      }
+    })
+
+    await t.test('检查中重复调用不产生第二个请求，完成后允许重试', async () => {
+      const component = await setup({ model_spec: 'fixture:chat' })
+      const statusRequest = deferred()
+      let requests = 0
+      globalThis.__modelSelectorApi.getModelStatusBySpec = () => {
+        requests += 1
+        return statusRequest.promise
+      }
+      const pending = component.checkCurrentModelStatus()
+      await component.checkCurrentModelStatus()
+      assert.equal(requests, 1)
+      assert.equal(component.state.currentModelStatus, null)
+      statusRequest.resolve({ data: { status: 'available' } })
+      await pending
+      await component.checkCurrentModelStatus()
+      assert.equal(requests, 2)
+      assert.equal(component.modelCheckLabel.value, '通过')
+    })
+
+    await t.test('请求异常显示异常并保留详情，再次检查可以恢复通过', async () => {
+      const component = await setup({ model_spec: 'fixture:chat' })
+      globalThis.__modelSelectorApi.getModelStatusBySpec = async () => { throw new Error('测试连接失败') }
+      await component.checkCurrentModelStatus()
+      assert.equal(component.state.checkingStatus, false)
+      assert.equal(component.modelCheckLabel.value, '异常')
+      assert.match(component.getCurrentModelStatusTitle(), /测试连接失败/)
+      globalThis.__modelSelectorApi.getModelStatusBySpec = async () => ({ data: { status: 'available' } })
+      await component.checkCurrentModelStatus()
+      assert.equal(component.modelCheckLabel.value, '通过')
+    })
+
+    await t.test('切换模型后不显示前一个模型迟到的通过或异常', async () => {
+      for (const fails of [false, true]) {
+        const component = await setup({ model_spec: 'fixture:before' })
+        const statusRequest = deferred()
+        globalThis.__modelSelectorApi.getModelStatusBySpec = () => statusRequest.promise
+        const pending = component.checkCurrentModelStatus()
+        component.props.model_spec = 'fixture:after'
+        if (fails) statusRequest.reject(new Error('前一个模型的失败'))
+        else statusRequest.resolve({ data: { status: 'available' } })
+        await pending
+        assert.equal(component.modelCheckLabel.value, '检查')
+        assert.equal(component.state.currentModelStatus, null)
+        assert.equal(component.state.checkingStatus, false)
+      }
+    })
   } finally {
     await server.close()
     globalThis.localStorage = previousStorage

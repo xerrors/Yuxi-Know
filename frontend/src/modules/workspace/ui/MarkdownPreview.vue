@@ -325,7 +325,7 @@ const replaceHtmlPreservingWidgets = (html) => {
       return
     }
 
-    for (const name of ['data-source-start', 'data-source-end']) {
+    for (const name of ['data-source-start', 'data-source-end', 'data-reference-excluded']) {
       if (nextNode.hasAttribute(name))
         reusablePreview.setAttribute(name, nextNode.getAttribute(name))
       else reusablePreview.removeAttribute(name)

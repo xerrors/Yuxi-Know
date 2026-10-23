@@ -33,6 +33,21 @@
         </div>
         <div class="setting-row">
           <div class="setting-copy">
+            <div class="setting-label">{{ items?.reference_model?.des || '来源标注模型' }}</div>
+            <p class="setting-description">未指定时沿用快速响应模型。建议选择非思考模型，或在模型配置中关闭思考、降低思考强度。</p>
+          </div>
+          <div class="setting-content">
+            <ModelSelectorComponent
+              display-name="mini"
+              :model_spec="configStore.config?.reference_model || ''"
+              clearable
+              placeholder="沿用快速响应模型"
+              @select-model="handleChange('reference_model', $event || '')"
+            />
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-copy">
             <div class="setting-label">{{ items?.embed_model?.des || '默认 Embedding 模型' }}</div>
             <p class="setting-description">将文本转为向量，用于知识库索引与检索。</p>
           </div>

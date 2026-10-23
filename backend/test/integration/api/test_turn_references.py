@@ -13,14 +13,15 @@ import pytest_asyncio
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from test.live_api_cleanup import make_test_session_title
+from test.live_api_cleanup import delete_test_session_rows, make_test_session_title
 from yuxi.modules.agents.models.messages import Message
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.modules.knowledge.models import KnowledgeBase
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
+# 本文件只创建快照，不执行 worker 或沙盒；fixture 逐项清理自己创建的资源。
+pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
 ANSWER = "# 结论\n\n知识库说明保留原文。\n\n网页说明链接可跳转。"
 REPLAY_RESULT = {
@@ -100,7 +101,9 @@ async def reference_turn(test_client, admin_headers, reference_replay):
             "base_url": f"http://api:{reference_replay.port}/v1",
             "api_key": "test-reference-key",
             "capabilities": ["chat"],
-            "enabled_models": [{"id": "reference-replay", "type": "chat", "source": "manual"}],
+            "enabled_models": [
+                {"id": "reference-replay", "type": "chat", "source": "manual", "request_body_overrides": {"enable_thinking": False}}
+            ],
         },
     )
     assert registered.status_code == 200, registered.text
@@ -124,7 +127,11 @@ async def reference_turn(test_client, admin_headers, reference_replay):
     early_id, result_id, neighbor_run_id = (str(uuid.uuid4()) for _ in range(3))
     engine = create_async_engine(os.environ["POSTGRES_URL"])
     sessions = async_sessionmaker(engine, expire_on_commit=False)
+    current_options = (await test_client.get("/api/system/config", headers=admin_headers)).json()
+    original_models = {key: current_options[key] for key in ["reference_model", "fast_model"]}
     try:
+        configured = await test_client.post("/api/system/config/update", headers=admin_headers, json={"reference_model": model})
+        assert configured.status_code == 200, configured.text
         async with sessions() as db:
             agent_session = await db.scalar(select(Session).where(Session.thread_id == thread_id))
             session_id = agent_session.id
@@ -298,8 +305,11 @@ async def reference_turn(test_client, admin_headers, reference_replay):
             neighbor_id=neighbor_id,
             result_id=result_id,
             kb_id=kb_id,
+            model=model,
         )
     finally:
+        restored = await test_client.post("/api/system/config/update", headers=admin_headers, json=original_models)
+        assert restored.status_code == 200, restored.text
         async with engine.begin() as conn:
             await conn.execute(
                 text("UPDATE agent_turns SET current_run_id=NULL, result_run_id=NULL WHERE thread_id=:id"),
@@ -311,6 +321,7 @@ async def reference_turn(test_client, admin_headers, reference_replay):
             await conn.execute(text("DELETE FROM agent_turns WHERE thread_id=:id"), {"id": thread_id})
             await conn.execute(text("DELETE FROM knowledge_bases WHERE kb_id=:id"), {"id": kb_id})
         await test_client.delete(f"/api/system/model-providers/{provider_id}", headers=admin_headers)
+        await delete_test_session_rows({thread_id})
         await engine.dispose()
 
 
@@ -339,12 +350,14 @@ async def test_reference_round_trip_uses_final_answer_and_same_turn_sources(
     saved = result.json()
     assert saved["output_message_id"] == target.message_id
     assert saved["result_run_id"] == target.result_id
+    assert saved["model_spec"] == target.model
     assert saved["citations"][0]["source_start_line"] == 8
     assert saved["citations"][0]["source_end_line"] == 12
     wire = reference_replay.requests[0]
     assert wire.get("tools") is None and wire.get("stream") is False
+    assert wire["enable_thinking"] is False
     prompt = json.loads(wire["messages"][-1]["content"])
-    assert prompt["answer"][2] == {"line": 3, "text": "知识库说明保留原文。"}
+    assert prompt["answer"] == [{"line": 3, "text": "知识库说明保留原文。"}, {"line": 5, "text": "网页说明链接可跳转。"}]
     assert [source["content"] for source in prompt["sources"]] == ["知识库证据", "网页证据"]
     async with target.sessions() as db:
         message = await db.get(Message, target.message_id)
@@ -448,10 +461,13 @@ async def test_readonly_connector_evidence_keeps_remote_file_id_without_document
         }
         tools = list(await db.scalars(select(Message).where(Message.turn_id == target.turn_id, Message.role == "tool")))
         knowledge = next(message for message in tools if message.extra_metadata["tool_name"] == "query_kb")
-        knowledge.extra_metadata = {**knowledge.extra_metadata, "output": json.dumps(
-            {"results": [{"content": "知识库证据", "metadata": {"file_id": "remote-document", "source": "外部文档"}}]},
-            ensure_ascii=False,
-        )}
+        knowledge.extra_metadata = {
+            **knowledge.extra_metadata,
+            "output": json.dumps(
+                {"results": [{"content": "知识库证据", "metadata": {"file_id": "remote-document", "source": "外部文档"}}]},
+                ensure_ascii=False,
+            ),
+        }
         await db.commit()
     before = await test_client.get(target.references_path, headers=admin_headers)
     assert [source["kind"] for source in before.json()["sources"]] == ["knowledge", "web"]
@@ -580,23 +596,91 @@ async def test_incomplete_turn_and_oversize_sources_do_not_call_model(
         assert "references" not in (await db.get(Message, target.message_id)).extra_metadata
 
 
-@pytest.mark.parametrize("snapshot", [None, {}, {"model": ""}])
-async def test_missing_run_model_snapshot_does_not_fall_back_or_call_model(
-    test_client, admin_headers, reference_turn, reference_replay, snapshot
+@pytest.mark.parametrize("use_fast_model", [False, True])
+async def test_reference_model_configuration_is_independent_of_run_snapshot(
+    test_client, admin_headers, reference_turn, reference_replay, use_fast_model
 ):
-    """缺失执行快照不能借用 Session 或系统默认模型并伪装成功。"""
+    """独立配置或明确沿用快速模型都不依赖历史 Run 模型。"""
     target = reference_turn
+    if use_fast_model:
+        response = await test_client.post(
+            "/api/system/config/update", headers=admin_headers, json={"reference_model": "", "fast_model": target.model}
+        )
+        assert response.status_code == 200, response.text
     async with target.sessions() as db:
         run = await db.get(AgentRun, target.result_id)
-        run.input_payload = {"context_snapshot": snapshot}
+        run.input_payload = {"context_snapshot": None}
         await db.commit()
 
     response = await test_client.post(target.references_path, headers=admin_headers)
-    assert response.status_code == 409, response.text
-    assert response.json()["detail"]["code"] == "references_config_missing"
+    assert response.status_code == 200, response.text
+    assert response.json()["model_spec"] == target.model
+    assert reference_replay.requests[0]["enable_thinking"] is False
+    async with target.sessions() as db:
+        saved = (await db.get(Message, target.message_id)).extra_metadata["references"]
+        assert saved == response.json()
+
+
+async def test_excluded_content_is_not_sent_or_saved_and_valid_original_lines_can_retry(
+    test_client, admin_headers, reference_turn, reference_replay
+):
+    """排除大段组件输入，拒绝模型越界标注，重试保留正文原始行号。"""
+    target = reference_turn
+    answer = "正文\n\n```widget\n" + "组件内容" * 20000 + "\n```\n\n后续"
+    async with target.sessions() as db:
+        message = await db.get(Message, target.message_id)
+        message.content = answer
+        await db.commit()
+    reference_replay.result = {"citations": [{"answer_start_line": 4, "answer_end_line": 4, "source_id": "s1", "quote": "知识库证据"}]}
+    invalid = await test_client.post(target.references_path, headers=admin_headers)
+    assert invalid.status_code == 502, invalid.text
+    assert invalid.json()["detail"]["code"] == "references_invalid"
+    prompt = json.loads(reference_replay.requests[0]["messages"][-1]["content"])
+    assert prompt["answer"] == [{"line": 1, "text": "正文"}, {"line": 7, "text": "后续"}]
+    async with target.sessions() as db:
+        assert "references" not in (await db.get(Message, target.message_id)).extra_metadata
+    reference_replay.result = {"citations": [{"answer_start_line": 7, "answer_end_line": 7, "source_id": "s1", "quote": "知识库证据"}]}
+    valid = await test_client.post(target.references_path, headers=admin_headers)
+    assert valid.status_code == 200, valid.text
+    async with target.sessions() as db:
+        saved = (await db.get(Message, target.message_id)).extra_metadata["references"]
+        assert saved == valid.json()
+        assert saved["citations"][0]["answer_start_line"] == 7
+        message = await db.get(Message, target.message_id)
+        legacy = {**saved, "citations": [*saved["citations"], {**saved["citations"][0], "answer_start_line": 4, "answer_end_line": 4}]}
+        message.extra_metadata = {**message.extra_metadata, "references": legacy}
+        await db.commit()
+    reread = await test_client.get(target.references_path, headers=admin_headers)
+    assert reread.json()["references"]["citations"] == saved["citations"]
+    repeated = await test_client.post(target.references_path, headers=admin_headers)
+    assert repeated.json()["citations"] == saved["citations"]
+
+
+async def test_answer_with_only_excluded_content_is_unavailable(test_client, admin_headers, reference_turn, reference_replay):
+    """只有代码和组件的回答没有可标注内容，不产生模型调用或成功标注。"""
+    target = reference_turn
+    async with target.sessions() as db:
+        message = await db.get(Message, target.message_id)
+        message.content = '```widget\n{"type":"Card","children":[]}\n```'
+        await db.commit()
+    available = await test_client.get(target.references_path, headers=admin_headers)
+    assert available.json()["available"] is False
+    rejected = await test_client.post(target.references_path, headers=admin_headers)
+    assert rejected.status_code == 409, rejected.text
+    assert rejected.json()["detail"]["code"] == "reference_answer_empty"
     assert reference_replay.requests == []
     async with target.sessions() as db:
         assert "references" not in (await db.get(Message, target.message_id)).extra_metadata
+
+
+async def test_non_admin_cannot_change_reference_model(test_client, admin_headers, standard_user):
+    """来源标注模型仍由现有后端超级管理员权限保护。"""
+    before = (await test_client.get("/api/system/config", headers=admin_headers)).json()["reference_model"]
+    response = await test_client.post(
+        "/api/system/config/update", headers=standard_user["headers"], json={"reference_model": "unconfigured:forbidden"}
+    )
+    assert response.status_code == 403, response.text
+    assert (await test_client.get("/api/system/config", headers=admin_headers)).json()["reference_model"] == before
 
 
 @pytest.mark.slow
@@ -606,9 +690,9 @@ async def test_real_model_matches_supported_answer_ranges(test_client, admin_hea
     if not model_spec:
         pytest.skip("真实模型探针需要 REFERENCE_PROBE_MODEL 指定已配置的聊天模型")
     target = reference_turn
+    configured = await test_client.post("/api/system/config/update", headers=admin_headers, json={"reference_model": model_spec})
+    assert configured.status_code == 200, configured.text
     async with target.sessions() as db:
-        run = await db.get(AgentRun, target.result_id)
-        run.input_payload = {"context_snapshot": {**run.input_payload["context_snapshot"], "model": model_spec}}
         tools = list(
             await db.scalars(
                 select(Message)

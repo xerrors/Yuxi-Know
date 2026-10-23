@@ -1,10 +1,13 @@
 /** 同一回答块的引用合并，范围跨块时胶囊落在最后的命中块。 */
-export function groupMarkdownReferences(blocks, citations) {
+export function groupMarkdownReferences(blocks, citations, excluded = []) {
   const groups = new Map()
   for (const [index, citation] of citations.entries()) {
-    const matches = blocks.filter((block) =>
+    if (excluded.some((block) =>
       Number(block.dataset.sourceStart) <= citation.answer_end_line &&
-      Number(block.dataset.sourceEnd) >= citation.answer_start_line)
+      Number(block.dataset.sourceEnd) >= citation.answer_start_line)) continue
+    const matches = blocks.filter((block) =>
+      Number(block.dataset.referenceStart) <= citation.answer_end_line &&
+      Number(block.dataset.referenceEnd) >= citation.answer_start_line)
     const innermost = matches.filter((block) =>
       !matches.some((other) => other !== block && block.contains(other)))
     if (!innermost.length) continue
@@ -28,8 +31,10 @@ export function decorateMarkdownReferences(root, citations) {
   root.querySelectorAll('.reference-citation').forEach((node) => node.remove())
   root.querySelectorAll('.reference-answer-highlight').forEach((node) =>
     node.classList.remove('reference-answer-highlight', 'reference-answer-active'))
-  const blocks = [...root.querySelectorAll('[data-source-start]')]
-  for (const [tail, group] of groupMarkdownReferences(blocks, citations)) {
+  const blocks = [...root.querySelectorAll('[data-reference-start]')]
+    .filter((block) => !block.closest('[data-reference-excluded]'))
+  const excluded = [...root.querySelectorAll('[data-reference-excluded]')]
+  for (const [tail, group] of groupMarkdownReferences(blocks, citations, excluded)) {
     group.blocks.forEach((block) => block.classList.add('reference-answer-highlight'))
     const badge = root.ownerDocument.createElement('button')
     badge.type = 'button'
