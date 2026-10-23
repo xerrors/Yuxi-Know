@@ -1,6 +1,6 @@
 # Backend 约定
 
-本目录承载 FastAPI 适配层、业务服务、repositories、Agent runtime 与持久化实现。先阅读根 [AGENTS.md](../AGENTS.md) 和 [ARCHITECTURE.md](../ARCHITECTURE.md)。
+本目录承载 FastAPI 适配层、业务服务、repositories、Agent runtime 与持久化实现。先阅读根 [AGENTS.md](../AGENTS.md)；架构与开发指南按根文件的任务范围加载。
 
 ## 边界与所有权
 

@@ -8,11 +8,14 @@ Owner：AGENTS.md
 
 根 `AGENTS.md` 要求每个任务预加载 `ARCHITECTURE.md` 和五份 develop-guides，合计约 73KB；对单文件文案或局部 bug 过重。根文件的“提交前至少运行”又要求文档改动运行后端 unit，与改动面证据表冲突。`backend/AGENTS.md` 把 ruff 描述为从仓库根目录运行，但命令实际切换到 `backend`，在同一 shell 连续执行时 cwd 会保留并导致后续命令失败。`docs/AGENTS.md` 重复了 `documentation-guidelines.md` 已拥有的写作规则，形成双 Owner。
 
+局部任务的加载例外还需覆盖根文件简介和子树入口，避免无条件架构预读或完整写作流程覆盖根文件的任务分级。
+
 ## 决策
 
 ### 实现方案
 
-- 根 `AGENTS.md` 改为按任务范围加载：局部改动只读根指令和相关源码；跨模块、状态/权限/持久化/外部副作用或架构选择才读 `ARCHITECTURE.md`，非平凡变更再读 Spec Loop 和工程信任系统，涉及测试时读测试规范；提交或创建 PR 前读贡献指南。
+- 根 `AGENTS.md` 拥有任务分级：局部改动只读根与适用子树指令及直接相关源码或文档；跨模块、状态/权限/持久化/外部副作用或架构选择才读 `ARCHITECTURE.md`，非平凡变更再读 Spec Loop 和工程信任系统，涉及测试时读测试规范；提交或创建 PR 前读贡献指南。根文件简介、各子树入口与文档规范的修改流程遵循同一加载范围。
+- 前端需要界面设计、交互或响应式方案时读取设计规范；文档新增、重写或机制说明变更执行完整写作流程，局部文案、链接或机械清理读取直接相关内容。领域知识、安全边界和验证要求保持适用；所有文档改动仍须执行提交前验证与独立 Review。
 - “至少运行”只约束代码变更；文档和导航改动按下表执行相对链接检查和 docs build。
 - `backend/AGENTS.md` 的 ruff 命令改为子 shell 中进入 `backend` 执行，保持与 `ruff.yml` 的工作目录一致，并可从仓库根目录连续运行。
 - `docs/AGENTS.md` 只保留进入 `docs/` 时必须执行的约束；语言、结构、示例、安全和决策记录细节由 `documentation-guidelines.md` 拥有。
@@ -31,4 +34,5 @@ Owner：AGENTS.md
 
 - `python3 scripts/verify_engineering_contracts.py`
 - `python3 -m unittest scripts.test_verify_engineering_contracts`
+- `cd docs && pnpm run build`
 - `git diff --check`
