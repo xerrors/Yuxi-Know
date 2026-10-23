@@ -8,6 +8,8 @@ Owner：.github/workflows/system-tests.yml
 
 完整系统测试需要可用的 Cube、共享目录和业务服务拓扑。托管探针只能证明沙盒执行，完整 API、worker、恢复与存储隔离还需要在相同托管环境中验证，避免依赖用户维护外部服务器。
 
+常规系统 CI 的沙盒选择及 Cube 探针触发策略由[container 运行链路决定](2026-10-23-container-runtime-ci.md)部分取代；本记录的真实 Cube 验证结果仅对应其指定提交与环境。
+
 ## 决策
 
 ### 实现方案

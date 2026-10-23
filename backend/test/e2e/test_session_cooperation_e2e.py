@@ -48,6 +48,8 @@ async def test_sessions_use_public_state_and_shared_sandbox(e2e_client, e2e_head
     """根工具创建普通会话，结果通过持久等待返回，文件在同一 Project 中。"""
     me = await e2e_client.get("/api/auth/me", headers=e2e_headers)
     uid = me.json()["uid"]
+    sandbox_backend = os.getenv("SANDBOX_BACKEND", "cube")
+    assert sandbox_backend in {"cube", "container"}
     await _provider(e2e_client, e2e_headers, base_url=os.environ["COOPERATION_REPLAY_URL"], provider_id="cooperation-replay")
     slug = await _agent(
         e2e_client,
@@ -93,7 +95,8 @@ async def test_sessions_use_public_state_and_shared_sandbox(e2e_client, e2e_head
         )
         workdir = root["workdir_path"]
         path = f"/home/user/workspace/{workdir}/cooperation.txt"
-        runtime_probe = f"/tmp/cooperation-shared-{uuid.uuid4().hex}"
+        probe_name = f"cooperation-shared-{uuid.uuid4().hex}"
+        runtime_probe = f"/tmp/{probe_name}" if sandbox_backend == "cube" else f"/home/user/workspace/{workdir}/{probe_name}"
         question_marker = " PARALLEL_QUESTION" if parallel_question else ""
         selection_marker = f" SELECT_AGENT:{target_slug}" if select_agent else ""
         accepted = await e2e_client.post(
@@ -214,8 +217,6 @@ async def test_sessions_use_public_state_and_shared_sandbox(e2e_client, e2e_head
         assert child_turn.status_code == 200 and output_text(child_turn.json()["yuxi"]["output"]) == OUTPUT
         assert json.loads(child["config_snapshot"])["system_prompt"].count("用户工作区 agents/AGENTS.md") == 0
         provider = get_sandbox_provider()
-        connection = await asyncio.to_thread(provider.get, uid)
-        assert connection is not None
         backend = UserSandboxBackend(uid=uid, workdir_path=root["workdir_path"])
         missing_path = path + ".missing.txt"
         for read_result in [await asyncio.to_thread(backend.read, missing_path), await backend.aread(missing_path)]:
@@ -225,18 +226,35 @@ async def test_sessions_use_public_state_and_shared_sandbox(e2e_client, e2e_head
         for read_result in [await asyncio.to_thread(backend.read, missing_path), await backend.aread(missing_path)]:
             assert read_result.error is None and read_result.file_data["content"] == "write then read verified"
         temporary = f"/tmp/cooperation-{uuid.uuid4().hex}"
-        assert (await asyncio.to_thread(backend.execute, f"printf transient > {temporary}")).exit_code == 0
-        # 压缩维护不能释放共享环境；根与成员均保留同一 /tmp 事实。
+        if sandbox_backend == "cube":
+            connection = await asyncio.to_thread(provider.get, uid)
+            assert connection is not None
+            assert (await asyncio.to_thread(backend.execute, f"printf transient > {temporary}")).exit_code == 0
+        # 两种后端都保留 Project 文件；持久 VM 额外保留同一 /tmp 与执行身份。
         for target in (thread_id, child["thread_id"]):
             compressed = await e2e_client.post(f"/api/v1/agents/sessions/{target}/compress", headers=e2e_headers)
             assert compressed.status_code == 200, compressed.text
-            preserved = await asyncio.to_thread(backend.execute, f"cat {temporary}")
-            assert preserved.exit_code == 0 and preserved.output == "transient"
+            preserved = await backend.aread(path)
+            assert preserved.error is None and preserved.file_data["content"] == "cooperation verified"
+            if sandbox_backend == "cube":
+                preserved = await asyncio.to_thread(backend.execute, f"cat {temporary}")
+                assert preserved.exit_code == 0 and preserved.output == "transient"
+                assert (await asyncio.to_thread(provider.get, uid)).sandbox_id == connection.sandbox_id
+        if sandbox_backend == "cube":
+            preserved = await asyncio.to_thread(backend.execute, f"cat {path} && cat {temporary}")
+            assert preserved.exit_code == 0 and preserved.output == "cooperation verifiedtransient"
             assert (await asyncio.to_thread(provider.get, uid)).sandbox_id == connection.sandbox_id
-        preserved = await asyncio.to_thread(backend.execute, f"cat {path} && cat {temporary}")
-        assert preserved.exit_code == 0 and preserved.output == "cooperation verifiedtransient"
-        assert (await asyncio.to_thread(provider.get, uid)).sandbox_id == connection.sandbox_id
-        assert (await asyncio.to_thread(backend.execute, f"rm -- {temporary}")).exit_code == 0
+            assert (await asyncio.to_thread(backend.execute, f"rm -- {temporary}")).exit_code == 0
+        else:
+            async with asyncio.timeout(30):
+                while True:
+                    status = await e2e_client.get("/api/user/sandbox", headers=e2e_headers)
+                    assert status.status_code == 200, status.text
+                    state = status.json()
+                    assert state["backend"] == "container", state
+                    if not state["active_runs"] and not state["busy"] and state["state"] == "not_created":
+                        break
+                    await asyncio.sleep(0.1)
 
     finally:
         await conn.close()

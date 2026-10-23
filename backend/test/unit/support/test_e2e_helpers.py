@@ -6,6 +6,19 @@ import httpx
 import pytest
 
 from test.e2e import e2e_helpers
+from test.e2e.test_container_agent_execution_e2e import wait_no_container
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("backend", ["cube", None])
+async def test_container_cleanup_check_rejects_wrong_backend_instead_of_skipping(backend):
+    """选择 container 专项后，错误或缺失的后端不能产生绿色 skip。"""
+    state = {"backend": backend, "state": "not_created", "active_runs": [], "busy": False}
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, json=state)), base_url="http://test"
+    ) as client:
+        with pytest.raises(AssertionError):
+            await wait_no_container(client, {})
 
 
 @pytest.mark.asyncio

@@ -154,9 +154,9 @@ class CooperationReplayHandler(BaseHTTPRequestHandler):
         self.write_completion(calls)
 
     def shared_sandbox_calls(self, serialized, child, results):
-        """按父子消息与工具结果验证共享环境。"""
+        """按父子消息与工具结果验证同一共享路径。"""
         calls = []
-        runtime_probe = re.search(r"COOP_RUNTIME:(/tmp/[\w-]+)", serialized).group(1)
+        runtime_probe = re.search(r'COOP_RUNTIME:(/[^\s"\\]+)', serialized).group(1)
         if child:
             if "child-write" not in results:
                 path = re.search(r'COOPERATION_CHILD:(/[^\s"\\]+)', serialized).group(1)
@@ -169,7 +169,7 @@ class CooperationReplayHandler(BaseHTTPRequestHandler):
                     ("child-write", "write_file", {"file_path": path, "content": "cooperation verified"}),
                 ]
             elif "shared_runtime_verified" not in str(results.get("child-probe")):
-                raise AssertionError("child did not use the dispatcher's actual sandbox")
+                raise AssertionError("child did not read the dispatcher's shared file")
         elif "root-prepare" not in results:
             calls = [("root-prepare", "execute", {"command": f"printf shared > {runtime_probe}"})]
         elif "SELECT_AGENT" in serialized and "agent-directory" not in results:

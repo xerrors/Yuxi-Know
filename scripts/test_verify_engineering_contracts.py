@@ -150,10 +150,7 @@ jobs:
       - 'backend/test/run_tests.sh'
       - 'docker/**'
       - 'scripts/ci_prepare_system_tests_env.sh'
-      - 'scripts/ci_probe_kvm.py'
-      - 'scripts/ci_probe_hosted_cube.sh'
       - 'scripts/ci_build_topology_images.sh'
-      - 'scripts/test_cube_worker_recovery.sh'
       - '.github/workflows/system-tests.yml'
 jobs:
   system:
@@ -174,8 +171,8 @@ jobs:
           test/integration/services/test_project_workdir.py::test_sessions_share_workdir_only_through_project \\
           test/integration/services/test_user_skill_projection.py \\
           test/integration/api/test_skill_artifact_authorization.py -q
-      - run: docker compose exec -T api uv run --no-sync --no-dev pytest test/integration/sandbox -q
-      - run: CUBE_TEST_ISOLATED_TOPOLOGY=1 bash scripts/test_cube_worker_recovery.sh
+      - run: docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD -e CONTAINER_E2E_REPLAY_URL_TEMPLATE api uv run --no-sync --no-dev pytest test/e2e/test_container_agent_execution_e2e.py -q
+      - run: SANDBOX_CONTAINER_TEST=1 SANDBOX_CONTAINER_IMAGE="$(docker compose config --format json | jq -r '.services[\"sandbox-image\"].image')" uv run --project backend --locked --group test pytest backend/test/integration/sandbox/test_container_sandbox.py -q
 """,
         )
         self._write(
@@ -484,7 +481,8 @@ jobs:
         path = self.root / ".github/workflows/system-tests.yml"
         original = path.read_text(encoding="utf-8")
         for test_path in (
-            "test/integration/sandbox",
+            "test/integration/sandbox/test_container_sandbox.py",
+            "test/e2e/test_container_agent_execution_e2e.py",
             "test/integration/services/test_input_attachments.py",
             'TEST_USERNAME="$E2E_USERNAME" TEST_PASSWORD="$E2E_PASSWORD" bash backend/test/run_tests.sh e2e',
             'docker compose exec -T -e TEST_USERNAME="$E2E_USERNAME" -e TEST_PASSWORD="$E2E_PASSWORD" api uv run --no-sync --no-dev pytest test/integration/api/test_chat_router.py::test_thread_message_audits_return_persisted_facts_without_leaking_into_history test/integration/api/test_chat_router.py::test_debug_messages_follow_database_sequence_and_include_unassigned_inputs -q --setup-show -o faulthandler_timeout=60',
@@ -512,13 +510,13 @@ jobs:
         path.write_text(original.replace('"${LIFECYCLE_E2E_TESTS[@]}" -m e2e', 'test/other.py'))
         self.assertTrue(any("E2E runner" in error for error in self._errors()))
 
-    def test_sandbox_gate_cannot_exclude_shared_mount_fuzz(self) -> None:
-        """恢复旧单文件命令时拒绝漏跑共享挂载 fuzz。"""
+    def test_container_gate_cannot_drop_real_isolation_suite(self) -> None:
+        """删除 container 真实隔离专项时拒绝，不能以默认 skip 冒充通过。"""
         path = self.root / ".github/workflows/system-tests.yml"
         path.write_text(
             path.read_text(encoding="utf-8").replace(
-                "pytest test/integration/sandbox -q",
-                "pytest test/integration/sandbox/test_cube_user_environment.py -q",
+                "SANDBOX_CONTAINER_TEST=1",
+                "SANDBOX_CONTAINER_TEST=0",
             ),
             encoding="utf-8",
         )

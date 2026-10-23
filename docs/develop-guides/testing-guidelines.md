@@ -192,14 +192,18 @@ pwsh -NoProfile -File scripts/test_init_security.ps1
 | 工程契约、Ruff、后端 unit、前端、文档、依赖审计 | 执行器上的语言工具链 | `.github/workflows` 中对应质量工作流 |
 | 初始化、Schema/关系约束、Input/FIFO、Run lease、反馈、协作持久化、OAuth 和局部 HTTP | 临时 PostgreSQL、Redis、文件与测试自建 HTTP 服务 | `service-integration.yml` → `scripts/ci_run_service_integration.sh` |
 | 附件服务持久化与对象读写 | PostgreSQL、MinIO 与文件系统；测试主体无需 VM | `system-tests.yml` 中附件服务步骤，随完整拓扑执行 |
-| 完整 API readiness、正式 worker 启动恢复、Agent E2E 和沙盒隔离 | 完整 Compose 拓扑与 Cube | `system-tests.yml` 的两个 ubuntu-24.04 job，各自安装本机 Cube 和正式模板 |
-| GitHub 托管机器的 KVM/Cube 兼容性探针 | KVM、临时 XFS、Cube 安装、正式模板和共享挂载 | `cube-hosted-probe.yml`，仅相关探针路径修改或手动运行 |
+| 完整 API readiness、正式 worker 启动恢复、Agent E2E 和沙盒隔离 | 完整 Compose 拓扑、container runner 与 sandbox 镜像 | `system-tests.yml` 的两个 ubuntu-24.04 job，使用 `container` profile |
+| GitHub 托管机器的 KVM/Cube 兼容性探针 | KVM、临时 XFS、Cube 安装、正式模板和共享挂载 | `cube-hosted-probe.yml`，仅手动运行 |
 
 独立服务 job 使用一次性数据库，运行应用初始化并创建基线测试管理员后执行已有集成测试；共享 API 与 Cube 地址固定为不可达，用真实数据库结果证明独立性。该入口会写入数据库及 Skill 目录，本地复用时必须提供独立的 `POSTGRES_URL`、`REDIS_URL` 与 `YUXI_SKILL_DATA_DIR`，并使用没有 `backend/.env` 的干净 checkout，禁止指向运行中的业务环境。基线管理员保留在临时库中，测试账号的创建、修改和清理继续受数据库的最后管理员约束保护。
 
-公开附件 HTTP 用例中的待消费快照、取消与删除边界使用真实 worker 和阻塞模型重放，随完整 Cube 拓扑执行；模型重放服务在这些用例之前启动。它们与仅验证持久化和对象读写的附件服务测试具有不同依赖。
+公开附件 HTTP 用例中的待消费快照、取消与删除边界使用真实 worker 和阻塞模型重放，随完整 container 拓扑执行；模型重放服务在这些用例之前启动。它们与仅验证持久化和对象读写的附件服务测试具有不同依赖。
 
-`self_managed_resources` 只描述 fixture 清理责任。正式 API 与 worker 在启动时检查 Cube，后台恢复用例即使声明该 marker，也需要真实 Cube 环境。托管探针在 GitHub 的 ubuntu-24.04 执行器上自动安装 Cube、构建正式模板并验证普通用户执行与共享文件回读，无需外部 Cube 配置或公网服务器。成功结果只证明该次执行器的兼容性，完整运行链路仍以对应 E2E 结果为准。两个系统 job 使用独立托管机器，通过 Docker bridge 访问本机 Cube，Compose 与 Cube 的状态目录统一位于 `/data/shared/`，项目 Redis、MinIO 及 Milvus 健康接口的宿主端口与 Cube 隔离，无需配置仓库的 Cube 地址或密钥。
+`self_managed_resources` 只描述 fixture 清理责任，不绕过 API/worker 的沙盒启动检查。常规系统 job 通过环境准备脚本显式选择 container 后端、启用对应 Compose profile 并生成临时 runner 令牌；API、worker 和 runner 使用同一物理 Workspace 与 Skill projection，只有 runner 持有 Docker socket。正式 sandbox 镜像参与独立层缓存，状态位于执行器临时目录。生产默认后端仍由 Compose 配置决定。
+
+container 专项包括 API/worker 的真实 execute 与 steer 后容器清理，以及宿主进程通过真实 Docker 验证文件、进程、资源和认证隔离。宿主专项显式启用 `SANDBOX_CONTAINER_TEST=1`，使用本次 Compose 配置选择的镜像；它的临时文件根与业务 runner 分离，不给 API 容器挂载 Docker socket。协作 E2E 对 container 使用共享 Project 文件作跨 Run 探针，对 Cube 保留共享 VM 临时文件与执行身份断言；全部协作、取消、压缩和持久结果检查仍执行。
+
+Cube 实现的 unit 继续运行；真实 KVM、Cube 安装、正式模板与共享挂载由手动 hosted probe 和 Cube 专属测试验证。常规 container CI 的成功不能解释为 Cube VM 兼容性通过。托管探针仅允许在 GitHub 临时托管执行器运行，其成功只证明该次执行器的兼容性。CI 取舍见[container 运行链路决定](decisions/implemented/2026-10-23-container-runtime-ci.md)。
 
 ## 网络搜索与正文工具
 

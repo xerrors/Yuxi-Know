@@ -2,15 +2,6 @@ name: Hosted Cube Probe
 
 on:
   workflow_dispatch:
-  push:
-    branches: ['develop/**']
-    paths:
-      - '.github/workflows/cube-hosted-probe.yml'
-      - 'scripts/ci_probe_kvm.py'
-      - 'scripts/ci_probe_hosted_cube.sh'
-      - 'scripts/ci_probe_cube_workspace.py'
-      - 'docker/cube/Dockerfile.user'
-      - 'docker/cube/build-template.sh'
 
 permissions:
   contents: read

@@ -149,8 +149,7 @@ async def wait_no_container(client: httpx.AsyncClient, headers: dict) -> dict:
             response = await client.get("/api/user/sandbox", headers=headers)
             assert response.status_code == 200, response.text
             value = response.json()
-            if value.get("backend") != "container":
-                pytest.skip("当前部署不是 container 沙盒后端")
+            assert value.get("backend") == "container", value
             if not value.get("active_runs") and not value.get("busy") and value.get("state") == "not_created":
                 return value
             await asyncio.sleep(0.25)
@@ -173,8 +172,7 @@ async def test_agent_execute_runs_in_ephemeral_container(replay_server, handoff)
         try:
             status = await client.get("/api/user/sandbox", headers=headers)
             assert status.status_code == 200, status.text
-            if status.json().get("backend") != "container":
-                pytest.skip("当前部署不是 container 沙盒后端")
+            assert status.json().get("backend") == "container", status.text
 
             provider = await client.post(
                 "/api/system/model-providers",

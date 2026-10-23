@@ -1,8 +1,8 @@
 """验证临时托管探针拒绝普通机器及 self-hosted runner。"""
 
-import os
 import copy
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -21,6 +21,21 @@ class HostedProbeTests(unittest.TestCase):
         """恢复缺失的托管边界时，负控必须失败。"""
         with tempfile.TemporaryDirectory() as root:
             self._check_rejection(Path(root))
+
+    def test_system_environment_requires_runner_temp_before_writing(self):
+        """遗漏托管临时目录时拒绝，不能覆盖已有环境文件。"""
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / ".env"
+            path.write_text("existing-fixture\n")
+            env = {**os.environ, "GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "github-hosted"}
+            env.pop("RUNNER_TEMP", None)
+            result = subprocess.run(
+                ["bash", str(ROOT / "scripts/ci_prepare_system_tests_env.sh")],
+                cwd=root, env=env, capture_output=True, text=True, timeout=5, check=False,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("RUNNER_TEMP", result.stderr)
+            self.assertEqual(path.read_text(), "existing-fixture\n")
 
     def _check_rejection(self, root: Path) -> None:
         """替换副作用命令，guard 回归也不能安装到本机。"""
@@ -128,49 +143,61 @@ class ServiceIntegrationTests(unittest.TestCase):
 
 
 class RuntimeTopologyTests(unittest.TestCase):
-    """完整拓扑使用本机 Cube，并与其共享文件、避开端口。"""
+    """常规系统拓扑使用 container，真实 Cube 只由手动探针验证。"""
 
     def assert_hosted_jobs(self, workflow: str) -> None:
-        """两个 job 均先准备真实 Cube，再启动原有应用拓扑。"""
+        """两个 job 均准备 container 镜像和 runner，保留构建缓存。"""
         jobs = re.split(r"(?m)^  [\w-]+:\n", workflow.split("\njobs:\n", 1)[1])[1:]
         self.assertEqual(len(jobs), 2)
         for job in jobs:
             self.assertIn("runs-on: ubuntu-24.04", job)
-            self.assertLess(job.index("python3 scripts/ci_probe_kvm.py"), job.index("bash scripts/ci_probe_hosted_cube.sh"))
-            self.assertLess(job.index("bash scripts/ci_probe_hosted_cube.sh"), job.index("bash scripts/ci_prepare_system_tests_env.sh"))
+            self.assertNotIn("ci_probe_kvm.py", job)
+            self.assertNotIn("ci_probe_hosted_cube.sh", job)
+            self.assertNotIn("test_cube_worker_recovery.sh", job)
             self.assertLess(job.index("bash scripts/ci_prepare_system_tests_env.sh"), job.index("docker compose up -d"))
+            start = re.search(r"(?m)^        run: docker compose up -d (.+)$", job)
+            self.assertIsNotNone(start)
+            self.assertIn("sandbox-runner", shlex.split(start.group(1)))
+            self.assertIn("id: sandbox-cache", job)
             saves = list(re.finditer(r"(?m)^        uses: actions/cache/save@v4$", job))
-            self.assertEqual(len(saves), 2)
+            self.assertEqual(len(saves), 3)
             for save in saves:
                 self.assertLess(job.index("bash scripts/ci_build_topology_images.sh"), save.start())
                 self.assertLess(save.start(), job.index("docker compose up -d"))
 
-    def test_both_runtime_jobs_use_local_cube(self):
-        """实际工作流必须摆脱外部执行器与仓库 Cube 配置。"""
+    def test_both_runtime_jobs_use_container(self):
+        """遗漏 runner、镜像缓存或恢复真实 Cube 安装时拒绝。"""
         workflow = (ROOT / ".github/workflows/system-tests.yml").read_text()
         self.assert_hosted_jobs(workflow)
-        self.assertNotIn("vars.CUBE_", workflow)
-        self.assertNotIn("secrets.CUBE_", workflow)
-        for original in (
-            "runs-on: ubuntu-24.04", "bash scripts/ci_probe_hosted_cube.sh", "python3 scripts/ci_probe_kvm.py",
-            "uses: actions/cache/save@v4",
-        ):
+        for original in ("runs-on: ubuntu-24.04", "sandbox-runner", "id: sandbox-cache", "uses: actions/cache/save@v4"):
             for name in ("background-job-worker-path", "system-tests"):
                 with self.subTest(original=original, job=name), self.assertRaises((AssertionError, ValueError)):
                     before, section = workflow.split(f"  {name}:\n", 1)
                     self.assert_hosted_jobs(before + f"  {name}:\n" + section.replace(original, "removed", 1))
+        with self.assertRaises(AssertionError):
+            self.assert_hosted_jobs(workflow.replace("steps:\n", "steps:\n      - run: bash scripts/ci_probe_hosted_cube.sh\n", 1))
 
-    def test_environment_matches_real_compose_mounts_and_ports(self):
-        """只替代宿主地址发现，用真实 Compose 展开校验容器与节点路径。"""
+    def test_cube_probe_only_runs_manually(self):
+        """Cube 安装不能重新进入普通 push 或 PR 路径。"""
+        workflow = (ROOT / ".github/workflows/cube-hosted-probe.yml").read_text()
+        self.assert_manual_probe(workflow)
+        for event in ("push", "pull_request", "schedule"):
+            with self.subTest(event=event), self.assertRaises(AssertionError):
+                self.assert_manual_probe(workflow.replace("on:\n", f"on:\n  {event}:\n"))
+
+    def assert_manual_probe(self, workflow: str) -> None:
+        """读取实际事件声明，手动入口必须保留。"""
+        events = workflow.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+        self.assertEqual(re.findall(r"(?m)^  ([\w-]+):", events), ["workflow_dispatch"])
+
+    def test_environment_matches_real_compose_mounts_and_runner(self):
+        """执行环境生成脚本并展开真实 Compose，证明认证与挂载一致。"""
         with tempfile.TemporaryDirectory() as root:
             base = Path(root)
             (base / ".env.template").write_text((ROOT / ".env.template").read_text())
-            docker = base / "docker"
-            docker.write_text("#!/bin/sh\nprintf '%s\\n' '172.17.0.1'\n")
-            docker.chmod(0o755)
-            env = {k: v for k, v in os.environ.items() if not k.startswith(("CUBE_", "YUXI_"))}
+            env = {k: v for k, v in os.environ.items() if not k.startswith(("CUBE_", "YUXI_", "SANDBOX_", "COMPOSE_"))}
             env.pop("SILICONFLOW_API_KEY", None)
-            env.update(GITHUB_ACTIONS="true", RUNNER_ENVIRONMENT="github-hosted", PATH=f"{base}:{os.environ['PATH']}")
+            env.update(GITHUB_ACTIONS="true", RUNNER_ENVIRONMENT="github-hosted", RUNNER_TEMP=root)
             env.update(
                 JWT_SECRET_KEY="ci-jwt-secret-at-least-thirty-two-characters",
                 API_KEY_DERIVATION_SECRET="ci-api-key-derivation-secret-at-least-32-chars",
@@ -180,56 +207,90 @@ class RuntimeTopologyTests(unittest.TestCase):
             config = json.loads(subprocess.check_output(
                 ["docker", "compose", "--env-file", str(base / ".env"), "-f", str(ROOT / "docker-compose.yml"),
                  "config", "--format", "json"],
-                env={**env, "PATH": os.environ["PATH"], "YUXI_ENV_FILE": str(base / ".env")}, text=True,
+                env={**env, "YUXI_ENV_FILE": str(base / ".env")}, text=True,
             ))
             for name in ("api", "worker"):
                 for key in ("SILICONFLOW_API_KEY", "WEB_SEARCH_PROVIDER", "DOUBAO_SEARCH_API_KEY", "TAVILY_API_KEY", "DEEPSEEK_API_KEY"):
                     self.assertEqual(config["services"][name]["environment"][key], "", f"{name}.{key} 必须保留模板空值")
-            self.assert_shared_state(config)
+            self.assert_container_state(config)
             for target in ("/app/user-data", "/app/skill-projections"):
                 broken = copy.deepcopy(config)
                 next(m for m in broken["services"]["worker"]["volumes"] if m["target"] == target)["source"] = "/wrong-checkout"
                 with self.subTest(target=target), self.assertRaises(AssertionError):
-                    self.assert_shared_state(broken)
-            for name, port in (
-                ("redis", "6379"), ("minio", "9000"), ("minio", "9001"), ("milvus", "9091"), ("milvus", "19530"),
-            ):
+                    self.assert_container_state(broken)
+            for name in ("api", "worker"):
                 broken = copy.deepcopy(config)
-                next(p for p in broken["services"][name]["ports"] if p["target"] == int(port))["published"] = port
-                with self.subTest(name=name, port=port), self.assertRaises(AssertionError):
-                    self.assert_shared_state(broken)
-            for name in ("postgres", "redis", "minio", "milvus", "graph", "api"):
-                broken = copy.deepcopy(config)
-                broken["services"][name]["ports"][0]["published"] = "10000"
-                with self.subTest(ephemeral_port=name), self.assertRaises(AssertionError):
-                    self.assert_shared_state(broken)
-            original = (base / ".env").read_bytes()
-            for invalid in ("", "not-an-address"):
-                docker.write_text(f"#!/bin/sh\nprintf '%s\\n' '{invalid}'\n")
-                result = subprocess.run(
-                    ["bash", str(ROOT / "scripts/ci_prepare_system_tests_env.sh")], cwd=base, env=env,
-                    capture_output=True, text=True, timeout=5,
-                )
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn("AddressValueError", result.stderr)
-                self.assertEqual((base / ".env").read_bytes(), original)
+                broken["services"][name]["environment"]["SANDBOX_BACKEND"] = "cube"
+                with self.subTest(backend=name), self.assertRaises(AssertionError):
+                    self.assert_container_state(broken)
+            broken = copy.deepcopy(config)
+            broken["services"]["sandbox-runner"]["environment"]["SANDBOX_RUNNER_TOKEN"] = "wrong-token"
+            with self.assertRaises(AssertionError):
+                self.assert_container_state(broken)
+            broken = copy.deepcopy(config)
+            del broken["services"]["sandbox-runner"]
+            with self.assertRaises(KeyError):
+                self.assert_container_state(broken)
 
-    def assert_shared_state(self, config: dict) -> None:
-        """API、worker 和 Cube metadata 必须引用同一份物理目录。"""
+    def test_image_builder_requires_and_builds_sandbox_image(self):
+        """真实 shell 必须构建 sandbox 镜像，profile 遗漏时在构建前失败。"""
+        with tempfile.TemporaryDirectory() as root:
+            base = Path(root)
+            docker = base / "docker"
+            docker.write_text(
+                '#!/bin/sh\n'
+                'if [ "$1" = compose ]; then cat "$BUILD_CONFIG"; else printf "%s\\n" "$*" >> "$BUILD_LOG"; fi\n'
+            )
+            docker.chmod(0o700)
+            config = {"services": {name: {"image": f"test-{name}"} for name in ("api", "minio", "storage-init", "sandbox-image")}}
+            config_file = base / "config.json"
+            log = base / "build.log"
+            env = {
+                **os.environ, "PATH": f"{base}:{os.environ['PATH']}",
+                "BUILD_CONFIG": str(config_file), "BUILD_LOG": str(log),
+            }
+            for configured in (True, False):
+                with self.subTest(configured=configured):
+                    log.unlink(missing_ok=True)
+                    value = copy.deepcopy(config)
+                    if not configured:
+                        del value["services"]["sandbox-image"]
+                    config_file.write_text(json.dumps(value))
+                    result = subprocess.run(
+                        ["bash", str(ROOT / "scripts/ci_build_topology_images.sh"), "", "", str(base / "sandbox-cache")],
+                        env=env, capture_output=True, text=True, timeout=10, check=False,
+                    )
+                    if not configured:
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertFalse(log.exists())
+                        continue
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    commands = [shlex.split(line) for line in log.read_text().splitlines()]
+                    self.assertEqual(len(commands), 4)
+                    sandbox = next(command for command in commands if "docker/sandbox.Dockerfile" in command)
+                    self.assertEqual(sandbox[sandbox.index("--tag") + 1], "test-sandbox-image")
+                    self.assertIn(f"type=local,dest={base}/sandbox-cache,mode=max", sandbox)
+                    self.assertIn("--load", sandbox)
+
+    def assert_container_state(self, config: dict) -> None:
+        """API、worker 和 runner 共享认证与物理数据，socket 只归 runner。"""
+        services = config["services"]
+        runner = services["sandbox-runner"]
+        token = runner["environment"]["SANDBOX_RUNNER_TOKEN"]
+        self.assertGreaterEqual(len(token), 16)
+        self.assertEqual(runner["environment"]["SANDBOX_CONTAINER_IMAGE"], services["sandbox-image"]["image"])
         for name in ("api", "worker"):
-            service = config["services"][name]
-            self.assertEqual(service["environment"]["CUBE_API_URL"], "http://172.17.0.1:3000")
-            mappings = (("/app/user-data", "CUBE_NODE_USER_DATA_DIR"), ("/app/skill-projections", "CUBE_NODE_SKILL_PROJECTION_DIR"))
-            for target, key in mappings:
+            service = services[name]
+            self.assertEqual(service["environment"]["SANDBOX_BACKEND"], "container")
+            self.assertEqual(service["environment"]["SANDBOX_RUNNER_URL"], "http://sandbox-runner:8090")
+            self.assertEqual(service["environment"]["SANDBOX_RUNNER_TOKEN"], token)
+            self.assertEqual(service["environment"]["CUBE_API_URL"], "")
+            for target, runner_target in (("/app/user-data", "/sandbox-data"), ("/app/skill-projections", "/sandbox-skill-projections")):
                 mount = next(m for m in service["volumes"] if m["target"] == target)
-                self.assertEqual(mount["source"], service["environment"][key])
-                self.assertTrue(mount["source"].startswith("/data/shared/"))
-        for name, forbidden in (("redis", {"6379"}), ("minio", {"9000", "9001"}), ("milvus", {"9091"})):
-            self.assertFalse(forbidden.intersection(str(p["published"]) for p in config["services"][name]["ports"]))
-        # Cube 的宿主临时端口、沙盒映射和 SNAT 占用整个 10000–65535。
-        for name in ("postgres", "redis", "minio", "milvus", "graph", "api"):
-            for port in config["services"][name]["ports"]:
-                self.assertLess(int(port["published"]), 10000)
+                runner_mount = next(m for m in runner["volumes"] if m["target"] == runner_target)
+                self.assertEqual(mount["source"], runner_mount["source"])
+            self.assertFalse(any(m["target"] == "/var/run/docker.sock" for m in service["volumes"]))
+        self.assertTrue(any(m["target"] == "/var/run/docker.sock" for m in runner["volumes"]))
 
 
 if __name__ == "__main__":

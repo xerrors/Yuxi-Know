@@ -15,10 +15,7 @@ on:
       - 'docker-compose.yml'
       - 'docker-compose.prod.yml'
       - 'scripts/ci_prepare_system_tests_env.sh'
-      - 'scripts/ci_probe_kvm.py'
-      - 'scripts/ci_probe_hosted_cube.sh'
       - 'scripts/ci_build_topology_images.sh'
-      - 'scripts/test_cube_worker_recovery.sh'
       - '.github/workflows/system-tests.yml'
   push:
     tags: ['v[0-9]*']
@@ -36,10 +33,7 @@ on:
       - 'docker-compose.yml'
       - 'docker-compose.prod.yml'
       - 'scripts/ci_prepare_system_tests_env.sh'
-      - 'scripts/ci_probe_kvm.py'
-      - 'scripts/ci_probe_hosted_cube.sh'
       - 'scripts/ci_build_topology_images.sh'
-      - 'scripts/test_cube_worker_recovery.sh'
       - '.github/workflows/system-tests.yml'
   workflow_dispatch:
 
@@ -53,7 +47,7 @@ concurrency:
 env:
   JWT_SECRET_KEY: ci-jwt-secret-at-least-thirty-two-characters
   API_KEY_DERIVATION_SECRET: ci-api-key-derivation-secret-at-least-32-chars
-  CUBE_TEMPLATE_ID: yuxi-user
+  CONTAINER_E2E_REPLAY_URL_TEMPLATE: http://api:{port}/v1
   OPENAI_REPLAY_URL: http://api:8765/v1
   COOPERATION_REPLAY_URL: http://api:8766/v1
   E2E_USERNAME: ci_e2e_admin
@@ -70,14 +64,6 @@ jobs:
       - uses: actions/checkout@v7
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - name: Prepare hosted KVM
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends qemu-system-x86 xfsprogs
-          python3 scripts/ci_probe_kvm.py
-      - name: Install local Cube and shipping user template
-        timeout-minutes: 25
-        run: bash scripts/ci_probe_hosted_cube.sh
       - name: Prepare Compose environment
         run: bash scripts/ci_prepare_system_tests_env.sh
       - name: Restore api image layer cache
@@ -96,8 +82,16 @@ jobs:
           key: buildkit-minio-${{ runner.os }}-${{ hashFiles('docker/minio/Dockerfile', 'docker/minio/docker-entrypoint.sh') }}
           restore-keys: |
             buildkit-minio-${{ runner.os }}-
+      - name: Restore sandbox image layer cache
+        id: sandbox-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: /tmp/yuxi-buildkit-cache/sandbox
+          key: buildkit-sandbox-${{ runner.os }}-${{ hashFiles('docker/sandbox.Dockerfile') }}
+          restore-keys: |
+            buildkit-sandbox-${{ runner.os }}-
       - name: Build topology images with cached layers
-        run: bash scripts/ci_build_topology_images.sh /tmp/yuxi-buildkit-cache/api /tmp/yuxi-buildkit-cache/minio
+        run: bash scripts/ci_build_topology_images.sh /tmp/yuxi-buildkit-cache/api /tmp/yuxi-buildkit-cache/minio /tmp/yuxi-buildkit-cache/sandbox
       - name: Save successful api build before runtime tests
         if: steps.api-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
@@ -110,12 +104,18 @@ jobs:
         with:
           path: /tmp/yuxi-buildkit-cache/minio
           key: ${{ steps.minio-cache.outputs.cache-primary-key }}
+      - name: Save successful sandbox build before runtime tests
+        if: steps.sandbox-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: /tmp/yuxi-buildkit-cache/sandbox
+          key: ${{ steps.sandbox-cache.outputs.cache-primary-key }}
       - name: Prepare isolated storage for runtime identity
         run: |
           docker compose run --rm --no-deps --user 0:0 api \
             install -d -o 1000 -g 1000 -m 0700 /app/user-data /app/skill-sources /app/skill-projections
       - name: Start background-job runtime topology
-        run: docker compose up -d postgres redis minio etcd milvus api worker
+        run: docker compose up -d postgres redis minio etcd milvus sandbox-runner api worker
       - name: Wait for background-job topology readiness
         run: |
           for attempt in $(seq 1 60); do
@@ -186,16 +186,13 @@ jobs:
       - name: Runtime logs on failure
         if: failure() || cancelled()
         run: |
-          docker compose logs api worker milvus graph --tail 200
+          docker compose logs api worker sandbox-runner milvus graph --tail 200
           docker ps -a --format 'table {{.Names}}\t{{.Status}}'
           docker stats --no-stream
           sudo ss -lntup
           free -h
-          df -h / /data/cubelet
+          df -h / "$RUNNER_TEMP"
           sudo dmesg | tail -60
-          for log in /opt/yuxi-cube/template-image.log /opt/yuxi-cube/template-push.log; do
-            if sudo test -f "$log"; then sudo tail -80 "$log"; fi
-          done
       - name: Stop runtime topology
         if: always()
         run: docker compose down -v
@@ -206,16 +203,13 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: '0.12.6'
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - name: Prepare hosted KVM
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends qemu-system-x86 xfsprogs
-          python3 scripts/ci_probe_kvm.py
-      - name: Install local Cube and shipping user template
-        timeout-minutes: 25
-        run: bash scripts/ci_probe_hosted_cube.sh
       - name: Prepare Compose environment
         run: |
           bash scripts/ci_prepare_system_tests_env.sh
@@ -245,8 +239,16 @@ jobs:
           key: buildkit-minio-${{ runner.os }}-${{ hashFiles('docker/minio/Dockerfile', 'docker/minio/docker-entrypoint.sh') }}
           restore-keys: |
             buildkit-minio-${{ runner.os }}-
+      - name: Restore sandbox image layer cache
+        id: sandbox-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: /tmp/yuxi-buildkit-cache/sandbox
+          key: buildkit-sandbox-${{ runner.os }}-${{ hashFiles('docker/sandbox.Dockerfile') }}
+          restore-keys: |
+            buildkit-sandbox-${{ runner.os }}-
       - name: Build topology images with cached layers
-        run: bash scripts/ci_build_topology_images.sh /tmp/yuxi-buildkit-cache/api /tmp/yuxi-buildkit-cache/minio
+        run: bash scripts/ci_build_topology_images.sh /tmp/yuxi-buildkit-cache/api /tmp/yuxi-buildkit-cache/minio /tmp/yuxi-buildkit-cache/sandbox
       - name: Save successful api build before runtime tests
         if: steps.api-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
@@ -259,12 +261,18 @@ jobs:
         with:
           path: /tmp/yuxi-buildkit-cache/minio
           key: ${{ steps.minio-cache.outputs.cache-primary-key }}
+      - name: Save successful sandbox build before runtime tests
+        if: steps.sandbox-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: /tmp/yuxi-buildkit-cache/sandbox
+          key: ${{ steps.sandbox-cache.outputs.cache-primary-key }}
       - name: Prepare isolated storage for runtime identity
         run: |
           docker compose run --rm --no-deps --user 0:0 api \
             install -d -o 1000 -g 1000 -m 0700 /app/user-data /app/skill-sources /app/skill-projections
       - name: Start focused runtime topology
-        run: docker compose up -d postgres redis minio milvus graph api worker
+        run: docker compose up -d postgres redis minio milvus graph sandbox-runner api worker
       - name: Wait for Milvus retrieval readiness
         run: |
           for attempt in $(seq 1 60); do
@@ -424,10 +432,10 @@ jobs:
             test/integration/services/test_project_workdir.py::test_sessions_share_workdir_only_through_project \
             test/integration/services/test_user_skill_projection.py \
             test/integration/api/test_skill_artifact_authorization.py -q
-      - name: Verify Cube Agent concurrent cancellation through HTTP and worker
-        run: CUBE_TEST_ISOLATED_TOPOLOGY=1 bash scripts/test_cube_worker_recovery.sh
-      - name: Verify real Sandbox storage isolation and shared projections
-        run: docker compose exec -T api uv run --no-sync --no-dev pytest test/integration/sandbox -q
+      - name: Verify container Agent execution and steer cleanup through HTTP and worker
+        run: docker compose exec -T -e E2E_USERNAME -e E2E_PASSWORD -e CONTAINER_E2E_REPLAY_URL_TEMPLATE api uv run --no-sync --no-dev pytest test/e2e/test_container_agent_execution_e2e.py -q
+      - name: Verify real container storage and process isolation
+        run: SANDBOX_CONTAINER_TEST=1 SANDBOX_CONTAINER_IMAGE="$(docker compose config --format json | jq -r '.services["sandbox-image"].image')" uv run --project backend --locked --group test pytest backend/test/integration/sandbox/test_container_sandbox.py -q
       - name: Verify web tool configuration and official HTTPS protocols
         run: |
           docker compose exec -T api uv run --no-sync --no-dev pytest \
@@ -446,16 +454,13 @@ jobs:
       - name: Runtime logs on failure
         if: failure() || cancelled()
         run: |
-          docker compose logs api worker milvus graph --tail 200
+          docker compose logs api worker sandbox-runner milvus graph --tail 200
           docker ps -a --format 'table {{.Names}}\t{{.Status}}'
           docker stats --no-stream
           sudo ss -lntup
           free -h
-          df -h / /data/cubelet
+          df -h / "$RUNNER_TEMP"
           sudo dmesg | tail -60
-          for log in /opt/yuxi-cube/template-image.log /opt/yuxi-cube/template-push.log; do
-            if sudo test -f "$log"; then sudo tail -80 "$log"; fi
-          done
       - name: Stop runtime topology
         if: always()
         run: docker compose -f docker-compose.yml -f backend/test/e2e/web-tools.compose.yml down -v --remove-orphans

@@ -127,3 +127,16 @@ def test_replay_selects_agent_id_from_directory_result():
     assert calls[0][2]["name"] == "worker"
     assert calls[0][2]["agent_id"] == "target-slug"
     assert "SELECTED_AGENT_CHILD" in calls[0][2]["description"]
+
+
+@pytest.mark.parametrize("path", ["/tmp/fixture", "/home/user/workspace/projects/fixture/shared-probe"])
+def test_cooperation_probe_uses_submitted_shared_path(path):
+    """父子执行探针使用提交路径，不假定跨 Run 一定共享 VM 临时目录。"""
+    serialized = f"COOPERATION_ROOT:/fixture.txt COOP_RUNTIME:{path}"
+    parent = CooperationReplayHandler.shared_sandbox_calls(None, serialized, False, {})
+    child = CooperationReplayHandler.shared_sandbox_calls(None, f"COOPERATION_CHILD:/fixture.txt COOP_RUNTIME:{path}", True, {})
+
+    assert parent == [("root-prepare", "execute", {"command": f"printf shared > {path}"})]
+    assert child[0] == ("child-probe", "execute", {"command": f"test -f {path} && printf shared_runtime_verified"})
+    with pytest.raises(AssertionError, match="did not read"):
+        CooperationReplayHandler.shared_sandbox_calls(None, serialized, True, {"child-write": "written", "child-probe": "missing"})

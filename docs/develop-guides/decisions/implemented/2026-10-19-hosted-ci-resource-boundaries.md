@@ -8,6 +8,8 @@ Owner：.github/workflows/system-tests.yml
 
 运行链路的两个 job 都依赖未注册的 self-hosted runner，数据库和局部 HTTP 测试也随完整 Cube 拓扑排队。GitHub Linux 执行器暴露 KVM 的文档不能直接证明 Cube 模板、网络和共享挂载兼容。
 
+常规系统 CI 的沙盒选择及 Cube 探针触发策略由[container 运行链路决定](2026-10-23-container-runtime-ci.md)部分取代；本记录的真实 Cube 验证结果仅对应其指定提交与环境。
+
 ## 决策
 
 ### 实现方案
