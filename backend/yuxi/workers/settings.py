@@ -5,6 +5,7 @@ from __future__ import annotations
 from arq import cron
 from arq.worker import func
 
+from yuxi.bootstrap.capabilities import knowledge_enabled
 from yuxi.bootstrap.worker import _worker_shutdown, _worker_startup
 from yuxi.infrastructure.redis import get_arq_redis_settings
 from yuxi.infrastructure.runtime_settings import get_int_env
@@ -12,7 +13,6 @@ from yuxi.infrastructure.worker_health import WORKER_HEALTH_INTERVAL_SECONDS, WO
 from yuxi.modules.agents.services.runner import MAX_RUN_TRIES, RUN_TIMEOUT_SECONDS, process_agent_run
 from yuxi.modules.background_jobs.dispatch import BACKGROUND_JOB_DEFAULT_TIMEOUT_SECONDS
 from yuxi.modules.extensions.mcp.oauth_service import cleanup_expired_mcp_oauth_attempts
-from yuxi.modules.knowledge.services.background_jobs import process_knowledge_projections
 from yuxi.workers.background_jobs import process_background_job
 
 
@@ -29,9 +29,12 @@ class WorkerSettings:
         func(process_background_job, timeout=BACKGROUND_JOB_DEFAULT_TIMEOUT_SECONDS + 30),
     ]
     cron_jobs = [
-        cron(process_knowledge_projections, second={15, 45}, run_at_startup=True),
         cron(cleanup_expired_mcp_oauth_attempts, second=0, run_at_startup=True),
     ]
+    if knowledge_enabled():
+        from yuxi.modules.knowledge.services.projection_cleanup import process_knowledge_projections
+
+        cron_jobs.append(cron(process_knowledge_projections, second={15, 45}, run_at_startup=True))
     max_jobs = worker_max_jobs()
     # 交互请求避免继承 ARQ 默认的 500ms 空闲轮询等待。
     poll_delay = 0.05

@@ -41,8 +41,9 @@ def client(monkeypatch):
         )
         return user, key
 
-    async def visible(uid):
+    async def visible(uid, *, selection="all"):
         """可见集合仅包含当前用户资源。"""
+        assert selection == "all"
         return [{"kb_id": uid, "name": uid}]
 
     async def retrieve(kb_id, query_text, visible_kbs, file_name=None):
@@ -227,3 +228,12 @@ async def test_api_lifespan_starts_mcp_and_cleans_up_after_failure(monkeypatch):
             pytest.fail("MCP failure must prevent serving requests")
     assert released == ["queue_clients", "neo4j", "postgres"]
     assert app.state.startup_complete is False
+
+
+def test_removed_download_is_not_discoverable_or_callable(client):
+    """已移除的工具不出现在目录，猜测名称也只返回未知工具。"""
+    listed = rpc(client, "tools/list").json()["result"]["tools"]
+    assert "download_kb_file" not in {item["name"] for item in listed}
+    result = rpc(client, "tools/call", {"name": "download_kb_file", "arguments": {"kb_id": "alice", "file_id": "source"}}).json()["result"]
+    assert result["isError"]
+    assert result["content"][0]["text"] == "Unknown knowledge tool"

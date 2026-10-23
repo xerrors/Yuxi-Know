@@ -1,7 +1,11 @@
 x-api-worker-env: &api-worker-env
   HOST_IP: ${HOST_IP:-}
+  YUXI_KNOWLEDGE_ENABLED: ${YUXI_KNOWLEDGE_ENABLED:-true}
+  YUXI_KNOWLEDGE_MCP_URL: ${YUXI_KNOWLEDGE_MCP_URL:-http://api:5050/api/mcp}
   RUNNING_IN_DOCKER: "true"
   YUXI_ENV: development
+  JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env, or rerun `bash scripts/init.sh`.}
+  YUXI_INSTANCE_ID: ${YUXI_INSTANCE_ID:?Set YUXI_INSTANCE_ID in .env, or rerun `bash scripts/init.sh`.}
   API_KEY_DERIVATION_SECRET: ${API_KEY_DERIVATION_SECRET:?Set API_KEY_DERIVATION_SECRET in .env [v0.7.2+], or rerun `bash scripts/init.sh`.}
   RAPIDOCR_MODEL_DIR: /home/yuxi/.cache/rapidocr/models
   # DBs and other services

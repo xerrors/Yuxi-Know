@@ -1,9 +1,12 @@
 """真实 HTTP、worker 与 Cube 验证知识库失败和搜索结果语义。"""
 
+import asyncio
 import json
+import os
 import re
 import shlex
 import uuid
+from contextlib import suppress
 from http.server import BaseHTTPRequestHandler
 
 import asyncpg
@@ -21,6 +24,7 @@ from test.integration.api.helpers import get_thread_workdir_path
 from test.live_api_cleanup import make_test_session_title
 from test.support.openai_replay_server import serve_replay_handler
 from yuxi.modules.agents.runtime.sandbox.backend import UserSandboxBackend
+from yuxi.modules.workspace.filesystem import Workspace
 
 pytestmark = [pytest.mark.e2e, pytest.mark.asyncio, pytest.mark.self_managed_resources, pytest.mark.timeout(240)]
 
@@ -133,7 +137,9 @@ async def test_worker_persists_knowledge_error_and_consistent_grep(e2e_client, e
                 text = str(observed[f"call-p2-{index}"])
                 assert text.count("needle") == count, text
                 assert ("matches above are valid but incomplete" in text) is truncated, text
-            assert "query_kb 执行失败" in str(observed["call-p2-5"])
+            knowledge_error = str(observed["call-p2-5"])
+            assert "Knowledge tool failed (404)" in knowledge_error, knowledge_error
+            assert "资源不存在或不可见" in knowledge_error, knowledge_error
             conn = await asyncpg.connect(postgres_dsn())
             try:
                 audit = await conn.fetchrow(
@@ -155,16 +161,30 @@ async def test_worker_persists_knowledge_error_and_consistent_grep(e2e_client, e
         finally:
             if thread_id:
                 await archive_public_thread(e2e_client, e2e_headers, thread_id, turn_id=turn_id)
-                paths = [guest_path]
+                if os.environ.get("SANDBOX_BACKEND", "cube") == "cube":
+                    cleanup = UserSandboxBackend(uid=uid).execute(
+                        f"rm -f -- {shlex.quote(guest_path)} && test ! -e {shlex.quote(guest_path)}"
+                    )
+                    assert cleanup.exit_code == 0, cleanup.output
+                else:
+                    # container 的 guest 文件属于已终态 Run，持久 Project 文件归 Workspace 清理。
+                    async with asyncio.timeout(30):
+                        while True:
+                            status = await e2e_client.get("/api/user/sandbox", headers=e2e_headers)
+                            assert status.status_code == 200, status.text
+                            state = status.json()
+                            assert state["backend"] == "container", state
+                            if not state["active_runs"] and not state["busy"] and state["state"] == "not_created":
+                                break
+                            await asyncio.sleep(0.1)
                 if workdir:
-                    paths.append(f"/home/user/workspace/{workdir}/matches.txt")
-                cleanup = UserSandboxBackend(uid=uid).execute(
-                    "rm -f -- "
-                    + " ".join(shlex.quote(path) for path in paths)
-                    + " && "
-                    + " && ".join("test ! -e " + shlex.quote(path) for path in paths)
-                )
-                assert cleanup.exit_code == 0, cleanup.output
+                    filesystem = Workspace(uid)
+                    root = f"/{workdir.strip('/')}"
+                    path = f"{root}/matches.txt"
+                    with suppress(FileNotFoundError):
+                        filesystem.delete_authorized_path(path, root=root)
+                    with pytest.raises(FileNotFoundError):
+                        filesystem.stat_authorized_path(path, root=root)
             removed = await e2e_client.delete(f"/api/agent/{slug}", headers=e2e_headers)
             assert removed.status_code in {200, 404}, removed.text
             removed = await e2e_client.delete(f"/api/system/model-providers/{provider_id}", headers=e2e_headers)

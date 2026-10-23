@@ -1,4 +1,4 @@
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 
 from fastapi import FastAPI
 
@@ -15,7 +15,10 @@ async def lifespan(app: FastAPI):
     app.state.startup_components = {}
     try:
         await _startup(app)
-        async with app.state.knowledge_mcp.manager.run():
+        async with AsyncExitStack() as stack:
+            knowledge_mcp = getattr(app.state, "knowledge_mcp", None)
+            if knowledge_mcp is not None:
+                await stack.enter_async_context(knowledge_mcp.manager.run())
             yield
     finally:
         app.state.startup_complete = False

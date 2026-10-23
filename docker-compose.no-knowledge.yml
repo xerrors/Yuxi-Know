@@ -1,0 +1,17 @@
+# 与开发或生产 Compose 叠加；保留所有持久数据，只关闭知识库运行能力。
+services:
+  api:
+    environment:
+      YUXI_KNOWLEDGE_ENABLED: "false"
+  worker:
+    environment:
+      YUXI_KNOWLEDGE_ENABLED: "false"
+  app-init:
+    environment:
+      YUXI_KNOWLEDGE_ENABLED: "false"
+  milvus:
+    scale: 0
+  etcd:
+    scale: 0
+  graph:
+    scale: 0

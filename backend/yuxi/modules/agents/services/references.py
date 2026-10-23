@@ -19,11 +19,15 @@ from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.agents.services.thread_access import require_thread
 from yuxi.modules.agents.tool_results import normalize_tool_result
-from yuxi.modules.knowledge.services.access import visible_knowledge_bases
+from yuxi.modules.extensions.tools.knowledge.client import KnowledgeMCPError, list_knowledge_bases
 from yuxi.modules.models.chat import load_chat_model
 from yuxi.modules.system.options import system_options
 from yuxi.shared.datetime import format_utc_datetime, utc_now
 from yuxi.shared.errors import ContentTooLargeError, OperationTimeoutError, ResourceNotFoundError, StateConflictError, UpstreamError
+
+KNOWLEDGE_REFERENCE_TOOLS = frozenset({"query_kb", "open_kb_document", "find_kb_document"})
+WEB_REFERENCE_TOOLS = frozenset({"web_search", "web_fetch"})
+REFERENCE_TOOLS = KNOWLEDGE_REFERENCE_TOOLS | WEB_REFERENCE_TOOLS
 
 
 class ReferenceMatch(BaseModel):
@@ -149,7 +153,7 @@ def collect_reference_sources(messages: list[Message], visible_kb_ids: set[str])
     for message in messages:
         metadata = message.extra_metadata or {}
         tool_name = metadata.get("tool_name")
-        if tool_name not in {"query_kb", "open_kb_document", "find_kb_document", "web_search", "web_fetch"}:
+        if tool_name not in REFERENCE_TOOLS:
             continue
         try:
             payload = json.loads(normalize_tool_result(metadata.get("output")).audit_content)
@@ -158,7 +162,7 @@ def collect_reference_sources(messages: list[Message], visible_kb_ids: set[str])
         if not isinstance(payload, (dict, list)) or isinstance(payload, dict) and payload.get("error"):
             continue
 
-        if tool_name in {"web_search", "web_fetch"}:
+        if tool_name in WEB_REFERENCE_TOOLS:
             candidates = _web_sources({"results": [payload]} if tool_name == "web_fetch" else payload)
         else:
             kb_id = (metadata.get("input") or {}).get("kb_id")
@@ -255,11 +259,15 @@ async def _load_reference_input(db, scope, thread_id, turn_id):
     result = await repo.get_result(turn_id=turn_id, thread_id=thread_id, uid=scope.uid, app_id=scope.app_id)
     if result is None:
         return None, None, []
-    visible = await visible_knowledge_bases(scope.uid)
-    sources = collect_reference_sources(await repo.list_retrievals(turn_id), {item["kb_id"] for item in visible})
-    from yuxi.modules.knowledge.runtime import knowledge_base
-
-    document_support = {item["kb_id"]: knowledge_base.knowledge_base_type_supports_documents(item["kb_type"]) for item in visible}
+    messages = await repo.list_retrievals(turn_id)
+    visible = []
+    if any((message.extra_metadata or {}).get("tool_name") in KNOWLEDGE_REFERENCE_TOOLS for message in messages):
+        try:
+            visible = await list_knowledge_bases(scope.uid)
+        except KnowledgeMCPError:
+            visible = []
+    document_support = {item["kb_id"]: item["supports_documents"] for item in visible}
+    sources = collect_reference_sources(messages, set(document_support))
     for source in sources:
         if source["kind"] == "knowledge":
             source["supports_documents"] = document_support[source["kb_id"]]

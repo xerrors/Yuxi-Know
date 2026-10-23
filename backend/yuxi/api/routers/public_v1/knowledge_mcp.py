@@ -14,8 +14,15 @@ from starlette.routing import Route
 
 from yuxi.api.dependencies.auth import KNOWLEDGE_MCP_PATH, get_current_user, get_required_user
 from yuxi.infrastructure.postgres.manager import pg_manager
+from yuxi.modules.identity.services.knowledge_delegation import authenticate_knowledge_delegate
 from yuxi.modules.knowledge.base import KBNotFoundError
-from yuxi.modules.knowledge.schemas import FindInputSchema, OpenInputSchema, SearchFileInput, SearchInputSchema
+from yuxi.modules.knowledge.schemas import (
+    FindInputSchema,
+    ListInputSchema,
+    OpenInputSchema,
+    SearchFileInput,
+    SearchInputSchema,
+)
 from yuxi.modules.knowledge.services import tools as knowledge_tools
 from yuxi.modules.knowledge.services.access import visible_knowledge_bases
 
@@ -34,12 +41,12 @@ class KnowledgeMCP:
                 "再用 open_kb_document 读取原文核实；引用来源时保留文件 ID 和行号。"
                 "文件名搜索无结果不代表内容检索无结果；内容检索无结果时可改写关键词。"
                 "长文按 next_offset 继续读取，文件列表按 offset/limit 翻页。"
-                "只能访问当前 Key 所属用户可见的知识库；404 后重新 list_kbs/search_file，勿猜测资源 ID。"
+                "只能访问当前调用用户可见且在委托范围内的知识库；404 后重新 list_kbs/search_file，勿猜测资源 ID。"
             ),
         )
         self.tools = {
             "list_kbs": (
-                None,
+                ListInputSchema,
                 "列出当前用户可见知识库的 kb_id、name、description。先按名称和描述选择检索范围，再调用 query_kb 或 search_file。",
             ),
             "query_kb": (
@@ -85,15 +92,23 @@ class KnowledgeMCP:
         self.route = Route(KNOWLEDGE_MCP_PATH, endpoint=self, methods=["GET", "POST", "DELETE"])
 
     async def __call__(self, scope, receive, send):
-        """每个 HTTP 请求重新验证 Key，不缓存跨请求的认证或资源范围。"""
+        """每个 HTTP 请求重新验证 Key 或内部委托，不缓存身份与范围。"""
         request = Request(scope, receive)
         authorization = request.headers.get("authorization", "")
         try:
-            if not authorization.startswith("Bearer yxkey_"):
-                raise HTTPException(401, "Yuxi API Key required", headers={"WWW-Authenticate": "Bearer"})
             async with pg_manager.get_async_session_context() as db:
-                user = await get_required_user(await get_current_user(request, authorization, db))
+                if authorization.startswith("Bearer yxkey_"):
+                    user = await get_required_user(await get_current_user(request, authorization, db))
+                    selection = "all"
+                elif authorization.startswith("Bearer "):
+                    try:
+                        user, selection = await authenticate_knowledge_delegate(authorization[7:], db)
+                    except ValueError as exc:
+                        raise HTTPException(401, "Invalid Knowledge delegation", headers={"WWW-Authenticate": "Bearer"}) from exc
+                else:
+                    raise HTTPException(401, "Invalid Knowledge delegation", headers={"WWW-Authenticate": "Bearer"})
                 request.state.knowledge_mcp_uid = user.uid
+                request.state.knowledge_mcp_selection = selection
         except HTTPException as exc:
             await JSONResponse({"detail": exc.detail}, status_code=exc.status_code, headers=exc.headers)(scope, receive, send)
             return
@@ -105,7 +120,7 @@ class KnowledgeMCP:
             types.Tool(
                 name=name,
                 description=description,
-                inputSchema=model.model_json_schema() if model else {"type": "object", "properties": {}},
+                inputSchema=model.model_json_schema(),
                 annotations=types.ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False),
             )
             for name, (model, description) in self.tools.items()
@@ -116,13 +131,13 @@ class KnowledgeMCP:
         if name not in self.tools:
             return types.CallToolResult(isError=True, content=[types.TextContent(type="text", text="Unknown knowledge tool")])
         try:
-            uid = self.server.request_context.request.state.knowledge_mcp_uid
-            visible = await visible_knowledge_bases(uid)
+            state = self.server.request_context.request.state
+            visible = await visible_knowledge_bases(state.knowledge_mcp_uid, selection=state.knowledge_mcp_selection)
             model, _ = self.tools[name]
-            if model is None:
-                result = knowledge_tools.list_kbs(visible)
+            payload = model.model_validate(arguments)
+            if name == "list_kbs":
+                result = knowledge_tools.list_kbs(visible, include_capabilities=payload.include_capabilities)
             else:
-                payload = model.model_validate(arguments)
                 result = await getattr(knowledge_tools, name)(visible_kbs=visible, **payload.model_dump())
             return types.CallToolResult(
                 content=[types.TextContent(type="text", text=json.dumps(result, ensure_ascii=False))],

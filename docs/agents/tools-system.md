@@ -89,9 +89,10 @@ reason 去除首尾空白后为 1–4000 字符，写明实际问题或经验、
 | `find_kb_document` | 在指定文件中按关键词或正则定位内容 |
 | `open_kb_document` | 按 `file_id` 分段读取解析后的文档 |
 | `search_file` | 按文件名搜索可见知识库中的文件 |
-| `download_kb_file` | 把有权限的原始文件下载到当前 Project 的 `outputs/` |
 
-工具参数中的 `kb_id`、`file_id` 和文件名都会在工具执行处重新检查，不能用模型提示词或 Agent 配置绕过知识库权限。知识库不会挂载为沙盒目录，读取方式见[知识库机制详解](../mechanisms/knowledge-base.md)。
+五个工具保留名称、参数和面向模型的结果结构，数据读取统一经过平台 HTTP MCP。运行时自动附带代表当前用户及会话选择的短期委托，无需在 Agent 的 MCP 字段添加本平台 Knowledge，也无需个人 OAuth 连接。
+
+Knowledge 在每次工具调用处重新检查 `kb_id`、`file_id`、文件名与当前读取权限；模型提示词和 Agent 配置不能授予权限。关闭 Knowledge 时 MCP 返回 404，实际调用显示知识能力不可用。鉴权、范围和存储边界见[知识库机制详解](../mechanisms/knowledge-base.md#agent-如何看到知识库)。
 
 需要在 Python 中直接取得知识库工具时：
 

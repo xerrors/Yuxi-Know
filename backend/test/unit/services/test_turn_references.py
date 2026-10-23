@@ -113,6 +113,48 @@ def test_revoked_knowledge_and_non_retrieval_tools_provide_no_sources():
     assert collect_reference_sources([tool("list_kbs", payload)], {"kb-a"}) == []
 
 
+@pytest.mark.asyncio
+async def test_reference_loading_reads_knowledge_permissions_only_for_knowledge_tools(monkeypatch):
+    """网页或空检索不发起知识库 MCP 会话，知识工具结果仍解析实时权限。"""
+    from yuxi.modules.agents.services import references
+
+    listed = AsyncMock(return_value=[{"kb_id": "kb-a", "name": "A", "description": "", "supports_documents": True}])
+    retrievals = []
+
+    async def list_retrievals(_turn_id):
+        """返回当前场景的持久工具快照。"""
+        return retrievals
+
+    repo = SimpleNamespace(
+        get_result=AsyncMock(return_value=(SimpleNamespace(id="message"), SimpleNamespace(id="run"))),
+        list_retrievals=list_retrievals,
+    )
+
+    async def get_turn(*_args, **_kwargs):
+        """提供存在的 Turn，聚焦检索来源分支。"""
+        return object()
+
+    monkeypatch.setattr(references, "require_thread", AsyncMock())
+    monkeypatch.setattr(references, "AgentTurnRepository", lambda _db: SimpleNamespace(get_for_scope=get_turn))
+    monkeypatch.setattr(references, "TurnReferenceRepository", lambda _db: repo)
+    monkeypatch.setattr(references, "list_knowledge_bases", listed)
+    scope = SimpleNamespace(uid="user-a", app_id=None)
+
+    retrievals[:] = [tool("web_search", {"results": [{"url": "https://example.com", "content": "网页证据"}]})]
+    _message, _run, web_sources = await references._load_reference_input(SimpleNamespace(), scope, "thread-a", "turn-a")
+    listed.assert_not_awaited()
+    assert [source["url"] for source in web_sources] == ["https://example.com"]
+
+    retrievals[:] = []
+    await references._load_reference_input(SimpleNamespace(), scope, "thread-a", "turn-a")
+    listed.assert_not_awaited()
+
+    retrievals[:] = [tool("query_kb", {"results": [{"content": "知识证据", "file_id": "file-a"}]})]
+    _message, _run, sources = await references._load_reference_input(SimpleNamespace(), scope, "thread-a", "turn-a")
+    listed.assert_awaited_once_with("user-a")
+    assert sources[0]["supports_documents"] is True
+
+
 @pytest.mark.parametrize("url", ["javascript:alert(1)", "file:///secret", "https://user:pass@example.org", "http://"])
 def test_unsafe_web_addresses_are_not_citable(url):
     """网页链接边界拒绝执行协议和内嵌凭据。"""

@@ -665,7 +665,6 @@ def builtin_skill_specs():
                     "find_kb_document",
                     "open_kb_document",
                     "search_file",
-                    "download_kb_file",
                 ],
             },
         ),

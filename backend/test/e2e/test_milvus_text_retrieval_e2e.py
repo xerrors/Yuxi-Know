@@ -508,3 +508,65 @@ async def test_worker_index_and_all_search_modes_use_text_constraints(e2e_client
         thread.join(timeout=5)
         replay.server_close()
         await pg_manager.close()
+
+
+@pytest.mark.self_managed_resources
+async def test_worker_ingest_preserves_submitted_order_and_persisted_parsed_content(e2e_client, e2e_headers):
+    """真实 ingest worker 按提交顺序发布结果，正文由 PostgreSQL 与对象读取证明。"""
+    from test.support.knowledge import default_embedding_model_spec
+
+    kb_id = None
+    samples = [("ingest-first.md", "# First\nFirst ingest proof.\n"), ("ingest-second.md", "# Second\nSecond ingest proof.\n")]
+    pg_manager.initialize()
+    try:
+        created = await e2e_client.post(
+            "/api/knowledge/knowledge-bases",
+            headers=e2e_headers,
+            json={
+                "name": f"pytest_ingest_{uuid4().hex}",
+                "description": "Worker ingest persistence proof",
+                "kb_type": "milvus",
+                "embedding_model_spec": default_embedding_model_spec(),
+            },
+        )
+        assert created.status_code == 200, created.text
+        kb_id = created.json()["kb_id"]
+        uploads = []
+        for filename, content in samples:
+            response = await e2e_client.post(
+                "/api/knowledge/files/upload",
+                params={"kb_id": kb_id},
+                headers=e2e_headers,
+                files={"file": (filename, content.encode(), "text/markdown")},
+            )
+            assert response.status_code == 200, response.text
+            uploads.append(response.json())
+        submitted = await e2e_client.post(
+            f"/api/knowledge/knowledge-bases/{kb_id}/documents",
+            headers=e2e_headers,
+            json={
+                "items": [item["file_path"] for item in uploads],
+                "params": {"auto_index": False, "content_hashes": {item["file_path"]: item["content_hash"] for item in uploads}},
+            },
+        )
+        assert submitted.status_code == 200, submitted.text
+        job_id = submitted.json()["job_id"]
+        await _wait_job(e2e_client, e2e_headers, job_id)
+        persisted = await e2e_client.get(f"/api/background-jobs/{job_id}", headers=e2e_headers)
+        assert persisted.status_code == 200, persisted.text
+        result = persisted.json()["job"]["result"]
+        assert result["processed"] == result["succeeded"] == result["submitted"] == 2
+        assert result["failed"] == 0 and result["result_truncated"] is False
+        assert len(result["items"]) == 2
+        for item, (filename, expected_content) in zip(result["items"], samples, strict=True):
+            file = await KnowledgeFileRepository().get_by_file_id(item["file_id"])
+            assert file.kb_id == kb_id and file.filename == filename and file.status == "parsed"
+            assert item["status"] == "parsed" and file.markdown_file
+            content = await e2e_client.get(f"/api/knowledge/knowledge-bases/{kb_id}/documents/{file.file_id}/content", headers=e2e_headers)
+            assert content.status_code == 200, content.text
+            assert content.json()["content"] == expected_content
+    finally:
+        if kb_id:
+            removed = await e2e_client.delete(f"/api/knowledge/knowledge-bases/{kb_id}", headers=e2e_headers)
+            assert removed.status_code in {200, 404}, removed.text
+        await pg_manager.close()

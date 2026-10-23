@@ -1,4 +1,4 @@
-"""Agent 与 Public API 共用的知识库查询工具用例。"""
+"""Knowledge MCP 与 Public API 共用的知识库查询工具用例。"""
 
 from __future__ import annotations
 
@@ -15,9 +15,19 @@ class KnowledgeToolError(ValueError):
         self.not_found = not_found
 
 
-def list_kbs(visible_kbs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def list_kbs(visible_kbs: list[dict[str, Any]], *, include_capabilities: bool = False) -> list[dict[str, Any]]:
     """列出可见知识库的工具展示字段。"""
-    return [{"kb_id": kb.get("kb_id"), "name": kb.get("name", ""), "description": kb.get("description") or "无描述"} for kb in visible_kbs]
+    result = []
+    for kb in visible_kbs:
+        item = {
+            "kb_id": kb.get("kb_id"),
+            "name": kb.get("name", ""),
+            "description": kb.get("description") or "无描述",
+        }
+        if include_capabilities:
+            item["supports_documents"] = knowledge_base.knowledge_base_type_supports_documents(kb.get("kb_type"))
+        result.append(item)
+    return result
 
 
 def require_visible_kb(kb_id: str, visible_kbs: list[dict[str, Any]]) -> str:
