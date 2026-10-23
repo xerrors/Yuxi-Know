@@ -197,6 +197,7 @@ def test_remote_skill_sandbox_uses_operator_workspace(monkeypatch, tmp_path):
     from yuxi.modules.workspace.paths import user_workspace_dir
 
     monkeypatch.setenv("YUXI_USER_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: SimpleNamespace())
     first = svc._RemoteSkillRequest.create("user-1")
     second = svc._RemoteSkillRequest.create("user-1")
     assert first.backend.id == second.backend.id == "user-1"
@@ -329,6 +330,7 @@ async def test_remote_skill_cleanup_preserves_other_request_and_workspace(monkey
     from yuxi.modules.workspace.paths import user_workspace_dir
 
     monkeypatch.setenv("YUXI_USER_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.backend.get_sandbox_provider", lambda: SimpleNamespace())
     first = svc._RemoteSkillRequest.create("user-1")
     second = svc._RemoteSkillRequest.create("user-1")
     root = user_workspace_dir("user-1")

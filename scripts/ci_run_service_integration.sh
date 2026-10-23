@@ -10,8 +10,11 @@ if [[ -e .env ]]; then
     echo '独立集成测试拒绝加载 backend/.env，请使用干净 checkout 与隔离资源' >&2
     exit 1
 fi
-# 共享 API 与 Cube 不可达，避免把现成运行环境误当成独立性证据。
+# 所有执行节点与共享 API 不可达，避免把现成运行环境误当成独立性证据。
 export TEST_BASE_URL=http://127.0.0.1:1
+export SANDBOX_BACKEND=container
+export SANDBOX_RUNNER_URL=http://127.0.0.1:1
+export SANDBOX_RUNNER_TOKEN=ci-service-integration-unused-token
 export CUBE_API_URL=http://127.0.0.1:1
 export CUBE_PROXY_NODE_IP=127.0.0.1
 export CUBE_PROXY_PORT_HTTP=1

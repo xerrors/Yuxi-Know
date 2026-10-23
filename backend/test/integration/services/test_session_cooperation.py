@@ -13,7 +13,7 @@ from agent_run_test_helpers import cleanup_agent_run_threads, create_agent_run
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from yuxi.modules.agents.services.run_lifecycle import settle_run
+from yuxi.modules.agents.services.run_lifecycle import complete_run_runtime_cleanup, settle_run
 from yuxi.infrastructure.postgres.models import load_models
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.agents.models.cooperation import CooperationEvent
@@ -38,7 +38,7 @@ pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_man
 
 @pytest_asyncio.fixture()
 async def tree(monkeypatch):
-    """每个用例建立独立用户和树，输出与范围均从数据库重新读取。"""
+    """每个用例建立独立用户和树，沙盒清理为替身，输出与范围从数据库回读。"""
     load_models()
     engine = create_async_engine(os.environ["POSTGRES_URL"])
     factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -50,6 +50,10 @@ async def tree(monkeypatch):
                 yield db
 
     monkeypatch.setattr(pg_manager, "get_async_session_context", transaction)
+    monkeypatch.setattr(
+        "yuxi.modules.agents.services.run_lifecycle.get_sandbox_provider",
+        lambda: SimpleNamespace(cleanup_run=lambda *_: None),
+    )
 
     monkeypatch.setattr(
         "yuxi.modules.agents.services.input_config.model_cache.get_model_info",
@@ -540,6 +544,7 @@ async def test_tool_side_effects_replay_across_resume_runs(tree):
         turn = await db.get(AgentTurn, old.turn_id)
         resumed_id = turn.current_run_id
         assert resumed_id != run_id
+        await complete_run_runtime_cleanup(old)
         _, acquired = await AgentRunRepository(db).mark_running(resumed_id, worker_id="resume-worker", lease_seconds=120)
         assert acquired
         await db.commit()
@@ -603,6 +608,8 @@ async def test_same_call_id_in_new_turn_creates_new_work(tree):
             session_record_id=old.session_record_id,
         )
         turn.current_run_id = new_run.id
+        await db.commit()
+        await complete_run_runtime_cleanup(old)
         _, acquired = await AgentRunRepository(db).mark_running(new_run.id, worker_id="new-turn-worker", lease_seconds=120)
         assert acquired
         await db.commit()
@@ -979,6 +986,7 @@ async def test_resume_call_cannot_change_target_session(tree, monkeypatch, opera
         turn = await db.get(AgentTurn, old_turn_id)
         assert turn.current_run_id != run_id
         resumed_id = turn.current_run_id
+        await complete_run_runtime_cleanup(await db.get(AgentRun, run_id))
         _, acquired = await AgentRunRepository(db).mark_running(resumed_id, worker_id="resume-worker", lease_seconds=120)
         assert acquired
         await db.commit()

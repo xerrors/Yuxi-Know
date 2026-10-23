@@ -714,12 +714,12 @@ async def test_runtime_omits_missing_and_disabled_services(scenario):
 
 
 @pytest.mark.parametrize("grouped", [False, True])
-async def test_runtime_does_not_hide_unknown_loading_failure(scenario, monkeypatch, grouped):
-    """只有确定的重连错误可排除服务，混合异常组仍保留真实故障。"""
+async def test_runtime_reports_unknown_loading_failure_without_exposing_tools(scenario, monkeypatch, grouped):
+    """发现故障关闭该 MCP 工具，并保留安全原因供当前 Run 展示。"""
     from yuxi.modules.extensions.mcp import service
 
     assert (await finish(scenario, await begin(scenario))).status_code == 200
-    failure = RuntimeError("protocol failure")
+    failure = RuntimeError("PRIVATE_PROTOCOL_FAILURE")
     if grouped:
         failure = ExceptionGroup("mixed", [StateConflictError("reconnect", code="mcp_reconnect_required"), failure])
 
@@ -728,9 +728,14 @@ async def test_runtime_does_not_hide_unknown_loading_failure(scenario, monkeypat
         raise failure
 
     monkeypatch.setattr(service, "personal_mcp_tools", fail)
-    with pytest.raises(type(failure)) as caught:
-        await service.resolve_runtime_mcp_tools(["fixture"], uid="alice")
-    assert caught.value is failure
+    unavailable, run_tools = {}, {}
+    assert await service.resolve_runtime_mcp_tools(["fixture"], uid="alice", run_tools=run_tools, unavailable=unavailable) == {}
+    expected = "服务连接或调用失败，请检查 MCP 服务后重试"
+    if grouped:
+        expected = "授权凭据不可用或已失效，请在扩展页面重新连接；" + expected
+    assert unavailable == {"fixture": expected}
+    assert run_tools == {}
+    assert scenario["current"].get("tool_call_count", 0) == 0
 
 
 async def test_runtime_invalid_refresh_excludes_service_and_preserves_reconnect_state(scenario):

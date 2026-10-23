@@ -134,7 +134,7 @@ def input_workdir_binding() -> WorkdirBinding:
 
 @pytest_asyncio.fixture
 async def sessions(monkeypatch):
-    """为输入契约建真实数据库，只替代外部发现、投递与通知。"""
+    """为输入契约建真实数据库，替代外部发现、沙盒、投递与通知。"""
     schema, admin_engine, engine = await create_input_schema()
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as db:
@@ -172,6 +172,7 @@ async def sessions(monkeypatch):
     notify = AsyncMock()
 
     monkeypatch.setattr(input_config.model_cache, "get_model_info", lambda spec: SimpleNamespace(model_type="chat"))
+    monkeypatch.setattr(lifecycle, "get_sandbox_provider", lambda: SimpleNamespace(cleanup_run=lambda *_: None))
     monkeypatch.setattr(lifecycle, "finish_turn_observation_if_terminal", notify)
     monkeypatch.setattr(turns, "finish_turn_observation_if_terminal", notify)
     monkeypatch.setattr(turns, "publish_cancel_signals", notify)

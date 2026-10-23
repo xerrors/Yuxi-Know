@@ -81,6 +81,41 @@ class ServiceIntegrationTests(unittest.TestCase):
             (ROOT / "scripts/ci_run_service_integration.sh").read_text(),
         )
 
+    def test_service_setup_selects_container_without_reachable_execution_nodes(self):
+        """初始化与 pytest 使用相同配置，不能隐式依赖 Cube 或现成 runner。"""
+        with tempfile.TemporaryDirectory() as root:
+            base = Path(root)
+            (base / "backend").mkdir()
+            (base / "scripts").mkdir()
+            script = base / "scripts/ci_run_service_integration.sh"
+            script.write_text((ROOT / "scripts/ci_run_service_integration.sh").read_text())
+            uv = base / "uv"
+            uv.write_text(
+                f"#!{sys.executable}\n"
+                "import json, os\n"
+                "keys = ('SANDBOX_BACKEND', 'SANDBOX_RUNNER_URL', 'SANDBOX_RUNNER_TOKEN', 'CUBE_API_URL', 'TEST_BASE_URL')\n"
+                "with open(os.environ['ENV_LOG'], 'a') as log:\n"
+                "    log.write(json.dumps({key: os.environ.get(key) for key in keys}) + '\\n')\n"
+            )
+            uv.chmod(0o755)
+            log = base / "env.jsonl"
+            subprocess.run(
+                ["bash", str(script)],
+                env={
+                    "PATH": f"{base}:{os.environ['PATH']}", "POSTGRES_URL": "fixture",
+                    "REDIS_URL": "fixture", "YUXI_SKILL_DATA_DIR": root, "ENV_LOG": str(log),
+                    "SANDBOX_BACKEND": "cube", "SANDBOX_RUNNER_URL": "http://existing-runner:8090",
+                },
+                capture_output=True, text=True, timeout=5, check=True,
+            )
+            environments = [json.loads(line) for line in log.read_text().splitlines()]
+            self.assertEqual(len(environments), 2)
+            for env in environments:
+                self.assertEqual(env["SANDBOX_BACKEND"], "container")
+                for key in ("SANDBOX_RUNNER_URL", "CUBE_API_URL", "TEST_BASE_URL"):
+                    self.assertEqual(env[key], "http://127.0.0.1:1")
+                self.assertGreaterEqual(len(env["SANDBOX_RUNNER_TOKEN"]), 16)
+
     def test_service_setup_requires_explicit_resource_locations(self):
         """遗漏任一资源位置时不得初始化默认数据库或 Skill 目录。"""
         with tempfile.TemporaryDirectory() as root:

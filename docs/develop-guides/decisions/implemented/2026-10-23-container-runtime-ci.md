@@ -16,6 +16,10 @@ Owner：.github/workflows/system-tests.yml
 
 协作 E2E 对 container 使用同一 Project 的真实文件作为父子 Run 的 execute 探针，并在压缩后回读文件、等待终态容器清理；对 Cube 保留持久 VM 的 `/tmp` 和执行身份断言。显式选择的 container 专项在服务报告错误后端时失败，不能用 skip 冒充通过。
 
+独立 PostgreSQL/Redis 集成脚本显式选择 container 的有效初始化配置，但 runner、Cube 与共享 API 地址均不可达，证明这些服务测试无需沙盒节点。仅验证本地目录和清理的 Skill 单测在 provider 装配处提供替身，继续使用真实 Backend 身份与文件字节断言；真实执行由系统 E2E 负责。
+
+输入与协作的数据库 fixture 在 provider 边界替代外部清理，数据库中的清理责任解除、终态和后续调度仍经过正式服务；手工构造恢复和新轮次的用例先提交旧 Run，再执行清理并领取后续 Run，不绕过清理责任守卫。MCP 集成断言遵循现有[单服务故障隔离契约](2026-10-20-mcp-runtime-degradation.md)，回读不可用原因并拒绝工具暴露，不再要求发现异常中断普通聊天；产品运行逻辑不变。
+
 `cube-hosted-probe.yml` 仅保留手动入口；Cube 实现、单测、专属 integration/E2E 与生产默认后端不变。常规 CI 的成功不表达 Cube VM、模板或共享挂载已通过验证。此决定部分取代[托管系统测试](2026-10-19-hosted-runtime-system-tests.md)、[托管资源边界](2026-10-19-hosted-ci-resource-boundaries.md)与[沙盒环境](2026-10-15-sandbox-environment.md)中常规 CI 选择 Cube 的部分。
 
 ## 替代方案
@@ -30,8 +34,10 @@ container 与 Cube VM 具有不同的隔离和临时目录语义。常规 CI 验
 
 ## 验证
 
-- Passed：`python3 -m unittest scripts.test_ci_resource_boundaries scripts.test_verify_engineering_contracts scripts.test_release_workflows`，86 项。真实 Compose 展开确认两种业务进程使用 container、令牌与挂载匹配、socket 仅归 runner；恢复 Cube、遗漏 runner/镜像、修改探针事件或关闭专项标记均被负控拒绝。实际 shell 的构建参数测试核对 sandbox 镜像及独立缓存，遗漏 profile 时构建前失败。
+- Passed：`python3 -m unittest scripts.test_ci_resource_boundaries scripts.test_verify_engineering_contracts scripts.test_release_workflows`，87 项。真实 Compose 展开确认两种业务进程使用 container、令牌与挂载匹配、socket 仅归 runner；恢复 Cube、遗漏 runner/镜像、修改探针事件或关闭专项标记均被负控拒绝。实际 shell 的构建参数测试核对 sandbox 镜像及独立缓存，遗漏 profile 时构建前失败；独立集成脚本的初始化和 pytest 子进程均使用 container 且执行节点不可达。
 - Passed：后端全量 `pytest test/unit -m "not slow" -q` 为 3104 passed、107 skipped；容器未挂载仓库根文件的部署检查另在宿主执行。后端 support unit 31 项，覆盖 Project 与 `/tmp` 两类重放探针及错误后端不能 skip；部署配置 unit 174 项，继续验证生产默认契约。
+- Passed：无沙盒部署配置的宿主补跑完整 `uv run --project backend --no-sync --group test pytest backend/test/unit -m 'not slow' -q`，3211 项、无 skip。两个 Skill 文件单测在遗漏 provider 替身时复现缺 Cube 配置失败，修复后相关文件 29 项通过。
+- Passed：全新 PostgreSQL 16、Redis 7.4.10 运行完整 `bash scripts/ci_run_service_integration.sh`，350 项、无 skip，192.58 秒；共享 API、runner 与 Cube 均不可达。清理前置缺失时恢复 5 项协作领取失败，补齐正式清理后，幂等、来源身份和副作用数量断言通过。
 - Passed：真实 Docker container integration 26 项，无 skip。使用预构建 sandbox 镜像，显式设置 `SANDBOX_CONTAINER_TEST=1`，执行 `uv run --project backend --no-sync --group test pytest backend/test/integration/sandbox/test_container_sandbox.py -q`，通过 Docker inspect、文件字节、进程及协议证明隔离、认证、取消和清理。
 - Passed：独立 Compose container 拓扑执行工作流的 readiness 与 worker 基线检查，包含暂停 worker 后 readiness 失效与恢复、3 项 readiness API，以及 2 项 container execute/steer E2E，无 skip。E2E 回读 Viewer 文件、Run 终态、执行身份及无活动容器状态。
 - Passed：工作流原有确定性生命周期入口 `bash backend/test/run_tests.sh e2e`，41 项、无 skip，包含 FIFO、steer、审批、取消、消费进程丢失恢复、五组父子协作、容量控制、停止和深度拒绝；协作分支回读 Project 文件与持久结果。
