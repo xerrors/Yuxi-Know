@@ -246,7 +246,7 @@ async def create_workspace_directory(*, parent_path: str, name: str, current_use
             root=WORKSPACE_SCOPE_ROOT,
         )
     except FileExistsError as exc:
-        raise InvalidOperationError("同名文件或文件夹已存在") from exc
+        raise InvalidOperationError("同名文件或文件夹已存在", code="workspace_directory_exists") from exc
     except FileNotFoundError as exc:
         raise ResourceNotFoundError("目标目录不存在") from exc
     except (PermissionError, NotADirectoryError, ValueError) as exc:

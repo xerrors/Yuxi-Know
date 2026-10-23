@@ -32,7 +32,7 @@ mineru_ocr_host_opts = Option(
                 "default": "medium",
                 "choices": ["medium", "high"],
                 "choice_labels": {"medium": "标准（medium）", "high": "高精度（high）"},
-                "help": "仅对 Hybrid 生效。标准模式更快，不分析图片与图表；高精度模式支持图片与图表分析，耗时更长。",
+                "help": "对 Hybrid 生效；高精度支持图片与图表分析，耗时更长。",
             },
         ]
     },
@@ -59,7 +59,7 @@ mineru_official_api_opts = Option(
                 "default": "pipeline",
                 "choices": ["pipeline", "vlm"],
                 "choice_labels": {"pipeline": "Pipeline（传统解析）", "vlm": "VLM（视觉模型解析）"},
-                "help": "Pipeline 使用传统解析流程；VLM 使用视觉模型解析。保存后对后续解析生效。",
+                "help": "Pipeline 使用传统解析流程；VLM 使用视觉模型解析。",
             },
         ]
     },

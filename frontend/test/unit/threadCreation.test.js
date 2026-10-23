@@ -165,8 +165,9 @@ test('预写 Thread 身份也须加载历史，已有历史的视图只恢复订
     const dependencies = {
       threadCreationInFlight: ref(false), agentStore: { isInitialized: true }, threads: ref([{ id: 'thread' }]),
       currentThreadId: ref('thread'), getThreadState: () => ({ historyLoaded }),
-      props: { embedded: false }, workspaceActive: ref(true), chatThreadsStore: { setCurrentThreadId() {} },
-      resumeCurrentRunForVisiblePage: async () => actions.push('resume'), selectChat: async id => actions.push(id)
+      props: { embedded: false }, workspaceActive: ref(true), chatThreadsStore: { setCurrentThreadId() {}, upsertThread() {} },
+      agentApi: { async getPublicThread() { return { id: 'thread' } } },
+      resumeCurrentRunForVisiblePage: async () => actions.push('resume'), selectChat: async id => { actions.push(id); return true }
     }
     const select = workspaceLogic('const selectThreadFromRoute =', 'const sessionInput =', dependencies, 'selectThreadFromRoute')
     assert.equal(await select('thread'), true)
@@ -230,4 +231,49 @@ for (const status of [403, 404, 503]) {
     assert.deepEqual(execution, [])
     assert.equal(availability.status.value, status === 503 ? 'error' : 'unavailable')
   })
+}
+
+for (const status of [403, 404, 410, 503, undefined]) {
+  test(`恢复未缓存线程遇到 ${status ?? '网络错误'}，只有确定失效才拒绝路由`, async () => {
+    let errors = 0
+    const dependencies = {
+      threadCreationInFlight: ref(false), agentStore: { isInitialized: true }, threads: ref([]), currentThreadId: ref(null),
+      agentApi: { async getPublicThread() { throw { status } } },
+      chatThreadsStore: { upsertThread() { assert.fail('失败详情不能写入列表') } },
+      handleChatError() { errors++ }
+    }
+    const select = workspaceLogic('const selectThreadFromRoute =', 'const sessionInput =', dependencies, 'selectThreadFromRoute')
+    assert.equal(await select('remembered-thread'), [403, 404, 410].includes(status) ? false : null)
+    assert.equal(errors, 1)
+  })
+}
+
+for (const historyLoaded of [false, true]) {
+  for (const status of [403, 404, 410, 503, undefined]) {
+    test(`缓存线程（历史${historyLoaded ? '已加载' : '未加载'}）遇到 ${status ?? '网络错误'}，失效结果传回路由协调器`, async () => {
+      const currentThreadId = ref(historyLoaded ? 'cached' : 'previous')
+      const errors = []
+      const dependencies = {
+        threadCreationInFlight: ref(false), agentStore: { isInitialized: true },
+        threads: ref([{ id: 'cached', agent: { id: 'agent' } }]), currentThreadId,
+        currentChatId: computed(() => currentThreadId.value), currentAgentId: ref('agent'),
+        getThreadState: () => ({ historyLoaded }), props: { embedded: false },
+        workspaceActive: ref(true), pageVisible: ref(true), isLoadingMessages: ref(false),
+        handleValidationError() { assert.fail('有效缓存的智能体不能作为失效原因') },
+        AgentValidator: { validateAgentIdWithError: () => true }, resetAgentPanelState() {},
+        setCurrentThreadId: value => { currentThreadId.value = value },
+        refreshSessionAgent: async () => {}, agentExecutionAvailable: ref(false),
+        agentApi: { async getPublicThread() { throw { status } } },
+        fetchThreadMessages: async () => { throw { status } },
+        handleChatError: error => errors.push(error.status),
+        chatThreadsStore: { upsertThread() { assert.fail('错误响应不能写入导航列表') } },
+        nextTick: async () => {}, scrollController: { async scrollToBottomStaticForce() {} },
+        resumeCurrentRunForVisiblePage() { assert.fail('失效或读取失败时不能恢复执行') }
+      }
+      const select = workspaceLogic('const selectChat =', 'const sessionInput =', dependencies, 'selectThreadFromRoute')
+      assert.equal(await select('cached'), [403, 404, 410].includes(status) ? false : null)
+      assert.deepEqual(errors, [status])
+      assert.equal(dependencies.isLoadingMessages.value, false)
+    })
+  }
 }

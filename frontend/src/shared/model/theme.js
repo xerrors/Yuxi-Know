@@ -72,6 +72,12 @@ export const useThemeStore = defineStore('theme', () => {
           controlItemBgActive: css('--gray-100'),
           controlItemBgHover: css('--gray-50')
         },
+        Dropdown: {
+          colorPrimary: css('--gray-900'),
+          controlItemBgActive: css('--gray-100'),
+          controlItemBgHover: css('--gray-50'),
+          controlItemBgActiveHover: css('--gray-150')
+        },
         Switch: {
           colorTextLightSolid: css('--color-on-primary'),
           colorTextQuaternary: css('--gray-600'),

@@ -117,7 +117,8 @@ test('项目默认折叠且提供完整名称提示', () => {
     'utf8'
   )
 
-  assert.match(source, /const expandedProjects = ref\(new Set\(\)\)/)
+  const uiSource = readFileSync(new URL('../../src/modules/session/model/chatUI.js', import.meta.url), 'utf8')
+  assert.match(uiSource, /const expandedProjects = ref\(new Set\(\)\)/)
   assert.match(
     source,
     /const isProjectExpanded = \(projectId\) => expandedProjects\.value\.has\(projectId\)/
@@ -169,7 +170,7 @@ test('项目提供带项目上下文的新建入口', () => {
     'utf8'
   )
   const layoutSource = readFileSync(
-    new URL('../../src/app/layouts/AppLayout.vue', import.meta.url),
+    new URL('../../src/modules/session/ui/SessionNavigation.vue', import.meta.url),
     'utf8'
   )
   const agentViewSource = readFileSync(new URL('../../src/pages/AgentView.vue', import.meta.url), 'utf8')

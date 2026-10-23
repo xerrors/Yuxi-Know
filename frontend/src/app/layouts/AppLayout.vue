@@ -2,7 +2,6 @@
 import { ref, onMounted, onUnmounted, computed, provide, watch } from 'vue'
 import { useMediaQuery } from '@vueuse/core'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
 import {
   BarChart3,
   ClipboardList,
@@ -11,7 +10,8 @@ import {
   HardDrive,
   PanelLeft,
   PanelLeftOpen,
-  MessageCirclePlus,
+  MessageCircle,
+  SquarePen,
   Search,
 } from '@lucide/vue'
 
@@ -28,10 +28,7 @@ import { storeToRefs } from 'pinia'
 import UserInfoComponent from '@/modules/settings/ui/UserInfoComponent.vue'
 import BackgroundJobsDrawer from '@/modules/background-jobs/ui/BackgroundJobsDrawer.vue'
 import SettingsModal from '@/modules/settings/ui/SettingsModal.vue'
-import SessionNavSection from '@/modules/session/ui/SessionNavSection.vue'
-import GlobalSearchModal from '@/modules/session/ui/GlobalSearchModal.vue'
-import { searchWorkspaceFiles } from '@/apis/workspace_api'
-import { projectApi } from '@/apis/project_api'
+import SessionNavigation from '@/modules/session/ui/SessionNavigation.vue'
 import { createSessionRouteCache } from './sessionRouteCache'
 
 const configStore = useConfigStore()
@@ -44,19 +41,20 @@ const projectsStore = useProjectsStore()
 const jobsStore = useBackgroundJobsStore()
 const userStore = useUserStore()
 const { activeCount: activeCountRef, isDrawerOpen } = storeToRefs(jobsStore)
-const { projects, isLoading: projectsLoading, error: projectsError } = storeToRefs(projectsStore)
-const { threads, currentThreadId, hasMoreThreads, isLoadingMoreThreads, threadCreationInFlight } =
-  storeToRefs(chatThreadsStore)
-
-// Add state for GitHub stars
-const githubStars = ref(0)
-const isLoadingStars = ref(false)
+const { threadCreationInFlight } = storeToRefs(chatThreadsStore)
 
 // Add state for settings modal
 const showSettingsModal = ref(false)
 const settingsInitialTab = ref('')
 
-const { sidebarCollapsed } = storeToRefs(chatUIStore)
+const route = useRoute()
+const router = useRouter()
+const isAgentView = computed(() => ['AgentComp', 'AgentCompWithThreadId'].includes(route.name))
+const { sidebarCollapsed, lastThreadId, sessionsPinned, sessionPeekOpen } = storeToRefs(chatUIStore)
+const normalNavigationRef = ref(null)
+const sessionsVisible = computed(
+  () => !sidebarCollapsed.value || (isAgentView.value && (sessionsPinned.value || sessionPeekOpen.value))
+)
 const compactViewport = useMediaQuery('(max-width: 767px)')
 watch(
   compactViewport,
@@ -65,8 +63,6 @@ watch(
   },
   { immediate: true }
 )
-const sessionSearchOpen = ref(false)
-const projectPendingId = ref(null)
 
 // Provide settings modal methods to child components
 const openSettingsModal = (tab) => {
@@ -90,21 +86,6 @@ const getRemoteKnowledgeBase = async () => {
   }
 }
 
-// Fetch GitHub stars count
-const fetchGithubStars = async () => {
-  try {
-    isLoadingStars.value = true
-    // 公共API，可以直接使用fetch
-    const response = await fetch('https://api.github.com/repos/xerrors/Yuxi')
-    const data = await response.json()
-    githubStars.value = data.stargazers_count
-  } catch (error) {
-    console.error('获取GitHub stars失败:', error)
-  } finally {
-    isLoadingStars.value = false
-  }
-}
-
 const handleGlobalKeydown = (e) => {
   // Ctrl+Shift+D or Cmd+Shift+D: Toggle Debug Modal for SuperAdmin
   if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'D' || e.key === 'd')) {
@@ -125,7 +106,6 @@ onMounted(() => {
   // 仅管理员加载后台作业数据
   if (userStore.isAdmin) {
     jobsStore.loadJobs()
-    fetchGithubStars() // Fetch GitHub stars on mount
   }
   startThreadStatusSync()
 })
@@ -138,7 +118,7 @@ const startThreadStatusSync = () => {
   if (threadStatusSyncTimer) return
   threadStatusSyncTimer = setInterval(() => {
     if (
-      sidebarCollapsed.value ||
+      !sessionsVisible.value ||
       (typeof document !== 'undefined' && document.visibilityState !== 'visible')
     ) {
       return
@@ -155,27 +135,23 @@ onUnmounted(() => {
   }
 })
 
-const route = useRoute()
-const router = useRouter()
 const sessionRouteCache = createSessionRouteCache(router)
 onUnmounted(sessionRouteCache.dispose)
 
 const activeJobCount = computed(() => activeCountRef.value || 0)
-const activeSessionThreadId = computed(() => {
-  return route.path.startsWith('/agent') ? currentThreadId.value : null
-})
 const productName = computed(() => infoStore.branding.name || 'Yuxi')
 
 // 下面是导航菜单部分，添加智能体项
 const mainList = computed(() => {
   const items = [
     {
-      name: '新建对话',
-      path: '/agent',
-      icon: MessageCirclePlus,
-      activeIcon: MessageCirclePlus,
-      action: true,
-      exactActive: true
+      name: '对话',
+      path: lastThreadId.value
+        ? router.resolve({ name: 'AgentCompWithThreadId', params: { thread_id: lastThreadId.value } }).path
+        : '/agent',
+      activePaths: ['/agent'],
+      icon: MessageCircle,
+      activeIcon: MessageCircle
     }
   ]
 
@@ -226,14 +202,12 @@ const isNavItemActive = (item) => {
 
 const setSidebarCollapsed = (collapsed) => {
   sidebarCollapsed.value = collapsed
+  sessionsPinned.value = false
+  sessionPeekOpen.value = false
 }
 
 const toggleSidebar = () => {
   setSidebarCollapsed(!sidebarCollapsed.value)
-}
-
-const openSessionSearch = () => {
-  sessionSearchOpen.value = true
 }
 
 const initAgentNavigation = async () => {
@@ -255,113 +229,11 @@ const loadProjects = async () => {
   }
 }
 
-const handleSelectChat = (threadId) => {
-  if (!threadId) return
-  if (!chatThreadsStore.setCurrentThreadId(threadId)) return
-  router.push({ name: 'AgentCompWithThreadId', params: { thread_id: threadId } })
-}
-
-const handleSearchThreadFound = (thread) => {
-  chatThreadsStore.upsertThread(thread)
-}
-
-const handleSearchSelectThread = (thread) => {
-  if (!thread?.id) return
-  chatThreadsStore.upsertThread(thread)
-  handleSelectChat(thread.id)
-}
-
-const handleCreateSessionFromSearch = () => {
-  if (!chatThreadsStore.setCurrentThreadId(null)) return
-  router.push({ name: 'AgentComp' })
-}
-
-const handleCreateProjectChat = async (projectId) => {
-  if (!projectId || projectPendingId.value || threadCreationInFlight.value) return
-  await router.push({ name: 'AgentComp', query: { project_id: projectId } })
-  chatThreadsStore.setCurrentThreadId(null)
-}
-
-const searchWorkspace = (query) => searchWorkspaceFiles(query)
-
-// 侧边栏搜索到工作区文件后跳转到工作区并打开对应文件
-const handleSearchSelectFile = (entry) => {
-  if (!entry?.path) return
-  router.push({ name: 'WorkspaceComp', query: { open: entry.path } })
-}
-
-const handleArchiveChat = async (threadId) => {
-  if (!threadId) return
-  try {
-    await chatThreadsStore.archiveThread(threadId)
-    if (route.params.thread_id === threadId) {
-      await router.replace({ name: 'AgentComp' })
-    }
-  } catch (error) {
-    console.warn('归档对话失败:', error)
-  }
-}
-
-const handleRenameChat = async ({ chatId, title }) => {
-  try {
-    await chatThreadsStore.updateThread(chatId, title)
-  } catch (error) {
-    console.warn('重命名对话失败:', error)
-  }
-}
-
-const handleTogglePinChat = async (threadId) => {
-  const thread = threads.value.find((item) => item.id === threadId)
-  if (!thread) return
-  try {
-    await chatThreadsStore.updateThread(threadId, null, !thread.yuxi.is_pinned)
-    await chatThreadsStore.loadThreads()
-    if (currentThreadId.value) {
-      chatThreadsStore.setCurrentThreadId(currentThreadId.value)
-    }
-  } catch (error) {
-    console.warn('更新置顶状态失败:', error)
-  }
-}
-
-const handleRenameProject = async ({ projectId, name }) => {
-  if (!projectId || projectPendingId.value) return
-  projectPendingId.value = projectId
-  try {
-    const updatedProject = await projectApi.renameProject(projectId, name)
-    projectsStore.replaceProject(updatedProject)
-    message.success('项目已重命名')
-  } catch (error) {
-    message.error(error?.message || '重命名项目失败')
-  } finally {
-    projectPendingId.value = null
-  }
-}
-
-const handleDeleteProject = async (projectId) => {
-  if (!projectId || projectPendingId.value) return
-  projectPendingId.value = projectId
-  try {
-    const removedThreadIds = await chatThreadsStore.withThreadListUpdate(async () => {
-      await projectApi.deleteProject(projectId)
-      return chatThreadsStore.removeThreadsByProject(projectId)
-    })
-    projectsStore.removeProject(projectId)
-    if (removedThreadIds.includes(route.params.thread_id)) {
-      await router.replace({ name: 'AgentComp' })
-    }
-    message.success('项目已删除，其中对话已归档，项目文件夹已保留')
-  } catch (error) {
-    message.error(error?.message || '删除项目失败')
-  } finally {
-    projectPendingId.value = null
-  }
-}
 
 watch(
   () => [route.path, route.params.thread_id],
   () => {
-    if (!route.path.startsWith('/agent')) return
+    if (!isAgentView.value) return
     if (threadCreationInFlight.value) return
     const threadId = typeof route.params.thread_id === 'string' ? route.params.thread_id : null
     chatThreadsStore.setCurrentThreadId(threadId)
@@ -377,7 +249,10 @@ provide('settingsModal', {
 </script>
 
 <template>
-  <div class="app-layout" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
+  <div
+    class="app-layout"
+    :class="{ 'sidebar-collapsed': sidebarCollapsed }"
+  >
     <div class="header">
       <div class="sidebar-brand" @click.stop>
         <router-link v-if="!sidebarCollapsed" to="/" class="brand-link">
@@ -398,9 +273,9 @@ provide('settingsModal', {
           <button
             type="button"
             class="sidebar-header-action"
-            :class="{ active: sessionSearchOpen }"
+            :class="{ active: normalNavigationRef?.sessionSearchOpen }"
             aria-label="搜索"
-            @click="openSessionSearch"
+            @click="normalNavigationRef?.openSessionSearch()"
           >
             <Search size="17" />
           </button>
@@ -415,39 +290,37 @@ provide('settingsModal', {
         </div>
       </div>
       <div class="nav">
-        <RouterLink
-          v-if="primaryNavItem"
-          :to="primaryNavItem.path"
-          class="nav-item"
-          :class="{ active: isNavItemActive(primaryNavItem) }"
-          :active-class="primaryNavItem.action ? '' : 'active'"
-          @click.stop
-        >
-          <a-tooltip placement="right" :open="sidebarCollapsed ? undefined : false">
-            <template #title>{{ primaryNavItem.name }}</template>
-            <component
-              class="icon"
-              :is="
-                isNavItemActive(primaryNavItem) ? primaryNavItem.activeIcon : primaryNavItem.icon
-              "
-              size="18"
-            />
-          </a-tooltip>
-          <span class="nav-text">{{ primaryNavItem.name }}</span>
-        </RouterLink>
-
-        <button
-          v-if="sidebarCollapsed"
-          type="button"
-          class="nav-item"
-          :class="{ active: sessionSearchOpen }"
-          aria-label="搜索"
-          @click.stop="openSessionSearch"
-        >
-          <a-tooltip placement="right" title="搜索">
-            <Search class="icon" size="18" />
-          </a-tooltip>
-        </button>
+        <div v-if="primaryNavItem" class="primary-nav-row">
+          <RouterLink
+            :to="primaryNavItem.path"
+            class="nav-item"
+            :class="{ active: isNavItemActive(primaryNavItem) }"
+            :active-class="primaryNavItem.action ? '' : 'active'"
+            @click.stop
+          >
+            <a-tooltip placement="right" :open="sidebarCollapsed ? undefined : false">
+              <template #title>{{ primaryNavItem.name }}</template>
+              <component
+                class="icon"
+                :is="
+                  isNavItemActive(primaryNavItem) ? primaryNavItem.activeIcon : primaryNavItem.icon
+                "
+                size="18"
+              />
+            </a-tooltip>
+            <span class="nav-text">{{ primaryNavItem.name }}</span>
+          </RouterLink>
+          <RouterLink
+            v-if="!sidebarCollapsed"
+            :to="{ name: 'AgentComp' }"
+            class="primary-new-chat"
+            active-class=""
+            aria-label="新建对话"
+            title="新建对话"
+          >
+            <SquarePen :size="16" aria-hidden="true" />
+          </RouterLink>
+        </div>
 
         <RouterLink
           v-for="(item, index) in secondaryNavItems"
@@ -471,43 +344,13 @@ provide('settingsModal', {
         </RouterLink>
       </div>
       <div class="fill">
-        <SessionNavSection
-          v-if="!sidebarCollapsed"
-          class="sidebar-sessions"
-          :current-chat-id="activeSessionThreadId"
-          :chats-list="threads.filter((thread) => !thread.yuxi.parent_session_id)"
-          :projects="projects"
-          :projects-loading="projectsLoading && !projectsStore.hasLoaded"
-          :projects-error="projectsStore.hasLoaded ? '' : projectsError"
-          :project-pending-id="projectPendingId"
-          :has-more-chats="hasMoreThreads"
-          :is-loading-more="isLoadingMoreThreads"
-          @select-chat="handleSelectChat"
-          @archive-chat="handleArchiveChat"
-          @rename-chat="handleRenameChat"
-          @toggle-pin="handleTogglePinChat"
-          @rename-project="handleRenameProject"
-          @delete-project="handleDeleteProject"
-          @create-project-chat="handleCreateProjectChat"
-          @retry-projects="loadProjects"
-          @load-more-chats="() => chatThreadsStore.loadMoreThreads()"
+        <SessionNavigation
+          ref="normalNavigationRef"
+          v-show="!sidebarCollapsed"
+          :visible="!sidebarCollapsed"
         />
       </div>
       <div class="foo">
-        <div class="github nav-item" @click.stop>
-          <a-tooltip placement="right" :open="sidebarCollapsed ? undefined : false">
-            <template #title>欢迎 Star</template>
-            <a href="https://github.com/xerrors/Yuxi" target="_blank" class="github-link">
-              <svg class="icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M12 .297a12 12 0 0 0-3.79 23.4c.6.11.82-.26.82-.58v-2.05c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.33-1.76-1.33-1.76-1.09-.75.08-.74.08-.74 1.2.08 1.83 1.23 1.83 1.23 1.07 1.83 2.8 1.3 3.49.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.23-3.22-.12-.3-.54-1.52.12-3.16 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.64.24 2.86.12 3.16.77.84 1.23 1.91 1.23 3.22 0 4.61-2.8 5.63-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.22.69.83.57A12 12 0 0 0 12 .297Z" />
-              </svg>
-              <span class="nav-text">GitHub</span>
-              <span v-if="githubStars > 0" class="github-stars">
-                <span class="star-count">{{ (githubStars / 1000).toFixed(1) }}k</span>
-              </span>
-            </a>
-          </a-tooltip>
-        </div>
         <!-- 用户信息组件 -->
         <div class="nav-item user-info" @click.stop>
           <UserInfoComponent :show-role="!sidebarCollapsed">
@@ -548,20 +391,6 @@ provide('settingsModal', {
         <component :is="Component" v-if="route.meta.keepAlive === false" />
       </router-view>
     </main>
-
-    <GlobalSearchModal
-      v-model:open="sessionSearchOpen"
-      :modes="['session', 'file']"
-      default-mode="session"
-      :recent-threads="threads.filter((thread) => !thread.yuxi.parent_session_id)"
-      :file-search="searchWorkspace"
-      file-placeholder="搜索个人空间文件..."
-      file-scope-hint="仅搜索个人空间，不包含知识库文件。"
-      @select-thread="handleSearchSelectThread"
-      @create-thread="handleCreateSessionFromSearch"
-      @thread-found="handleSearchThreadFound"
-      @select-file="handleSearchSelectFile"
-    />
 
     <BackgroundJobsDrawer v-if="userStore.isAdmin" />
     <SettingsModal
@@ -619,6 +448,7 @@ div.header,
 }
 
 .header {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 0 0 @sidebar-width;
@@ -647,16 +477,6 @@ div.header,
     padding: 0 @sidebar-padding-x;
   }
 
-  .sidebar-sessions {
-    height: 100%;
-    min-height: 0;
-    overflow: hidden;
-
-    :deep(.session-list) {
-      padding: 0 @sidebar-padding-x;
-    }
-  }
-
   .sidebar-brand,
   :deep(.session-nav-section:not(.sidebar-sessions)),
   .github,
@@ -665,6 +485,8 @@ div.header,
   }
 
   .fill {
+    display: flex;
+    flex-direction: column;
     flex: 1 1 0;
     min-height: 0;
   }
@@ -673,6 +495,7 @@ div.header,
     position: relative;
     z-index: 1;
     flex: 0 0 auto;
+    margin-top: auto;
     background: var(--main-5);
     padding: 0 @sidebar-padding-x @sidebar-padding-y;
   }
@@ -757,6 +580,48 @@ div.header,
     }
   }
 
+  .primary-nav-row {
+    position: relative;
+
+    .nav-item {
+      padding-right: 38px;
+    }
+
+    &:hover .primary-new-chat,
+    &:has(:focus-visible) .primary-new-chat {
+      opacity: 1;
+      pointer-events: auto;
+    }
+  }
+
+  .primary-new-chat {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--gray-600);
+    opacity: 0;
+    pointer-events: none;
+    transition: color 0.15s ease;
+
+    &:hover,
+    &:focus-visible {
+      color: var(--gray-1000);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--main-color);
+      outline-offset: -2px;
+    }
+  }
+
   .nav-item {
     display: flex;
     align-items: center;
@@ -837,53 +702,6 @@ div.header,
       background-color: color-mix(in srgb, var(--gray-100) 6%, var(--gray-100));
       font-weight: 600;
       color: var(--gray-1000);
-    }
-
-    &.github {
-      margin-bottom: 8px;
-      &:hover {
-        border-color: transparent;
-      }
-
-      .github-link {
-        display: flex;
-        align-items: center;
-        width: 100%;
-        min-width: 0;
-        color: inherit;
-        text-decoration: none;
-      }
-
-      .icon {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: @sidebar-icon-size;
-        line-height: 1;
-        width: 1em;
-        height: 1em;
-      }
-
-      .github-stars {
-        display: flex;
-        align-items: center;
-        max-width: 48px;
-        margin-left: auto;
-        overflow: hidden;
-        font-size: 12px;
-        color: var(--gray-600);
-        background-color: var(--gray-100);
-        padding: 2px 8px;
-        border-radius: 6px;
-        white-space: nowrap;
-        transition:
-          opacity 0.12s ease,
-          max-width 0.18s ease;
-
-        .star-count {
-          font-weight: 600;
-        }
-      }
     }
 
     &.api-docs {
@@ -1006,6 +824,7 @@ div.header,
 
 .app-layout.sidebar-collapsed {
   .header {
+    overflow: visible;
     flex-basis: @sidebar-collapsed-width;
     width: @sidebar-collapsed-width;
     align-items: stretch;
@@ -1051,6 +870,10 @@ div.header,
       }
     }
 
+    .primary-nav-row {
+      width: @sidebar-item-height;
+    }
+
     .nav {
       align-items: center;
       width: 100%;
@@ -1072,18 +895,11 @@ div.header,
       width: 100%;
       padding: 0 @sidebar-collapsed-icon-padding-x;
 
-      .nav-text,
-      .github-stars {
+      .nav-text {
         max-width: 0;
         margin-left: 0;
         opacity: 0;
         pointer-events: none;
-      }
-
-      &.github {
-        .github-link {
-          justify-content: flex-start;
-        }
       }
 
       &.user-info {
@@ -1103,6 +919,11 @@ div.header,
         }
       }
     }
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .header {
+    transition: none;
   }
 }
 @media (max-width: 767px) {

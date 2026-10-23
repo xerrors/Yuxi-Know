@@ -1,6 +1,6 @@
-![Yuxi：可私有部署的知识智能体平台](https://xerrors.oss-cn-shanghai.aliyuncs.com/posts/2026/08/20260818-151118-mac-1787037059154-8c08f48c.png)
+![Yuxi：可私有部署的多租户知识智能体平台](https://oss-img.xerrors.cn/posts/2026/08/20260818-151118-mac-1787037059154-8c08f48c.png)
 
-Yuxi（语析）是一个可私有部署的知识智能体平台，面向需要管理数据、模型和团队权限的组织。用户可以检索内部资料、配置智能体、通过工具和协作会话执行任务，并在持久工作区中查看和下载文件产物。
+**Yuxi = Cloud Agents + Knowledge RAG**，Yuxi 是一个可私有部署的多租户知识智能体平台。自定义智能体，权限可控，沉淀企业轨迹。它把知识库检索、知识图谱、LangGraph 多智能体编排、MCP/Skills、沙盒工具和权限管理放进同一个工作区。让每个用户都拥有一个云端 Codex。
 
 [项目主页](https://xerrors.github.io/Yuxi/) · [快速开始](https://xerrors.github.io/Yuxi/intro/quick-start) · [演示视频](https://www.bilibili.com/video/BV1erE26iEgv/) · [版本记录](https://github.com/xerrors/Yuxi/releases) · [English](README.en.md)
 
@@ -15,23 +15,22 @@ Yuxi（语析）是一个可私有部署的知识智能体平台，面向需要�
 
 ## Yuxi 能做什么
 
-| 能力 | 当前范围 |
-| --- | --- |
-| 知识库与 RAG | 上传、解析和索引文档，配置嵌入与重排模型，支持向量、BM25 与混合检索及来源核对；可只读连接外部知识源 |
-| 知识图谱 | 管理员对已索引的 Milvus 文档块提交构建任务，将实体和关系写入 Neo4j，并与文本检索融合 |
-| 智能体与协作 | 配置模型、提示词、Tools、MCP 和 Skills；协作会话拥有独立上下文，共享项目文件 |
-| 文件与执行环境 | 每个用户使用持久 Cube VM，智能体在授权目录中读写文件、运行命令，产物支持预览和下载 |
-| 团队与权限 | 管理用户、部门和共享资源范围；API Key 为外部应用提供独立 APP 与终端用户作用域 |
-| 接入与观测 | Web、npm CLI 和公开 API 共用运行链路，知识库支持 MCP 只读接入；提供后台作业、运行审计、Langfuse tracing 和用户反馈 |
+Yuxi 是面向需要企业自部署的多用户 Agent 产品，且需要自己掌握数据、模型和权限的团队：
 
-默认审批模式要求确认命令执行和当前 Project 外的文件写入，Project 内写入自动放行；用户可选择完全信任模式。知识库检索评估由平台提供，完整智能体评估可通过公开 API 自行构建，见[智能体评估](docs/agents/agent-evaluation.md)。
+- **二开友好**：MIT 协议、代码简洁、可拓展性强、高并发部署友好。
+- **Harness**：功能完善的云端多用户 Harness，自定义智能体，沉淀企业轨迹。
+- **Knowledge**： 高效、精准的 Agentic RAG 套件，上传文档，解析、分块和向量索引。
+- **执行多步骤任务**：组合工具、MCP、Skills、子智能体和沙盒，产出可预览、可下载的文件。
+- **连接知识图谱**：从 Milvus 知识库的文档块中抽取实体和关系，写入 Neo4j 并参与检索。
+- **管理团队使用范围**：按用户、部门和共享范围管理知识库、智能体、Skills 和模型。
+- **对比运行质量**：评估知识库的检索结果；完整智能体评估可通过公开 API 自行构建，见[智能体评估](docs/agents/agent-evaluation.md)。
 
 
 ## 赞助商
 
 | 赞助商 | 介绍 |
 | :---: | :--- |
-| <img src="https://xerrors.oss-cn-shanghai.aliyuncs.com/github/%E4%B8%8B%E8%BD%BD.jpeg" alt="Fluxion AI LOGO" width="180" /> | Fluxion AI面向个人开发者、技术团队与企业，通过统一API接入并管理全球主流AI模型；通过多线路动态调度提升可用性，模型表现、响应时间与费用透明可查。根据不同模型与线路，API调用成本较官方或基准价格可降低40%—98%。专属链接[注册](https://fluxionai.space/register?source=github&campaign=yuxi&promo=YUXI) 获 $7 API 额度 |
+| <img src="https://oss-img.xerrors.cn/github/%E4%B8%8B%E8%BD%BD.jpeg" alt="Fluxion AI LOGO" width="180" /> | Fluxion AI面向个人开发者、技术团队与企业，通过统一API接入并管理全球主流AI模型；通过多线路动态调度提升可用性，模型表现、响应时间与费用透明可查。根据不同模型与线路，API调用成本较官方或基准价格可降低40%—98%。专属链接[注册](https://fluxionai.space/register?source=github&campaign=yuxi&promo=YUXI) 获 $7 API 额度 |
 
 ## 快速启动
 
@@ -87,9 +86,237 @@ curl --fail http://localhost:5050/api/system/ready
 - [生产部署](https://xerrors.github.io/Yuxi/advanced/deployment)：部署、升级、备份和排障。
 - [版本变更记录](https://xerrors.github.io/Yuxi/develop-guides/changelog)：查看已发布变更。
 
-## 界面预览
+## 能力展示
 
-知识库和知识图谱的操作演示见[演示视频](https://www.bilibili.com/video/BV1erE26iEgv/)；其他界面可从[项目主页](https://xerrors.github.io/Yuxi/)进入查看。
+Yuxi 把知识进入系统、Agent 执行任务和团队治理放在一条完整链路中。以下按六个核心模块介绍系统能力：
+
+
+| 模块               | 解决的问题                           | 代表能力                                             |
+| -------------------- | -------------------------------------- | ------------------------------------------------------ |
+| 统一智能体工作台   | 在一个界面完成提问、执行与交付       | 多轮对话、知识库检索、任务状态、人工审批               |
+| 知识库与 RAG | 为回答提供检索内容             | 多格式入库、Embedding/Rerank、检索测试、RAG 评估     |
+| 知识图谱与知识导图 | 发现实体关系并浏览知识库文件结构     | 图谱构建、子图浏览、节点详情、文件元数据导图         |
+| 多智能体与扩展生态 | 把复杂任务拆给不同角色和工具         | SubAgents、Skills、MCP、Tools、Agent 配置            |
+| 沙盒工作区与产物   | 把对话结果变成可继续使用的文件       | 隔离文件系统、文件生成、在线预览、下载               |
+| 团队治理与运行管理 | 在多人环境中管理能力、权限和运行状态 | 多租户、用户与部门权限、模型配置、API Key、Dashboard |
+
+### 01 · 统一智能体工作台
+
+用户可以在同一个对话界面里引用知识库文档、个人文件或扩展 Skill；查看任务执行状态，并在对话中获取回答或生成的文件。
+
+- 支持使用 `@` 快速引入知识库、文件与特定 Skill。
+- 展示任务拆解步骤、工具调用状态与上下文 Token 消耗。
+- 支持预览和下载生成的文件产物。
+
+![Yuxi 统一智能体工作台](https://oss-img.xerrors.cn/github/image-20260825145022410.png)
+
+<details>
+<summary><strong>展开详细截图：对话、执行状态与人工审批</strong></summary>
+
+**长任务执行状态与过程追踪**
+
+后台异步执行复杂任务时，界面会实时呈现智能体的思考链路、步骤计划、子任务状态与工具调用日志，不再让长任务变成黑盒等待。
+
+![image-20260826195730155](https://oss-img.xerrors.cn/github/image-20260826195730155.png)
+
+**人工审批与交付卡片**
+
+默认审批模式要求确认命令执行和当前 Project 外的文件写入，Project 内写入自动放行；完全信任模式不要求审批。任务完成后，用户可以通过交付卡片预览或保存文件。
+
+![人工审批与文件交付](https://oss-img.xerrors.cn/github/image-20260825163940350.png)
+
+</details>
+
+### 02 · 知识库与 RAG
+
+支持将团队各类资料集中管理并解析为结构化知识库。Agent 可以检索相关文档片段，作为回答问题的上下文。
+
+- 集中管理文件与目录结构，实时查看解析进度、Chunk 切片与 Token 统计。
+- 支持配置 Embedding 与 Rerank 算法，并在后台直接进行多路召回测试与调优。
+- 内置 RAG 效果评估工具，通过实际问答集量化测试知识库检索与回答质量。
+
+![image-20260830144756161](https://oss-img.xerrors.cn/github/image-20260830144756161.png)
+
+<details>
+<summary><strong>展开详细截图：入库、检索与评估</strong></summary>
+
+**文档解析与切片管理**
+
+支持 PDF、Word、PPT、Excel、Markdown 等多种常见文档格式。内置 MinerU、PaddleX、RapidOCR 等解析引擎，提取文本、图片和表格内容并切分为 Chunk，生成向量索引供检索使用。
+
+![文档入库与解析状态](https://oss-img.xerrors.cn/github/image-20260825155256725.png)
+
+**知识库类型与外部数据源**
+
+除了开箱即用的本地向量知识库，系统还支持直接连接 Dify、Notion 等外部知识库服务，通过统一检索器供 Agent 调用。
+
+![知识库类型](https://oss-img.xerrors.cn/github/image-20260825155356171.png)
+
+**检索测试与重排序（Rerank）**
+
+提供直观的检索测试工作台。输入测试 Query 即可实时查看 Embedding 向量初筛得分、混合检索结果以及 Rerank 重排序后的分数变化，方便直观验证召回效果。
+
+![image-20260830144827319](https://oss-img.xerrors.cn/github/image-20260830144827319.png)
+
+**RAG 效果评估**
+
+支持构建基准问答评估集并批量评测检索召回率；提供参考答案和评判模型时，还可评估答案准确性，帮助发现知识盲区与配置短板。
+
+![image-20260830144852289](https://oss-img.xerrors.cn/github/image-20260830144852289.png)
+
+自动生成单条 QA 和多跳 QA
+
+![image-20260826200055381](https://oss-img.xerrors.cn/github/image-20260826200055381.png)
+
+![image-20260830144919806](https://oss-img.xerrors.cn/github/image-20260830144919806.png)
+
+![image-20260830144950126](https://oss-img.xerrors.cn/github/image-20260830144950126.png)
+
+</details>
+
+### 03 · 知识图谱与知识导图
+
+从非结构化文档中抽取实体与关系，构建知识图谱。既支持在交互式拓扑图谱中探索实体关联，也支持根据文件层级和主题元数据自动生成清晰的知识导图。
+
+- 从知识库中自动抽取实体与关系，在 Milvus/Neo4j 中构建知识图谱索引。
+- 支持按关键词搜索实体、点击节点查看属性详情，并高亮探索关联子图。
+- 结合知识库文件元数据自动生成多层级知识导图，浏览知识库结构。
+
+![image-20260830145027082](https://oss-img.xerrors.cn/github/image-20260830145027082.png)
+
+<details>
+<summary><strong>展开详细截图：图谱构建、节点关系与知识导图</strong></summary>
+
+**图谱构建与索引状态**
+
+管理员对已索引的 Milvus 文档块提交构建任务后，系统执行实体识别与关系抽取并写入 Neo4j。图谱构建不随文档解析自动触发，用户可查看实体、关系与后台任务进度。
+
+![image-20260826200519930](https://oss-img.xerrors.cn/github/image-20260826200519930.png)
+
+**知识导图**
+
+基于文件的目录结构、分类标签与元数据特征，自动生成结构化的主题脑图/知识导图，方便用户以树状脉络快速浏览海量知识内容。
+
+![image-20260830145125067](https://oss-img.xerrors.cn/github/image-20260830145125067.png)
+
+</details>
+
+### 04 · 多智能体与扩展生态
+
+一个 Agent 可以灵活组合模型、提示词、知识库、外部工具与专用子智能体。面对复杂任务，主智能体负责规划拆解，多个 SubAgents 分头异步并行执行，Skills 与 MCP 协议提供能力扩展。
+
+- 自由配置 Agent 的基座模型、知识挂载、工具调用与系统提示词。
+- 支持多个 SubAgents 异步并行执行深度调研、数据分析或内容生成。
+- 原生兼容 Skills 插件机制与 MCP（Model Context Protocol）标准协议。
+
+![Yuxi 多智能体编排](https://oss-img.xerrors.cn/github/image-20260825152252874.png)
+
+<details>
+<summary><strong>展开详细截图：Agent 配置、子智能体与扩展能力</strong></summary>
+
+**Agent 配置与行为定制**
+
+智能体提供丰富的模块化配置项，可以按需组合大模型、挂载的知识库、自定义 Tools、MCP 服务、前置提示词与子智能体，并支持灵活配置在部门或团队内的共享可见范围。
+
+![Agent 配置](https://oss-img.xerrors.cn/github/image-20260825151729055.png)
+
+**子智能体并行执行**
+
+支持主智能体将复杂的多步骤任务拆解后，派出多个专属 SubAgent 异步并行跑任务（例如分头检索不同领域的法规、分别撰写报告不同章节），执行完毕后汇总结果。
+
+![子智能体并行执行](https://oss-img.xerrors.cn/github/image-20260825151559976.png)
+
+**Skills、MCP 与生态扩展**
+
+统一接入并管理 Skills 扩展技能与 MCP Servers 外部协议，支持针对不同角色分配权限与使用范围；借助渐进式披露机制，在真正需要时按需动态解析并加载工具。Skill 在线安装支持 skills.sh 以及魔搭社区的 skill。
+
+![image-20260830145227399](https://oss-img.xerrors.cn/github/image-20260830145227399.png)
+
+可以查看并在线编辑 skill
+
+![image-20260830145217595](https://oss-img.xerrors.cn/github/image-20260830145217595.png)
+
+可以配置 skill 权限和依赖
+
+![image-20260830145359700](https://oss-img.xerrors.cn/github/image-20260830145359700.png)
+
+内置工具列表
+
+![内置工具](https://oss-img.xerrors.cn/github/image-20260826201207239.png)
+
+</details>
+
+### 05 · 沙盒工作区与文件产物
+
+智能体可以通过沙盒工具读写文件。智能体不仅能在对话中回答问题，还能把分析研究成果沉淀为 Markdown 文档、数据表格、HTML 页面或可执行代码，并在工作区中随时查看与下载。
+
+- 通过沙盒限制工具可访问的文件范围。
+- 支持生成图文报告、数据分析图表、Web 页面等多种格式产物。
+- 在浏览器中预览受支持的文件格式，并打包下载。
+
+![Yuxi 沙盒工作区与文件产物](https://oss-img.xerrors.cn/github/image-20260825152123583.png)
+
+<details>
+<summary><strong>展开详细截图：文件管理、在线预览与任务交付</strong></summary>
+
+**工作区文件管理**
+
+可视化管理任务在工作区中读取与产生的文件，清晰展示目录层级、文件类型与体积大小，方便在会话之间复用中间产物。
+
+![image-20260826201931458](https://oss-img.xerrors.cn/github/image-20260826201931458.png)
+
+
+**HTML、PDF、图表与代码在线预览**
+
+智能体生成的报告文档、可视化 HTML 网页、图片图表或代码脚本，无需下载即可直接在浏览器内置的预览器中渲染并进行交互查看。markdown 还支持在线编辑保存。
+
+![image-20260826202142495](https://oss-img.xerrors.cn/github/image-20260826202142495.png)
+
+
+**对话中的文件交付**
+
+任务执行完毕后，对话气泡中会生成结构化的交付卡片，直观呈现文件摘要、格式与操作按钮，支持直接打开预览或保存到本地。
+
+![image-20260826202412695](https://oss-img.xerrors.cn/github/image-20260826202412695.png)
+
+
+</details>
+
+### 06 · 团队治理与运行管理
+
+专为企业和团队多人协作打造。管理员可以集中管理成员与部门组织架构、统一配置模型接入凭据与 API Key，并通过监控看板查看平台的运行状况与调用指标。
+
+- 支持按用户、部门和共享范围配置知识库、Agent 等资源的访问与管理权限。
+- 集中配置和调度多供应商的大模型能力，统一管理 API Key 凭据。
+- 实时统计分析使用量、请求趋势与资源负载，辅助运行维护。
+
+![image-20260826201755760](https://oss-img.xerrors.cn/github/image-20260826201755760.png)
+
+<details>
+<summary><strong>展开详细截图：权限、模型与运行数据</strong></summary>
+
+**用户、部门与细粒度权限体系**
+
+通过用户、部门和资源共享范围控制知识库、智能体等资源的访问与管理权限；沙盒工作区按用户隔离。
+
+![image-20260826201638124](https://oss-img.xerrors.cn/github/image-20260826201638124.png)
+
+
+**模型供应商与统一凭据管理**
+
+支持接入主流大模型供应商（OpenAI、Anthropic、DeepSeek、Qwen 及 OpenAI 兼容自建端点如 vLLM 等），集中维护 API Key 凭据并统一分配模型能力，密钥对普通成员完全脱敏。
+
+![模型供应商与模型能力](https://oss-img.xerrors.cn/github/image-20260825152458034.png)
+
+**Dashboard 与系统运行监控**
+
+运维数据看板展示会话、模型和工具调用、Token 消耗以及 VM 状态等统计，为容量规划和成本核算提供数据支撑。
+
+![image-20260826201346254](https://oss-img.xerrors.cn/github/image-20260826201346254.png)
+
+![image-20260826201430096](https://oss-img.xerrors.cn/github/image-20260826201430096.png)
+
+</details>
 
 ## 参与贡献
 
@@ -127,4 +354,4 @@ Yuxi 的实现和文档参考了以下优秀的开源项目：
 </a>
 
 
-[![给 Yuxi 一个 Star](https://xerrors.oss-cn-shanghai.aliyuncs.com/posts/2026/08/20260818-184409-image-da91658b.png)](https://github.com/xerrors/Yuxi)
+[![给 Yuxi 一个 Star](https://oss-img.xerrors.cn/posts/2026/08/20260818-184409-image-da91658b.png)](https://github.com/xerrors/Yuxi)

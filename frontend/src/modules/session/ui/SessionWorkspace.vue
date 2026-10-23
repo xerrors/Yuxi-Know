@@ -47,7 +47,7 @@
             aria-controls="agent-state-panel"
             @click.stop="toggleStatePanel"
           >
-            <ListCollapse size="16" class="nav-btn-icon" />
+            <Gauge size="16" class="nav-btn-icon" />
             <span class="hide-text">状态</span>
           </button>
           <button
@@ -647,7 +647,7 @@
               :aria-expanded="statePanelOpen"
               @click="toggleStatePanel"
             >
-              <ListCollapse :size="16" />
+              <Gauge :size="16" />
             </button>
           </template>
           <template #session-content>
@@ -710,7 +710,7 @@ import {
   ChevronDown,
   CornerDownRight,
   PanelRight,
-  ListCollapse,
+  Gauge,
   Play,
   RefreshCw,
   Trash2,
@@ -2508,6 +2508,7 @@ const selectChat = async (chatId) => {
     }
   } catch (error) {
     handleChatError(error, 'load')
+    return [403, 404, 410].includes(error?.status) ? false : null
   } finally {
     isLoadingMessages.value = false
   }
@@ -2541,12 +2542,13 @@ const selectThreadFromRoute = async (threadId) => {
     return true
   }
 
-  if (!threads.value.some((thread) => thread.id === threadId)) {
+  const loadedCurrentThread = currentThreadId.value === threadId && getThreadState(threadId).historyLoaded
+  if (loadedCurrentThread || !threads.value.some((thread) => thread.id === threadId)) {
     try {
       chatThreadsStore.upsertThread(await agentApi.getPublicThread(threadId))
     } catch (error) {
       handleChatError(error, 'load')
-      return false
+      return [403, 404, 410].includes(error?.status) ? false : null
     }
   }
 
@@ -2555,14 +2557,13 @@ const selectThreadFromRoute = async (threadId) => {
     return false
   }
 
-  if (currentThreadId.value === threadId && getThreadState(threadId).historyLoaded) {
+  if (loadedCurrentThread) {
     if (!props.embedded && workspaceActive.value) chatThreadsStore.setCurrentThreadId(threadId)
     await resumeCurrentRunForVisiblePage()
     return true
   }
 
-  await selectChat(threadId)
-  return true
+  return selectChat(threadId)
 }
 
 const sessionInput = createSessionInput({

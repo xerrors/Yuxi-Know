@@ -1,7 +1,9 @@
 <template>
-  <div class="agent-view">
+  <div class="agent-view" :class="{ 'sessions-pinned': sidebarCollapsed && sessionsPinned }">
+    <SessionNavigation v-if="sidebarCollapsed" panel :active="ownsCurrentRoute" />
     <SessionWorkspace
       ref="workspaceRef"
+      class="agent-session-workspace"
       :single-mode="false"
       :initial-project-id="draftProjectId"
       :is-new-session="!threadId"
@@ -22,6 +24,9 @@
 <script setup>
 import { computed, onActivated, onBeforeUnmount, onDeactivated, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { storeToRefs } from 'pinia'
+import { useChatUIStore } from '@/modules/session'
+import SessionNavigation from '@/modules/session/ui/SessionNavigation.vue'
 import SessionWorkspace from '@/modules/session/ui/SessionWorkspace.vue'
 import SessionAgentPicker from '@/modules/agents/ui/SessionAgentPicker.vue'
 import { useAgentStore } from '@/modules/agents/model/agent'
@@ -36,6 +41,7 @@ const props = defineProps({
 const emit = defineEmits(['session-created'])
 const router = useRouter()
 const agentStore = useAgentStore()
+const { sidebarCollapsed, sessionsPinned } = storeToRefs(useChatUIStore())
 const workspaceRef = ref(null)
 const active = ref(true)
 const draftProjectId = computed(() => (props.threadId ? '' : props.projectId))
@@ -103,9 +109,26 @@ function handleThreadChange(id) {
 <style scoped>
 .agent-view {
   display: flex;
-  flex-direction: column;
+  position: relative;
+  flex-direction: row;
+  min-width: 0;
   width: 100%;
   height: 100vh;
   overflow: hidden;
+}
+.agent-session-workspace {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  margin-left: 0;
+  transition: margin-left 0.2s ease;
+}
+.agent-view.sessions-pinned > .agent-session-workspace {
+  margin-left: 250px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-session-workspace {
+    transition: none;
+  }
 }
 </style>

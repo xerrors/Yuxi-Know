@@ -60,7 +60,9 @@
           :show-chunk-size-overlap="true"
           :show-preset="true"
           :allow-preset-follow-default="true"
-          :knowledge-base-preset-id="store.knowledgeBase?.additional_params?.chunk_preset_id || 'general'"
+          :knowledge-base-preset-id="
+            store.knowledgeBase?.additional_params?.chunk_preset_id || 'general'
+          "
         />
       </div>
     </a-modal>

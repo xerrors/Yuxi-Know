@@ -9,6 +9,7 @@ from yuxi.infrastructure.postgres.models import load_models
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.extensions.tools.knowledge import tools
 from yuxi.modules.knowledge.repositories.bases import KnowledgeBaseRepository
+from yuxi.modules.knowledge.services.tools import KnowledgeToolError
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
@@ -51,7 +52,9 @@ async def test_knowledge_tools_reject_access_after_http_revocation(test_client, 
         persisted = await repository.get_by_kb_id(kb_id)
         assert persisted is not None and persisted.share_config == share_config
 
-        assert await tools.query_kb.coroutine(kb_id=kb_id, query_text="private", runtime=runtime) == ("无法获取当前会话可访问的知识库")
+        with pytest.raises(KnowledgeToolError, match="无法获取当前会话可访问的知识库") as rejected:
+            await tools.query_kb.coroutine(kb_id=kb_id, query_text="private", runtime=runtime)
+        assert rejected.value.not_found
         denied = await test_client.post(
             "/api/v1/knowledge/tools/query_kb",
             headers=standard_user["headers"],

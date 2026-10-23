@@ -1,13 +1,22 @@
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useUserStore } from '@/modules/identity'
 import { defineStore } from 'pinia'
 import { threadApi } from '@/apis'
 import { handleChatError } from '@/shared/lib/errorHandler'
 import { threadDraftStore } from '@/modules/session/model/thread_draft'
+import { useChatUIStore } from './chatUI'
 
 const PAGE_SIZE = 100
 export const useChatThreadsStore = defineStore('chatThreads', () => {
   const threads = ref([])
   const currentThreadId = ref(null)
+  const userStore = useUserStore()
+  // 切换账号只清理内存选择，不改写任一账号已保存的导航目标。
+  watch(
+    () => userStore.userId,
+    () => { currentThreadId.value = null },
+    { flush: 'sync' }
+  )
   const threadCreationInFlight = ref(false)
   const hasMoreThreads = ref(true)
   let after = null
@@ -29,6 +38,7 @@ export const useChatThreadsStore = defineStore('chatThreads', () => {
   const setCurrentThreadId = (threadId, { force = false } = {}) => {
     if (threadCreationInFlight.value && !force) return false
     currentThreadId.value = threadId || null
+    useChatUIStore().lastThreadId = currentThreadId.value
     return true
   }
 
@@ -162,24 +172,25 @@ export const useChatThreadsStore = defineStore('chatThreads', () => {
       }
     })
 
-  const archiveThread = async (threadId) =>
-    withThreadListUpdate(async () => {
-      if (!threadId) return
-
+  const archiveThread = (threadId) => {
+    const initiatingUserId = userStore.userId
+    return withThreadListUpdate(async () => {
+      if (!threadId || userStore.userId !== initiatingUserId) return
       try {
         await threadApi.archiveThread(threadId)
+        if (userStore.userId !== initiatingUserId) return
         threads.value = threads.value.filter((thread) => thread.id !== threadId)
         // 归档后清理当前线程的本地草稿。
         threadDraftStore.remove(threadId)
-        if (currentThreadId.value === threadId) {
-          setCurrentThreadId(null)
-        }
+        if (currentThreadId.value === threadId) setCurrentThreadId(null)
+        if (useChatUIStore().lastThreadId === threadId) useChatUIStore().lastThreadId = null
       } catch (error) {
         console.error('Failed to archive thread:', error)
         handleChatError(error, 'archive')
         throw error
       }
     })
+  }
 
   const removeThreadsByProject = (projectId) => {
     if (!projectId) return []
@@ -196,9 +207,8 @@ export const useChatThreadsStore = defineStore('chatThreads', () => {
 
     threads.value = remainingThreads
     removedIds.forEach((threadId) => threadDraftStore.remove(threadId))
-    if (removedIds.includes(currentThreadId.value)) {
-      setCurrentThreadId(null)
-    }
+    if (removedIds.includes(currentThreadId.value)) setCurrentThreadId(null)
+    if (removedIds.includes(useChatUIStore().lastThreadId)) useChatUIStore().lastThreadId = null
     return removedIds
   }
 

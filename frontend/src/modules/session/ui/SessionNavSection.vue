@@ -1,7 +1,7 @@
 <template>
   <section class="session-nav-section" :class="{ collapsed }">
     <div v-if="showHistory && !collapsed" class="history-panel">
-      <div class="session-list">
+      <div ref="listElement" class="session-list" @scroll="saveScrollPosition">
         <section
           v-if="projectsLoading || projectsError || projectGroups.length"
           class="history-group project-history-group"
@@ -191,7 +191,9 @@
 </template>
 
 <script setup>
-import { computed, h, ref } from 'vue'
+import { computed, h, nextTick, ref, watch } from 'vue'
+import { storeToRefs } from 'pinia'
+import { useChatUIStore } from '../model/chatUI'
 import { message, Modal } from 'ant-design-vue'
 import {
   ChevronDown,
@@ -208,6 +210,7 @@ import CollapseTransition from '@/shared/ui/CollapseTransition.vue'
 import { buildProjectSessionGroups } from '@/modules/projects'
 
 const props = defineProps({
+  visible: { type: Boolean, default: true },
   currentChatId: { type: String, default: null },
   chatsList: { type: Array, default: () => [] },
   projects: { type: Array, default: () => [] },
@@ -231,12 +234,20 @@ const emit = defineEmits([
   'create-project-chat',
   'retry-projects'
 ])
-const projectsExpanded = ref(true)
-const recentExpanded = ref(true)
-const expandedProjects = ref(new Set())
+const { projectsExpanded, recentExpanded, expandedProjects, projectVisibleCounts, navigationScrollTop } =
+  storeToRefs(useChatUIStore())
+const listElement = ref(null)
+/** 只记录当前展示的列表，避免隐藏实例覆盖滚动位置。 */
+function saveScrollPosition() {
+  if (props.visible) navigationScrollTop.value = listElement.value?.scrollTop || 0
+}
+watch(() => props.visible, async (visible) => {
+  if (!visible) return
+  await nextTick()
+  if (props.visible && listElement.value) listElement.value.scrollTop = navigationScrollTop.value
+}, { immediate: true })
 const INITIAL_PROJECT_SESSIONS = 5
 const PROJECT_SESSIONS_STEP = 10
-const projectVisibleCounts = ref({})
 const groupedNavigation = computed(() =>
   buildProjectSessionGroups(props.projects, props.chatsList)
 )

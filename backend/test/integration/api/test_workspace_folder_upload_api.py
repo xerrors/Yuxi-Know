@@ -244,6 +244,10 @@ async def test_folder_upload_uses_non_root_parent_path(test_client, standard_use
     created = await test_client.post("/api/workspace/directory", json={"parent_path": "/", "name": parent}, headers=headers)
     assert created.status_code == 200, created.text
     try:
+        conflict = await test_client.post("/api/workspace/directory", json={"parent_path": "/", "name": parent}, headers=headers)
+        assert conflict.status_code == 400, conflict.text
+        assert conflict.json()["detail"] == {"code": "workspace_directory_exists", "message": "同名文件或文件夹已存在"}
+
         response = await _upload(test_client, headers, root, [("a.txt", b"alpha")], parent_path=f"/{parent}")
         assert response.status_code == 200, response.text
         assert response.json()["entries"][0]["path"] == f"/{parent}/{root}/a.txt"
