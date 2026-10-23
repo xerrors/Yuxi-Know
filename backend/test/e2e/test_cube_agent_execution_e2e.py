@@ -14,7 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import httpx
 import pytest
-from yuxi.modules.agents.runtime.sandbox.provider import CubeSandboxProvider
+from yuxi.modules.agents.runtime.sandbox.cube_provider import CubeSandboxProvider
 from yuxi.modules.identity.security import AuthUtils
 from yuxi.modules.workspace.paths import user_workspace_dir
 from test.e2e.e2e_helpers import wait_for_consumed_input, wait_model_provider_cache

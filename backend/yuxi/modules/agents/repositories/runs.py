@@ -425,6 +425,9 @@ class AgentRunRepository:
             return run, False
 
         if initial_claim:
+            # Steer 接续可被提前补投；旧 Run 的环境必须先确认清理。
+            if await self.has_thread_cleanup(run.thread_id):
+                return run, False
             from yuxi.modules.agents.repositories.cooperation import CooperationRepository
 
             if not await CooperationRepository(self.db).claim_execution_slot(run):
@@ -666,7 +669,7 @@ class AgentRunRepository:
         run.worker_id = None
         run.heartbeat_at = None
         run.lease_expires_at = None
-        run.runtime_cleanup_pending = status != "yielded"
+        run.runtime_cleanup_pending = True
         await self._project_input_delivery_status(run)
         audit_status = {
             "completed": "abandoned",
@@ -693,7 +696,7 @@ class AgentRunRepository:
         return run, True
 
     async def has_thread_cleanup(self, thread_id: str) -> bool:
-        """前轮清理责任未释放时阻止该 Thread 开启新轮。"""
+        """检查该 Thread 尚未解除的 runtime 清理责任。"""
         return (
             await self.db.scalar(
                 select(AgentRun.id)

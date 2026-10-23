@@ -95,8 +95,8 @@ def test_invalid_existing_secret_is_not_rotated(tmp_path):
     assert read_env(tmp_path)["JWT_SECRET_KEY"] == "short"
 
 
-def test_production_generates_credentials_and_requires_cube_paths(tmp_path):
-    """生产初始化生成服务凭据并要求实际执行节点映射。"""
+def test_production_generates_credentials_and_requires_cube_address(tmp_path):
+    """生产初始化生成服务凭据并要求执行节点地址。"""
     result = run_init(tmp_path, YUXI_ENV="production", SILICONFLOW_API_KEY="test-key")
     assert result.returncode != 0
     assert "CUBE_API_URL" in result.stderr
@@ -113,6 +113,74 @@ def test_production_generates_credentials_and_requires_cube_paths(tmp_path):
     for name in ["POSTGRES_PASSWORD", "NEO4J_PASSWORD", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY"]:
         assert len(values[name]) >= 32
     assert values["YUXI_ENV"] == "production"
+
+
+@pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
+@pytest.mark.parametrize("paths", [None, "", "/data/shared/custom"])
+def test_cube_compose_defaults_and_explicit_paths_after_init(tmp_path, filename, paths):
+    """真实初始化和 Compose 解析保留默认目录或部署者指定的映射。"""
+    import json
+    import shutil
+
+    if not shutil.which("docker"):
+        pytest.skip("需要 Docker Compose 命令验证部署配置")
+    overrides = {}
+    if paths is not None:
+        overrides = {
+            "CUBE_NODE_USER_DATA_DIR": f"{paths}/threads" if paths else "",
+            "CUBE_NODE_SKILL_PROJECTION_DIR": f"{paths}/skills" if paths else "",
+        }
+    result = run_init(
+        tmp_path,
+        YUXI_ENV="production" if ".prod." in filename else "development",
+        SILICONFLOW_API_KEY="test-key",
+        CUBE_API_URL="http://node:3000",
+        CUBE_PROXY_NODE_IP="node",
+        **overrides,
+    )
+    assert result.returncode == 0, result.stderr
+    env_file = tmp_path / ".env.prod"
+    rendered = subprocess.run(
+        ["docker", "compose", "--env-file", str(env_file), "-f", str(project_root() / filename), "config", "--format", "json"],
+        env={**isolated_environment(), "YUXI_ENV_FILE": str(env_file)},
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+    assert rendered.returncode == 0, rendered.stderr
+    services = json.loads(rendered.stdout)["services"]
+    for name in ("api", "worker", "app-init"):
+        env = services[name]["environment"]
+        assert env["CUBE_NODE_USER_DATA_DIR"] == (f"{paths}/threads" if paths else "/data/shared/yuxi/threads")
+        assert env["CUBE_NODE_SKILL_PROJECTION_DIR"] == (f"{paths}/skills" if paths else "/data/shared/yuxi/skill-projections")
+        assert env["CUBE_PROXY_PORT_HTTP"] == "80"
+        assert env["CUBE_TEMPLATE_ID"] == "yuxi-user"
+
+
+def test_container_backend_generates_runner_token_in_development(tmp_path):
+    """开发 container 模式也自动生成 runner token，避免首次启动健康检查失败。"""
+    result = run_init(tmp_path, SANDBOX_BACKEND="container", SILICONFLOW_API_KEY="test-key")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert len(read_env(tmp_path)["SANDBOX_RUNNER_TOKEN"]) >= 32
+
+
+def test_production_container_backend_requires_runner_credentials(tmp_path):
+    """生产 container 模式要求镜像 digest，并自动生成 runner token。"""
+    result = run_init(tmp_path, YUXI_ENV="production", SANDBOX_BACKEND="container", SILICONFLOW_API_KEY="test-key")
+    assert result.returncode != 0
+    assert "SANDBOX_CONTAINER_IMAGE" in result.stderr
+    result = run_init(
+        tmp_path,
+        YUXI_ENV="production",
+        SANDBOX_BACKEND="container",
+        SILICONFLOW_API_KEY="test-key",
+        SANDBOX_CONTAINER_IMAGE="registry.example/yuxi-sandbox:0.8.0",
+        SANDBOX_CONTAINER_IMAGE_DIGEST="sha256:" + "a" * 64,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    values = read_env(tmp_path)
+    assert len(values["SANDBOX_RUNNER_TOKEN"]) >= 32
+    assert values["SANDBOX_CONTAINER_IMAGE_DIGEST"].startswith("sha256:")
 
 
 @pytest.mark.parametrize(

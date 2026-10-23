@@ -41,7 +41,7 @@ async def test_cleanup_reconciler_keeps_pending_run_for_dispatch_recovery(monkey
     settlement = AsyncMock()
     monkeypatch.setattr(leases.pg_manager, "get_async_session_context", session_context)
     monkeypatch.setattr(leases, "AgentRunRepository", Repo)
-    monkeypatch.setattr(leases, "complete_run_command_cleanup", cleanup)
+    monkeypatch.setattr(leases, "complete_run_runtime_cleanup", cleanup)
     monkeypatch.setattr(lifecycle, "dispatch_next_input", dispatch)
     monkeypatch.setattr(leases, "publish_run_settlement", settlement)
     monkeypatch.setattr(leases, "reconcile_cancelling_turns", AsyncMock())
@@ -65,9 +65,9 @@ async def test_stale_cleanup_does_not_touch_commands_of_new_attempt(monkeypatch,
     async def session_context():
         yield db
 
-    provider = SimpleNamespace(cancel_run=lambda *_: marker.unlink())
+    provider = SimpleNamespace(cleanup_run=lambda *_: marker.unlink())
     monkeypatch.setattr(leases.pg_manager, "get_async_session_context", session_context)
     monkeypatch.setattr(lifecycle, "get_sandbox_provider", lambda: provider)
     stale = SimpleNamespace(id="run-1", uid="user-1", runtime_cleanup_pending=True)
-    assert await leases.complete_run_command_cleanup(stale)
+    assert await leases.complete_run_runtime_cleanup(stale)
     assert marker.read_text() == "running"

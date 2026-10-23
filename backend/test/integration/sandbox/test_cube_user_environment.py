@@ -31,7 +31,7 @@ def test_concurrent_first_use_and_home_files_wake_original_vm(resources, monkeyp
     import sys
 
     code = (
-        "from yuxi.modules.agents.runtime.sandbox.provider import CubeSandboxProvider; "
+        "from yuxi.modules.agents.runtime.sandbox.cube_provider import CubeSandboxProvider; "
         f"print(CubeSandboxProvider().get({uid!r}).sandbox_id)"
     )
     processes = [
@@ -276,8 +276,8 @@ def test_http_env_verification_uses_new_values_preserves_existing_process_and_wa
             future = executor.submit(
                 provider.execute,
                 uid,
-                ': > before-env.tmp; touch env-writing-started; '
-                'while [ ! -f env-write-release ]; do sleep .1; done; '
+                ": > before-env.tmp; touch env-writing-started; "
+                "while [ ! -f env-write-release ]; do sleep .1; done; "
                 'printf %s "$LAB_ENV" > before-env.tmp && mv before-env.tmp before-env.txt; '
                 'while [ ! -f env-release ]; do sleep .1; done; printf %s "$LAB_ENV" > after-env.txt',
                 WORKSPACE_PATH,
@@ -327,7 +327,7 @@ def test_http_env_verification_uses_new_values_preserves_existing_process_and_wa
 
 def test_run_snapshot_keeps_values_across_commands_while_verification_reads_latest(resources):
     """真实 VM 输出固定快照，HTTP 验证读取新值，退出上下文后读取新配置。"""
-    from yuxi.modules.agents.runtime.sandbox.provider import sandbox_run_env
+    from yuxi.modules.agents.runtime.sandbox import sandbox_run_env
     from yuxi.modules.agents.repositories.environment import AgentEnvRepository
 
     uid, password, provider, backend = resources
@@ -452,7 +452,7 @@ def test_timeout_and_crashed_executor_cleanup_preserve_other_commands(resources)
     time.sleep(0.3)
     assert path.read_bytes() == before
     code = (
-        "from yuxi.modules.agents.runtime.sandbox.provider import CubeSandboxProvider; "
+        "from yuxi.modules.agents.runtime.sandbox.cube_provider import CubeSandboxProvider; "
         f"CubeSandboxProvider().execute({uid!r}, 'while :; do printf c >> crashed.txt; sleep .1; done', {WORKSPACE_PATH!r}, 120)"
     )
     process = subprocess.Popen([sys.executable, "-c", code])

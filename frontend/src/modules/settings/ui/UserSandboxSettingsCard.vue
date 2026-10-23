@@ -3,7 +3,7 @@
     <div class="sandbox-heading">
       <div>
         <h3>Agent 环境</h3>
-        <p>所有对话共享此环境</p>
+        <p>{{ ephemeral ? '每个任务独立临时环境，任务结束后销毁' : '所有对话共享此环境' }}</p>
       </div>
       <a-button
         class="sandbox-icon-button"
@@ -31,7 +31,7 @@
           <span v-if="timingText" class="sandbox-state-separator" aria-hidden="true">·</span>
           <span v-if="timingText" class="sandbox-timing">{{ timingText }}</span>
         </div>
-        <ActionDropdown v-model:open="menuOpen" :width="144">
+        <ActionDropdown v-if="!ephemeral" v-model:open="menuOpen" :width="144">
           <template #trigger
             ><a-button
               class="sandbox-icon-button"
@@ -58,7 +58,7 @@
           </div>
         </ActionDropdown>
       </div>
-      <div class="sandbox-disk" title="系统和主目录所在磁盘，不含共享工作区">
+      <div v-if="!ephemeral" class="sandbox-disk" title="系统和主目录所在磁盘，不含共享工作区">
         <span class="sandbox-label">磁盘</span>
         <div class="sandbox-disk-content">
           <span v-if="diskUsage" title="上次手动查询的结果"
@@ -149,8 +149,10 @@ const statePresentation = computed(
       ? { label: '读取中', icon: LoaderCircle, tone: 'muted' }
       : { label: '状态未知', icon: CircleHelp, tone: 'muted' })
 )
+const ephemeral = computed(() => status.value?.backend === 'container')
 const stateTitle = computed(() => {
   const value = status.value
+  if (ephemeral.value) return '任务首次执行命令时创建，任务结束后销毁'
   if (value?.state === 'paused' && value.paused_at)
     return `休眠于 ${formatFullDateTime(value.paused_at)}`
   if (value?.state === 'not_created') return '首次执行时自动创建'
@@ -159,6 +161,7 @@ const stateTitle = computed(() => {
     : ''
 })
 const timingText = computed(() => {
+  if (ephemeral.value) return ''
   const serverTime = Date.parse(status.value?.server_time)
   return sandboxTimingText(status.value, serverTime + clock.value - receivedAt.value)
 })

@@ -296,10 +296,18 @@ class UserSandboxBackend(BaseSandbox):
             if seconds <= 0:
                 raise ValueError("timeout must be positive")
             cwd = runtime_workdir_path(self._workdir_path) if self._workdir_path else WORKSPACE_PATH
-            output, exit_code, truncated = self._provider.execute(self._uid, command, cwd, seconds, cancelled)
+            output, exit_code, truncated = self._provider.execute(
+                self._uid,
+                command,
+                cwd,
+                seconds,
+                cancelled,
+                workdir=self._workdir_path,
+            )
             return ExecuteResponse(output=output, exit_code=exit_code, truncated=truncated)
         except Exception as exc:
-            return ExecuteResponse(output=f"Error: {type(exc).__name__}: 执行失败，请核对用户环境", exit_code=1, truncated=False)
+            message = str(exc) if str(exc) else "执行失败，请核对用户环境"
+            return ExecuteResponse(output=f"Error: {type(exc).__name__}: {message}", exit_code=1, truncated=False)
 
     def _read_bytes(self, path: str, max_bytes: int) -> bytes:
         """路径路由失败时不回退，VM 调用固定普通账号。"""
@@ -365,6 +373,7 @@ except Exception as error:
             stdin_data=data,
             output_budget=((max_bytes + 2) // 3 * 4 + 1024) if operation == "read" else 4 * 1024 * 1024,
             python=True,
+            workdir=self._workdir_path,
         )
         if exit_code != 0 or truncated:
             raise OSError("Guest file operation failed or exceeded output budget")

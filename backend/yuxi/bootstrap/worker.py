@@ -41,7 +41,7 @@ async def _worker_startup(ctx):
     if not isinstance(ctx, dict):
         raise TypeError("ARQ worker context 必须是字典")
     AuthUtils.require_security_secrets()
-    from yuxi.modules.agents.runtime.sandbox.provider import check_sandbox_provider
+    from yuxi.modules.agents.runtime.sandbox import check_sandbox_provider
 
     await check_sandbox_provider()
     ctx["worker_id"] = WORKER_ID

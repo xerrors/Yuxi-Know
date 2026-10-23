@@ -2,7 +2,7 @@
 
 import pytest
 
-from yuxi.modules.agents.runtime.sandbox.provider import CubeSandboxProvider
+from yuxi.modules.agents.runtime.sandbox.cube_provider import CubeSandboxProvider
 from yuxi.shared.errors import UpstreamError
 
 

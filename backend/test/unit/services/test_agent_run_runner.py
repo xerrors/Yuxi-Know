@@ -372,14 +372,14 @@ def _patch_common(monkeypatch: pytest.MonkeyPatch, run_obj: SimpleNamespace):
             )
         ),
     )
-    monkeypatch.setattr(runner, "complete_run_command_cleanup", fake_cleanup)
+    monkeypatch.setattr(runner, "complete_run_runtime_cleanup", fake_cleanup)
     monkeypatch.setattr(lifecycle, "clear_cancel_signal", fake_noop)
     monkeypatch.setattr(runner, "publish_run_settlement", fake_noop)
     monkeypatch.setattr(runner, "stream_agent_execution", lambda **kwargs: object())
     monkeypatch.setattr(runner.RunContext, "start", fake_noop)
     monkeypatch.setattr(runner.RunContext, "close", fake_noop)
     monkeypatch.setattr(runner.RunContext, "is_cancelled", fake_not_cancelled)
-    monkeypatch.setattr(leases, "complete_run_command_cleanup", AsyncMock(return_value=True))
+    monkeypatch.setattr(leases, "complete_run_runtime_cleanup", AsyncMock(return_value=True))
 
 
 @pytest.mark.asyncio
@@ -419,7 +419,7 @@ async def test_process_agent_run_rejects_corrupted_runtime_scope_before_executio
 @pytest.mark.parametrize("fails", [False, True])
 async def test_run_environment_snapshot_survives_updates_and_is_released(monkeypatch, fails):
     """线程与异步子任务复用启动快照，成功或失败退出均释放密钥。"""
-    from yuxi.modules.agents.runtime.sandbox.provider import sandbox_run_env
+    from yuxi.modules.agents.runtime.sandbox import sandbox_run_env
 
     run = _build_run()
     _patch_common(monkeypatch, run)
@@ -970,7 +970,7 @@ async def test_process_agent_run_retryable_error_retries_then_completes(monkeypa
         return True
 
     monkeypatch.setattr(runner, "release_run_lease_for_retry", fake_release_lease)
-    monkeypatch.setattr(runner, "complete_run_command_cleanup", fake_release_runtime)
+    monkeypatch.setattr(runner, "complete_run_runtime_cleanup", fake_release_runtime)
 
     with pytest.raises(runner.RetryableRunError) as retry:
         await runner.process_agent_run({"job_try": 1}, "run-1")

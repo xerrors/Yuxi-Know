@@ -9,7 +9,8 @@ from types import SimpleNamespace
 import pytest
 
 from yuxi.modules.agents.runtime.sandbox.cube import Environment
-from yuxi.modules.agents.runtime.sandbox.provider import CubeSandboxProvider, sandbox_run_env
+from yuxi.modules.agents.runtime.sandbox.cube_provider import CubeSandboxProvider
+from yuxi.modules.agents.runtime.sandbox import sandbox_run_env
 
 
 @pytest.fixture
@@ -42,7 +43,7 @@ async def test_parallel_run_commands_use_snapshot_including_empty_configuration(
         """恢复逐命令读库时，测试必须在正确原因上失败。"""
         raise AssertionError("Run command must not read current configuration")
 
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.provider.AgentEnvRepository.load_for_sync_runtime", unexpected_read)
+    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.cube_provider.AgentEnvRepository.load_for_sync_runtime", unexpected_read)
 
     async def execute(snapshot):
         """每个并发执行拥有独立上下文。"""
@@ -63,7 +64,9 @@ async def test_parallel_run_commands_use_snapshot_including_empty_configuration(
 def test_standalone_operations_read_latest_while_file_processes_have_clean_environment(provider, monkeypatch):
     """独立验证读取新值，文件进程不继承用户配置。"""
     current = {"RUN_VALUE": "before"}
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.provider.AgentEnvRepository.load_for_sync_runtime", lambda uid: dict(current))
+    monkeypatch.setattr(
+        "yuxi.modules.agents.runtime.sandbox.cube_provider.AgentEnvRepository.load_for_sync_runtime", lambda uid: dict(current)
+    )
     assert json.loads(provider.execute("fixture", "print-env", "/", 10)[0]) == current
     current["RUN_VALUE"] = "after"
     assert json.loads(provider.execute("fixture", "print-env", "/", 10)[0]) == current

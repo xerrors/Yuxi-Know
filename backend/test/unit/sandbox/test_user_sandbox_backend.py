@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from yuxi.modules.agents.runtime.sandbox import backend as backend_module
 from yuxi.modules.agents.runtime.sandbox.backend import UserSandboxBackend, create_agent_composite_backend
 from yuxi.modules.extensions.skills.projection import get_user_skills_root_dir
 from yuxi.modules.workspace.paths import ensure_user_workspace, user_workspace_dir
@@ -23,9 +24,9 @@ def backend(tmp_path, monkeypatch):
         def __getattr__(self, key):
             raise AssertionError(f"local files must not call VM: {key}")
 
-    value = UserSandboxBackend(uid="one")
-    value._provider = NoVM()
-    return value
+    novm = NoVM()
+    monkeypatch.setattr(backend_module, "get_sandbox_provider", lambda: novm)
+    return UserSandboxBackend(uid="one")
 
 
 def test_workspace_read_write_edit_and_search_do_not_wake_vm(backend):

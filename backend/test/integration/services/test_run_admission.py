@@ -67,7 +67,7 @@ async def test_admission_rejection_persists_original_reason_and_finishes_cleanup
         graph_started.write_text("unexpected execution")
         raise AssertionError("准入拒绝后不得执行")
 
-    monkeypatch.setattr(run_lifecycle, "get_sandbox_provider", lambda: SimpleNamespace(cancel_run=cancel_command))
+    monkeypatch.setattr(run_lifecycle, "get_sandbox_provider", lambda: SimpleNamespace(cleanup_run=cancel_command))
     monkeypatch.setattr(runner, "stream_agent_execution", enter_graph)
     monkeypatch.setattr(runner, "start_session_title", lambda **_kwargs: None)
     if fault in {"raw", "manifest"}:

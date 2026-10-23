@@ -44,7 +44,7 @@ async def test_vm_stats_report_unavailable_instead_of_zero(monkeypatch):
     """上游错误穿过用例边界后保留不可用语义。"""
     with http_server({"/v2/sandboxes": (503, {})}) as port:
         adapter = CubeAdapter(Config(api_url=f"http://127.0.0.1:{port}"))
-        monkeypatch.setattr(sandbox, "get_sandbox_provider", lambda: SimpleNamespace(adapter=adapter))
+        monkeypatch.setattr(sandbox, "get_sandbox_provider", lambda: SimpleNamespace(vm_stats=adapter.vm_stats))
         with pytest.raises(UpstreamError, match="VM 统计暂不可用") as result:
             await sandbox.get_vm_stats()
         assert isinstance(result.value.__cause__, httpx.HTTPStatusError)

@@ -8,7 +8,7 @@ from typing import Any
 
 from yuxi.infrastructure.filesystem import await_io
 from yuxi.modules.agents.repositories.environment import AgentEnvRepository, AgentEnvWriteResult
-from yuxi.modules.agents.runtime.sandbox.provider import get_sandbox_provider
+from yuxi.modules.agents.runtime.sandbox import get_sandbox_provider
 from yuxi.modules.workspace.runtime_paths import WORKSPACE_PATH
 from yuxi.shared.datetime import format_utc_datetime, utc_now
 from yuxi.shared.errors import InvalidOperationError, StateConflictError, UpstreamError

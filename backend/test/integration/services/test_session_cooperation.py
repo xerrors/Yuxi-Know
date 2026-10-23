@@ -646,12 +646,12 @@ async def test_user_message_after_tree_stop_resumes_only_target_queue(tree, monk
     from yuxi.modules.agents.models.cooperation import CooperationRuntime
     from yuxi.modules.agents.services.cooperation import control_tree
     from yuxi.modules.agents.services.inputs import accept_message
-    from yuxi.modules.agents.services.leases import complete_run_command_cleanup
+    from yuxi.modules.agents.services.leases import complete_run_runtime_cleanup
 
     monkeypatch.setattr("yuxi.modules.agents.services.turns.publish_cancel_signals", AsyncMock())
     monkeypatch.setattr(
         "yuxi.modules.agents.services.run_lifecycle.get_sandbox_provider",
-        lambda: type("Provider", (), {"cancel_run": staticmethod(lambda *_: None)})(),
+        lambda: type("Provider", (), {"cleanup_run": staticmethod(lambda *_: None)})(),
     )
     factory, run_id, root_id, uid = tree
     member = await child(tree)
@@ -674,7 +674,7 @@ async def test_user_message_after_tree_stop_resumes_only_target_queue(tree, monk
         run = await db.get(AgentRun, run_id)
         await settle_run(db=db, run=run, worker_id="root-worker", status="cancelled", token_usage=None)
         await db.commit()
-    await complete_run_command_cleanup(run)
+    await complete_run_runtime_cleanup(run)
     async with factory() as db:
         accepted = await accept_message(db=db, **arguments)
     async with factory() as db:
@@ -1034,7 +1034,7 @@ async def test_child_status_notification_preserves_self_and_parent_recipients(tr
 async def test_cancelling_last_pending_run_keeps_tree_stop_state(tree):
     """取消 pending Run 持久化终态，不登记协作树沙盒回收计时。"""
     from yuxi.modules.agents.models.cooperation import CooperationRuntime
-    from yuxi.modules.agents.services.leases import complete_run_command_cleanup
+    from yuxi.modules.agents.services.leases import complete_run_runtime_cleanup
     from yuxi.modules.agents.services.turns import cancel_turn
 
     factory, run_id, root_id, uid = tree
@@ -1043,7 +1043,7 @@ async def test_cancelling_last_pending_run_keeps_tree_stop_state(tree):
         root_run = await db.get(AgentRun, run_id)
         await settle_run(db=db, run=root_run, worker_id="root-worker", status="failed", token_usage=None)
         await db.commit()
-    await complete_run_command_cleanup(root_run)
+    await complete_run_runtime_cleanup(root_run)
     async with factory() as db:
         await cancel_turn(
             db=db,

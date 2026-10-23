@@ -10,7 +10,7 @@ from yuxi.modules.system.services import options as option_values
 
 @pytest.fixture(autouse=True)
 def api_key_derivation_secret(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.provider.check_sandbox_provider", AsyncMock())
+    monkeypatch.setattr("yuxi.modules.agents.runtime.sandbox.check_sandbox_provider", AsyncMock())
     monkeypatch.setenv("JWT_SECRET_KEY", "test-jwt-secret-that-is-at-least-32-chars")
     monkeypatch.setenv("API_KEY_DERIVATION_SECRET", "test-api-key-derivation-secret-32-chars")
 

@@ -9,10 +9,10 @@ from datetime import datetime
 from yuxi.infrastructure.observability.logging import logger
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.agents.repositories.runs import TERMINAL_RUN_STATUSES, AgentRunRepository
-from yuxi.modules.agents.runtime.sandbox.provider import get_sandbox_provider
+from yuxi.modules.agents.runtime.sandbox import get_sandbox_provider
 from yuxi.modules.agents.services.event_writer import publish_run_settlement
 from yuxi.modules.agents.services.run_lifecycle import (
-    complete_run_command_cleanup,
+    complete_run_runtime_cleanup,
     finish_run_lifecycle,
     reconcile_cancelling_turns,
     reconcile_expired_run,
@@ -26,7 +26,7 @@ WORKER_ID = f"worker-{uuid.uuid4().hex}"
 
 
 async def maintain_user_sandboxes() -> None:
-    """维护用户环境；所有会话空闲后暂停，不删除 VM。"""
+    """由所选后端对账执行资源，并维护自身的空闲或孤儿环境。"""
     await asyncio.to_thread(get_sandbox_provider().maintain)
 
 
@@ -112,7 +112,7 @@ async def reconcile_pending_runtime_cleanups() -> list[str]:
     failures = 0
     for run in pending_runs:
         try:
-            if not await complete_run_command_cleanup(run):
+            if not await complete_run_runtime_cleanup(run):
                 continue
             if run.status in TERMINAL_RUN_STATUSES:
                 await publish_run_settlement(run.id, run.status, thread_id=run.thread_id)

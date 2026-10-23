@@ -317,6 +317,7 @@ async def test_safe_handoff_consumes_batch_in_same_turn_with_current_config(sess
         old = await db.get(AgentRun, current.id)
         next_run = await db.get(AgentRun, settled.next_dispatch.run_id)
         assert old.status == "yielded"
+        assert old.runtime_cleanup_pending, "yielded 必须保留旧 Run 的环境清理责任"
         assert next_run.turn_id == current.turn_id and next_run.resume_from_run_id == current.id
         assert next_run.input_payload == current.input_payload
         assert next_run.input_payload["context_snapshot"]["model"] != "test:chat"
@@ -325,6 +326,55 @@ async def test_safe_handoff_consumes_batch_in_same_turn_with_current_config(sess
         assert [message.content for message in messages] == ["S1", "S2"]
         turn = await db.get(AgentTurn, current.turn_id)
         assert turn.current_run_id == next_run.id and turn.result_run_id is None
+
+
+async def test_steer_successor_waits_for_durable_runtime_cleanup(sessions, monkeypatch, tmp_path):
+    """提前补投不能越过旧环境；清理失败保留责任，恢复后才能领取。"""
+    from yuxi.modules.agents.services import run_lifecycle
+
+    current = await _start(sessions)
+    await _send(sessions, "steer-after-runtime")
+    async with sessions() as db:
+        run = await db.get(AgentRun, current.id)
+        settled = await settle_run(db=db, run=run, worker_id="owner", status="completed", token_usage=None)
+        # 独立构造待清理状态，使领取门禁的负向案例不依赖终态写入实现。
+        run.runtime_cleanup_pending = True
+        await db.commit()
+    successor_id = settled.next_dispatch.run_id
+    async with sessions() as db:
+        _, acquired = await AgentRunRepository(db).mark_running(successor_id, worker_id="next-owner", lease_seconds=60)
+        assert not acquired, "接续 Run 不能先于旧 Run 的清理确认执行"
+        await db.commit()
+
+    resource = tmp_path / "old-run-resource"
+    resource.write_text("owned")
+
+    def failed_cleanup(*_args):
+        """模拟执行节点无法确认资源已释放。"""
+        raise RuntimeError("runtime unavailable")
+
+    monkeypatch.setattr(run_lifecycle, "get_sandbox_provider", lambda: SimpleNamespace(cleanup_run=failed_cleanup))
+    with pytest.raises(RuntimeError, match="runtime unavailable"):
+        await run_lifecycle.complete_run_runtime_cleanup(current)
+    async with sessions() as db:
+        assert (await db.get(AgentRun, current.id)).runtime_cleanup_pending
+        assert (await db.get(AgentRun, successor_id)).status == "pending"
+    assert resource.read_text() == "owned"
+
+    def cleanup(uid, run_id):
+        """释放指定旧 Run 的资源。"""
+        assert (uid, run_id) == (current.uid, current.id)
+        resource.unlink(missing_ok=True)
+
+    monkeypatch.setattr(run_lifecycle, "get_sandbox_provider", lambda: SimpleNamespace(cleanup_run=cleanup))
+    await run_lifecycle.complete_run_runtime_cleanup(current)
+    await run_lifecycle.complete_run_runtime_cleanup(current)
+    assert not resource.exists()
+    async with sessions() as db:
+        assert not (await db.get(AgentRun, current.id)).runtime_cleanup_pending
+        successor, acquired = await AgentRunRepository(db).mark_running(successor_id, worker_id="next-owner", lease_seconds=60)
+        assert acquired and successor.status == "running"
+        await db.commit()
 
 
 @pytest.mark.parametrize("status", ["failed", "cancelled"])

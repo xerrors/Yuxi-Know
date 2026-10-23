@@ -14,7 +14,7 @@ from yuxi.modules.agents.repositories.messages import MessageRepository
 from yuxi.modules.agents.repositories.model_audit import ModelMessageAuditRepository
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.repositories.tool_audit import ToolMessageAuditRepository
-from yuxi.modules.agents.services.run_lifecycle import lock_run_lifecycle, settle_checkpoint
+from yuxi.modules.agents.services.run_lifecycle import complete_run_runtime_cleanup, lock_run_lifecycle, settle_checkpoint
 from yuxi.modules.agents.services.scheduler import Dispatch, deliver
 from yuxi.modules.agents.tool_results import TOOL_FAILURE_MESSAGE, tool_result_text
 from yuxi.shared.datetime import utc_now
@@ -192,6 +192,7 @@ async def save_messages_from_langgraph_state(
             next_dispatch = settlement.next_dispatch
         await db.commit()
         if next_dispatch:
+            await complete_run_runtime_cleanup(persisted_run)
             await deliver(next_dispatch)
         return "running" if continue_after_cancelled_steer else terminal_status
     except asyncio.CancelledError:

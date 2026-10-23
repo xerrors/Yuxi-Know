@@ -1,5 +1,22 @@
 # 沙盒与文件系统机制
 
+## 执行后端
+
+`SANDBOX_BACKEND` 只允许两个值：
+
+| 值 | 执行 Owner | 生命周期 | 隔离定位 |
+|---|---|---|---|
+| `cube`（默认） | 每用户一个持久 Cube VM | 跨 Run 复用，空闲休眠，显式重建 | Linux/KVM，强隔离 |
+| `container` | 独立 `sandbox-runner`，每 Run 一个临时容器 | 首次 `execute` 创建，Run 终态/取消/失败时销毁 | 普通 Docker/Podman，单租户或可信代码 |
+
+两种后端复用 Agent 工具入口、Workspace 虚拟路径、审批、审计和 Run lease。每个 Run 终态（包括 yielded）都登记 `runtime_cleanup_pending`；统一的 `cleanup_run` 确认资源释放后才清除责任。Cube 清理所属命令并保留用户 VM，container 删除所属 Run 容器。清理失败由现有恢复循环重试。
+
+Steer 在原事务中提交旧 Run 的 yielded 状态及新 pending Run，提交后先清理旧环境再投递接续。即使周期补投提前到达，Run 领取边界也拒绝同 Thread 尚有清理责任的首次执行；清理恢复后由 pending 补投接续，不丢失已消费输入。
+
+Container 模式的部署、挂载、资源限制和能力差异见[Container 沙盒](../advanced/container-sandbox.md)。以下“用户 VM”段落描述默认 Cube 后端。
+
+## Cube 用户 VM
+
 每个用户固定一个持久 Cube VM。所有 Agent 对话共用普通账号 `user` 的软件、Home 和配置，自然并发执行；项目的 cwd、Run 结果、协作身份和执行名额仍分别管理。Agent 没有 sudo 权限，平台控制凭据不进入 VM 的环境变量或模型上下文。
 
 ## 文件边界
@@ -39,6 +56,6 @@ Run 取消监听直接清理所属命令，超时与 lease 失效清理由持久
 
 ## 源码定位与验证
 
-[Sandbox provider](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/runtime/sandbox/provider.py)协调用户锁、环境代次、命令登记与清理，[Cube adapter](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/runtime/sandbox/cube.py)执行远端普通账号协议，[Sandbox repository](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/repositories/sandbox.py)保存环境与命令事实。[Workspace 路径契约](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/workspace/runtime_paths.py)和[文件边界](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/workspace/runtime_files.py)决定访问宿主共享文件还是 VM 文件。
+[Sandbox 公共入口](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/runtime/sandbox/__init__.py)提供 Backend、可信上下文、后端选择及就绪检查；业务 service 不选择具体实现。[Cube provider](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/runtime/sandbox/cube_provider.py)协调用户锁、环境代次、命令登记与清理，[Cube adapter](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/runtime/sandbox/cube.py)执行远端普通账号协议，[Sandbox repository](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/agents/repositories/sandbox.py)保存环境与命令事实。[Workspace 路径契约](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/workspace/runtime_paths.py)和[文件边界](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/workspace/runtime_files.py)决定访问宿主共享文件还是 VM 文件。
 
 [用户环境集成测试](https://github.com/xerrors/Yuxi/blob/main/backend/test/integration/sandbox/test_cube_user_environment.py)覆盖环境复用与生命周期，[文件边界测试](https://github.com/xerrors/Yuxi/blob/main/backend/test/integration/sandbox/test_cube_shared_mount_fuzz.py)检查共享挂载的路径约束，[Agent E2E](https://github.com/xerrors/Yuxi/blob/main/backend/test/e2e/test_cube_agent_execution_e2e.py)核对执行、产物和取消。命令返回成功后仍需读取目标文件及持久命令状态；Cube 节点不可用时，明确记录未执行范围。

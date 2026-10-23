@@ -39,7 +39,7 @@ YUXI_INIT_NON_INTERACTIVE=1 ./scripts/init.sh
 
 执行前须按[沙盒配置与运维](./sandbox-operations.md#原生执行节点)准备节点、模板和真实共享挂载。两个节点路径分别共享 `YUXI_STATE_DIR/yuxi/threads`、`YUXI_STATE_DIR/yuxi/skill-projections` 的底层文件；只填写路径不会建立共享。复用节点时为每套环境分配独立共享路径和实例标识，不能把开发环境的用户目录直接交给生产 API。Docker 项目名只接受小写字母、数字、连字符和下划线，因此显示名称 `Production` 对应项目名 `production`。
 
-脚本接受环境变量覆盖，并生成缺失的 PostgreSQL、Neo4j、MinIO 凭据和两个独立应用安全密钥；已有非空安全密钥无效时明确失败，不自动轮换。重建时保留配置文件及原有密钥，避免用临时环境变量覆盖已有生产凭据。开关、优先级和模型 Key 输入见[初始化应用配置](../intro/quick-start.md#_3-初始化应用配置)。
+脚本接受环境变量覆盖，并生成缺失的 PostgreSQL、Neo4j、MinIO 凭据和两个独立应用安全密钥；已有非空安全密钥无效时明确失败，不自动轮换。重建时保留配置文件及原有密钥，避免用临时环境变量覆盖已有生产凭据。开关、优先级和模型 Key 输入见[常见配置](../intro/quick-start.md#常见配置)。
 
 也可以复制模板，手动编辑 `.env.prod` 并设置文件权限：
 

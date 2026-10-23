@@ -410,16 +410,28 @@ def test_mime_guard_detects_missing_mjs_mapping():
 
 
 @pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
-def test_shipping_uses_only_cube_environment_configuration(filename):
-    """API/worker 必须声明实际共享目录，旧执行服务不能再注册。"""
+def test_shipping_selects_cube_or_container_with_explicit_runner_boundary(filename):
+    """API/worker 只保存配置；Docker socket 只属于 container profile 的 runner。"""
     compose = load_compose(filename)
-    assert "sandbox-provisioner" not in compose["services"]
+    services = compose["services"]
+    assert "sandbox-provisioner" not in services
     for name in ("api", "worker"):
-        env = compose["services"][name]["environment"]
-        assert env["CUBE_NODE_USER_DATA_DIR"].startswith("${CUBE_NODE_USER_DATA_DIR:?")
-        assert env["CUBE_NODE_SKILL_PROJECTION_DIR"].startswith("${CUBE_NODE_SKILL_PROJECTION_DIR:?")
+        env = services[name]["environment"]
+        assert env["SANDBOX_BACKEND"] == "${SANDBOX_BACKEND:-cube}"
+        assert env["SANDBOX_RUNNER_URL"] == "${SANDBOX_RUNNER_URL:-http://sandbox-runner:8090}"
+        assert env["CUBE_API_URL"] == "${CUBE_API_URL:-}"
+        assert env["CUBE_NODE_USER_DATA_DIR"] == "${CUBE_NODE_USER_DATA_DIR:-/data/shared/yuxi/threads}"
+        assert env["CUBE_NODE_SKILL_PROJECTION_DIR"] == "${CUBE_NODE_SKILL_PROJECTION_DIR:-/data/shared/yuxi/skill-projections}"
+        assert not any(key.startswith("SANDBOX_CONTAINER_") for key in env)
         assert env["SANDBOX_IDLE_SECONDS"] == "${SANDBOX_IDLE_SECONDS:-300}"
         assert not any(key.startswith("SANDBOX_PROVISIONER") for key in env)
+        targets = {_volume_target(volume) for volume in services[name].get("volumes") or []}
+        assert "/var/run/docker.sock" not in targets
+    runner = services["sandbox-runner"]
+    assert runner["profiles"] == ["container"]
+    targets = {_volume_target(volume) for volume in runner.get("volumes") or []}
+    assert {"/var/run/docker.sock", "/sandbox-data", "/sandbox-skill-projections"} <= targets
+    assert services["sandbox-image"]["profiles"] == ["container"]
 
 
 @pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])

@@ -15,6 +15,7 @@ from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.infrastructure.postgres.models import load_models
 from yuxi.migrations.main import initialize_schema
 from yuxi.migrations.schema import schema_migration_lock
+from yuxi.modules.agents.runtime.sandbox import validate_sandbox_configuration
 from yuxi.modules.agents.services.configuration import initialize_agent_presets
 from yuxi.modules.extensions.mcp.service import ensure_builtin_mcp_servers_in_db
 from yuxi.modules.extensions.skills.builtin.sync import init_builtin_skills
@@ -23,6 +24,7 @@ from yuxi.modules.models.providers.service import ensure_builtin_model_providers
 
 async def main() -> None:
     """串行准备共享内容；部分阶段失败保留已提交数据，修正后幂等重跑。"""
+    validate_sandbox_configuration()
     load_models()
     pg_manager.initialize()
     try:

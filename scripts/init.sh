@@ -237,7 +237,10 @@ for name in SILICONFLOW_API_KEY WEB_SEARCH_PROVIDER DOUBAO_SEARCH_API_KEY TAVILY
     JWT_SECRET_KEY API_KEY_DERIVATION_SECRET YUXI_INSTANCE_ID YUXI_ENV \
     POSTGRES_PASSWORD NEO4J_PASSWORD MINIO_ACCESS_KEY MINIO_SECRET_KEY \
     CUBE_API_URL CUBE_API_KEY CUBE_PROXY_NODE_IP CUBE_PROXY_PORT_HTTP CUBE_TEMPLATE_ID \
-    CUBE_NODE_USER_DATA_DIR CUBE_NODE_SKILL_PROJECTION_DIR COMPOSE_PROJECT_NAME YUXI_STATE_DIR YUXI_FRONTEND_PORT; do
+    CUBE_NODE_USER_DATA_DIR CUBE_NODE_SKILL_PROJECTION_DIR \
+    SANDBOX_BACKEND SANDBOX_RUNNER_TOKEN SANDBOX_RUNNER_URL SANDBOX_CONTAINER_IMAGE \
+    SANDBOX_CONTAINER_IMAGE_DIGEST SANDBOX_CONTAINER_NETWORK SANDBOX_CONTAINER_UID SANDBOX_CONTAINER_GID \
+    COMPOSE_PROJECT_NAME YUXI_STATE_DIR YUXI_FRONTEND_PORT; do
     if [ "${!name+x}" = x ]; then
         case "$name" in
             JWT_SECRET_KEY|API_KEY_DERIVATION_SECRET)
@@ -273,6 +276,22 @@ if [ -z "$(get_env_value YUXI_INSTANCE_ID)" ]; then
     set_env_value YUXI_INSTANCE_ID "$instance"
 fi
 
+sandbox_backend=$(get_env_value SANDBOX_BACKEND)
+sandbox_backend="${sandbox_backend:-cube}"
+case "$sandbox_backend" in
+    cube|container) ;;
+    *) fail "SANDBOX_BACKEND must be cube or container." ;;
+esac
+set_env_value SANDBOX_BACKEND "$sandbox_backend"
+if [ "$sandbox_backend" = container ]; then
+    runner_token=$(get_env_value SANDBOX_RUNNER_TOKEN)
+    if [ -z "$runner_token" ]; then
+        set_env_value SANDBOX_RUNNER_TOKEN "$(generate_hex 32)"
+    else
+        security_secret_is_valid "$runner_token" || fail "SANDBOX_RUNNER_TOKEN must be at least 32 characters without surrounding whitespace or quotes."
+    fi
+fi
+
 if [ "$(get_env_value YUXI_ENV)" = production ]; then
     compose_file=docker-compose.prod.yml
     for name in POSTGRES_PASSWORD NEO4J_PASSWORD MINIO_ACCESS_KEY MINIO_SECRET_KEY; do
@@ -280,12 +299,24 @@ if [ "$(get_env_value YUXI_ENV)" = production ]; then
             set_env_value "$name" "$(generate_hex 32)"
         fi
     done
-    for name in CUBE_API_URL CUBE_PROXY_NODE_IP CUBE_NODE_USER_DATA_DIR CUBE_NODE_SKILL_PROJECTION_DIR; do
-        ensure_required_value "$name"
-    done
+    if [ "$sandbox_backend" = container ]; then
+        ensure_required_value SANDBOX_CONTAINER_IMAGE
+        ensure_required_value SANDBOX_CONTAINER_IMAGE_DIGEST
+        case "$(get_env_value SANDBOX_CONTAINER_IMAGE_DIGEST)" in
+            sha256:*) ;;
+            *) fail "SANDBOX_CONTAINER_IMAGE_DIGEST must start with sha256:" ;;
+        esac
+    else
+        for name in CUBE_API_URL CUBE_PROXY_NODE_IP; do
+            ensure_required_value "$name"
+        done
+    fi
 fi
 
 echo "✅ Configuration saved to ${env_file}."
+if [ "$sandbox_backend" = container ]; then
+    echo "🐳 Container sandbox selected: start services with docker compose --profile container up -d."
+fi
 if [ "$skip_images" = 1 ]; then
     echo "Image preparation skipped (YUXI_INIT_SKIP_IMAGES=1)."
     exit 0

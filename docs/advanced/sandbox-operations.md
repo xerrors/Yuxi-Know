@@ -1,6 +1,6 @@
 # 沙盒配置与运维
 
-本页供部署管理员准备和维护 Cube 用户 VM。Yuxi 固定使用 CubeSandbox v0.7.3，应用服务使用 Compose，执行节点需要专用 Linux/KVM；Yuxi 与 Cube 的 Workspace/Skills 挂载必须指向同一份文件。运行时只装配 Cube，节点或实例故障会明确失败。
+本页供部署管理员准备和维护默认的 Cube 用户 VM。没有 Linux/KVM 节点时，使用 [Container 沙盒](container-sandbox.md)；它提供单租户轻量执行环境，不替代 Cube 的强隔离。Yuxi 固定使用 CubeSandbox v0.7.3，应用服务使用 Compose，执行节点需要专用 Linux/KVM；Yuxi 与 Cube 的 Workspace/Skills 挂载必须指向同一份文件。运行时只装配当前 `SANDBOX_BACKEND`，节点或实例故障会明确失败。
 
 ## 原生执行节点
 
@@ -14,7 +14,7 @@ Skills 页的推荐区提供“浏览器与网页自动化”分组，可按需�
 
 浏览器 profile、session 与登录状态的复用由所选 CLI 的实际配置管理，系统提示词只负责选择浏览器 Skill。agent-browser 跨浏览器重启保存状态需要显式配置持久 profile 或状态恢复，详见[上游会话文档](https://agent-browser.dev/sessions)。不同用户有各自的 VM Home；显式重建既有 VM 前需按下文确认 Home 数据保留，因为重建可能清除浏览器配置。
 
-配置 Yuxi 的 `.env` / `.env.prod`：
+配置 Yuxi 的 `.env` / `.env.prod`。Compose 提供端口、模板和下列共享目录的默认值，省略或留空即可使用；不同节点布局通过同名变量覆盖：
 
 ```dotenv
 CUBE_API_URL=http://<private-node-address>:3000

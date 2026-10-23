@@ -18,6 +18,7 @@ Yuxi 是一个面向 RAG、知识图谱和多智能体工作流的知识库平�
 - `storage-init`：无网络的一次性进程，准备 API/worker/app-init 与 Milvus 挂载根的属主和模式，不递归修改已有文件；消费进程等待其成功退出。
 - `app-init`：普通用户运行的部署任务，在 PostgreSQL advisory lock 内先建立或校验当前 Schema，再同步系统配置定义、内置供应商、Agent、MCP 与 Skill 来源文件。API 与 worker 等待全部成功。空库基线为 business 1、knowledge 1，直接包含个人 MCP 授权表、128 位用户归属字段及当前约束。当前版本跳过结构初始化，其他版本明确拒绝；历史部署的结构调整由部署侧直接完成，代码不保留增量迁移脚本。共享同步失败保留已提交内容，修正后幂等重跑。
 - Cube Linux/KVM 执行节点：每个用户拥有一个持久普通账号 VM，Workspace 与授权 Skills 共享宿主文件。
+- `sandbox-runner`：选择 container 后端时由该独立进程持有 Docker socket，为每个 Run 懒创建临时容器并执行命令；API/worker 只调用认证 HTTP。挂载、镜像和资源限制由 runner 拥有，Run 归属与清理责任仍由 PostgreSQL 拥有。
 - `postgres`：业务数据、知识库元数据、持久 Input 队列、Turn/Run 与 LangGraph checkpoint。
 - `redis`：ARQ 投递、运行事件、取消信号以及跨进程配置和模型缓存。
 - `minio`：附件草稿内容、知识库原始文件和其他对象数据；正式 Agent 附件归 Workdir，附件事实归 PostgreSQL。
@@ -95,7 +96,7 @@ Yuxi 始终交付完整知识能力。API 注册知识库、图谱、评估、Da
 4. owning transaction 提交后才向 ARQ 投递 pending Run。恢复扫描可补投未成功投递的同一个 Run，不自动重试已经失败的工作。
 5. `worker` 中的 `modules/agents/services/runner.py` 使用进程 identity 与 job-attempt token 取得 Run lease；未取得 ownership 的重复任务不会执行。runner 依次核验输入、执行用户与 Workdir 授权，并共用拒绝结算；启动独立事务续租的心跳后，由 `services/preparation.py` 准备 Context，在有效 lease 下提交 write-once 运行清单后才进入 LangGraph。Langfuse 使用 Turn 级 trace 与 Run 级 observation；远端观测不拥有业务终态。
 6. 所有 Session 通过同一 Agent 后端与 middleware 组合 Workdir、Skills、MCP、审批、摘要及协作能力。协作成员拥有独立上下文、Thread/Input/Turn/Run，以父关系和树内名称关联；不继承父历史。全树共享 Project Workdir 与四个执行名额，同一用户的所有树共用一个 Cube VM，等待释放 worker 与执行名额。PostgreSQL 拥有协作消息、等待与终态事实；普通取消只影响指定 Turn，用户明确停止才停止整树。各 Run 的 lease、结果和终态发布独立，用户环境由 worker 在该用户无活动 Run 或操作时空闲休眠；具体行为见[会话协作](docs/agents/session-cooperation.md)。
-7. 安全接管点在工具批次及 checkpoint 保存之后，或无工具的模型调用完成之后。pending steer 被固定为消费批次，旧 Run yielded，同一 Turn 创建下一 Run；普通工具循环保持同一 Run。人工等待使 Run interrupted、Turn waiting，并保存绑定该 Run 的等待点；结构化回答或审批消费等待点后，在同一 Turn 创建新 Run。
+7. 安全接管点在工具批次及 checkpoint 保存之后，或无工具的模型调用完成之后。pending steer 被固定为消费批次，旧 Run yielded，同一 Turn 创建下一 Run；提交后确认旧 Run 的 runtime 清理再投递接续，领取边界拒绝同 Thread 尚有清理责任的首次执行。普通工具循环保持同一 Run。人工等待使 Run interrupted、Turn waiting，并保存绑定该 Run 的等待点；结构化回答或审批消费等待点后，在同一 Turn 创建新 Run。
 8. 完成、失败和取消由当前 owner 在数据库事务中收敛 Run 与 Turn。最终结果指向明确的顶层 result Run 的 output Message；Model/Tool 审计保留独立归属；普通历史只读取已登记的公开 item，不包含内部 prompt 或 checkpoint。父完成、失败或单轮取消保留后代独立工作；用户显式停止整树才取消所有成员在途 Turn。取消先持久化状态并暂停待消费输入队列，再发送 Redis 加速信号；失联 Run 由 lease reconciliation 形成可观察失败。外部副作用仍按 at-least-once 语义核对。
 9. LangGraph v3 ProtocolEvent 先由 `RunMessageRecorder` 统一记录模型和工具消息事实。工具审计仅在 `extra_metadata.output` 保存原始结果，`content` 固定为空且由数据库约束保护；审计文本、Memory 与公开内容使用同一工具结果契约派生，再由公开适配器转换为 OpenAI Agents 事件。消息事实与公开快照各自提交后发布事件，checkpoint 留在独立执行结果。Redis 保存逐条公开事件，SSE data 为事件本身，逻辑 event_id 与恢复 cursor 分开；断线或过期时客户端读取 PostgreSQL 快照恢复，不从相邻 Run 推断结果。
 10. Thread 保存不可变 `project_id`，每个 Project 绑定一个 `workdir_path`，多个 Project 可以共享同一路径。managed Project 使用服务端创建的 `projects/YYYYMMDD/<六位标识>[-N]`，linked Project 绑定当前用户 UserWorkspace 内通过 no-follow 校验的已有目录。Thread 只归档；删除 Project 时拒绝仍有活跃 Turn 或待处理 Input 的情况，再软删除 Project 并归档所属 Thread。`yuxi.modules.workspace` 拥有宿主路径和 fd-relative 文件访问，Workdir resolver 为 Viewer、附件、Artifact、Run 和协作会话提供同一持久路径；Run 终态解除当前执行的清理责任，用户 VM 在无活动 Run 或命令时空闲休眠，Workdir 保留。

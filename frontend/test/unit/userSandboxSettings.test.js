@@ -344,6 +344,27 @@ test('休眠时间与空闲倒计时按服务端快照展示，忙碌和未知�
   }
 })
 
+test('container 模式显示任务级临时环境并隐藏重建和磁盘操作', async () => {
+  const current = {
+    backend: 'container',
+    state: 'not_created',
+    busy: false,
+    active_runs: [],
+    active_operations: 0
+  }
+  const view = await renderSettings('UserSandboxSettingsCard', { get: async () => current })
+  try {
+    assert.ok(view.find((node) => node.text?.includes('每个任务独立临时环境')))
+    assert.equal(view.find((node) => node.props.role === 'menuitem'), undefined)
+    assert.equal(view.find((node) => node.props['aria-label'] === '环境操作'), undefined)
+    assert.equal(view.find((node) => node.props['aria-label']?.includes('磁盘用量')), undefined)
+    assert.equal(view.find((node) => node.props.class === 'sandbox-timing'), undefined)
+    assert.ok(view.find((node) => node.text?.trim() === '未创建'))
+  } finally {
+    await view.close()
+  }
+})
+
 test('较旧的环境查询晚返回不能覆盖最新休眠时间，错误后不保留倒计时', async () => {
   let get = async () => ({ state: 'not_created', idle_timeout_seconds: 300 })
   const view = await renderSettings('UserSandboxSettingsCard', { get: () => get() })

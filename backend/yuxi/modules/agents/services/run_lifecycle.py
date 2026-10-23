@@ -21,7 +21,7 @@ from yuxi.modules.agents.repositories.input import AgentInputRepository
 from yuxi.modules.agents.repositories.runs import TERMINAL_RUN_STATUSES, AgentRunRepository
 from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.agents.repositories.turn import AgentTurnRepository
-from yuxi.modules.agents.runtime.sandbox.provider import get_sandbox_provider
+from yuxi.modules.agents.runtime.sandbox import get_sandbox_provider
 from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.agents.services.cooperation_notifications import notify_turn_state
 from yuxi.modules.agents.services.queue_control import pause_pending_queue
@@ -218,15 +218,15 @@ async def finish_run_lifecycle(run: AgentRun) -> None:
         await finish_turn_observation_if_terminal(run.turn_id)
 
 
-async def complete_run_command_cleanup(run: AgentRun) -> bool:
-    """确认该 Run 外部命令清理后才释放 cleanup 责任。"""
+async def complete_run_runtime_cleanup(run: AgentRun) -> bool:
+    """确认该 Run 拥有的命令与环境已释放后才解除持久清理责任。"""
     async with pg_manager.get_async_session_context() as db:
         current = await db.scalar(select(AgentRun).where(AgentRun.id == run.id).with_for_update(key_share=True))
         if current is None:
             raise RuntimeError("Run 的 cleanup Owner 不存在")
         if current.runtime_cleanup_pending:
             # 与 retry 领取持同一 Run 锁；取消也必须等待外部清理结束后才能释放。
-            await await_io(asyncio.to_thread(get_sandbox_provider().cancel_run, current.uid, current.id))
+            await await_io(asyncio.to_thread(get_sandbox_provider().cleanup_run, current.uid, current.id))
             current.runtime_cleanup_pending = False
             await db.flush()
     if current.status == "cancelled":
@@ -246,7 +246,7 @@ async def settle_waiting_cancel(*, thread_id: str, turn_id: str, uid: str, app_i
         run = await AgentRunRepository(db).get_run(turn.current_run_id)
         if run is None or run.status != "interrupted":
             return False
-        await complete_run_command_cleanup(run)
+        await complete_run_runtime_cleanup(run)
         await _clear_waitpoint_checkpoint(run)
         await AgentTurnRepository(db).set_terminal(turn, status="cancelled")
 

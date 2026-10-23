@@ -344,7 +344,7 @@ async def test_steer_before_first_model_yields_without_ai_output(monkeypatch):
         return SimpleNamespace(status="yielded", changed=True, next_dispatch=SimpleNamespace(run_id="next-run"))
 
     async def dispatch(target):
-        assert target.run_id == "next-run" and events == ["commit"]
+        assert target.run_id == "next-run" and events == ["commit", "cleanup"]
         events.append("dispatch")
 
     monkeypatch.setattr(message_svc, "AgentRunRepository", RunRepo)
@@ -352,6 +352,13 @@ async def test_steer_before_first_model_yields_without_ai_output(monkeypatch):
     monkeypatch.setattr(message_svc, "ModelMessageAuditRepository", _EmptyModelAuditRepo)
     monkeypatch.setattr(message_svc, "ToolMessageAuditRepository", _EmptyToolAuditRepo)
     monkeypatch.setattr(message_svc, "settle_checkpoint", settle)
+
+    async def cleanup(target):
+        """旧 Run 的资源清理必须发生在提交后、接续投递前。"""
+        assert target.id == run.id and events == ["commit"]
+        events.append("cleanup")
+
+    monkeypatch.setattr(message_svc, "complete_run_runtime_cleanup", cleanup)
     monkeypatch.setattr(message_svc, "deliver", dispatch)
     repo = _FakeConvRepo(DB())
     status = await message_svc.save_messages_from_langgraph_state(
@@ -365,7 +372,7 @@ async def test_steer_before_first_model_yields_without_ai_output(monkeypatch):
     )
     assert status == run.status == "yielded" and run.output_message_id is None
     assert repo.saved_messages == repo.published_message_ids == []
-    assert events == ["commit", "dispatch"]
+    assert events == ["commit", "cleanup", "dispatch"]
 
 
 @pytest.mark.asyncio

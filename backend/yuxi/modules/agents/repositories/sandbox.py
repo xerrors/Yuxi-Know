@@ -40,6 +40,14 @@ class SandboxRepository:
         """读取该用户唯一环境。"""
         return connection.execute("SELECT * FROM user_sandboxes WHERE uid=%s", (uid,)).fetchone()
 
+    def run_owner(self, run_id: str):
+        """只读 Run 的执行归属与清理责任，不取得生命周期行锁。"""
+        with self.connect() as connection:
+            return connection.execute(
+                "SELECT uid,status,worker_id,lease_expires_at,runtime_cleanup_pending FROM agent_runs WHERE id=%s",
+                (run_id,),
+            ).fetchone()
+
     def save_environment(self, connection, row: dict) -> None:
         """按固定列写入环境引用，不允许调用方拼接列名。"""
         connection.execute(
@@ -71,7 +79,7 @@ class SandboxRepository:
         """外部启动前先保存 owner 与代次。"""
         if row["run_id"]:
             run = connection.execute(
-                "SELECT uid,status,worker_id,lease_expires_at FROM agent_runs WHERE id=%s", (row["run_id"],)
+                "SELECT uid,status,worker_id,lease_expires_at,runtime_cleanup_pending FROM agent_runs WHERE id=%s", (row["run_id"],)
             ).fetchone()
             if not run or run["uid"] != row["uid"] or run["status"] != "running" or run["worker_id"] != row["owner"]:
                 raise StateConflictError("Run 已取消或执行 owner 已改变")

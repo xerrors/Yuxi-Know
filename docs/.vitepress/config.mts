@@ -93,6 +93,7 @@ export default defineConfig({
           { text: '生产部署', link: '/advanced/deployment' },
           { text: 'Agent 并发容量', link: '/advanced/agent-concurrency-capacity' },
           { text: '沙盒配置与运维', link: '/advanced/sandbox-operations' },
+          { text: 'Container 沙盒', link: '/advanced/container-sandbox' },
           { text: '文档解析与 OCR', link: '/advanced/document-processing' },
           {
             text: '知识库管理',

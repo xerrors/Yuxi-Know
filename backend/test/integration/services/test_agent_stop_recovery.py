@@ -40,7 +40,7 @@ async def test_cancel_pending_with_empty_queue_does_not_pause_future_work(sessio
 async def test_running_cancel_finishes_turn_after_cleanup_without_reconciler(sessions, monkeypatch):
     """真实清理入口应直接收敛 Turn，不调用周期恢复。"""
     run = await start_input_run(sessions)
-    monkeypatch.setattr(lifecycle, "get_sandbox_provider", lambda: type("Provider", (), {"cancel_run": staticmethod(lambda *_: None)})())
+    monkeypatch.setattr(lifecycle, "get_sandbox_provider", lambda: type("Provider", (), {"cleanup_run": staticmethod(lambda *_: None)})())
     async with sessions() as db:
         await turns.cancel_turn(db=db, scope=SCOPE, thread_id="input-thread", turn_id=run.turn_id, idempotency_key="stop-running")
     async with sessions() as db:
@@ -51,7 +51,7 @@ async def test_running_cancel_finishes_turn_after_cleanup_without_reconciler(ses
         current = await db.get(AgentRun, run.id)
         assert (await db.get(AgentTurn, run.turn_id)).status == "cancelling"
         assert current.runtime_cleanup_pending
-    assert await leases.complete_run_command_cleanup(current)
+    assert await leases.complete_run_runtime_cleanup(current)
     async with sessions() as db:
         assert (await db.get(AgentTurn, run.turn_id)).status == "cancelled"
         assert not (await db.get(AgentRun, run.id)).runtime_cleanup_pending
@@ -136,7 +136,7 @@ async def test_waiting_cancel_with_empty_queue_finishes_without_pause(sessions, 
         async with sessions() as db:
             assert not (await db.get(AgentRun, current.id)).runtime_cleanup_pending
 
-    monkeypatch.setattr(lifecycle, "get_sandbox_provider", lambda: type("Provider", (), {"cancel_run": staticmethod(lambda *_: None)})())
+    monkeypatch.setattr(lifecycle, "get_sandbox_provider", lambda: type("Provider", (), {"cleanup_run": staticmethod(lambda *_: None)})())
     monkeypatch.setattr(lifecycle, "_clear_waitpoint_checkpoint", clear_checkpoint)
     async with sessions() as db:
         await turns.cancel_turn(db=db, scope=SCOPE, thread_id="input-thread", turn_id=run.turn_id, idempotency_key="stop-wait")
@@ -290,7 +290,7 @@ async def test_failure_before_model_preparation_finishes_cleanup_without_scan(se
         current = await db.get(AgentRun, run.id)
         current.input_payload = {"runtime": "invalid"}
         await db.commit()
-    monkeypatch.setattr(lifecycle, "get_sandbox_provider", lambda: type("Provider", (), {"cancel_run": staticmethod(lambda *_: None)})())
+    monkeypatch.setattr(lifecycle, "get_sandbox_provider", lambda: type("Provider", (), {"cleanup_run": staticmethod(lambda *_: None)})())
     await runner.process_agent_run({"job_try": 1}, run.id)
     async with sessions() as db:
         current = await db.get(AgentRun, run.id)
@@ -305,7 +305,7 @@ async def test_cancel_between_failure_check_and_terminal_commit_is_settled_by_ow
     assert not await runner._confirmed_user_cancel(run.id)
     async with sessions() as db:
         await turns.cancel_turn(db=db, scope=SCOPE, thread_id="input-thread", turn_id=run.turn_id, idempotency_key="late-cancel")
-    monkeypatch.setattr(lifecycle, "get_sandbox_provider", lambda: type("Provider", (), {"cancel_run": staticmethod(lambda *_: None)})())
+    monkeypatch.setattr(lifecycle, "get_sandbox_provider", lambda: type("Provider", (), {"cleanup_run": staticmethod(lambda *_: None)})())
     transition = await runner._settle_uncommitted_run(
         run.id,
         "failed",
@@ -418,7 +418,7 @@ async def test_arq_execution_timeout_persists_failed_turn_and_releases_cleanup(s
     monkeypatch.setattr(runner, "stream_agent_execution", blocked_stream)
     monkeypatch.setattr(runner, "start_session_title", lambda **_: None)
     monkeypatch.setattr(runner, "get_agent_state_view", AsyncMock(return_value={"agent_state": None}))
-    monkeypatch.setattr(lifecycle, "get_sandbox_provider", lambda: type("Provider", (), {"cancel_run": staticmethod(lambda *_: None)})())
+    monkeypatch.setattr(lifecycle, "get_sandbox_provider", lambda: type("Provider", (), {"cleanup_run": staticmethod(lambda *_: None)})())
     redis, namespace, queue_name, workers = isolated_queue
     worker = YuxiWorker(
         functions=[func(runner.process_agent_run, timeout=5)],

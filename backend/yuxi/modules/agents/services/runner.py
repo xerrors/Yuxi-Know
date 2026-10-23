@@ -44,7 +44,7 @@ from yuxi.modules.agents.services.openai_events import OpenAIEventAdapter
 from yuxi.modules.agents.services.preparation import (
     prepare_and_record_run_execution,
 )
-from yuxi.modules.agents.services.run_lifecycle import complete_run_command_cleanup, finish_run_lifecycle, settle_run
+from yuxi.modules.agents.services.run_lifecycle import complete_run_runtime_cleanup, finish_run_lifecycle, settle_run
 from yuxi.modules.agents.services.titles import start_session_title
 from yuxi.modules.agents.services.transport import (
     wait_for_cancel_signal,
@@ -226,10 +226,10 @@ class RunContext:
         if self.uid is None:
             return
         from yuxi.infrastructure.filesystem import await_io
-        from yuxi.modules.agents.runtime.sandbox.provider import get_sandbox_provider
+        from yuxi.modules.agents.runtime.sandbox import get_sandbox_provider
 
         try:
-            await await_io(asyncio.to_thread(get_sandbox_provider().cancel_run, self.uid, self.run_id, self.worker_id))
+            await await_io(asyncio.to_thread(get_sandbox_provider().cleanup_run, self.uid, self.run_id, self.worker_id))
         except Exception:
             logger.exception("Run 外部命令尚未确认停止，保留持久清理责任: run=%s", self.run_id)
 
@@ -237,7 +237,7 @@ class RunContext:
 async def _require_runtime_cleanup(run: AgentRun, message: str) -> None:
     """把外部命令/并发清理失败统一转成 ARQ 可重试的 durable cleanup。"""
     try:
-        cleaned = await complete_run_command_cleanup(run)
+        cleaned = await complete_run_runtime_cleanup(run)
     except Exception as exc:
         raise RuntimeCleanupPendingError(message) from exc
     if not cleaned:
@@ -534,7 +534,7 @@ async def _process_agent_run(ctx, run_id: str, execution_timeout: asyncio.Timeou
     turn_id = run.turn_id
     thread_id = run.thread_id
     user = None
-    from yuxi.modules.agents.runtime.sandbox.provider import sandbox_run_env, sandbox_run_owner
+    from yuxi.modules.agents.runtime.sandbox import sandbox_run_env, sandbox_run_owner
 
     sandbox_owner_token = sandbox_run_owner.set((run_id, worker_id))
     sandbox_env_token = sandbox_run_env.set(None)

@@ -578,9 +578,9 @@ async def test_cancelled_cleanup_holds_run_lock_until_external_command_finishes(
             await db.commit()
         monkeypatch.setattr(lease_worker.pg_manager, "get_async_session_context", lambda: _session_context(sessions))
         monkeypatch.setattr(
-            lifecycle, "get_sandbox_provider", lambda: type("Provider", (), {"cancel_run": staticmethod(cancel_commands)})()
+            lifecycle, "get_sandbox_provider", lambda: type("Provider", (), {"cleanup_run": staticmethod(cancel_commands)})()
         )
-        task = asyncio.create_task(lease_worker.complete_run_command_cleanup(stale))
+        task = asyncio.create_task(lease_worker.complete_run_runtime_cleanup(stale))
         assert await asyncio.to_thread(started.wait, 5)
         task.cancel()
         await asyncio.sleep(0)
@@ -594,13 +594,13 @@ async def test_cancelled_cleanup_holds_run_lock_until_external_command_finishes(
             await task
         async with sessions() as db:
             assert (await db.get(AgentRun, run_id)).runtime_cleanup_pending is True
-        assert await lease_worker.complete_run_command_cleanup(stale)
+        assert await lease_worker.complete_run_runtime_cleanup(stale)
         async with sessions() as db:
             run, acquired = await AgentRunRepository(db).mark_running(run_id, worker_id="new-attempt", lease_seconds=60)
             assert acquired
             await db.commit()
         command.write_text("new attempt")
-        assert await lease_worker.complete_run_command_cleanup(stale)
+        assert await lease_worker.complete_run_runtime_cleanup(stale)
         assert command.read_text() == "new attempt"
         async with sessions() as db:
             current = await db.get(AgentRun, run_id)
