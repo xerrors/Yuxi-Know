@@ -282,6 +282,38 @@ test('用户 Store 的普通错误传播链不附着或记录服务端任意响�
   })
 })
 
+test('Skill 业务错误展示具体原因且丢弃额外响应字段', async () => {
+  await withServer(async (server) => {
+    storageValues.set('user_token', 'fixture-token')
+    const detail = {
+      code: 'skill_request_invalid',
+      message: 'SKILL.md frontmatter.slug 必须是小写字母/数字/短横线',
+      context: { secret: 'should-drop' }
+    }
+    globalThis.fetch = async () => new Response(JSON.stringify({ detail }), {
+      status: 400, headers: { 'content-type': 'application/json' }
+    })
+    const { prepareSkillUpload } = await server.ssrLoadModule('/src/apis/skill_api.js')
+    const { resolveApiErrorMessage } = await server.ssrLoadModule('/src/apis/base.js')
+    await assert.rejects(prepareSkillUpload(new Blob(['invalid skill'])), (error) => {
+      assert.equal(error.status, 400)
+      assert.equal(resolveApiErrorMessage(error, '解析 Skill 失败'), detail.message)
+      assert.deepEqual(error.response.data.detail, { code: detail.code, message: detail.message })
+      assert.equal(JSON.stringify(error.response.data).includes('should-drop'), false)
+      return true
+    })
+  })
+})
+
+test('错误文案解析保留脱敏字符串、冲突提示和默认文案', async () => {
+  await withServer(async (server) => {
+    const { resolveApiErrorMessage } = await server.ssrLoadModule('/src/apis/base.js')
+    assert.equal(resolveApiErrorMessage({ response: { data: { detail: '请求参数错误' } } }), '请求参数错误')
+    assert.equal(resolveApiErrorMessage(new Error('请求冲突，请刷新后重试')), '请求冲突，请刷新后重试')
+    assert.equal(resolveApiErrorMessage({}, '解析 Skill 失败'), '解析 Skill 失败')
+  })
+})
+
 test('用户管理分页 API 只请求当前页并编码服务端筛选条件', async () => {
   await withServer(async (server) => {
     storageValues.set('user_token', 'test-token')

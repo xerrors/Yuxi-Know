@@ -61,7 +61,7 @@ async def test_shared_skill_edit_updates_file_and_index_and_rejects_stale_or_una
             json={"path": "missing.md", "content": "unexpected", "expected_revision": revision},
         )
         assert missing_file.status_code == 404, missing_file.text
-        assert missing_file.json()["detail"] == "文件不存在"
+        assert missing_file.json()["detail"] == {"code": "skill_request_invalid", "message": "文件不存在"}
         unchanged = await test_client.get(f"/api/system/skills/{slug}/content", headers=admin_headers)
         assert unchanged.status_code == 200, unchanged.text
         assert unchanged.json()["data"]["files"] == {"SKILL.md": original}

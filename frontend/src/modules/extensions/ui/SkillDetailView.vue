@@ -461,6 +461,7 @@ import {
   ChevronDown,
   ChevronRight
 } from '@lucide/vue'
+import { resolveApiErrorMessage } from '@/apis/base'
 import { skillApi } from '@/apis/skill_api'
 import {
   collectSkillChanges,
@@ -887,7 +888,7 @@ const saveContent = async () => {
     syncDependencyFormFromSkill(result.data.skill)
     message.success('已保存全部修改')
   } catch (error) {
-    message.error(error?.response?.data?.detail || '保存失败，全部修改仍保留')
+    message.error(resolveApiErrorMessage(error, '保存失败，全部修改仍保留'))
   } finally {
     savingFile.value = false
   }
@@ -1028,7 +1029,7 @@ const saveShareConfig = async () => {
     }
     message.success('设置已保存')
   } catch (error) {
-    message.error(error?.response?.data?.detail || error.message || '保存设置失败')
+    message.error(resolveApiErrorMessage(error, '保存设置失败'))
   } finally {
     savingShareConfig.value = false
   }

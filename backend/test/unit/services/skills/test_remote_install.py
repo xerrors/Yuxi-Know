@@ -173,19 +173,23 @@ async def test_remote_skill_sandbox_executes_cli_through_user_backend():
 
 
 @pytest.mark.asyncio
-async def test_remote_skill_sandbox_rejects_incomplete_command() -> None:
+@pytest.mark.parametrize("exit_code", [1, None])
+async def test_remote_skill_sandbox_rejects_failed_command_without_echoing_output(exit_code) -> None:
+    """失败和未完成的命令均不把原始输出作为业务提示。"""
+
     class FakeBackend:
         async def aexecute(self, _command: str, *, timeout: int):
             assert timeout == svc.CLI_TIMEOUT_SECONDS
-            return SimpleNamespace(output="still running", exit_code=None)
+            return SimpleNamespace(output="PRIVATE_CLI_MARKER", exit_code=exit_code)
 
     sandbox = svc._RemoteSkillRequest(
         home=f"{svc.WORKSPACE_PATH}/.remote-skills/remote-skill-test",
         backend=FakeBackend(),
     )
 
-    with pytest.raises(ValueError, match="still running"):
+    with pytest.raises(ValueError, match="skills CLI 执行失败，请检查来源或稍后重试") as failure:
         await sandbox.run(["npx", "-y", "skills", "add", "https://github.com/owner/repo", "--list"])
+    assert "PRIVATE_CLI_MARKER" not in str(failure.value)
 
 
 def test_remote_skill_sandbox_uses_operator_workspace(monkeypatch, tmp_path):

@@ -127,3 +127,37 @@ def test_skill_content_conflict_maps_to_http_409(monkeypatch):
     assert response.status_code == 409
     assert response.json() == {"detail": "revision changed"}
     saver.assert_awaited_once()
+
+
+def test_skill_upload_validation_returns_displayable_business_error(tmp_path, monkeypatch):
+    """真实解析拒绝非法 slug，并返回前端可展示的业务 detail。"""
+    monkeypatch.setenv("YUXI_RUNTIME_DIR", str(tmp_path))
+    response = TestClient(_build_app()).post(
+        "/api/skills/import/prepare",
+        files={"file": ("SKILL.md", b"---\nname: demo\nslug: Invalid_Slug\ndescription: demo\n---\n", "text/markdown")},
+    )
+    assert response.status_code == 400
+    assert response.json() == {
+        "detail": {
+            "code": "skill_request_invalid",
+            "message": "SKILL.md frontmatter.slug 必须是小写字母/数字/短横线，且不能连续短横线",
+        }
+    }
+
+
+@pytest.mark.parametrize(
+    "metadata", ['name: demo\ndescription: "PRIVATE_YAML_MARKER', 'name: "PRIVATE_YAML_MARKER\ndescription:\n  note: value']
+)
+def test_skill_upload_yaml_error_does_not_echo_input(tmp_path, monkeypatch, metadata):
+    """YAML 两条失败路径都只返回安全语法提示。"""
+    monkeypatch.setenv("YUXI_RUNTIME_DIR", str(tmp_path))
+    response = TestClient(_build_app()).post(
+        "/api/skills/import/prepare",
+        files={"file": ("SKILL.md", f"---\n{metadata}\n---\n".encode(), "text/markdown")},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == {
+        "code": "skill_request_invalid",
+        "message": "SKILL.md frontmatter YAML 解析失败，请检查 YAML 语法",
+    }
+    assert "PRIVATE_YAML_MARKER" not in response.text

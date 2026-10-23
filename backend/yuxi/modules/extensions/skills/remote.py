@@ -201,9 +201,7 @@ class _RemoteSkillRequest:
         result = await self.backend.aexecute(command, timeout=CLI_TIMEOUT_SECONDS)
         output = str(result.output or "")
         if result.exit_code != 0:
-            cleaned_lines = _clean_cli_output(output)
-            error_msg = "\n".join(line for line in cleaned_lines if line)[:500]
-            raise ValueError(error_msg or "skills CLI 执行失败")
+            raise ValueError("skills CLI 执行失败，请检查来源或稍后重试")
         return output
 
     async def download_skill(self, name: str, target_dir: Path) -> None:

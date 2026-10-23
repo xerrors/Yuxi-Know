@@ -3,6 +3,7 @@ import fs from 'node:fs/promises'
 import test from 'node:test'
 import { compileScript, parse } from 'vue/compiler-sfc'
 import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { createTestServer } from '../helpers/createTestServer.js'
 import {
   collectSkillChanges,
   readDraftDependencies,
@@ -16,6 +17,15 @@ async function loadComponent(path, deps) {
   const importNames = [...compiled.matchAll(/^import \{([\s\S]*?)\} from '[^']+'$/gm)].flatMap(
     (match) => match[1].split(',').map((name) => name.trim())
   )
+  if (importNames.includes('resolveApiErrorMessage')) {
+    const server = await createTestServer({ server: { middlewareMode: true, hmr: false }, appType: 'custom' })
+    try {
+      const api = await server.ssrLoadModule('/src/apis/base.js')
+      deps.resolveApiErrorMessage = api.resolveApiErrorMessage
+    } finally {
+      await server.close()
+    }
+  }
   for (const name of importNames) if (!(name in deps)) deps[name] = {}
   for (const match of compiled.matchAll(/^import (\w+) from '[^']+'$/gm))
     if (!(match[1] in deps)) deps[match[1]] = {}

@@ -75,6 +75,17 @@ function extractBusinessErrorDetail(errorData) {
   return { code: detail.code, message: detail.message }
 }
 
+/** 从请求错误中读取业务文案，保留公共请求层已脱敏的错误信息。 */
+export function resolveApiErrorMessage(error, fallback = '请求失败') {
+  const detail = error?.response?.data?.detail
+  if (detail && typeof detail === 'object' && typeof detail.message === 'string' && detail.message.trim()) {
+    return detail.message
+  }
+  if (typeof detail === 'string' && detail.trim()) return detail
+  if (typeof error?.message === 'string' && error.message.trim()) return error.message
+  return fallback
+}
+
 function publicErrorMessage(url, status, headers, requiresAuth) {
   const path = safeRequestMetadata(url, {}).path
   if (status === 400) return '请求参数错误'

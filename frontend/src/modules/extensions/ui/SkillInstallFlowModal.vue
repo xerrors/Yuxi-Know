@@ -231,6 +231,7 @@
 import { computed, defineComponent, h, nextTick, ref, watch } from 'vue'
 import { CheckCircle2, Circle, LoaderCircle, PackageOpen, X as XIcon, XCircle } from '@lucide/vue'
 import ShareConfigForm from '@/modules/agents/ui/ShareConfigForm.vue'
+import { resolveApiErrorMessage } from '@/apis/base'
 import { skillApi } from '@/apis/skill_api'
 import { useUserStore } from '@/modules/identity'
 
@@ -419,7 +420,7 @@ const prepareRequests = async (requests) => {
 
     openReview(drafts.value)
   } catch (error) {
-    const message = error?.response?.data?.detail || error.message || '加载 Skill 失败'
+    const message = resolveApiErrorMessage(error, '加载 Skill 失败')
     await discardDrafts()
     flowError.value = message
   }
@@ -513,7 +514,7 @@ const installDrafts = async () => {
     }
   } catch (error) {
     await discardDrafts()
-    flowError.value = error?.response?.data?.detail || error.message || '安装 Skill 失败'
+    flowError.value = resolveApiErrorMessage(error, '安装 Skill 失败')
     installItems.value
       .filter((item) => item.status === 'waiting')
       .forEach((item) => Object.assign(item, { status: 'failed', error: flowError.value }))

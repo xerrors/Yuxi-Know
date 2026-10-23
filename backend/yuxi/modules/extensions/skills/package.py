@@ -11,6 +11,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 import yaml
+from pypinyin import Style, lazy_pinyin
 
 from yuxi.infrastructure.filesystem import open_directory_fd, open_regular_file_fd
 
@@ -85,12 +86,26 @@ def parse_skill_markdown(content: str) -> tuple[str, str, str, dict[str, Any]]:
 
     name = _validate_skill_display_name(str(data.get("name", "")))
     raw_slug = str(data.get("slug", "")).strip()
-    slug = _validate_skill_slug_value(raw_slug, field_name="slug") if raw_slug else _validate_skill_slug_value(name, field_name="name")
+    if raw_slug:
+        slug = _validate_skill_slug_value(raw_slug, field_name="slug")
+    elif is_valid_skill_slug(name):
+        slug = name
+    else:
+        slug = derive_skill_slug_from_display_name(name)
     description = str(data.get("description", "")).strip()
     if not description:
         raise ValueError("SKILL.md frontmatter 缺少 description")
 
     return slug, name, description, data
+
+
+def derive_skill_slug_from_display_name(name: str) -> str:
+    """把展示名转为稳定标识，无可用字符时使用名称摘要。"""
+    phonetic = "".join(lazy_pinyin(name, style=Style.NORMAL))
+    slug = re.sub(r"[^a-z0-9]+", "-", phonetic.lower()).strip("-")[:64].rstrip("-")
+    if slug:
+        return slug
+    return f"skill-{hashlib.sha1(name.encode('utf-8')).hexdigest()[:12]}"
 
 
 def copy_skill_snapshot(
@@ -105,24 +120,27 @@ def copy_skill_snapshot(
     parsed = parse_skill_dir_metadata(target_dir)
     if expected_slug and parsed["slug"] != expected_slug:
         raise ValueError("Skill slug 在复制过程中发生变化")
-    if final_slug and parsed["slug"] != final_slug:
+    if final_slug is None and not is_valid_skill_slug(parsed["name"]):
+        final_slug = parsed["slug"]
+    if final_slug:
         skill_md = target_dir / "SKILL.md"
-        skill_md.write_text(
-            rewrite_frontmatter_slug(skill_md.read_text(encoding="utf-8"), final_slug),
-            encoding="utf-8",
-        )
+        content = skill_md.read_text(encoding="utf-8")
+        _slug, _name, _description, metadata = parse_skill_markdown(content)
+        if parsed["slug"] != final_slug or (not metadata.get("slug") and not is_valid_skill_slug(parsed["name"])):
+            skill_md.write_text(rewrite_frontmatter_slug(content, final_slug), encoding="utf-8")
+            parsed = parse_skill_dir_metadata(target_dir)
     return parsed
 
 
 def copy_skill_tree_no_symlinks(source_dir: Path, target_dir: Path) -> None:
     """复制不含符号链接的 Skill 目录到 staging。"""
     if source_dir.is_symlink():
-        raise ValueError(f"Skill 来源只允许普通文件和目录: {source_dir}")
+        raise ValueError("Skill 来源只允许普通文件和目录")
     source_dir = source_dir.resolve()
     if not source_dir.is_dir():
         raise FileNotFoundError(source_dir)
     if skill_tree_contains_symlink(source_dir):
-        raise ValueError(f"Skill 来源只允许普通文件和目录: {source_dir}")
+        raise ValueError("Skill 来源只允许普通文件和目录")
     try:
         shutil.copytree(source_dir, target_dir, symlinks=False)
     except BaseException:
@@ -134,9 +152,11 @@ def rewrite_frontmatter_slug(content: str, new_slug: str) -> str:
     """在安装快照中写入最终 Skill slug。"""
     frontmatter_raw, body = split_skill_frontmatter(content)
     data = _load_skill_frontmatter(frontmatter_raw)
-    if data.get("slug"):
-        data["slug"] = new_slug
-    else:
+    had_explicit_slug = bool(str(data.get("slug", "")).strip())
+    name = str(data.get("name", "")).strip()
+    data["slug"] = new_slug
+    # 旧包的 name 同时充当标识；自然语言展示名不随同名安装改写。
+    if not had_explicit_slug and is_valid_skill_slug(name):
         data["name"] = new_slug
     dumped = yaml.safe_dump(data, sort_keys=False, allow_unicode=True).strip()
     return f"---\n{dumped}\n---\n{body}"
@@ -216,11 +236,11 @@ def _load_skill_frontmatter(raw: str) -> dict[str, Any]:
             count=1,
         )
         if folded == raw:
-            raise ValueError(f"SKILL.md frontmatter YAML 解析失败: {error}") from error
+            raise ValueError("SKILL.md frontmatter YAML 解析失败，请检查 YAML 语法") from error
         try:
             data = yaml.safe_load(folded)
         except yaml.YAMLError as folded_error:
-            raise ValueError(f"SKILL.md frontmatter YAML 解析失败: {folded_error}") from folded_error
+            raise ValueError("SKILL.md frontmatter YAML 解析失败，请检查 YAML 语法") from folded_error
     if not isinstance(data, dict):
         raise ValueError("SKILL.md frontmatter 必须是对象")
     return data

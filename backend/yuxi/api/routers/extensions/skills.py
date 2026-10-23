@@ -797,10 +797,10 @@ async def delete_skill_route(
 
 
 def _raise_from_value_error(e: ValueError) -> None:
-    """按现有错误契约映射 HTTP 状态。"""
+    """保留状态映射，以业务 detail 返回可展示的校验原因。"""
     message = str(e)
     status_code = 404 if "不存在" in message or "无权" in message else 400
-    raise HTTPException(status_code=status_code, detail=message)
+    raise HTTPException(status_code=status_code, detail={"code": "skill_request_invalid", "message": message})
 
 
 def _cleanup_export_file(path: str) -> None:

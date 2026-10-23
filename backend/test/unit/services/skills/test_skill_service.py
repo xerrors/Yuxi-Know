@@ -609,6 +609,37 @@ def test_parse_skill_markdown_supports_display_name_with_slug():
     assert meta["version"] == "1.0.2"
 
 
+@pytest.mark.parametrize(
+    ("name", "expected_slug"),
+    [("周易智慧", "zhouyizhihui"), ("PRD to Prototype", "prd-to-prototype"), ("Word / DOCX", "word-docx"), ("✨", "skill-09324d876aae")],
+)
+def test_parse_skill_markdown_derives_stable_slug_without_changing_display_name(name, expected_slug):
+    """缺少标识的展示名可重复解析为相同 slug，名称保持原样。"""
+    content = f"---\nname: {name}\ndescription: demo\n---\n# Demo\n"
+    for _ in range(2):
+        slug, parsed_name, description, _ = skill_package.parse_skill_markdown(content)
+        assert (slug, parsed_name, description) == (expected_slug, name, "demo")
+
+
+def test_parse_skill_markdown_rejects_invalid_explicit_slug():
+    """显式非法标识不能被名称派生掩盖。"""
+    with pytest.raises(ValueError, match="frontmatter.slug 必须是小写字母/数字/短横线"):
+        skill_package.parse_skill_markdown("---\nname: 展示名\nslug: Invalid_Slug\ndescription: demo\n---\n")
+
+
+@pytest.mark.parametrize("explicit_slug", [False, True])
+def test_copy_skill_snapshot_preserves_existing_identity_content(tmp_path, explicit_slug):
+    """标识未变时保留注释和换行，避免改变文件修订。"""
+    source = tmp_path / "source"
+    source.mkdir()
+    identity = "slug: demo\r\nname: Demo" if explicit_slug else "name: demo"
+    content = f"---\r\n# keep comment\r\n{identity}\r\ndescription: demo\r\n---\r\n# Demo\r\n".encode()
+    (source / "SKILL.md").write_bytes(content)
+    target = tmp_path / "target"
+    skill_package.copy_skill_snapshot(source, target, expected_slug="demo", final_slug="demo")
+    assert (target / "SKILL.md").read_bytes() == content
+
+
 def test_parse_skill_markdown_requires_frontmatter():
     with pytest.raises(ValueError, match="frontmatter"):
         skill_package.parse_skill_markdown("# missing")
@@ -1187,14 +1218,36 @@ def test_shared_skill_path_blocks_traversal():
         ),
         (
             "valid-archive.zip",
-            {"valid-archive/SKILL.md": "---\nname: invalid--skill\ndescription: invalid name\n---\n# Invalid\n"},
+            {"valid-archive/SKILL.md": "---\nname: 展示名\nslug: invalid--skill\ndescription: invalid slug\n---\n# Invalid\n"},
             set(),
             None,
             None,
             None,
             None,
             None,
-            "SKILL.md frontmatter.name 必须是小写字母/数字/短横线",
+            "SKILL.md frontmatter.slug 必须是小写字母/数字/短横线",
+        ),
+        (
+            "NanjingHJLP.yi.zip",
+            {"skill/SKILL.md": "---\nname: 周易智慧\ndescription: demo\n---\n# Demo\n"},
+            {"zhouyizhihui"},
+            "zhouyizhihui",
+            "周易智慧",
+            "zhouyizhihui-v2",
+            "周易智慧",
+            ("name: 周易智慧", "slug: zhouyizhihui-v2"),
+            None,
+        ),
+        (
+            "PRD to Prototype.zip",
+            {"skill/SKILL.md": "---\nname: PRD to Prototype\ndescription: demo\n---\n# Demo\n"},
+            set(),
+            "prd-to-prototype",
+            "PRD to Prototype",
+            "prd-to-prototype",
+            "PRD to Prototype",
+            ("name: PRD to Prototype", "slug: prd-to-prototype"),
+            None,
         ),
         (
             "Word Skill.zip",

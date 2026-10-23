@@ -519,6 +519,7 @@ import {
   Plus,
   Minus
 } from '@lucide/vue'
+import { resolveApiErrorMessage } from '@/apis/base'
 import { skillApi } from '@/apis/skill_api'
 import ExtensionCardGrid from './ExtensionCardGrid.vue'
 import SkillInstallFlowModal from './SkillInstallFlowModal.vue'
@@ -885,7 +886,7 @@ const openSkillPreview = async (skill) => {
     skillPreviewMarkdown.value = result?.data?.content || ''
   } catch (error) {
     if (requestSeq !== previewRequestSeq || previewSkill.value?.slug !== skill.slug) return
-    skillPreviewError.value = error?.response?.data?.detail || error.message || '读取 SKILL.md 失败'
+    skillPreviewError.value = resolveApiErrorMessage(error, '读取 SKILL.md 失败')
   } finally {
     if (requestSeq === previewRequestSeq) skillPreviewLoading.value = false
   }
@@ -940,7 +941,7 @@ const handleToggleSkillEnabled = async (skill) => {
     }
     message.success(`Skill 已${enabled ? '启用' : '禁用'}`)
   } catch (error) {
-    message.error(error?.response?.data?.detail || error.message || '更新 Skill 启用状态失败')
+    message.error(resolveApiErrorMessage(error, '更新 Skill 启用状态失败'))
   } finally {
     togglingSkillSlugs.value = togglingSkillSlugs.value.filter((slug) => slug !== skill.slug)
   }
@@ -977,7 +978,7 @@ const confirmDeletePreviewSkill = () => {
         previewSkill.value = null
         await fetchSkills()
       } catch (error) {
-        message.error(error?.response?.data?.detail || error.message || '卸载 Skill 失败')
+        message.error(resolveApiErrorMessage(error, '卸载 Skill 失败'))
       } finally {
         deletingPreviewSkill.value = false
       }
@@ -1041,7 +1042,7 @@ const handleBatchDelete = () => {
         exitBatchDeleteMode()
         await fetchSkills()
       } catch (error) {
-        message.error(error?.response?.data?.detail || error.message || '批量删除失败')
+        message.error(resolveApiErrorMessage(error, '批量删除失败'))
       } finally {
         loading.value = false
       }
@@ -1117,7 +1118,7 @@ const handleImportUpload = async ({ file, onSuccess, onError }) => {
     })
     onSuccess?.(result)
   } catch (e) {
-    message.error(e?.response?.data?.detail || e.message || '解析 Skill 失败')
+    message.error(resolveApiErrorMessage(e, '解析 Skill 失败'))
     onError?.(e)
   } finally {
     importing.value = false
@@ -1168,7 +1169,7 @@ const handleListRemoteSkills = async () => {
 
     rememberRemoteSource(source)
   } catch (error) {
-    message.error(error?.response?.data?.detail || error.message || '获取远程 Skills 失败')
+    message.error(resolveApiErrorMessage(error, '获取远程 Skills 失败'))
   } finally {
     listingRemoteSkills.value = false
   }
@@ -1223,7 +1224,7 @@ const handleSearchRemoteSkills = async () => {
       message.success(`搜索到 ${searchedSkills.value.length} 个 Skills`)
     }
   } catch (error) {
-    message.error(error?.response?.data?.detail || error.message || '搜索远程 Skills 失败')
+    message.error(resolveApiErrorMessage(error, '搜索远程 Skills 失败'))
   } finally {
     searchingRemoteSkills.value = false
   }
