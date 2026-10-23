@@ -362,49 +362,44 @@ class KnowledgeFileRepository:
             )
             return {str(parent_id): int(count or 0) for parent_id, count in result.all() if parent_id}
 
-    async def get_kb_file_stats(self, kb_id: str) -> dict[str, int]:
+    async def get_kb_file_stats(self, kb_id: str) -> dict[str, Any]:
         """从 PostgreSQL 读取当前统计，避免文件提交后列表仍引用旧缓存。"""
         async with pg_manager.get_async_session_context() as session:
             return await self.query_kb_file_stats(kb_id, session=session)
 
-    async def query_kb_file_stats(self, kb_id: str, *, session: AsyncSession) -> dict[str, int]:
-        """在调用方事务中直接聚合文件统计，绕过读取缓存。"""
-        non_folder = KnowledgeFile.is_folder.is_(False)
-        result = await session.execute(
+    async def query_kb_file_stats(self, kb_id: str, *, session: AsyncSession) -> dict[str, Any]:
+        """一次分组聚合提供同一快照中的全库统计和逐状态计数。"""
+        rows = await session.execute(
             select(
-                func.count(KnowledgeFile.file_id).label("row_count"),
-                func.sum(case((non_folder, 1), else_=0)).label("file_count"),
-                func.sum(case((KnowledgeFile.is_folder.is_(True), 1), else_=0)).label("folder_count"),
-                func.coalesce(func.sum(case((non_folder, KnowledgeFile.file_size), else_=0)), 0).label("total_size"),
-                func.coalesce(func.sum(case((non_folder, KnowledgeFile.chunk_count), else_=0)), 0).label("chunk_count"),
-                func.coalesce(func.sum(case((non_folder, KnowledgeFile.token_count), else_=0)), 0).label("token_count"),
-                func.sum(case((non_folder & (KnowledgeFile.status == "uploaded"), 1), else_=0)).label("pending_parse_count"),
-                func.sum(case((non_folder & KnowledgeFile.status.in_(["parsed", "error_indexing"]), 1), else_=0)).label(
-                    "pending_index_count"
-                ),
-                func.sum(
-                    case(
-                        (
-                            non_folder & KnowledgeFile.status.in_(["processing", "waiting", "parsing", "indexing"]),
-                            1,
-                        ),
-                        else_=0,
-                    )
-                ).label("processing_count"),
-            ).where(KnowledgeFile.kb_id == kb_id, KnowledgeFile.deleted_at.is_(None))
+                KnowledgeFile.is_folder,
+                KnowledgeFile.status,
+                func.count().label("n"),
+                func.coalesce(func.sum(KnowledgeFile.file_size), 0).label("size"),
+                func.coalesce(func.sum(KnowledgeFile.chunk_count), 0).label("chunks"),
+                func.coalesce(func.sum(KnowledgeFile.token_count), 0).label("tokens"),
+            )
+            .where(KnowledgeFile.kb_id == kb_id, KnowledgeFile.deleted_at.is_(None))
+            .group_by(KnowledgeFile.is_folder, KnowledgeFile.status)
         )
-        row = result.one()
-
+        stats = dict.fromkeys(["row_count", "file_count", "folder_count", "total_size", "chunk_count", "token_count"], 0)
+        counts = {}
+        for row in rows:
+            stats["row_count"] += int(row.n)
+            if row.is_folder:
+                stats["folder_count"] += int(row.n)
+                continue
+            stats["file_count"] += int(row.n)
+            stats["total_size"] += int(row.size)
+            stats["chunk_count"] += int(row.chunks)
+            stats["token_count"] += int(row.tokens)
+            status = row.status or FileStatus.UPLOADED
+            counts[status] = counts.get(status, 0) + int(row.n)
         return {
-            "row_count": int(row.row_count or 0),
-            "file_count": int(row.file_count or 0),
-            "folder_count": int(row.folder_count or 0),
-            "total_size": int(row.total_size or 0),
-            "chunk_count": int(row.chunk_count or 0),
-            "token_count": int(row.token_count or 0),
-            "pending_parse_count": int(row.pending_parse_count or 0),
-            "pending_index_count": int(row.pending_index_count or 0),
-            "processing_count": int(row.processing_count or 0),
+            **stats,
+            "pending_parse_count": counts.get(FileStatus.UPLOADED, 0),
+            "pending_index_count": counts.get(FileStatus.PARSED, 0) + counts.get(FileStatus.ERROR_INDEXING, 0),
+            "processing_count": sum(counts.get(status, 0) for status in ["processing", "waiting", "parsing", "indexing"]),
+            "file_status_counts": counts,
         }
 
     async def upsert(self, file_id: str, data: dict[str, Any]) -> KnowledgeFile:

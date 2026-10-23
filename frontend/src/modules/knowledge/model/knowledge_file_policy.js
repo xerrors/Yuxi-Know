@@ -7,10 +7,10 @@ const STATUS_VIEW = {
   uploaded: { label: '待解析', tone: 'status-warning', icon: 'clock' },
   parsing: { label: '解析中', tone: 'status-info', icon: 'progress' },
   parsed: { label: '待入库', tone: 'status-primary', icon: 'file' },
-  error_parsing: { label: '重试解析', tone: 'status-error', icon: 'error' },
+  error_parsing: { label: '解析失败', tone: 'status-error', icon: 'error' },
   indexing: { label: '入库中', tone: 'status-info', icon: 'progress' },
   indexed: { label: '已入库', tone: 'status-success', icon: 'success' },
-  error_indexing: { label: '重试入库', tone: 'status-error', icon: 'error' },
+  error_indexing: { label: '入库失败', tone: 'status-error', icon: 'error' },
   done: { label: '已入库', tone: 'status-success', icon: 'success' },
   failed: { label: '入库失败', tone: 'status-error', icon: 'error' },
   processing: { label: '处理中', tone: 'status-info', icon: 'progress' },
@@ -51,10 +51,12 @@ export const FILE_STATUS_FILTER_OPTIONS = [
   { label: '待解析', value: 'uploaded' },
   { label: '解析中', value: 'parsing' },
   { label: '待入库', value: 'parsed' },
-  { label: '重试解析', value: 'error_parsing' },
+  { label: '解析失败', value: 'error_parsing' },
   { label: '入库中', value: 'indexing' },
   { label: '已入库', value: 'indexed' },
-  { label: '重试入库', value: 'error_indexing' }
+  { label: '等待中', value: 'waiting' },
+  { label: '处理中', value: 'processing' },
+  { label: '入库失败', value: 'error_indexing' }
 ]
 
 export const getFileStatusView = (status) =>

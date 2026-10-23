@@ -27,7 +27,7 @@ def serialize_staged_file(staged: StagedDocument, *, kb_id: str | None, filename
     }
 
 
-def _knowledge_base_stats(knowledge_base: KnowledgeBaseSummary) -> dict[str, int]:
+def _knowledge_base_stats(knowledge_base: KnowledgeBaseSummary) -> dict:
     """组装兼容现有接口的嵌套统计字段。"""
     return {
         "file_count": knowledge_base.file_count,
@@ -39,6 +39,7 @@ def _knowledge_base_stats(knowledge_base: KnowledgeBaseSummary) -> dict[str, int
         "pending_parse_count": knowledge_base.pending_parse_count,
         "pending_index_count": knowledge_base.pending_index_count,
         "processing_count": knowledge_base.processing_count,
+        "file_status_counts": knowledge_base.file_status_counts,
     }
 
 

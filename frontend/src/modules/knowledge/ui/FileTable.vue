@@ -114,7 +114,10 @@
       @page-change="handleTablePageChange"
     >
       <template #breadcrumb-suffix>
-        <span v-if="isFilteredView" class="file-breadcrumb-filter">筛选结果</span>
+        <span v-if="isFilteredView" class="file-breadcrumb-filter">
+          <Filter :size="12" aria-hidden="true" />
+          {{ currentStatusLabel || '筛选结果' }}
+        </span>
       </template>
 
       <template #toolbar-actions>
@@ -297,21 +300,73 @@
       <template #status="{ row, text }">
         <div class="file-status-cell">
           <template v-if="!row.is_folder">
+            <a-popover
+              v-if="['error_parsing', 'error_indexing', 'failed'].includes(row.status)"
+              :open="Boolean(failurePopoverVisibleMap[row.file_id])"
+              @open-change="setFailureDetailOpen(row.file_id, $event)"
+              :trigger="['hover', 'click']"
+              :mouse-enter-delay="0.2"
+              :mouse-leave-delay="0.15"
+              placement="topRight"
+            >
+              <button
+                :id="`file-failure-trigger-${row.file_id}`"
+                type="button"
+                class="file-status-pill file-status-failure"
+                :aria-label="`${getStatusText(text)}，查看失败原因`"
+                :aria-expanded="Boolean(failurePopoverVisibleMap[row.file_id])"
+                :aria-describedby="`file-failure-reason-${row.file_id}`"
+                @click.stop
+                @keydown.esc.stop="closeFailureDetail(row.file_id)"
+                @keydown.tab="focusFailureReason($event, row.file_id)"
+              >
+                <span class="file-status-icon" aria-hidden="true">
+                  <component :is="getStatusIcon(text)" />
+                </span>
+                <span>{{ getStatusText(text) }}</span>
+              </button>
+              <template #content>
+                <div
+                  :id="`file-failure-content-${row.file_id}`"
+                  class="file-failure-content"
+                  @keydown.esc.stop="closeFailureDetail(row.file_id)"
+                  @focusout="leaveFailureDetail($event, row.file_id)"
+                >
+                  <strong class="file-failure-heading">失败原因</strong>
+                  <pre
+                    :id="`file-failure-reason-${row.file_id}`"
+                    class="file-error-message"
+                    tabindex="0"
+                    @keydown.shift.tab.prevent="closeFailureDetail(row.file_id)"
+                    >{{ fileFailureReason(row) }}</pre>
+                  <a-button
+                    v-if="!readonly && hasStatusAction(row)"
+                    type="link"
+                    size="small"
+                    class="file-failure-retry"
+                    :disabled="lock"
+                    @click.stop="handleStatusAction(row)"
+                  >
+                    {{ getStatusActionTitle(row) }}
+                  </a-button>
+                </div>
+              </template>
+            </a-popover>
             <button
-              v-if="!readonly && hasStatusAction(row)"
+              v-else-if="!readonly && hasStatusAction(row)"
               type="button"
-              class="file-status-pill file-status-action"
+              :class="['file-status-pill', 'file-status-action', getStatusTone(text)]"
               :disabled="lock"
               :title="getStatusActionTitle(row)"
               @click.stop="handleStatusAction(row)"
             >
-              <span v-if="getStatusIcon(text)" :class="['file-status-icon', getStatusTone(text)]">
+              <span v-if="getStatusIcon(text)" class="file-status-icon">
                 <component :is="getStatusIcon(text)" />
               </span>
               <span>{{ getStatusText(text) }}</span>
             </button>
-            <span v-else class="file-status-pill file-status-static">
-              <span v-if="getStatusIcon(text)" :class="['file-status-icon', getStatusTone(text)]">
+            <span v-else :class="['file-status-pill', getStatusTone(text)]">
+              <span v-if="getStatusIcon(text)" class="file-status-icon">
                 <component :is="getStatusIcon(text)" />
               </span>
               <span>{{ getStatusText(text) }}</span>
@@ -466,6 +521,7 @@ import { useConfigStore } from '@/modules/settings'
 import OCRSelector from '@/modules/settings/ui/OCRSelector.vue'
 import { message, Modal } from 'ant-design-vue'
 import { documentApi } from '@/apis/knowledge_api'
+import { fileFailureReason } from '../model/fileSummary'
 import {
   FILE_ACTIONS,
   FILE_STATUS_FILTER_OPTIONS,
@@ -588,7 +644,7 @@ const overflowMenuOpen = ref(false)
 const currentStatusLabel = computed(() => {
   if (statusFilter.value === 'all') return ''
   const opt = statusOptions.find((o) => o.value === statusFilter.value)
-  return opt ? opt.label : ''
+  return opt ? opt.label : getStatusText(statusFilter.value)
 })
 
 const allSelectableFiles = computed(() =>
@@ -613,6 +669,38 @@ const onSelectAllChange = (e) => {
   } else {
     selectedRowKeys.value = []
   }
+}
+
+const failurePopoverVisibleMap = ref({})
+/** 键盘正在读取正文时，鼠标离开标签不能关闭浮层。 */
+function setFailureDetailOpen(fileId, open) {
+  const content = document.getElementById(`file-failure-content-${fileId}`)
+  if (!open && content?.contains(document.activeElement)) return
+  failurePopoverVisibleMap.value[fileId] = open
+}
+
+/** 将标签后的 Tab 顺序接到传送到页面末尾的错误正文。 */
+function focusFailureReason(event, fileId) {
+  if (event.shiftKey || !failurePopoverVisibleMap.value[fileId]) return
+  const reason = document.getElementById(`file-failure-reason-${fileId}`)
+  if (reason) {
+    event.preventDefault()
+    reason.focus()
+  }
+}
+
+/** 键盘离开错误详情时收起浮层，不改变下一控件的焦点。 */
+function leaveFailureDetail(event, fileId) {
+  const trigger = document.getElementById(`file-failure-trigger-${fileId}`)
+  if (!event.currentTarget.contains(event.relatedTarget) && event.relatedTarget !== trigger) {
+    failurePopoverVisibleMap.value[fileId] = false
+  }
+}
+
+/** 关闭错误浮层并归还焦点，方便继续用键盘浏览文件。 */
+function closeFailureDetail(fileId) {
+  failurePopoverVisibleMap.value[fileId] = false
+  document.getElementById(`file-failure-trigger-${fileId}`)?.focus()
 }
 
 const popoverVisibleMap = ref({})
@@ -1370,6 +1458,36 @@ import FallbackAvatar from '@/shared/ui/FallbackAvatar.vue'
 </script>
 
 <style scoped lang="less">
+.file-failure-content {
+  width: min(360px, calc(100vw - 48px));
+}
+.file-failure-heading {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.file-error-message {
+  max-height: 240px;
+  overflow: auto;
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--color-text-secondary);
+  user-select: text;
+  &:focus-visible {
+    outline: 2px solid var(--main-color);
+    outline-offset: 2px;
+  }
+}
+.file-failure-retry {
+  margin-top: 8px;
+  padding: 0;
+}
 
 .file-table-container {
   display: flex;
@@ -1394,8 +1512,16 @@ import FallbackAvatar from '@/shared/ui/FallbackAvatar.vue'
 }
 
 .file-breadcrumb-filter {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 6px;
+  margin-left: 12px;
+  padding: 0 8px;
+  border-radius: 4px;
+  background: var(--main-10);
   color: var(--main-color);
-  font-size: 13px;
+  font-size: 12px;
   line-height: 24px;
   white-space: nowrap;
 }
@@ -1587,10 +1713,10 @@ import FallbackAvatar from '@/shared/ui/FallbackAvatar.vue'
   box-sizing: border-box;
   min-height: 24px;
   max-width: 100%;
-  padding: 0 6px;
+  padding: 0 8px;
   border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
+  border-radius: 999px;
+  background: var(--gray-50);
   color: var(--gray-700);
   font-family: inherit;
   font-size: 12px;
@@ -1619,24 +1745,33 @@ import FallbackAvatar from '@/shared/ui/FallbackAvatar.vue'
   align-items: center;
 }
 
-.status-success {
-  color: var(--color-success-500);
+.file-status-pill:focus-visible {
+  outline: 2px solid var(--main-color);
+  outline-offset: 2px;
 }
-
-.status-error {
-  color: var(--color-error-500);
+.file-status-failure,
+.file-status-pill.status-error {
+  background: var(--color-error-50);
+  color: var(--color-error-700);
 }
-
-.status-info {
-  color: var(--color-info-500);
+.file-status-failure {
+  cursor: help;
 }
-
-.status-warning {
-  color: var(--color-warning-500);
+.file-status-pill.status-success {
+  background: var(--color-success-50);
+  color: var(--color-success-700);
 }
-
-.status-primary {
-  color: var(--color-primary-500);
+.file-status-pill.status-info {
+  background: var(--color-info-50);
+  color: var(--color-info-700);
+}
+.file-status-pill.status-warning {
+  background: var(--color-warning-50);
+  color: var(--color-warning-900);
+}
+.file-status-pill.status-primary {
+  background: var(--main-10);
+  color: var(--main-color);
 }
 
 .file-time-cell {

@@ -50,6 +50,7 @@ class KnowledgeBaseSummary:
     pending_parse_count: int = 0
     pending_index_count: int = 0
     processing_count: int = 0
+    file_status_counts: dict[str, int] = field(default_factory=dict)
     effective_permission: ResourcePermission | None = None
 
     @property

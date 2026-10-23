@@ -1,4 +1,5 @@
 import types
+from collections import Counter
 from unittest.mock import AsyncMock
 
 
@@ -73,6 +74,7 @@ class FakeFileRepository:
         records = [record for record in self.records.values() if record.kb_id == kb_id]
         files = [record for record in records if not record.is_folder]
         return {
+            "file_status_counts": dict(Counter(record.status for record in files)),
             "row_count": len(records),
             "file_count": len(files),
             "folder_count": len(records) - len(files),
@@ -164,6 +166,7 @@ async def test_create_knowledge_base_persists_allowed_record_fields(tmp_path, mo
     assert "share_config" not in payload["additional_params"]
     assert "created_by" not in payload["additional_params"]
     assert result.kb_id.startswith("kb_")
+
 
 async def test_manager_refresh_knowledge_base_stats_persists_metadata(tmp_path, monkeypatch):
     manager = KnowledgeBaseManager(str(tmp_path))

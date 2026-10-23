@@ -99,65 +99,16 @@
                 </div>
               </div>
             </div>
-            <div class="file-panel-status">
-              <button
-                v-if="canManageKnowledgeBase && pendingParseCount > 0"
-                type="button"
-                class="lucide-icon-btn extension-panel-action extension-panel-action-secondary file-stat-card file-stat-warning file-stat-summary"
-                :disabled="store.state.chunkLoading"
-                @click="confirmBatchParse"
-              >
-                <FileText :size="16" />
-                <div class="file-stat-inline">
-                  <span class="file-stat-value">{{ pendingParseCount }}</span>
-                  <span class="file-stat-label">待解析</span>
-                </div>
-              </button>
-              <button
-                v-if="canManageKnowledgeBase && pendingIndexCount > 0"
-                type="button"
-                class="lucide-icon-btn extension-panel-action extension-panel-action-secondary file-stat-card file-stat-warning file-stat-summary"
-                :disabled="store.state.chunkLoading"
-                @click="confirmBatchIndex"
-              >
-                <DatabaseIcon :size="16" />
-                <div class="file-stat-inline">
-                  <span class="file-stat-value">{{ pendingIndexCount }}</span>
-                  <span class="file-stat-label">待入库</span>
-                </div>
-              </button>
-              <div class="file-stat-card file-stat-summary">
-                <FileText :size="16" />
-                <div class="file-stat-inline">
-                  <span class="file-stat-value">{{ fileStats.count }}</span>
-                  <span class="file-stat-label">文件</span>
-                </div>
-              </div>
-              <div
-                v-if="fileStats.sizeText"
-                class="lucide-icon-btn extension-panel-action extension-panel-action-secondary file-stat-card file-stat-summary"
-                :title="`文件大小 ${fileStats.sizeText}`"
-              >
-                <DatabaseIcon :size="16" aria-hidden="true" />
-                <div class="file-stat-inline">
-                  <span class="file-stat-value">{{ fileStats.sizeText }}</span>
-                </div>
-              </div>
-              <div class="file-stat-card file-stat-summary">
-                <DatabaseIcon :size="16" />
-                <div class="file-stat-inline">
-                  <span class="file-stat-value">{{ fileStats.chunkText }}</span>
-                  <span class="file-stat-label">Chunks</span>
-                </div>
-              </div>
-              <div class="file-stat-card file-stat-summary">
-                <Hash :size="16" />
-                <div class="file-stat-inline">
-                  <span class="file-stat-value">{{ fileStats.tokenText }}</span>
-                  <span class="file-stat-label">Tokens</span>
-                </div>
-              </div>
-            </div>
+            <KnowledgeFileSummary
+              :stats="knowledgeBase.stats || {}"
+              :can-manage="canManageKnowledgeBase"
+              :busy="store.state.chunkLoading"
+              :refreshing="refreshingStatistics"
+              @filter="fileTableRef?.applyStatusFilter($event)"
+              @parse-pending="confirmBatchParse"
+              @index-pending="confirmBatchIndex"
+              @refresh="refreshStatistics"
+            />
           </div>
           <FileTable
             ref="fileTableRef"
@@ -365,11 +316,9 @@ import {
   ChevronDown,
   ChevronRight,
   Copy,
-  Database as DatabaseIcon,
   FileText,
   FolderPlus,
   FolderUp,
-  Hash,
   Network,
   Pencil,
   Search,
@@ -379,6 +328,7 @@ import {
 import { message } from 'ant-design-vue'
 import ExtensionDetailLayout from '@/shared/ui/ExtensionDetailLayout.vue'
 import FileTable from '@/modules/knowledge/ui/FileTable.vue'
+import KnowledgeFileSummary from '@/modules/knowledge/ui/KnowledgeFileSummary.vue'
 import FileDetailModal from '@/modules/knowledge/ui/FileDetailModal.vue'
 import FileUploadModal from '@/modules/knowledge/ui/FileUploadModal.vue'
 import FileSearchModal from '@/modules/knowledge/ui/FileSearchModal.vue'
@@ -469,51 +419,20 @@ const handleActiveTabChange = (tab) => {
   }
 }
 
+const refreshingStatistics = ref(false)
+/** 复用详情读取接口刷新已有统计，不重新计数或写入 metadata。 */
+const refreshStatistics = async () => {
+  if (refreshingStatistics.value) return
+  refreshingStatistics.value = true
+  try {
+    await store.getKnowledgeBaseInfo(undefined, true, true)
+  } finally {
+    refreshingStatistics.value = false
+  }
+}
+
 const pendingParseCount = computed(() => {
   return Number(store.knowledgeBase.stats?.pending_parse_count || 0)
-})
-
-const formatStatNumber = (value) => {
-  const number = Number(value ?? 0)
-  return Number.isFinite(number) ? number.toLocaleString('zh-CN') : '0'
-}
-
-const formatCompactFileSize = (bytes) => {
-  const number = Number(bytes)
-  if (!Number.isFinite(number) || number <= 0) return ''
-
-  const units = ['b', 'kb', 'mb', 'gb', 'tb', 'pb']
-  let unitIndex = 0
-  let value = number
-  while (value >= 1000 && unitIndex < units.length - 1) {
-    value /= 1024
-    unitIndex += 1
-  }
-
-  const decimals = value >= 100 ? 0 : value >= 10 ? 1 : 2
-  return `${Number(value.toFixed(decimals))}${units[unitIndex]}`
-}
-
-const formatTokenStatNumber = (value) => {
-  const number = Number(value ?? 0)
-  if (!Number.isFinite(number)) return '0'
-  const absNumber = Math.abs(number)
-  if (absNumber > 1024 * 1000) return `${(number / 1_000_000).toFixed(1)} m`
-  if (absNumber >= 1000) return `${Math.round(number / 1000).toLocaleString('zh-CN')} k`
-  return number.toLocaleString('zh-CN')
-}
-
-const fileStats = computed(() => {
-  const stats = store.knowledgeBase.stats || {}
-  const statsFileCount = Number(stats.file_count)
-  const totalSize = Number(stats.total_size || 0)
-
-  return {
-    count: Number.isFinite(statsFileCount) ? statsFileCount : 0,
-    sizeText: totalSize > 0 ? formatCompactFileSize(totalSize) : '',
-    chunkText: formatStatNumber(stats.chunk_count),
-    tokenText: formatTokenStatNumber(stats.token_count)
-  }
 })
 
 const pendingIndexCount = computed(() => {
@@ -1121,109 +1040,6 @@ onUnmounted(() => {
   color: var(--gray-500);
 }
 
-.file-panel-status {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.file-stat-card {
-  min-width: 60px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 30px;
-  padding: 0 12px;
-  border-radius: 6px;
-  background: var(--gray-0);
-  border: 1px solid var(--gray-200);
-  box-shadow: none;
-  color: var(--gray-700);
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 1;
-  appearance: none;
-  text-align: center;
-  cursor: default;
-  justify-content: center;
-  transition:
-    background-color 0.18s ease,
-    border-color 0.18s ease,
-    color 0.18s ease;
-
-  div {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-  }
-
-  svg {
-    flex: 0 0 auto;
-  }
-
-  .file-stat-value,
-  .file-stat-label {
-    white-space: nowrap;
-  }
-
-  .file-stat-value {
-    font-size: 13px;
-    font-weight: 400;
-    line-height: 1.2;
-    color: var(--gray-900);
-  }
-
-  .file-stat-label {
-    font-size: 10px;
-    font-weight: 400;
-    color: var(--gray-500);
-  }
-
-  &:hover:not(:disabled),
-  &:focus-visible:not(:disabled) {
-    border-color: var(--gray-300);
-    background: var(--gray-0);
-    color: var(--gray-900);
-    outline: none;
-  }
-}
-
-.file-stat-summary {
-  min-width: 87px;
-  min-height: 30px;
-
-  .file-stat-inline {
-    flex-direction: row;
-    align-items: baseline;
-    gap: 4px;
-  }
-}
-
-.file-stat-warning {
-  cursor: pointer;
-  color: var(--color-warning-700);
-  border-color: var(--color-warning-100);
-  background: var(--color-warning-50);
-
-  .file-stat-value {
-    color: var(--color-warning-900);
-  }
-
-  &:hover:not(:disabled),
-  &:focus-visible:not(:disabled) {
-    border-color: var(--color-warning-500);
-    background: var(--color-warning-50);
-    color: var(--color-warning-900);
-  }
-
-  &:disabled {
-    cursor: not-allowed;
-    opacity: 0.6;
-  }
-}
 
 .knowledge-base-edit-tabs :deep(.ant-tabs-nav) {
   margin-bottom: 20px;

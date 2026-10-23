@@ -220,7 +220,7 @@ class KnowledgeBaseManager:
         raise ValueError("知识库共享配置必须使用 version 2")
 
     @staticmethod
-    def _normalize_knowledge_base_stats(stats: dict | None) -> dict[str, int]:
+    def _normalize_knowledge_base_stats(stats: dict | None) -> dict[str, Any]:
         """规范化知识库聚合统计字段。"""
         normalized = {
             "file_count": 0,
@@ -234,13 +234,14 @@ class KnowledgeBaseManager:
             "processing_count": 0,
         }
         if not isinstance(stats, dict):
-            return normalized
+            return {**normalized, "file_status_counts": {}}
 
         for key in normalized:
             try:
                 normalized[key] = max(int(stats.get(key) or 0), 0)
             except (TypeError, ValueError):
                 normalized[key] = 0
+        normalized["file_status_counts"] = dict(stats.get("file_status_counts") or {})
         return normalized
 
     async def _refresh_knowledge_base_stats(self, kb_id: str) -> dict[str, int]:
@@ -723,6 +724,7 @@ class KnowledgeBaseManager:
             "children_count": child_count,
             "has_original_file": bool(getattr(record, "minio_url", None) or getattr(record, "path", None)),
             "has_parsed_markdown": bool(getattr(record, "markdown_file", None)),
+            "error_message": getattr(record, "error_message", None),
         }
 
     async def get_knowledge_base_info(self, kb_id: str, include_files: bool = False) -> KnowledgeBaseDetail | None:
