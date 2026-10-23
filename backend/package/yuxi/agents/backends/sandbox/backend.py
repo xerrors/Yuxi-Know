@@ -14,6 +14,7 @@ from typing import Any
 import httpx
 from deepagents.backends.protocol import (
     ASYNC_GREP_TIMEOUT,
+    DeleteResult,
     EditResult,
     ExecuteResponse,
     FileDownloadResponse,
@@ -106,6 +107,10 @@ def _permission_error(operation: str, path: str) -> str:
     return f"permission denied for {operation} on '{path}'"
 
 
+def _normalize_line_endings(value: str) -> str:
+    return value.replace("\r\n", "\n")
+
+
 def _raise_authorized_path_operation_error(output: str | None, path: str, fallback: str) -> None:
     """把 sandbox 安全文件脚本的失败恢复为稳定边界异常。"""
     detail = str(output or "")
@@ -174,6 +179,15 @@ def _is_utf8_decode_failure(exc: Exception) -> bool:
 
 
 class ProvisionerSandboxBackend(BaseSandbox):
+    """基于 Provisioner Sandbox 的文件后端。
+
+    DeepAgents 0.7 的 BaseSandbox 用"在沙箱执行生成的 shell/Python 命令并解析 stdout"实现了
+    als/awrite/aedit/aglob，遮蔽了 BackendProtocol 转发到同步方法的默认语义。
+    本类的原生文件 API 与读写根边界只存在于同步方法，因此这些异步方法必须显式委托；
+    否则异步工具调用会在授权前产生副作用，把命令 stdout（含生成的脚本源码与 traceback）
+    或授权根之外的内容当作工具结果交回模型。
+    """
+
     def __init__(
         self,
         thread_id: str,
@@ -605,6 +619,10 @@ class ProvisionerSandboxBackend(BaseSandbox):
             infos.append(info)
         return LsResult(entries=self._filter_readable_infos(infos))
 
+    async def als(self, path: str) -> LsResult:
+        """异步列举委托原生实现，保留可读根过滤。"""
+        return await asyncio.to_thread(self.ls, path)
+
     def _ensure_parent_directory(self, file_path: str) -> None:
         """在 UserWorkspace 内按需创建父目录，且不跟随符号链接。"""
         relative_parts = tuple(PurePosixPath(file_path[len(_USER_DATA_ROOT) :].lstrip("/")).parts[:-1])
@@ -632,8 +650,10 @@ finally:
             raise PermissionError(result.output or file_path)
 
     def write(self, file_path: str, content: str) -> WriteResult:
-        """Write a new text file.
+        """Write a text file, creating it or replacing it entirely.
 
+        覆盖语义遵循 DeepAgents 0.7 的 `write_file` 工具契约：不存在则创建，
+        已存在则整体替换（0.6 的 "failing if it already exists" 已被上游移除）。
         This method is intentionally text-only. Binary payloads should go through
         upload_files(), which uses base64 encoding for the sandbox file API.
         """
@@ -645,12 +665,6 @@ finally:
             return WriteResult(error=f"Error: {_permission_error('write', normalized_path)}")
         if not isinstance(content, str):
             return WriteResult(error="Error: write() only supports text content; use upload_files() for binary data")
-        try:
-            self._read_binary(normalized_path)
-        except Exception:  # noqa: BLE001
-            pass
-        else:
-            return WriteResult(error=f"Error: File '{file_path}' already exists")
 
         try:
             self._ensure_parent_directory(normalized_path)
@@ -661,6 +675,10 @@ finally:
             return WriteResult(error=str(exc) or f"Failed to write file '{file_path}'")
 
         return WriteResult(path=normalized_path)
+
+    async def awrite(self, file_path: str, content: str) -> WriteResult:
+        """异步写入委托原生实现，保留写权限边界与父目录创建。"""
+        return await asyncio.to_thread(self.write, file_path, content)
 
     def edit(
         self,
@@ -673,6 +691,9 @@ finally:
 
         This method operates on UTF-8-decoded text content only. Binary files
         are not supported here and should be handled via download/upload flows.
+
+        匹配与写回都按 LF 口径进行：sandbox 编辑器先把文件归一化为 LF 再匹配，
+        因此编辑 CRLF 文件会把整个文件的行尾改成 LF。
         """
         try:
             normalized_path = _normalize_path(file_path)
@@ -681,13 +702,23 @@ finally:
         if not self._can_write_path(normalized_path):
             return EditResult(error=f"Error: {_permission_error('write', normalized_path)}")
 
-        # Check if old_string exists
-        try:
-            text = self._read_binary(normalized_path).decode("utf-8", errors="replace")
-        except Exception:  # noqa: BLE001
+        # 匹配判定必须用原始字节：行窗口 read API 会丢文件末尾换行并把 CRLF 折叠成 LF。
+        download = self.download_files([normalized_path])[0]
+        if download.error == "file_not_found":
             return EditResult(error=f"Error: File '{file_path}' not found")
+        if download.error:
+            return EditResult(error=f"Error: Failed to read '{file_path}': {download.error}")
 
-        count = text.count(old_string)
+        try:
+            text = (download.content or b"").decode("utf-8")
+        except UnicodeDecodeError:
+            return EditResult(error=f"Error: File '{file_path}' is not a text file")
+
+        # 远端编辑器先把文件归一化为 LF 再字面匹配，且不做唯一性校验，因此判定留在本地
+        # 并按同一口径归一化：read_file 交给模型的也已经是 LF 形态。
+        matched_old = _normalize_line_endings(old_string)
+        matched_new = _normalize_line_endings(new_string)
+        count = _normalize_line_endings(text).count(matched_old)
         if count == 0:
             return EditResult(error=f"Error: String not found in file: '{old_string}'")
         if count > 1 and not replace_all:
@@ -704,8 +735,8 @@ finally:
             result = self._get_client().file.str_replace_editor(
                 command="str_replace",
                 path=normalized_path,
-                old_str=old_string,
-                new_str=new_string,
+                old_str=matched_old,
+                new_str=matched_new,
                 replace_mode=replace_mode,
             )
             if not result.success:
@@ -714,6 +745,31 @@ finally:
             return EditResult(error=f"Error editing file: {exc}")
 
         return EditResult(path=normalized_path, occurrences=count if replace_all else 1)
+
+    async def aedit(
+        self,
+        file_path: str,
+        old_string: str,
+        new_string: str,
+        replace_all: bool = False,  # noqa: FBT001, FBT002
+    ) -> EditResult:
+        """异步编辑委托原生 str_replace_editor，避免工具错误里回显生成的 Python 脚本。"""
+        return await asyncio.to_thread(self.edit, file_path, old_string, new_string, replace_all)
+
+    def delete(self, file_path: str) -> DeleteResult:
+        """删除与写/编辑同界；BaseSandbox.delete 是无边界 shell rm -rf，其文档自述不构成安全边界。
+
+        授权检查通过后交给上游实现；adelete 由 BackendProtocol 默认 to_thread 转发到此闭合。
+        """
+        try:
+            normalized_path = _normalize_path(file_path)
+        except Exception as exc:  # noqa: BLE001
+            return DeleteResult(error=f"Error: Invalid path '{file_path}': {exc}")
+        if not self._can_write_path(normalized_path):
+            return DeleteResult(error=f"Error: {_permission_error('write', normalized_path)}")
+        if normalized_path == _USER_DATA_ROOT:
+            return DeleteResult(error="Error: deleting the user data root is not allowed")
+        return super().delete(normalized_path)
 
     def _grep_root(self, pattern: str, path: str, glob: str | None, max_count: int | None) -> GrepResult:
         """调用沙盒原生文件搜索并映射结构化结果。"""
@@ -822,10 +878,10 @@ finally:
                 )
             )
 
-    def glob(self, pattern: str, path: str = "/") -> GlobResult:
+    def glob(self, pattern: str, path: str | None = None) -> GlobResult:
         """Return files matching a glob pattern under allowed sandbox paths."""
         try:
-            normalized_path = _normalize_path(path)
+            normalized_path = _normalize_path(path or "/")
         except Exception as exc:  # noqa: BLE001
             return GlobResult(error=f"Invalid path '{path}': {exc}")
         if ".." in PurePosixPath(str(pattern or "")).parts:
@@ -849,6 +905,10 @@ finally:
         infos = self._filter_readable_infos(infos)
         infos.sort(key=lambda item: item.get("path", ""))
         return GlobResult(matches=infos)
+
+    async def aglob(self, pattern: str, path: str | None = None) -> GlobResult:
+        """异步 glob 委托原生实现，保留可读根收敛。"""
+        return await asyncio.to_thread(self.glob, pattern, path)
 
     def upload_files(self, files: list[tuple[str, bytes]]) -> list[FileUploadResponse]:
         """Upload binary or text file payloads via the sandbox file API.

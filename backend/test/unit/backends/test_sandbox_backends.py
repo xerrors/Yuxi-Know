@@ -13,7 +13,7 @@ import httpx
 import pytest
 import yuxi.agents.backends.sandbox.backend as sandbox_backend_module
 from deepagents.backends import CompositeBackend
-from deepagents.backends.protocol import GlobResult, GrepResult, ReadResult
+from deepagents.backends.protocol import DeleteResult, ExecuteResponse, GlobResult, GrepResult, ReadResult
 from deepagents.backends.sandbox import MAX_BINARY_BYTES
 from langchain_core.messages import ToolMessage
 from langgraph.prebuilt.tool_node import ToolRuntime
@@ -1815,3 +1815,557 @@ def test_workdir_paths_are_workspace_relative_and_reject_symlinks(monkeypatch, t
     (projects / file_id).write_text("file", encoding="utf-8")
     with pytest.raises(ValueError, match="符号链接或非目录组件"):
         paths.user_workdir_host_dir("user-1", f"projects/{file_id}")
+
+
+def _record_shell_fallback(monkeypatch, backend) -> list[str]:
+    """记录 backend.execute 调用，并以上游脚本实现的失败输出作为负向 oracle。
+
+    DeepAgents 0.7 的 BaseSandbox 用 execute 跑生成的 shell/Python 命令实现异步文件工具；
+    异步调用命中原生文件 API 时这里的记录必须为空。
+    """
+    commands: list[str] = []
+
+    def _record(self, command, *, timeout=None):
+        commands.append(command)
+        return ExecuteResponse(
+            output='python3 -c "\nimport os, stat as _stat, sys, json, base64\nTraceback (most recent call last):\n',
+            exit_code=0,
+        )
+
+    monkeypatch.setattr(backend, "execute", MethodType(_record, backend))
+    return commands
+
+
+def _install_native_file_client(backend, file_client) -> None:
+    backend._get_client = MethodType(lambda self: file_client, backend)
+
+
+@pytest.mark.asyncio
+async def test_provisioner_adelete_forwards_to_bounded_delete(monkeypatch) -> None:
+    monkeypatch.setattr("yuxi.agents.backends.sandbox.backend.get_sandbox_provider", lambda: object())
+    backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
+
+    def _unbounded_delete(self, file_path):
+        pytest.fail("异步越界删除不应到达上游 shell rm")
+
+    monkeypatch.setattr(sandbox_backend_module.BaseSandbox, "delete", _unbounded_delete)
+
+    result = await backend.adelete("/etc/passwd")
+
+    assert result.error == "Error: permission denied for write on '/etc/passwd'"
+
+
+@pytest.mark.asyncio
+async def test_provisioner_aedit_denies_outside_write_roots_before_shell(monkeypatch) -> None:
+    monkeypatch.setattr("yuxi.agents.backends.sandbox.backend.get_sandbox_provider", lambda: object())
+    backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
+
+    def str_replace_editor(**kwargs):
+        pytest.fail("越界编辑不应到达 sandbox 编辑器")
+
+    _install_native_file_client(backend, SimpleNamespace(file=SimpleNamespace(str_replace_editor=str_replace_editor)))
+    executed = _record_shell_fallback(monkeypatch, backend)
+
+    result = await backend.aedit("/home/gem/skills/probe/SKILL.md", "content", "other")
+
+    assert result.error == "Error: permission denied for write on '/home/gem/skills/probe/SKILL.md'"
+    assert executed == []
+
+
+@pytest.mark.asyncio
+async def test_provisioner_aedit_matches_old_string_ending_at_file_eof(monkeypatch) -> None:
+    """old_string 覆盖到文件末行且以换行结尾时必须命中。
+
+    行窗口 read API 返回的正文不含文件末尾换行，用它预检会让这类编辑恒报 "String not found"。
+    """
+    monkeypatch.setattr("yuxi.agents.backends.sandbox.backend.get_sandbox_provider", lambda: object())
+    backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
+    edit_calls: list[dict] = []
+
+    def str_replace_editor(**kwargs):
+        edit_calls.append(kwargs)
+        return SimpleNamespace(success=True, message=None)
+
+    def _read_binary(self, path, offset=0, limit=None):
+        return b"def main():\n    return 1"
+
+    _install_native_file_client(
+        backend,
+        SimpleNamespace(
+            file=SimpleNamespace(
+                str_replace_editor=str_replace_editor,
+                download_file=lambda **_kwargs: iter([b"def main():\n    return 1\n"]),
+            )
+        ),
+    )
+    monkeypatch.setattr(backend, "_read_binary", MethodType(_read_binary, backend))
+    executed = _record_shell_fallback(monkeypatch, backend)
+
+    result = await backend.aedit(f"{WORKDIR_PATH}/demo.py", "    return 1\n", "    return 2\n")
+
+    assert result.error is None
+    assert edit_calls[0]["old_str"] == "    return 1\n"
+    assert executed == []
+
+
+@pytest.mark.asyncio
+async def test_provisioner_aedit_normalizes_crlf_file_to_lf(monkeypatch) -> None:
+    """CRLF 文件按 LF 口径命中：编辑器先归一化再匹配，写回也是 LF。"""
+    monkeypatch.setattr("yuxi.agents.backends.sandbox.backend.get_sandbox_provider", lambda: object())
+    backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
+    edit_calls: list[dict] = []
+
+    def str_replace_editor(**kwargs):
+        edit_calls.append(kwargs)
+        return SimpleNamespace(success=True, message=None)
+
+    def _read_binary(self, path, offset=0, limit=None):
+        return b"a\nb"
+
+    _install_native_file_client(
+        backend,
+        SimpleNamespace(
+            file=SimpleNamespace(
+                str_replace_editor=str_replace_editor,
+                download_file=lambda **_kwargs: iter([b"a\r\nb\r\n"]),
+            )
+        ),
+    )
+    monkeypatch.setattr(backend, "_read_binary", MethodType(_read_binary, backend))
+    executed = _record_shell_fallback(monkeypatch, backend)
+
+    result = await backend.aedit(f"{WORKDIR_PATH}/demo.py", "a\nb", "x\ny")
+
+    assert result.error is None
+    assert edit_calls[0]["old_str"] == "a\nb"
+    assert edit_calls[0]["new_str"] == "x\ny"
+    assert executed == []
+
+
+@pytest.mark.asyncio
+async def test_provisioner_aedit_replace_all_uses_all_mode_and_counts_occurrences(monkeypatch) -> None:
+    monkeypatch.setattr("yuxi.agents.backends.sandbox.backend.get_sandbox_provider", lambda: object())
+    backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
+    edit_calls: list[dict] = []
+
+    def str_replace_editor(**kwargs):
+        edit_calls.append(kwargs)
+        return SimpleNamespace(success=True, message=None)
+
+    _install_native_file_client(
+        backend,
+        SimpleNamespace(
+            file=SimpleNamespace(
+                str_replace_editor=str_replace_editor,
+                download_file=lambda **_kwargs: iter([b"a = 1\na = 1\n"]),
+            )
+        ),
+    )
+    executed = _record_shell_fallback(monkeypatch, backend)
+
+    result = await backend.aedit(f"{WORKDIR_PATH}/demo.py", "a = 1", "a = 2", replace_all=True)
+
+    assert result.error is None
+    assert result.occurrences == 2
+    assert edit_calls[0]["replace_mode"] == "ALL"
+    assert executed == []
+
+
+@pytest.mark.asyncio
+async def test_provisioner_aedit_replaces_through_native_editor(monkeypatch) -> None:
+    monkeypatch.setattr("yuxi.agents.backends.sandbox.backend.get_sandbox_provider", lambda: object())
+    backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
+    edit_calls: list[dict] = []
+
+    def str_replace_editor(**kwargs):
+        edit_calls.append(kwargs)
+        return SimpleNamespace(success=True, message=None)
+
+    _install_native_file_client(
+        backend,
+        SimpleNamespace(
+            file=SimpleNamespace(
+                str_replace_editor=str_replace_editor,
+                download_file=lambda **_kwargs: iter([b"def main():\n    return 1\n"]),
+            )
+        ),
+    )
+    executed = _record_shell_fallback(monkeypatch, backend)
+
+    result = await CompositeBackend(
+        default=backend,
+        routes={},
+        artifacts_root=f"{WORKDIR_PATH}/outputs",
+    ).aedit(f"{WORKDIR_PATH}/demo.py", "    return 1", "    return 2")
+
+    assert result.error is None
+    assert result.path == f"{WORKDIR_PATH}/demo.py"
+    assert result.occurrences == 1
+    assert edit_calls == [
+        {
+            "command": "str_replace",
+            "path": f"{WORKDIR_PATH}/demo.py",
+            "old_str": "    return 1",
+            "new_str": "    return 2",
+            "replace_mode": "FIRST",
+        }
+    ]
+    assert executed == []
+
+
+@pytest.mark.asyncio
+async def test_provisioner_aedit_reports_missing_string_without_script_output(monkeypatch) -> None:
+    monkeypatch.setattr("yuxi.agents.backends.sandbox.backend.get_sandbox_provider", lambda: object())
+    backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
+
+    def str_replace_editor(**kwargs):
+        pytest.fail("未命中的编辑不应到达 sandbox 编辑器")
+
+    _install_native_file_client(
+        backend,
+        SimpleNamespace(
+            file=SimpleNamespace(
+                str_replace_editor=str_replace_editor,
+                download_file=lambda **_kwargs: iter([b"def main():\n    return 1\n"]),
+            )
+        ),
+    )
+    executed = _record_shell_fallback(monkeypatch, backend)
+
+    result = await backend.aedit(f"{WORKDIR_PATH}/demo.py", "    return 3", "    return 2")
+
+    assert result.error == "Error: String not found in file: '    return 3'"
+    assert "import" not in result.error
+    assert "Traceback" not in result.error
+    assert executed == []
+
+
+@pytest.mark.asyncio
+async def test_provisioner_aedit_reports_non_utf8_file_without_reaching_editor(monkeypatch) -> None:
+    monkeypatch.setattr("yuxi.agents.backends.sandbox.backend.get_sandbox_provider", lambda: object())
+    backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
+
+    def str_replace_editor(**kwargs):
+        pytest.fail("非文本文件不应到达 sandbox 编辑器")
+
+    _install_native_file_client(
+        backend,
+        SimpleNamespace(
+            file=SimpleNamespace(
+                str_replace_editor=str_replace_editor,
+                download_file=lambda **_kwargs: iter([b"\xff\xfe not utf-8"]),
+            )
+        ),
+    )
+    executed = _record_shell_fallback(monkeypatch, backend)
+
+    result = await backend.aedit(f"{WORKDIR_PATH}/data.bin", "a", "b")
+
+    assert result.error == f"Error: File '{WORKDIR_PATH}/data.bin' is not a text file"
+    assert executed == []
+
+
+@pytest.mark.asyncio
+async def test_provisioner_aedit_requires_replace_all_for_ambiguous_match(monkeypatch) -> None:
+    monkeypatch.setattr("yuxi.agents.backends.sandbox.backend.get_sandbox_provider", lambda: object())
+    backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
+
+    def str_replace_editor(**kwargs):
+        pytest.fail("歧义匹配未确认 replace_all 时不应到达 sandbox 编辑器")
+
+    _install_native_file_client(
+        backend,
+        SimpleNamespace(
+            file=SimpleNamespace(
+                str_replace_editor=str_replace_editor,
+                download_file=lambda **_kwargs: iter([b"a = 1\na = 1\n"]),
+            )
+        ),
+    )
+    executed = _record_shell_fallback(monkeypatch, backend)
+
+    result = await backend.aedit(f"{WORKDIR_PATH}/demo.py", "a = 1", "a = 2")
+
+    assert "appears multiple times" in result.error
+    assert "replace_all=True" in result.error
+    assert executed == []
+
+
+@pytest.mark.asyncio
+async def test_provisioner_aglob_denies_outside_readable_roots_before_shell(monkeypatch) -> None:
+    monkeypatch.setattr("yuxi.agents.backends.sandbox.backend.get_sandbox_provider", lambda: object())
+    backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
+
+    def find_files(**kwargs):
+        pytest.fail("越界 glob 不应到达 sandbox find_files")
+
+    _install_native_file_client(backend, SimpleNamespace(file=SimpleNamespace(find_files=find_files)))
+    executed = _record_shell_fallback(monkeypatch, backend)
+
+    result = await backend.aglob("*", path="/etc")
+
+    assert result.error == "permission denied for read on '/etc'"
+    assert not result.matches
+    assert executed == []
+
+
+@pytest.mark.asyncio
+async def test_provisioner_aglob_filters_matches_outside_readable_roots(monkeypatch) -> None:
+    monkeypatch.setattr("yuxi.agents.backends.sandbox.backend.get_sandbox_provider", lambda: object())
+    backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
+
+    def find_files(**kwargs):
+        return SimpleNamespace(data=SimpleNamespace(files=[f"{kwargs['path']}/ok.md", "/etc/shadow"]))
+
+    _install_native_file_client(backend, SimpleNamespace(file=SimpleNamespace(find_files=find_files)))
+    executed = _record_shell_fallback(monkeypatch, backend)
+
+    result = await backend.aglob("**/*.md", path=WORKDIR_PATH)
+
+    assert [item["path"] for item in result.matches] == [f"{WORKDIR_PATH}/ok.md"]
+    assert executed == []
+
+
+@pytest.mark.asyncio
+async def test_provisioner_aglob_rejects_traversal_pattern(monkeypatch) -> None:
+    monkeypatch.setattr("yuxi.agents.backends.sandbox.backend.get_sandbox_provider", lambda: object())
+    backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
+
+    def find_files(**kwargs):
+        pytest.fail("穿越模式不应到达 sandbox find_files")
+
+    _install_native_file_client(backend, SimpleNamespace(file=SimpleNamespace(find_files=find_files)))
+    executed = _record_shell_fallback(monkeypatch, backend)
+
+    result = await backend.aglob("**/../../etc/*")
+
+    assert result.error == "Invalid glob pattern: path traversal is not allowed"
+    assert executed == []
+
+
+@pytest.mark.asyncio
+async def test_provisioner_aglob_searches_readable_roots_through_native_find_files(monkeypatch) -> None:
+    monkeypatch.setattr("yuxi.agents.backends.sandbox.backend.get_sandbox_provider", lambda: object())
+    backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
+    find_calls: list[dict] = []
+
+    def find_files(**kwargs):
+        find_calls.append(kwargs)
+        return SimpleNamespace(data=SimpleNamespace(files=[f"{kwargs['path']}/match.md"]))
+
+    _install_native_file_client(backend, SimpleNamespace(file=SimpleNamespace(find_files=find_files)))
+    executed = _record_shell_fallback(monkeypatch, backend)
+
+    result = await backend.aglob("**/*.md")
+
+    assert result.error is None
+    assert [call["path"] for call in find_calls] == ["/home/gem/user-data", "/home/gem/skills"]
+    assert [item["path"] for item in result.matches] == [
+        "/home/gem/skills/match.md",
+        "/home/gem/user-data/match.md",
+    ]
+    assert executed == []
+
+
+@pytest.mark.asyncio
+async def test_provisioner_agrep_denies_outside_readable_roots_before_shell(monkeypatch) -> None:
+    monkeypatch.setattr("yuxi.agents.backends.sandbox.backend.get_sandbox_provider", lambda: object())
+    backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
+    executed = _record_shell_fallback(monkeypatch, backend)
+
+    result = await backend.agrep("NEEDLE", path="/etc", max_count=3)
+
+    assert result.error == "permission denied for read on '/etc'"
+    assert executed == []
+
+
+@pytest.mark.asyncio
+async def test_provisioner_als_denies_outside_readable_roots_before_shell(monkeypatch) -> None:
+    monkeypatch.setattr("yuxi.agents.backends.sandbox.backend.get_sandbox_provider", lambda: object())
+    backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
+
+    def list_path(**kwargs):
+        pytest.fail("越界列举不应到达 sandbox 文件 API")
+
+    _install_native_file_client(backend, SimpleNamespace(file=SimpleNamespace(list_path=list_path)))
+    executed = _record_shell_fallback(monkeypatch, backend)
+
+    result = await backend.als("/etc")
+
+    assert result.error == "permission denied for read on '/etc'"
+    assert not result.entries
+    assert executed == []
+
+
+@pytest.mark.asyncio
+async def test_provisioner_als_filters_entries_outside_readable_roots(monkeypatch) -> None:
+    """沙箱回包混入授权根之外的条目时，异步列举与同步口径一致地过滤。"""
+    monkeypatch.setattr("yuxi.agents.backends.sandbox.backend.get_sandbox_provider", lambda: object())
+    backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
+
+    def list_path(**kwargs):
+        entries = [
+            SimpleNamespace(path=f"{kwargs['path']}/report.md", is_directory=False, size=7, modified_time=None),
+            SimpleNamespace(path="/etc/passwd", is_directory=False, size=100, modified_time=None),
+        ]
+        return SimpleNamespace(data=SimpleNamespace(files=entries))
+
+    _install_native_file_client(backend, SimpleNamespace(file=SimpleNamespace(list_path=list_path)))
+    executed = _record_shell_fallback(monkeypatch, backend)
+
+    result = await backend.als(WORKDIR_PATH)
+
+    assert [item["path"] for item in result.entries] == [f"{WORKDIR_PATH}/report.md"]
+    assert executed == []
+
+
+@pytest.mark.asyncio
+async def test_provisioner_als_lists_through_native_list_path(monkeypatch) -> None:
+    monkeypatch.setattr("yuxi.agents.backends.sandbox.backend.get_sandbox_provider", lambda: object())
+    backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
+    list_calls: list[dict] = []
+
+    def list_path(**kwargs):
+        list_calls.append(kwargs)
+        entry = SimpleNamespace(path=f"{kwargs['path']}/report.md", is_directory=False, size=7, modified_time=None)
+        return SimpleNamespace(data=SimpleNamespace(files=[entry]))
+
+    _install_native_file_client(backend, SimpleNamespace(file=SimpleNamespace(list_path=list_path)))
+    executed = _record_shell_fallback(monkeypatch, backend)
+
+    result = await backend.als(WORKDIR_PATH)
+
+    assert result.error is None
+    assert result.entries == [{"path": f"{WORKDIR_PATH}/report.md", "is_dir": False, "size": 7}]
+    assert list_calls == [{"path": WORKDIR_PATH, "recursive": False, "include_size": True}]
+    assert executed == []
+
+
+@pytest.mark.asyncio
+async def test_provisioner_awrite_creates_through_native_write_file(monkeypatch) -> None:
+    monkeypatch.setattr("yuxi.agents.backends.sandbox.backend.get_sandbox_provider", lambda: object())
+    backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
+    write_calls: list[dict] = []
+
+    def write_file(**kwargs):
+        write_calls.append(kwargs)
+        return SimpleNamespace(success=True, message=None)
+
+    _install_native_file_client(backend, SimpleNamespace(file=SimpleNamespace(write_file=write_file)))
+    monkeypatch.setattr(backend, "_ensure_parent_directory", MethodType(lambda self, path: None, backend))
+    executed = _record_shell_fallback(monkeypatch, backend)
+
+    result = await backend.awrite(f"{WORKDIR_PATH}/notes.md", "hello")
+
+    assert result.error is None
+    assert result.path == f"{WORKDIR_PATH}/notes.md"
+    assert write_calls == [{"file": f"{WORKDIR_PATH}/notes.md", "content": "hello"}]
+    assert executed == []
+
+
+@pytest.mark.asyncio
+async def test_provisioner_awrite_denies_outside_write_roots_before_shell(monkeypatch) -> None:
+    monkeypatch.setattr("yuxi.agents.backends.sandbox.backend.get_sandbox_provider", lambda: object())
+    backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
+
+    def write_file(**kwargs):
+        pytest.fail("越界写入不应到达 sandbox 文件 API")
+
+    _install_native_file_client(backend, SimpleNamespace(file=SimpleNamespace(write_file=write_file)))
+    executed = _record_shell_fallback(monkeypatch, backend)
+
+    result = await backend.awrite("/home/gem/skills/probe/SKILL.md", "content")
+
+    assert result.error == "Error: permission denied for write on '/home/gem/skills/probe/SKILL.md'"
+    assert executed == []
+
+
+@pytest.mark.asyncio
+async def test_provisioner_awrite_replaces_existing_file_by_contract(monkeypatch) -> None:
+    """write_file 契约是"已存在则整体替换"，重复写同一路径必须落到原生写入而不是报错。"""
+    monkeypatch.setattr("yuxi.agents.backends.sandbox.backend.get_sandbox_provider", lambda: object())
+    backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
+    write_calls: list[dict] = []
+
+    def write_file(**kwargs):
+        write_calls.append(kwargs)
+        return SimpleNamespace(success=True, message=None)
+
+    def _read_binary(self, path, offset=0, limit=None):
+        return b"first"
+
+    _install_native_file_client(backend, SimpleNamespace(file=SimpleNamespace(write_file=write_file)))
+    monkeypatch.setattr(backend, "_read_binary", MethodType(_read_binary, backend))
+    monkeypatch.setattr(backend, "_ensure_parent_directory", MethodType(lambda self, path: None, backend))
+    executed = _record_shell_fallback(monkeypatch, backend)
+
+    first = await backend.awrite(f"{WORKDIR_PATH}/notes.md", "first")
+    second = await backend.awrite(f"{WORKDIR_PATH}/notes.md", "second")
+
+    assert first.error is None
+    assert second.error is None
+    assert write_calls == [
+        {"file": f"{WORKDIR_PATH}/notes.md", "content": "first"},
+        {"file": f"{WORKDIR_PATH}/notes.md", "content": "second"},
+    ]
+    assert executed == []
+
+
+def test_provisioner_delete_delegates_within_write_roots(monkeypatch) -> None:
+    monkeypatch.setattr("yuxi.agents.backends.sandbox.backend.get_sandbox_provider", lambda: object())
+    backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
+    delete_calls: list[str] = []
+
+    def _fake_delete(self, file_path):
+        delete_calls.append(file_path)
+        return DeleteResult(error=None, path=file_path)
+
+    monkeypatch.setattr(sandbox_backend_module.BaseSandbox, "delete", _fake_delete)
+
+    result = backend.delete(f"{WORKDIR_PATH}/stale.md")
+
+    assert result.error is None
+    assert delete_calls == [f"{WORKDIR_PATH}/stale.md"]
+
+
+def test_provisioner_delete_denies_outside_write_roots_before_shell(monkeypatch) -> None:
+    """delete 必须与写边界同界：上游 BaseSandbox.delete 是无边界 shell rm。"""
+    monkeypatch.setattr("yuxi.agents.backends.sandbox.backend.get_sandbox_provider", lambda: object())
+    backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
+
+    def _unbounded_delete(self, file_path):
+        pytest.fail("越界删除不应到达上游 shell rm")
+
+    monkeypatch.setattr(sandbox_backend_module.BaseSandbox, "delete", _unbounded_delete)
+
+    result = backend.delete("/home/gem/skills/probe/SKILL.md")
+
+    assert result.error == "Error: permission denied for write on '/home/gem/skills/probe/SKILL.md'"
+
+
+def test_provisioner_delete_denies_user_data_root_before_shell(monkeypatch) -> None:
+    monkeypatch.setattr("yuxi.agents.backends.sandbox.backend.get_sandbox_provider", lambda: object())
+    backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
+
+    def _unbounded_delete(self, file_path):
+        pytest.fail("用户数据根不应到达上游 shell rm")
+
+    monkeypatch.setattr(sandbox_backend_module.BaseSandbox, "delete", _unbounded_delete)
+
+    result = backend.delete("/home/gem/user-data")
+
+    assert result.error == "Error: deleting the user data root is not allowed"
+
+
+def test_provisioner_delete_reports_invalid_path(monkeypatch) -> None:
+    monkeypatch.setattr("yuxi.agents.backends.sandbox.backend.get_sandbox_provider", lambda: object())
+    backend = ProvisionerSandboxBackend(thread_id="thread-1", uid="user-1")
+
+    def _unbounded_delete(self, file_path):
+        pytest.fail("非法路径不应到达上游 shell rm")
+
+    monkeypatch.setattr(sandbox_backend_module.BaseSandbox, "delete", _unbounded_delete)
+
+    result = backend.delete("relative/stale.md")
+
+    assert "Invalid path" in result.error
