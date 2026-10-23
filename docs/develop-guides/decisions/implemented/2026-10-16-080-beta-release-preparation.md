@@ -20,6 +20,8 @@ Owner：docs/develop-guides/releases/0.8.0.md
 
 [独立更新页](../../releases/0.8.0.md)按用户场景合并相对 `v0.7.3` tag 的变化。Decision 负责定位，源码、公开契约和测试确认最终行为；中间 Schema、旧沙盒回收行为和已被取代的 Agent 创建方案不作为最终功能。历史 changelog 只增加入口，导航、README、快速开始、部署参考和 roadmap 同步。Beta 不批量归档 Decision。
 
+更新页标明已核对的提交与日期，只收录该提交可追溯的实现，未提交工作区内容不计入发布范围。部署与执行说明区分默认 Cube 用户 VM 和可选 Run 级容器；来源标注、MCP 故障隔离及 CI 按后续已生效决定更新。历史测试结果链接到所属记录并保留拓扑、时点和未运行范围，不把文档核对或旧探针扩写为当前版本完整验收。
+
 候选源码获取指向 `Yuchuan925/Yuxi:develop/0-8-0`。远端写入只面向该 fork 分支；版本材料不表示 tag、GitHub Release 或 npm 包已经发布。原工作区的两处前端修改及两份未跟踪调研保留，不进入发布提交；候选前端和文档在排除这些文件的独立 worktree 中验证。
 
 ## 替代方案
@@ -31,11 +33,13 @@ Owner：docs/develop-guides/releases/0.8.0.md
 
 ## 后果
 
-用户可从同一页了解最终功能、仅全新部署的要求、Cube/KVM 前置、公开 API 与 CLI 不兼容边界，以及尚未验证的范围。候选交付需要对应提交的远端检查，不能用本地通过冒充 GitHub 检查成功。
+用户可从同一页了解最终功能、仅全新部署的要求、两种执行后端的前置与持久化差异、公开 API 与 CLI 不兼容边界，以及尚未验证的范围。候选交付需要对应提交的远端检查，不能用本地通过冒充 GitHub 检查成功。
 
 Web 使用 markdown-it 15.0.2 修复[自动链接的二次复杂度问题](https://github.com/advisories/GHSA-253c-mchw-3w2r)，锁定已发布的补丁版本以避免引入当天新版本及无关传递依赖。`@vscode/markdown-it-katex>katex` 定向覆盖到 0.18.4，修复[原型污染后的继承属性读取](https://github.com/advisories/GHSA-238p-pmpm-9mq7)，并与页面直接导入的 KaTeX CSS 保持同版。插件仍使用原有 `renderToString`、`trust: false` 和后续 DOMPurify 清理；覆盖需要在插件升级时重新评估，不构成对全部 0.16 消费者的兼容承诺。
 
 ## 验证
+
+更新页内容核对以 `v0.7.3..97e04174` 的提交历史、页面修订和对应提交的源码为范围（`Inspected`），不读取未提交功能作为发布事实。工程契约检查、检查器 66 项 unittest、两份变更文档的相对链接及构建后锚点检查、`cd docs && pnpm run build` 与 `git diff --check` 通过；文档构建存在非阻断的大 chunk 提示。此次文档更新未重跑产品 HTTP、worker、浏览器或外部供应商链路（`Not run`），下述 beta1 测试及更新页引用的后续记录均保留各自的验证时点与范围。
 
 以下命令由本地执行。Compose 测试使用独立项目、空 PostgreSQL、Redis、MinIO、Milvus、Neo4j 及私有配置，未操作原开发实例的数据；模型回复来自确定性 HTTP 重放，不产生真实供应商可用性结论。
 
