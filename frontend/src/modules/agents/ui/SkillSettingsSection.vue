@@ -1,13 +1,13 @@
 <template>
-  <div class="skill-settings-section">
-    <div class="section-title">Skill 配置</div>
+  <div class="skill-settings-section settings-section-block">
+    <div class="settings-section-title">Skill 配置</div>
 
-    <section class="source-panel">
+    <section class="source-panel settings-surface-card">
       <template v-if="sourceOption">
         <div class="source-header">
           <div class="source-copy">
-            <h4>远程来源白名单</h4>
-            <p>只有列表中的域名可以远程加载和安装 Skill。</p>
+            <h4 class="settings-form-label">远程来源白名单</h4>
+            <p class="settings-form-description">只有列表中的域名可以远程加载和安装 Skill。</p>
           </div>
           <a-button v-if="!isEditing" type="text" size="small" @click="startEditing">
             <Pencil :size="14" />
@@ -124,56 +124,13 @@ onMounted(loadOption)
 </script>
 
 <style lang="less" scoped>
-.skill-settings-section {
-  margin-top: 24px;
-
-  &.first-section {
-    margin-top: 0;
-  }
-}
-
-.section-title {
-  margin: 0 0 10px;
-  color: var(--gray-900);
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.source-panel {
-  padding: 14px 16px;
-  border: 1px solid var(--gray-150);
-  border-radius: 8px;
-  background: var(--gray-0);
-}
-
 .source-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
 
-  h4,
-  p {
-    margin: 0;
-  }
-
-  h4 {
-    color: var(--gray-900);
-    font-size: 13px;
-    font-weight: 500;
-  }
-
-  p {
-    margin-top: 4px;
-    color: var(--color-text-secondary);
-    font-size: 12px;
-    line-height: 1.5;
-  }
-
   :deep(.ant-btn) {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
     color: var(--gray-600);
 
     &:hover,

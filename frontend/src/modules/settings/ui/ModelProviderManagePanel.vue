@@ -1201,7 +1201,7 @@ defineExpose({
                   <LoaderCircle
                     v-if="isModelTesting(currentProviderForModels.provider_id, model.id)"
                     :size="13"
-                    class="spinning"
+                    class="yuxi-rotate"
                   />
                   <Zap v-else :size="13" />
                 </a-button>
@@ -1277,7 +1277,7 @@ defineExpose({
                 @click="fetchRemoteModels(currentProviderForModels.provider_id)"
               >
                 <template #icon>
-                  <RefreshCw :size="14" :class="{ spinning: remoteLoading }" aria-hidden="true" />
+                  <RefreshCw :size="14" :class="{ 'yuxi-rotate': remoteLoading }" aria-hidden="true" />
                 </template>
               </a-button>
             </div>
@@ -1557,19 +1557,6 @@ defineExpose({
   justify-content: center;
   padding: 100px 20px;
   text-align: center;
-}
-
-.spinning {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .models-modal-content {

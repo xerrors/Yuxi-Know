@@ -2,7 +2,7 @@
 
 状态：implemented
 类型：simplification
-Owner：frontend/src/modules/settings/ui/settings-form.less
+Owner：frontend/src/assets/css/settings.less
 
 ## 问题
 
@@ -12,7 +12,9 @@ Owner：frontend/src/modules/settings/ui/settings-form.less
 
 ### 实现方案
 
-三个设置面板通过 scoped LESS 引用同一份 `settings-form.less`，使用共同的 panel、row、copy 和 content 类组织设置项。基本设置的协作深度复用同一结构。共享样式拥有标题、边框、行间分隔、文本层级和窄容器布局；控件保留现有事件与业务数据。模型选择器、普通选择器和数字输入分别采用当前所需的 340px、260px 和 88px 宽度。
+三个设置面板使用 `settings.less` 中共同的 panel、row、copy 和 control 类组织设置项，由全局样式入口一次装配。基本设置的协作深度复用同一结构。共享样式拥有标题、边框、行间分隔、文本层级和窄容器布局；控件保留现有事件与业务数据。模型选择器、普通选择器和数字输入分别采用当前所需的 340px、260px 和 88px 宽度。
+
+公共样式的装配、命名和设置弹窗边界由[设置界面共享样式归属](./2026-10-23-settings-style-ownership.md)补充；本记录拥有表单和服务卡片的布局取舍。
 
 ## 替代方案
 
@@ -20,7 +22,7 @@ Owner：frontend/src/modules/settings/ui/settings-form.less
 
 ## 后果
 
-修改共享规则会同时影响三个设置面板。OCR 与网页搜索的服务卡片通过 scoped LESS 引用 `settings-service-card.less`，统一标题、说明、字段网格、编辑操作与窄容器布局。只有一个字段时，字段名称置于组名称后，以 12px 次级文字显示，输入框不重复显示标签；多字段保留各自标签。输入控件通过 aria-label 保留可访问名称。网页搜索测试状态仍由其业务组件拥有。
+修改共享规则会同时影响三个设置面板。OCR 与网页搜索使用同一入口的服务卡片类，统一标题、说明、字段网格、编辑操作与窄容器布局。只有一个字段时，字段名称置于组名称后，以 12px 次级文字显示，输入框不重复显示标签；多字段保留各自标签。输入控件通过 aria-label 保留可访问名称。网页搜索测试状态仍由其业务组件拥有。
 
 ## 验证
 

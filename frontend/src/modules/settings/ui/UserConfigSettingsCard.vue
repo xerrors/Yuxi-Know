@@ -5,7 +5,7 @@
         <div class="config-row">
           <div class="config-meta">
             <div class="config-title-line">
-              <span class="config-title">是否启用 Memory</span>
+              <span class="settings-form-label">是否启用 Memory</span>
               <button type="button" class="memory-view-button" @click="viewMemory">查看 Memory</button>
             </div>
           </div>
@@ -103,13 +103,6 @@ defineExpose({ refresh: loadUserConfig })
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
-  }
-
-  .config-title {
-    color: var(--gray-900);
-    font-size: 14px;
-    font-weight: 500;
-    line-height: 1.4;
   }
 
   .memory-view-button {

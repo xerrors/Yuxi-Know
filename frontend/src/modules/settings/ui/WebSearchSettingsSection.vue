@@ -1,102 +1,144 @@
 <template>
-  <div class="web-settings">
-    <div class="section-title">默认搜索服务</div>
-    <div v-if="loadError" role="alert" class="web-error">
-      {{ loadError }} <a-button size="small" @click="load">重试</a-button>
-    </div>
-    <a-spin v-else :spinning="loading">
-      <section class="settings-panel" aria-label="默认网页工具供应商">
-        <div v-for="operation in ['search', 'fetch']" :key="operation" class="setting-row">
-          <div class="setting-copy">
-            <span class="setting-label">{{ operation === 'search' ? '搜索服务' : '网页抓取服务' }}</span>
-            <p class="setting-description">{{ operation === 'search' ? '联网搜索时，使用此服务查找网页信息。' : '读取网页时，使用此服务提取正文内容。' }}</p>
-          </div>
-          <div class="setting-content is-compact">
-            <a-select
-              :aria-label="operation === 'search' ? '搜索服务' : '网页抓取服务'"
-              :value="defaultProvider(operation, config, providers, options)"
-              :options="providerChoices(operation)"
-              placeholder="请先配置 API Key"
-              :loading="savingDefault === operation"
-              :disabled="Boolean(savingDefault) || loading"
-              @change="saveDefault(operation, $event)"
-            />
-          </div>
+  <div class="web-settings settings-page">
+    <a-spin :spinning="loading">
+      <section class="settings-section-block">
+        <h3 class="settings-section-title">默认搜索服务</h3>
+        <div v-if="loadError" role="alert" class="web-error">
+          {{ loadError }} <a-button size="small" @click="load">重试</a-button>
         </div>
-      </section>
-
-      <div class="section-title">服务配置</div>
-      <div class="option-list">
-        <section
-          v-for="provider in providers"
-          :key="provider.id"
-          class="option-card"
-          :aria-label="provider.name + ' 配置'"
-        >
-          <header class="option-header">
-            <div class="option-heading">
-              <div class="option-title">
-                <h4>{{ provider.name }}</h4>
-                <span class="option-field-name">API Key</span>
-                <div v-if="results[provider.id]" class="test-summary" role="status" aria-live="polite">
-                  <span
-                    v-for="(result, operation) in results[provider.id]"
-                    :key="operation"
-                    :class="['test-state', result.state]"
-                  >
-                    {{ operation === 'search' ? '搜索' : 'Fetch' }}{{ { running: '测试中…', passed: '通过', failed: '失败' }[result.state] }}<template v-if="result.error">：{{ result.error }}</template>
-                  </span>
-                </div>
-              </div>
-              <p v-if="provider.id === 'tavily'">
-                每月免费额度 · <a href="https://docs.tavily.com/documentation/api-credits" target="_blank" rel="noopener noreferrer">官方计费</a>
+        <section v-else class="settings-form-panel" aria-label="默认网页工具供应商">
+          <div v-for="operation in ['search', 'fetch']" :key="operation" class="settings-form-row">
+            <div class="settings-form-copy">
+              <span class="settings-form-label">{{
+                operation === 'search' ? '搜索服务' : '网页抓取服务'
+              }}</span>
+              <p class="settings-form-description">
+                {{
+                  operation === 'search'
+                    ? '联网搜索时，使用此服务查找网页信息。'
+                    : '读取网页时，使用此服务提取正文内容。'
+                }}
               </p>
-              <p v-else>{{ provider.fetch ? '搜索与网页抓取' : '网页搜索' }}</p>
             </div>
-            <div class="option-actions" :class="{ editing: editingKey === provider.id || testing[provider.id] }">
-              <a-button
-                type="text"
-                size="small"
-                :loading="testing[provider.id]"
-                :disabled="testDisabled(provider)"
-                @click="runTest(provider)"
-              >测试</a-button>
-              <template v-if="editingKey === provider.id">
-                <a-button size="small" :disabled="Boolean(savingKey) || testing[provider.id]" @click="cancelEditing">取消</a-button>
-                <a-button
-                  type="primary"
-                  size="small"
-                  class="save-button"
-                  :loading="savingKey === provider.id"
-                  :disabled="testing[provider.id]"
-                  @click="saveKey(provider)"
-                >保存</a-button>
-              </template>
-              <a-button
-                v-else
-                type="text"
-                size="small"
-                :disabled="Boolean(editingKey) || testing[provider.id] || loading"
-                @click="startEditing(provider)"
-              >编辑</a-button>
+            <div class="settings-form-control is-compact">
+              <a-select
+                :aria-label="operation === 'search' ? '搜索服务' : '网页抓取服务'"
+                :value="defaultProvider(operation, config, providers, options)"
+                :options="providerChoices(operation)"
+                placeholder="请先配置 API Key"
+                :loading="savingDefault === operation"
+                :disabled="Boolean(savingDefault) || loading"
+                @change="saveDefault(operation, $event)"
+              />
             </div>
-          </header>
-          <label v-if="editingKey === provider.id" class="option-field">
-            <a-input-password
-              aria-label="API Key"
-              v-model:value="draftKey"
-              :placeholder="provider.environment"
-              :disabled="Boolean(savingKey) || testing[provider.id]"
-              autocomplete="new-password"
-              @update:value="delete results[provider.id]"
-            />
-            <small>留空并保存会清除数据库中的值。</small>
-          </label>
-          <div v-else class="option-field">
-            <a-input aria-label="API Key" :value="credentialDescription(provider)" class="masked-value" disabled />
           </div>
         </section>
-      </div>
+      </section>
+
+      <section v-if="!loadError" class="settings-section-block">
+        <h3 class="settings-section-title">服务配置</h3>
+        <div class="settings-service-list">
+          <section
+            v-for="provider in providers"
+            :key="provider.id"
+            class="settings-service-card"
+            :aria-label="provider.name + ' 配置'"
+          >
+            <header class="settings-service-header">
+              <div class="settings-service-heading">
+                <div class="settings-service-title">
+                  <h4>{{ provider.name }}</h4>
+                  <span class="settings-service-field-name">API Key</span>
+                  <div
+                    v-if="results[provider.id]"
+                    class="test-summary"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <span
+                      v-for="(result, operation) in results[provider.id]"
+                      :key="operation"
+                      :class="['test-state', result.state]"
+                    >
+                      {{ operation === 'search' ? '搜索' : 'Fetch'
+                      }}{{ { running: '测试中…', passed: '通过', failed: '失败' }[result.state]
+                      }}<template v-if="result.error">：{{ result.error }}</template>
+                    </span>
+                  </div>
+                </div>
+                <p v-if="provider.id === 'tavily'" class="settings-service-description">
+                  每月免费额度 ·
+                  <a
+                    href="https://docs.tavily.com/documentation/api-credits"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >官方计费</a
+                  >
+                </p>
+                <p v-else class="settings-service-description">
+                  {{ provider.fetch ? '搜索与网页抓取' : '网页搜索' }}
+                </p>
+              </div>
+              <div
+                class="settings-service-actions"
+                :class="{ editing: editingKey === provider.id || testing[provider.id] }"
+              >
+                <a-button
+                  type="text"
+                  size="small"
+                  :loading="testing[provider.id]"
+                  :disabled="testDisabled(provider)"
+                  @click="runTest(provider)"
+                  >测试</a-button
+                >
+                <template v-if="editingKey === provider.id">
+                  <a-button
+                    size="small"
+                    :disabled="Boolean(savingKey) || testing[provider.id]"
+                    @click="cancelEditing"
+                    >取消</a-button
+                  >
+                  <a-button
+                    type="primary"
+                    size="small"
+                    :loading="savingKey === provider.id"
+                    :disabled="testing[provider.id]"
+                    @click="saveKey(provider)"
+                    >保存</a-button
+                  >
+                </template>
+                <a-button
+                  v-else
+                  type="text"
+                  size="small"
+                  :disabled="Boolean(editingKey) || testing[provider.id] || loading"
+                  @click="startEditing(provider)"
+                  >编辑</a-button
+                >
+              </div>
+            </header>
+            <label v-if="editingKey === provider.id" class="settings-service-field">
+              <a-input-password
+                aria-label="API Key"
+                v-model:value="draftKey"
+                :placeholder="provider.environment"
+                :disabled="Boolean(savingKey) || testing[provider.id]"
+                autocomplete="new-password"
+                @update:value="delete results[provider.id]"
+              />
+              <small>留空并保存会清除数据库中的值。</small>
+            </label>
+            <div v-else class="settings-service-field">
+              <a-input
+                aria-label="API Key"
+                :value="credentialDescription(provider)"
+                class="settings-masked-value"
+                disabled
+              />
+            </div>
+          </section>
+        </div>
+      </section>
     </a-spin>
   </div>
 </template>
@@ -219,12 +261,8 @@ onMounted(load)
 </script>
 
 <style scoped lang="less">
-.web-settings { container: settings-services / inline-size; }
 .test-summary { display: flex; flex-wrap: wrap; gap: 4px 12px; min-width: 0; font-size: 12px; overflow-wrap: anywhere; }
 .test-state { color: var(--color-text-secondary); }
 .passed { color: var(--color-success-700); }
 .failed, .web-error { color: var(--color-error-700); }
 </style>
-
-<style lang="less" scoped src="./settings-form.less"></style>
-<style lang="less" scoped src="./settings-service-card.less"></style>

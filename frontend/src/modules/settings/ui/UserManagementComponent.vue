@@ -1,14 +1,14 @@
 <template>
-  <div class="user-management">
+  <div class="user-management settings-page">
     <!-- 头部区域 -->
-    <div class="header-section">
-      <div class="header-content">
-        <div class="section-title">用户管理</div>
-        <p class="section-description">
+    <div class="settings-header">
+      <div class="settings-header-copy">
+        <div class="settings-section-title">用户管理</div>
+        <p class="settings-section-description">
           管理系统用户，请谨慎操作。删除用户后该用户将无法登录系统。
         </p>
       </div>
-      <div class="header-actions">
+      <div class="settings-header-actions">
         <a-button
           @click="handleRefresh"
           :loading="userManagement.refreshing"
@@ -19,7 +19,7 @@
             <RefreshCw :size="16" :class="{ 'yuxi-rotate': userManagement.refreshing }" />
           </template>
         </a-button>
-        <a-button type="primary" @click="showAddUserModal" class="add-btn lucide-icon-btn">
+        <a-button type="primary" @click="showAddUserModal" class="lucide-icon-btn">
           <template #icon><Plus :size="16" /></template>
           添加用户
         </a-button>
@@ -62,9 +62,9 @@
     </div>
 
     <!-- 主内容区域 -->
-    <div class="content-section">
+    <div class="settings-management-content">
       <a-spin :spinning="userManagement.loading">
-        <div v-if="userManagement.error" class="error-message">
+        <div v-if="userManagement.error" class="settings-error">
           <a-alert type="error" :message="userManagement.error" show-icon />
         </div>
 
@@ -77,7 +77,6 @@
               :pagination="false"
               table-layout="fixed"
               :scroll="{ x: 760 }"
-              class="settings-table"
             >
               <template #bodyCell="{ column, record }">
                 <template v-if="column.key === 'user'">
@@ -174,7 +173,7 @@
           </div>
         </template>
 
-        <div v-else class="empty-state">
+        <div v-else class="settings-empty">
           <a-empty :description="hasActiveFilters ? '没有匹配的用户' : '暂无用户数据'" />
         </div>
       </a-spin>
@@ -192,7 +191,7 @@
       class="user-modal"
     >
       <a-form layout="vertical" class="user-form">
-        <a-form-item label="用户名" required class="form-item">
+        <a-form-item label="用户名" required>
           <a-input
             v-model:value="userManagement.form.username"
             ref="usernameInputRef"
@@ -217,7 +216,7 @@
         </a-form-item>
 
         <!-- 手机号字段 -->
-        <a-form-item label="手机号" class="form-item">
+        <a-form-item label="手机号">
           <a-input
             v-model:value="userManagement.form.phoneNumber"
             placeholder="请输入手机号（可选，可用于登录）"
@@ -237,7 +236,7 @@
         </template>
 
         <template v-if="!userManagement.editMode || userManagement.displayPasswordFields">
-          <a-form-item label="密码" required class="form-item">
+          <a-form-item label="密码" required>
             <a-input-password
               v-model:value="userManagement.form.password"
               :placeholder="`请输入密码（至少 ${MIN_PASSWORD_LENGTH} 位）`"
@@ -245,7 +244,7 @@
             />
           </a-form-item>
 
-          <a-form-item label="确认密码" required class="form-item">
+          <a-form-item label="确认密码" required>
             <a-input-password
               v-model:value="userManagement.form.confirmPassword"
               placeholder="请再次输入密码"
@@ -253,7 +252,7 @@
           </a-form-item>
         </template>
 
-        <a-form-item v-if="!userManagement.editMode || userStore.isSuperAdmin" label="角色" class="form-item">
+        <a-form-item v-if="!userManagement.editMode || userStore.isSuperAdmin" label="角色">
           <a-select v-model:value="userManagement.form.role">
             <a-select-option value="user" :disabled="userManagement.editMode && userManagement.originalRole !== 'user'">普通用户</a-select-option>
             <a-select-option value="admin" v-if="userStore.isSuperAdmin" :disabled="userManagement.editMode && userManagement.originalRole === 'superadmin'">管理员</a-select-option>
@@ -262,7 +261,7 @@
         </a-form-item>
 
         <!-- 部门选择器（仅超级管理员可见） -->
-        <a-form-item v-if="userStore.isSuperAdmin" label="部门" class="form-item">
+        <a-form-item v-if="userStore.isSuperAdmin" label="部门">
           <a-select v-model:value="userManagement.form.departmentId" placeholder="请选择部门">
             <a-select-option
               v-for="dept in departmentManagement.departments"
@@ -735,40 +734,6 @@ onUnmounted(() => {
 }
 
 .user-management {
-  .header-section {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    gap: 16px;
-    margin-bottom: 16px;
-
-    .header-content {
-      flex: 1;
-      min-width: 0;
-
-      .section-title {
-        font-size: 16px;
-        font-weight: 500;
-        color: var(--gray-900);
-        line-height: 1.4;
-        margin: 12px 0 12px;
-      }
-
-      .section-description {
-        font-size: 14px;
-        color: var(--gray-600);
-        line-height: 1.4;
-        margin: 0;
-      }
-    }
-
-    .header-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-  }
-
   .filter-section {
     display: flex;
     align-items: center;
@@ -838,178 +803,113 @@ onUnmounted(() => {
     }
   }
 
-  .content-section {
-    overflow: hidden;
+  .user-table-cell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    width: 100%;
 
-    .error-message {
-      padding: 16px 24px;
+    .user-avatar {
+      flex-shrink: 0;
     }
 
-    .empty-state {
-      padding: 60px 20px;
-      text-align: center;
-    }
+    .user-meta {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      flex: 1;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      text-align: left;
+      cursor: pointer;
 
-    .settings-table-wrapper {
-      border: 1px solid var(--gray-150);
-      border-radius: 8px;
-      overflow: hidden;
-      background: var(--gray-0);
+      &:focus-visible {
+        outline: 2px solid var(--main-color);
+        outline-offset: 2px;
+        border-radius: 4px;
+      }
 
-      :deep(.ant-table) {
-        background: transparent;
+      .user-name {
+        font-weight: 500;
+        color: var(--gray-900);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
         font-size: 13px;
+        line-height: 18px;
       }
 
-      :deep(.ant-table-thead > tr > th) {
-        background: var(--gray-50);
-        color: var(--gray-500);
-        font-weight: 500;
+      .user-uid {
         font-size: 12px;
-        padding: 9px 14px;
-        border-bottom: 1px solid var(--gray-150);
-        white-space: nowrap;
-
-        &::before {
-          display: none !important;
-        }
-      }
-
-      :deep(.ant-table-tbody > tr > td) {
-        padding: 10px 14px;
-        color: var(--gray-800);
-        border-bottom: 1px solid var(--gray-100);
-        transition: background 0.15s ease;
-      }
-
-      :deep(.ant-table-tbody > tr:last-child > td) {
-        border-bottom: none;
-      }
-
-      :deep(.ant-table-tbody > tr:hover > td) {
-        background: var(--gray-25) !important;
-      }
-
-      .user-table-cell {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        min-width: 0;
+        color: var(--gray-600);
+        line-height: 14px;
+        font-family: 'JetBrains Mono', 'Fira Code', 'Menlo', monospace;
         width: 100%;
-
-        .user-avatar {
-          flex-shrink: 0;
-        }
-
-        .user-meta {
-          display: flex;
-          flex-direction: column;
-          min-width: 0;
-          flex: 1;
-          padding: 0;
-          border: 0;
-          background: transparent;
-          text-align: left;
-          cursor: pointer;
-
-          &:focus-visible {
-            outline: 2px solid var(--main-color);
-            outline-offset: 2px;
-            border-radius: 4px;
-          }
-
-          .user-name {
-            font-weight: 500;
-            color: var(--gray-900);
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            font-size: 13px;
-            line-height: 18px;
-          }
-
-          .user-uid {
-            font-size: 12px;
-            color: var(--gray-600);
-            line-height: 14px;
-            font-family: 'JetBrains Mono', 'Fira Code', 'Menlo', monospace;
-            width: 100%;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-          }
-        }
-      }
-
-      .role-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        padding: 2px 8px;
-        border-radius: 999px;
-        font-size: 11px;
-        font-weight: 500;
-        line-height: 16px;
-        background: var(--gray-100);
-        color: var(--gray-600);
-        white-space: nowrap;
-
-        svg {
-          flex-shrink: 0;
-        }
-
-        &.superadmin {
-          background: rgba(217, 119, 6, 0.08);
-          color: #d97706;
-        }
-
-        &.admin {
-          background: var(--main-30);
-          color: var(--main-color);
-        }
-      }
-
-      .dept-text,
-      .time-text {
-        color: var(--gray-600);
-        font-size: 12px;
-      }
-
-      .dept-text {
-        display: block;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
+    }
+  }
 
-      .phone-text {
-        font-size: 12px;
-        color: var(--gray-700);
-        font-family: 'JetBrains Mono', 'Fira Code', 'Menlo', monospace;
-      }
+  .role-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 16px;
+    background: var(--gray-100);
+    color: var(--gray-600);
+    white-space: nowrap;
+
+    svg {
+      flex-shrink: 0;
     }
 
-    .pagination-section {
-      display: flex;
-      justify-content: flex-end;
-      margin-top: 16px;
+    &.superadmin {
+      background: var(--color-warning-50);
+      color: var(--color-warning-900);
     }
+
+    &.admin {
+      background: var(--main-30);
+      color: var(--main-color);
+    }
+  }
+
+  .dept-text,
+  .time-text {
+    color: var(--gray-600);
+    font-size: 12px;
+  }
+
+  .dept-text {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .phone-text {
+    font-size: 12px;
+    color: var(--gray-700);
+    font-family: 'JetBrains Mono', 'Fira Code', 'Menlo', monospace;
+  }
+
+  .pagination-section {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 16px;
   }
 }
 
 .user-modal {
   .user-form {
-    .form-item {
-      margin-bottom: 16px;
-
-      :deep(.ant-form-item-label) {
-        padding-bottom: 6px;
-
-      }
-    }
-
-
-
     .password-toggle {
       margin-bottom: 16px;
       padding: 12px 16px;

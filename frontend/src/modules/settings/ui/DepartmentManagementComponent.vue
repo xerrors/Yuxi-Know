@@ -1,12 +1,12 @@
 <template>
-  <div class="department-management">
+  <div class="department-management settings-page">
     <!-- 头部区域 -->
-    <div class="header-section">
-      <div class="header-content">
-        <div class="section-title">部门管理</div>
-        <p class="section-description">管理系统部门，部门下的用户会被隔离管理。</p>
+    <div class="settings-header">
+      <div class="settings-header-copy">
+        <div class="settings-section-title">部门管理</div>
+        <p class="settings-section-description">管理系统部门，部门下的用户会被隔离管理。</p>
       </div>
-      <div class="header-actions">
+      <div class="settings-header-actions">
         <a-button
           @click="handleRefresh"
           :loading="departmentManagement.refreshing"
@@ -17,7 +17,7 @@
             ><RefreshCw :size="16" :class="{ 'yuxi-rotate': departmentManagement.refreshing }"
           /></template>
         </a-button>
-        <a-button type="primary" @click="showAddDepartmentModal" class="add-btn lucide-icon-btn">
+        <a-button type="primary" @click="showAddDepartmentModal" class="lucide-icon-btn">
           <template #icon><Plus :size="16" /></template>
           添加部门
         </a-button>
@@ -25,9 +25,9 @@
     </div>
 
     <!-- 主内容区域 -->
-    <div class="content-section">
+    <div class="settings-management-content">
       <a-spin :spinning="departmentManagement.loading">
-        <div v-if="departmentManagement.error" class="error-message">
+        <div v-if="departmentManagement.error" class="settings-error">
           <a-alert type="error" :message="departmentManagement.error" show-icon />
         </div>
 
@@ -38,13 +38,12 @@
               :columns="columns"
               :rowKey="(record) => record.id"
               :pagination="false"
-              class="settings-table"
             >
               <template #bodyCell="{ column, record }">
                 <template v-if="column.key === 'name'">
-                  <div class="table-cell-title">
-                    <Building2 :size="15" class="cell-icon" />
-                    <span class="cell-main-text" :title="record.name">{{ record.name }}</span>
+                  <div class="settings-table-title">
+                    <Building2 :size="15" class="settings-table-icon" />
+                    <span class="settings-table-name" :title="record.name">{{ record.name }}</span>
                   </div>
                 </template>
                 <template v-if="column.key === 'description'">
@@ -84,7 +83,7 @@
           </div>
         </template>
 
-        <div v-else class="empty-state">
+        <div v-else class="settings-empty">
           <a-empty description="暂无部门数据" />
         </div>
       </a-spin>
@@ -99,10 +98,9 @@
       @cancel="departmentManagement.modalVisible = false"
       :maskClosable="false"
       width="520px"
-      class="department-modal"
     >
-      <a-form layout="vertical" class="department-form" autocomplete="off">
-        <a-form-item label="部门名称" required class="form-item">
+      <a-form layout="vertical" autocomplete="off">
+        <a-form-item label="部门名称" required>
           <a-input
             v-model:value="departmentManagement.form.name"
             placeholder="请输入部门名称"
@@ -111,7 +109,7 @@
           />
         </a-form-item>
 
-        <a-form-item label="部门描述" class="form-item">
+        <a-form-item label="部门描述">
           <a-textarea
             v-model:value="departmentManagement.form.description"
             placeholder="请输入部门描述（可选）"
@@ -128,7 +126,7 @@
             创建部门时必须同时创建管理员，该管理员将负责管理本部门用户
           </p>
 
-          <a-form-item label="管理员UID" required class="form-item">
+          <a-form-item label="管理员UID" required>
             <a-input
               v-model:value="departmentManagement.form.adminUid"
               placeholder="请输入管理员UID（3-20位字母/数字/下划线）"
@@ -144,7 +142,7 @@
             <div v-else class="yuxi-form-help">此 UID 将用于登录</div>
           </a-form-item>
 
-          <a-form-item label="密码" required class="form-item">
+          <a-form-item label="密码" required>
             <a-input-password
               v-model:value="departmentManagement.form.adminPassword"
               :placeholder="`请输入管理员密码（至少 ${MIN_PASSWORD_LENGTH} 位）`"
@@ -156,7 +154,7 @@
             />
           </a-form-item>
 
-          <a-form-item label="确认密码" required class="form-item">
+          <a-form-item label="确认密码" required>
             <a-input-password
               v-model:value="departmentManagement.form.adminConfirmPassword"
               placeholder="请再次输入密码"
@@ -167,7 +165,7 @@
             />
           </a-form-item>
 
-          <a-form-item label="手机号（可选）" class="form-item">
+          <a-form-item label="手机号（可选）">
             <a-input
               v-model:value="departmentManagement.form.adminPhone"
               placeholder="请输入手机号（可用于登录）"
@@ -495,150 +493,26 @@ onMounted(() => {
 
 <style lang="less" scoped>
 .department-management {
-  .header-section {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    gap: 16px;
-    margin-bottom: 16px;
-
-    .header-content {
-      flex: 1;
-      min-width: 0;
-
-      .section-title {
-        font-size: 16px;
-        font-weight: 500;
-        color: var(--gray-900);
-        line-height: 1.4;
-        margin: 12px 0 12px;
-      }
-
-      .section-description {
-        font-size: 14px;
-        color: var(--gray-600);
-        line-height: 1.4;
-        margin: 0;
-      }
-    }
-
-    .header-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-  }
-
-  .content-section {
+  .desc-text {
+    color: var(--gray-500);
+    font-size: 12px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
+    line-height: 1.4;
+  }
 
-    .error-message {
-      padding: 16px 24px;
-    }
-
-    .empty-state {
-      padding: 60px 20px;
-      text-align: center;
-    }
-
-    .settings-table-wrapper {
-      border: 1px solid var(--gray-150);
-      border-radius: 8px;
-      overflow: hidden;
-      background: var(--gray-0);
-
-      :deep(.ant-table) {
-        background: transparent;
-        font-size: 13px;
-      }
-
-      :deep(.ant-table-thead > tr > th) {
-        background: var(--gray-50);
-        color: var(--gray-500);
-        font-weight: 500;
-        font-size: 12px;
-        padding: 9px 14px;
-        border-bottom: 1px solid var(--gray-150);
-        white-space: nowrap;
-
-        &::before {
-          display: none !important;
-        }
-      }
-
-      :deep(.ant-table-tbody > tr > td) {
-        padding: 10px 14px;
-        color: var(--gray-800);
-        border-bottom: 1px solid var(--gray-100);
-        transition: background 0.15s ease;
-      }
-
-      :deep(.ant-table-tbody > tr:last-child > td) {
-        border-bottom: none;
-      }
-
-      :deep(.ant-table-tbody > tr:hover > td) {
-        background: var(--gray-25) !important;
-      }
-
-      .table-cell-title {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        min-width: 0;
-        max-width: 100%;
-
-        .cell-icon {
-          color: var(--gray-400);
-          flex-shrink: 0;
-        }
-
-        .cell-main-text {
-          font-weight: 500;
-          color: var(--gray-900);
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-      }
-
-      .desc-text {
-        color: var(--gray-500);
-        font-size: 12px;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        line-height: 1.4;
-      }
-
-      .count-badge {
-        display: inline-flex;
-        align-items: center;
-        padding: 1px 8px;
-        border-radius: 999px;
-        background: var(--gray-100);
-        color: var(--gray-600);
-        font-size: 12px;
-        font-weight: 500;
-      }
-    }
+  .count-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: var(--gray-100);
+    color: var(--gray-600);
+    font-size: 12px;
+    font-weight: 500;
   }
 }
 
-.department-modal {
-  .department-form {
-    .form-item {
-      margin-bottom: 20px;
-
-      :deep(.ant-form-item-label) {
-        padding-bottom: 4px;
-
-      }
-    }
-  }
-
-
-
-}
 </style>

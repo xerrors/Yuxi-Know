@@ -5,7 +5,7 @@ async (page) => {
   await page.locator('.user-info-dropdown').click()
   await page.getByRole('menuitem', { name: '设置', exact: true }).click()
   await page.locator('.settings-sider').getByText('基本设置', { exact: true }).click()
-  const row = page.locator('.setting-row').filter({ has: page.getByText('默认对话模型', { exact: true }) })
+  const row = page.locator('.settings-form-row').filter({ has: page.getByText('默认对话模型', { exact: true }) })
   const button = row.locator('.status-check-button')
   const initialWidth = (await button.boundingBox()).width
   check((await button.textContent()).trim().replace(/\s/g, '') === '检查', '初始按钮显示检查')

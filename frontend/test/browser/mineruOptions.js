@@ -4,7 +4,7 @@
 async page => {
   const check = (value, message) => { if (!value) throw new Error(message) }
   const panel = page.locator('.ocr-settings-section')
-  const card = panel.locator('.option-card').filter({ has: page.getByRole('heading', { name: 'MinerU 服务', exact: true }) })
+  const card = panel.locator('.settings-service-card').filter({ has: page.getByRole('heading', { name: 'MinerU 服务', exact: true }) })
   const open = async () => {
     await page.locator('.user-info-dropdown:visible').click()
     await page.getByRole('menuitem', { name: '设置', exact: true }).click()

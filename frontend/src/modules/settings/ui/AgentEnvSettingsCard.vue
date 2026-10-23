@@ -1,19 +1,20 @@
 <template>
-  <div class="agent-env-settings">
+  <div class="agent-env-settings settings-page">
     <UserSandboxSettingsCard ref="sandboxSettings" />
-    <div class="header-section">
-      <div class="header-content">
-        <div class="section-title">环境变量</div>
-        <p class="section-description">管理账户级环境变量，保存后对新启动的运行生效。</p>
+    <div class="settings-header">
+      <div class="settings-header-copy">
+        <div class="settings-section-title">环境变量</div>
+        <p class="settings-section-description">管理账户级环境变量，保存后对新启动的运行生效。</p>
       </div>
-      <div class="header-actions">
+      <div class="settings-header-actions">
         <a-button
-          class="refresh-btn lucide-icon-btn"
+          class="yuxi-refresh-button"
           :loading="loading"
           title="刷新"
+          aria-label="刷新环境变量"
           @click="loadAgentEnv"
         >
-          <template #icon><RefreshCw :size="16" :class="{ spin: loading }" /></template>
+          <template #icon><RefreshCw :size="16" :class="{ 'yuxi-rotate': loading }" /></template>
         </a-button>
         <a-button
           :loading="verifying"
@@ -215,67 +216,6 @@ onMounted(loadAgentEnv)
 
 <style lang="less" scoped>
 .agent-env-settings {
-  padding-top: 12px;
-
-  .header-section {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    gap: 16px;
-    margin-bottom: 14px;
-
-    @media (max-width: 760px) {
-      align-items: stretch;
-      flex-direction: column;
-    }
-  }
-
-  .header-content {
-    flex: 1;
-    min-width: 0;
-
-    .section-title {
-      font-size: 16px;
-      font-weight: 500;
-      color: var(--gray-900);
-      line-height: 1.4;
-      margin: 0 0 6px;
-    }
-
-    .section-description {
-      font-size: 14px;
-      color: var(--gray-600);
-      line-height: 1.4;
-      margin: 0;
-    }
-  }
-
-  .header-actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
-    flex-wrap: wrap;
-
-    .refresh-btn {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 32px;
-      height: 32px;
-      border-radius: 6px;
-      transition: all 0.2s ease;
-
-      &:hover {
-        background: var(--gray-25);
-      }
-
-      .spin {
-        animation: spin 1s linear infinite;
-      }
-    }
-  }
-
   .env-tip {
     margin-bottom: 14px;
     padding: 8px 12px;
@@ -299,20 +239,6 @@ onMounted(loadAgentEnv)
     color: var(--gray-600);
     font-size: 12px;
     margin-bottom: 14px;
-  }
-}
-
-:deep(.spin) {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
   }
 }
 </style>

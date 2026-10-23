@@ -8,6 +8,7 @@
 @import './antd.less';
 @import './empty.less';
 @import './management-controls.less';
+@import './settings.less';
 
 :root {
   --header-height: 45px;

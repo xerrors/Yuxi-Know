@@ -39,7 +39,7 @@ async page => {
   })
   await page.goto(`${origin}/test/browser/webSearchSettings.html`)
   const panel = page.locator('.web-settings')
-  const cards = panel.locator('.option-card')
+  const cards = panel.locator('.settings-service-card')
   await cards.nth(0).locator('input').waitFor()
   check(await cards.count() === 3, '供应商卡片数量错误')
   check(await cards.locator('input:not([disabled])').count() === 0, '默认界面仍有可编辑测试表单')
@@ -114,10 +114,15 @@ async page => {
   await page.evaluate(() => window.webSettingsTheme.setTheme('dark'))
   await page.waitForFunction(() => getComputedStyle(document.querySelector('.ant-select-selector')).backgroundColor === 'rgb(3, 3, 3)')
   await page.screenshot({ path: '/tmp/yuxi-web-search-simple-dark.png', fullPage: true, animations: 'disabled' })
-  await page.setViewportSize({ width: 390, height: 844 })
+  await page.setViewportSize({ width: 768, height: 1000 })
   check(await panel.evaluate(el => el.scrollWidth <= el.clientWidth + 1), '窄屏出现横向溢出')
-  await page.waitForFunction(() => [...document.querySelectorAll('.option-actions')].every(el => getComputedStyle(el).opacity === '1'))
-  await page.screenshot({ path: '/tmp/yuxi-web-search-simple-mobile.png', fullPage: true, animations: 'disabled' })
+  await panel.evaluate(el => { el.style.maxWidth = '500px' })
+  await page.waitForFunction(() => {
+    const actions = [...document.querySelectorAll('.settings-service-actions')]
+    return actions.length === 3 && actions.every(el => getComputedStyle(el).opacity === '1')
+  })
+  await panel.evaluate(el => el.style.removeProperty('max-width'))
+  await page.screenshot({ path: '/tmp/yuxi-web-search-simple-narrow.png', fullPage: true, animations: 'disabled' })
   await page.unroute('**/api/**')
   return { configurationWrites: writes.length, requests: tests.length, screenshots: 3 }
 }

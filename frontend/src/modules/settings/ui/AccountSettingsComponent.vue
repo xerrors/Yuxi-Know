@@ -1,17 +1,24 @@
 <template>
-  <div class="account-settings">
-    <div class="header-section">
-      <div class="header-content">
-        <div class="section-title">账户设置</div>
-        <p class="section-description">管理当前账户资料、身份信息。</p>
+  <div class="account-settings settings-page">
+    <div class="settings-header">
+      <div class="settings-header-copy">
+        <div class="settings-section-title">账户设置</div>
+        <p class="settings-section-description">管理当前账户资料、身份信息。</p>
       </div>
-      <a-button class="lucide-icon-btn" :loading="refreshing" @click="refreshProfile">
-        <template #icon><RefreshCw :size="16" :class="{ spin: refreshing }" /></template>
-        刷新
-      </a-button>
+      <div class="settings-header-actions">
+        <a-button
+          class="yuxi-refresh-button"
+          :loading="refreshing"
+          aria-label="刷新账户资料"
+          title="刷新"
+          @click="refreshProfile"
+        >
+          <template #icon><RefreshCw :size="16" :class="{ 'yuxi-rotate': refreshing }" /></template>
+        </a-button>
+      </div>
     </div>
 
-    <div class="account-card profile-card">
+    <div class="settings-surface-card profile-card">
       <div class="profile-summary">
         <div class="profile-left">
           <a-upload
@@ -33,7 +40,7 @@
               />
               <div class="avatar-mask">
                 <Upload v-if="!avatarUploading" :size="16" />
-                <RefreshCw v-else :size="16" class="spin" />
+                <RefreshCw v-else :size="16" class="yuxi-rotate" />
                 <span>{{ userStore.avatar ? '更换' : '上传' }}</span>
               </div>
             </div>
@@ -349,17 +356,6 @@ watch(() => [userStore.username, userStore.phoneNumber], syncProfileDraft, { imm
 
 <style lang="less" scoped>
 .account-settings {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-
-  .account-card {
-    padding: 16px;
-    border-radius: 12px;
-    background: var(--gray-0);
-    border: 1px solid var(--gray-150);
-  }
-
   .profile-card {
     display: flex;
     flex-direction: column;
@@ -554,22 +550,6 @@ watch(() => [userStore.username, userStore.phoneNumber], syncProfileDraft, { imm
     font-family: 'Monaco', 'Consolas', monospace;
   }
 
-  .apikey-card {
-    padding: 16px;
-  }
 }
 
-:deep(.spin) {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
-  }
-}
 </style>

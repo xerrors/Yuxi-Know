@@ -1,6 +1,6 @@
 <template>
   <div class="env-editor-container">
-    <div class="settings-table-wrapper">
+    <div class="settings-table-surface">
       <div class="env-table-header">
         <div class="col-key">变量名 (KEY)</div>
         <div class="col-value">变量值 (VALUE)</div>
@@ -56,7 +56,7 @@
                 type="text"
                 size="small"
                 danger
-                class="action-btn lucide-icon-btn"
+                class="yuxi-table-action lucide-icon-btn"
                 @click="removeRow(index)"
               >
                 <Trash2 :size="14" />
@@ -244,12 +244,7 @@ watch(
   gap: 12px;
 }
 
-.settings-table-wrapper {
-  border: 1px solid var(--gray-150);
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--gray-0);
-
+.settings-table-surface {
   .env-table-header {
     display: flex;
     align-items: center;
@@ -330,9 +325,6 @@ watch(
     .env-value-toggle {
       position: absolute;
       right: 6px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
       width: 22px;
       height: 22px;
       color: var(--gray-400);
@@ -340,22 +332,6 @@ watch(
       &:hover {
         color: var(--gray-700);
       }
-    }
-  }
-
-  .action-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 26px;
-    height: 26px;
-    border-radius: 6px;
-    color: var(--gray-400);
-    transition: all 0.15s ease;
-
-    &:hover:not(:disabled) {
-      background: var(--color-error-50, #fff2f0);
-      color: var(--color-error-500, #ff4d4f);
     }
   }
 
@@ -370,19 +346,5 @@ watch(
 .env-editor-footer {
   display: flex;
   align-items: center;
-
-  .add-env-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 13px;
-    color: var(--gray-700);
-    border-radius: 6px;
-
-    &:hover {
-      color: var(--gray-900);
-      border-color: var(--gray-300);
-    }
-  }
 }
 </style>

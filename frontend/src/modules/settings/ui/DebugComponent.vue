@@ -1223,32 +1223,6 @@ const reloadAllStores = async () => {
   }
 }
 
-/* 按钮通用重置与 Icon 完美居中 */
-:deep(.ant-btn) {
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 4px;
-  border-radius: 4px;
-  line-height: 1;
-  vertical-align: middle;
-
-  .ant-btn-icon,
-  .anticon {
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    line-height: 1;
-    margin-right: 0 !important;
-  }
-
-  svg {
-    display: inline-block;
-    vertical-align: middle;
-    flex-shrink: 0;
-  }
-}
-
 /* 顶部单行 Header */
 .panel-header {
   display: flex;
@@ -1562,33 +1536,23 @@ const reloadAllStores = async () => {
   padding: 0 8px;
   font-size: 11.5px;
   border-radius: 4px;
-  border: 1px solid var(--gray-300);
-  background: var(--gray-0);
-  color: var(--gray-800);
   transition: all 0.15s ease;
 
-  &:hover {
-    border-color: var(--gray-500);
-    color: var(--gray-1000);
-    background: var(--gray-50);
+  &:not(.ant-btn-primary) {
+    border: 1px solid var(--gray-300);
+    background: var(--gray-0);
+    color: var(--gray-800);
+
+    &:hover {
+      border-color: var(--gray-500);
+      color: var(--gray-1000);
+      background: var(--gray-50);
+    }
   }
 
   &.icon-only {
     width: 26px;
     padding: 0;
-  }
-
-  &.ant-btn-primary,
-  &.auto-refresh-btn.auto-refreshing {
-    background: var(--second-50) !important;
-    border-color: var(--second-300) !important;
-    color: var(--second-1000) !important;
-
-    &:hover {
-      background: var(--second-100) !important;
-      border-color: var(--second-400) !important;
-      color: var(--second-1000) !important;
-    }
   }
 
   &.danger {
@@ -2177,7 +2141,7 @@ const reloadAllStores = async () => {
     flex-direction: column !important;
     border: 1px solid var(--gray-300) !important;
     background: var(--gray-0) !important;
-    box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.25) !important;
+    box-shadow: var(--shadow-popover) !important;
   }
 
   .ant-modal-body {

@@ -1,9 +1,9 @@
 <template>
-  <section class="sandbox-settings" aria-label="Agent 环境">
-    <div class="sandbox-heading">
-      <div>
-        <h3>Agent 环境</h3>
-        <p>{{ ephemeral ? '每个任务独立临时环境，任务结束后销毁' : '所有对话共享此环境' }}</p>
+  <section class="sandbox-settings settings-section-block" aria-label="Agent 环境">
+    <div class="settings-header">
+      <div class="settings-header-copy">
+        <h3 class="settings-section-title">Agent 环境</h3>
+        <p class="settings-section-description">{{ ephemeral ? '每个任务独立临时环境，任务结束后销毁' : '所有对话共享此环境' }}</p>
       </div>
       <a-button
         class="sandbox-icon-button"
@@ -80,7 +80,7 @@
         </div>
       </div>
     </div>
-    <p v-if="diskError" class="sandbox-description" role="alert">{{ diskError }}</p>
+    <p v-if="diskError" class="settings-section-description" role="alert">{{ diskError }}</p>
     <a-alert v-if="error" type="error" :message="error" show-icon />
     <ul v-if="status?.active_runs?.length" class="sandbox-runs">
       <li v-for="run in status.active_runs" :key="run.id">
@@ -93,7 +93,7 @@
         >
       </li>
     </ul>
-    <p v-if="status?.active_operations" class="sandbox-description">
+    <p v-if="status?.active_operations" class="settings-section-description">
       活动操作及待清理命令：{{ status.active_operations }} 项。
     </p>
   </section>
@@ -267,35 +267,12 @@ defineExpose({ refresh })
 </script>
 
 <style scoped>
-.sandbox-settings {
-  margin-bottom: 28px;
-}
-.sandbox-heading,
 .sandbox-state-row,
 .sandbox-disk,
 .sandbox-runs li {
   display: flex;
   align-items: center;
   gap: 12px;
-}
-.sandbox-heading {
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 16px;
-}
-.sandbox-heading h3 {
-  margin: 0;
-  color: var(--color-text);
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 24px;
-}
-.sandbox-heading p,
-.sandbox-description {
-  margin: 6px 0 0;
-  color: var(--color-text-secondary);
-  font-size: 12px;
-  line-height: 20px;
 }
 .sandbox-overview {
   margin-bottom: 12px;
@@ -365,9 +342,6 @@ defineExpose({ refresh })
   width: 32px;
   height: 32px;
   flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
 }
 .sandbox-rebuild {
   color: var(--color-error-700);
@@ -376,7 +350,6 @@ defineExpose({ refresh })
   color: var(--color-text-secondary);
   cursor: not-allowed;
 }
-.sandbox-description,
 .sandbox-settings > :deep(.ant-alert) {
   margin-bottom: 12px;
 }

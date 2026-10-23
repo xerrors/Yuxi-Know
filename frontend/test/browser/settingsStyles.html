@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>设置共享样式验证</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp, defineAsyncComponent, h, nextTick, reactive } from 'vue'
+      import { createPinia } from 'pinia'
+      import { createMemoryHistory, createRouter } from 'vue-router'
+      import Antd, { ConfigProvider } from 'ant-design-vue'
+      import SettingsModal from '../../src/modules/settings/ui/SettingsModal.vue'
+      import AccountSettings from '../../src/modules/settings/ui/AccountSettingsComponent.vue'
+      import ApiKeyManagement from '../../src/modules/settings/ui/ApiKeyManagementComponent.vue'
+      import UserManagement from '../../src/modules/settings/ui/UserManagementComponent.vue'
+      import DepartmentManagement from '../../src/modules/settings/ui/DepartmentManagementComponent.vue'
+      import { useConfigStore } from '../../src/modules/settings/model/config.js'
+      import { useUserStore } from '../../src/modules/identity/model/user.js'
+      import { useThemeStore } from '../../src/shared/model/theme.js'
+      import '../../src/assets/css/main.css'
+
+      const state = reactive({ mode: 'modal', panel: 'account', revision: 0 })
+      const standalonePanels = {
+        account: AccountSettings,
+        apiKeys: ApiKeyManagement,
+        user: UserManagement,
+        department: DepartmentManagement,
+        schedules: defineAsyncComponent(() => import('../../src/modules/agents/ui/ScheduledAgentEditor.vue')),
+        skill: defineAsyncComponent(() => import('../../src/modules/extensions/ui/SkillDetailView.vue')),
+        providers: defineAsyncComponent(() => import('../../src/modules/settings/ui/ModelProviderManagePanel.vue')),
+        debug: defineAsyncComponent(() => import('../../src/modules/settings/ui/DebugComponent.vue'))
+      }
+      const pinia = createPinia()
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [
+          { path: '/skills/:slug', component: { render: () => null } },
+          { path: '/:pathMatch(.*)*', component: { render: () => null } }
+        ]
+      })
+      let theme
+      const app = createApp({
+        render: () => h(ConfigProvider, { theme: theme.currentTheme }, {
+          default: () => state.mode === 'modal'
+            ? h(SettingsModal, { visible: true, initialTab: state.panel, key: state.revision })
+            : h('main', {
+              id: 'settings-standalone',
+              style: 'max-width:1100px;margin:24px auto;padding:24px;min-width:0'
+            }, [h(standalonePanels[state.panel], { key: state.revision, ...(state.panel === 'debug' ? { show: true } : {}) })])
+        })
+      })
+      app.use(pinia)
+      app.use(Antd)
+      app.use(router)
+      app.provide('settingsModal', { closeSettingsModal() {} })
+      const user = useUserStore()
+      user.token = 'settings-style-browser-fixture'
+      user.userId = 101
+      user.username = '设置样式验证用户'
+      user.uid = 'fixture-settings-user'
+      user.userRole = 'superadmin'
+      user.departmentName = '知识平台研发与长名称布局验证部门'
+      theme = useThemeStore()
+      theme.setTheme('light')
+      await useConfigStore().refreshConfig()
+      await router.isReady()
+      app.mount('#app')
+      window.settingsStyles = {
+        setTheme: (value) => theme.setTheme(value),
+        destroy: () => app.unmount(),
+        async mount(mode, panel) {
+          if (mode === 'standalone' && !standalonePanels[panel]) throw new Error('未知独立面板')
+          if (panel === 'skill') await router.replace('/skills/settings-style-fixture')
+          state.mode = mode
+          state.panel = panel
+          state.revision++
+          await nextTick()
+        }
+      }
+    </script>
+  </body>
+</html>

@@ -1,127 +1,144 @@
 <template>
-  <div class="ocr-settings-section">
-    <div class="section-title">默认 OCR 方法</div>
-    <section class="settings-panel">
-      <div class="setting-row">
-        <div class="setting-copy">
-          <div class="setting-label">{{ items?.default_ocr_engine?.des || '默认 OCR 解析引擎' }}</div>
-          <p class="setting-description">未单独指定解析方式时，使用此引擎识别文档内容与版面。</p>
-        </div>
-        <div class="setting-content is-compact">
-          <OCRSelector
-            :model-value="configStore.config?.default_ocr_engine"
-            @update:model-value="configStore.setConfigValue('default_ocr_engine', $event)"
-          />
-        </div>
-      </div>
-    </section>
-
-    <div class="section-title">OCR 服务配置</div>
-    <p class="section-description">
-      地址留空时读取对应环境变量，凭据留空时保留原值，解析选项使用所选值。
-    </p>
-    <div class="option-list">
-      <section v-for="option in configOptions" :key="option.key" class="option-card">
-        <header class="option-header">
-          <div class="option-heading">
-            <div class="option-title">
-              <h4>{{ option.name }}</h4>
-              <span v-if="option.params.fields.length === 1" class="option-field-name">
-                {{ option.params.fields[0].label }}
-              </span>
+  <div class="ocr-settings-section settings-page">
+    <section class="settings-section-block">
+      <h3 class="settings-section-title">默认 OCR 方法</h3>
+      <section class="settings-form-panel">
+        <div class="settings-form-row">
+          <div class="settings-form-copy">
+            <div class="settings-form-label">
+              {{ items?.default_ocr_engine?.des || '默认 OCR 解析引擎' }}
             </div>
-            <p>{{ option.description }}</p>
+            <p class="settings-form-description">
+              未单独指定解析方式时，使用此引擎识别文档内容与版面。
+            </p>
           </div>
-          <div class="option-actions" :class="{ editing: editingKey === option.key }">
-            <template v-if="editingKey === option.key">
-              <a-button size="small" :disabled="savingOption === option.key" @click="cancelEditing">
-                取消
-              </a-button>
-              <a-button
-                type="primary"
-                size="small"
-                class="save-button"
-                :loading="savingOption === option.key"
-                @click="saveOption(option)"
-              >
-                保存
-              </a-button>
-            </template>
-            <a-button
-              v-else
-              type="text"
-              size="small"
-              :disabled="Boolean(editingKey)"
-              @click="startEditing(option)"
-            >
-              编辑
-            </a-button>
-          </div>
-        </header>
-        <div v-if="editingKey === option.key" class="option-fields">
-          <div
-            v-for="field in option.params.fields"
-            :key="field.key"
-            class="option-field"
-          >
-            <label
-              v-if="option.params.fields.length > 1"
-              :for="`${option.key}-${field.key}`"
-              class="setting-label"
-            >{{ field.label }}</label>
-            <a-input-password
-              v-if="field.sensitive"
-              :id="`${option.key}-${field.key}`"
-              v-model:value="draftValue[field.key]"
-              :aria-label="field.label"
-              :placeholder="field.environment"
-              autocomplete="new-password"
-              :disabled="clearedFields[field.key]"
-            />
-            <a-select
-              v-else-if="field.choices"
-              :id="`${option.key}-${field.key}`"
-              v-model:value="draftValue[field.key]"
-              :aria-label="field.label"
-              :options="
-                field.choices.map((value) => ({
-                  value,
-                  label: field.choice_labels?.[value] || value,
-                }))
-              "
-            />
-            <a-input
-              v-else
-              :id="`${option.key}-${field.key}`"
-              v-model:value="draftValue[field.key]"
-              :aria-label="field.label"
-              :placeholder="field.placeholder || field.environment"
-              allow-clear
-            />
-            <small>
-              {{ field.sensitive ? '留空保持现有凭据；勾选清除会移除数据库中的值。' : field.help }}
-            </small>
-            <a-checkbox
-              v-if="field.sensitive && option.sensitive_state?.[field.key]?.source === 'database'"
-              v-model:checked="clearedFields[field.key]"
-            >
-              清除已保存凭据
-            </a-checkbox>
-          </div>
-        </div>
-        <div v-else class="option-fields option-values">
-          <div v-for="field in option.params.fields" :key="field.key" class="option-field">
-            <span v-if="option.params.fields.length > 1" class="setting-label">{{ field.label }}</span>
-            <a-input
-              :aria-label="field.label"
-              :value="getFieldDisplay(option, field)"
-              :class="{ 'masked-value': field.sensitive }"
-              disabled
+          <div class="settings-form-control is-compact">
+            <OCRSelector
+              :model-value="configStore.config?.default_ocr_engine"
+              @update:model-value="configStore.setConfigValue('default_ocr_engine', $event)"
             />
           </div>
         </div>
       </section>
-    </div>
+    </section>
+
+    <section class="settings-section-block">
+      <h3 class="settings-section-title">OCR 服务配置</h3>
+      <p class="settings-section-description">
+      地址留空时读取对应环境变量，凭据留空时保留原值，解析选项使用所选值。
+      </p>
+      <div class="settings-service-list">
+        <section v-for="option in configOptions" :key="option.key" class="settings-service-card">
+          <header class="settings-service-header">
+            <div class="settings-service-heading">
+              <div class="settings-service-title">
+                <h4>{{ option.name }}</h4>
+                <span v-if="option.params.fields.length === 1" class="settings-service-field-name">
+                  {{ option.params.fields[0].label }}
+                </span>
+              </div>
+              <p class="settings-service-description">{{ option.description }}</p>
+            </div>
+            <div class="settings-service-actions" :class="{ editing: editingKey === option.key }">
+              <template v-if="editingKey === option.key">
+                <a-button
+                  size="small"
+                  :disabled="savingOption === option.key"
+                  @click="cancelEditing"
+                >
+                  取消
+                </a-button>
+                <a-button
+                  type="primary"
+                  size="small"
+                  :loading="savingOption === option.key"
+                  @click="saveOption(option)"
+                >
+                  保存
+                </a-button>
+              </template>
+              <a-button
+                v-else
+                type="text"
+                size="small"
+                :disabled="Boolean(editingKey)"
+                @click="startEditing(option)"
+              >
+                编辑
+              </a-button>
+            </div>
+          </header>
+          <div v-if="editingKey === option.key" class="settings-service-fields">
+            <div
+              v-for="field in option.params.fields"
+              :key="field.key"
+              class="settings-service-field"
+            >
+              <label
+                v-if="option.params.fields.length > 1"
+                :for="`${option.key}-${field.key}`"
+                class="settings-form-label"
+              >{{ field.label }}</label>
+              <a-input-password
+                v-if="field.sensitive"
+                :id="`${option.key}-${field.key}`"
+                v-model:value="draftValue[field.key]"
+                :aria-label="field.label"
+                :placeholder="field.environment"
+                autocomplete="new-password"
+                :disabled="clearedFields[field.key]"
+              />
+              <a-select
+                v-else-if="field.choices"
+                :id="`${option.key}-${field.key}`"
+                v-model:value="draftValue[field.key]"
+                :aria-label="field.label"
+                :options="
+                  field.choices.map((value) => ({
+                    value,
+                    label: field.choice_labels?.[value] || value,
+                  }))
+                "
+              />
+              <a-input
+                v-else
+                :id="`${option.key}-${field.key}`"
+                v-model:value="draftValue[field.key]"
+                :aria-label="field.label"
+                :placeholder="field.placeholder || field.environment"
+                allow-clear
+              />
+              <small>
+                {{ field.sensitive ? '留空保持现有凭据；勾选清除会移除数据库中的值。' : field.help }}
+              </small>
+              <a-checkbox
+                v-if="field.sensitive && option.sensitive_state?.[field.key]?.source === 'database'"
+                v-model:checked="clearedFields[field.key]"
+              >
+                清除已保存凭据
+              </a-checkbox>
+            </div>
+          </div>
+          <div v-else class="settings-service-fields">
+            <div
+              v-for="field in option.params.fields"
+              :key="field.key"
+              class="settings-service-field"
+            >
+              <span v-if="option.params.fields.length > 1" class="settings-form-label">{{
+                field.label
+              }}</span>
+              <a-input
+                :aria-label="field.label"
+                :value="getFieldDisplay(option, field)"
+                :class="{ 'settings-masked-value': field.sensitive }"
+                disabled
+              />
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -213,16 +230,3 @@ const saveOption = async (option) => {
 
 onMounted(loadConfigOptions)
 </script>
-
-<style lang="less" scoped>
-.ocr-settings-section { container: settings-services / inline-size; }
-.section-description {
-  margin: 0 0 12px;
-  color: var(--color-text-secondary);
-  font-size: 12px;
-  line-height: 1.6;
-}
-</style>
-
-<style lang="less" scoped src="./settings-form.less"></style>
-<style lang="less" scoped src="./settings-service-card.less"></style>

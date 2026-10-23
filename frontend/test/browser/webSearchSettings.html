@@ -10,8 +10,7 @@ import Antd, { ConfigProvider } from 'ant-design-vue'
 import { useThemeStore } from '../../src/shared/model/theme.js'
 import SettingsModal from '../../src/modules/settings/ui/SettingsModal.vue'
 import { useUserStore } from '../../src/modules/identity/model/user.js'
-import '../../src/assets/css/base.css'
-import '../../src/assets/css/base.dark.css'
+import '../../src/assets/css/main.css'
 const pinia = createPinia()
 let theme
 const app = createApp({ render: () => h(ConfigProvider, { theme: theme.currentTheme }, { default: () => h(SettingsModal, { visible: true, initialTab: 'webSearch' }) }) })

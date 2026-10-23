@@ -14,7 +14,7 @@
       @click.prevent.stop
     >
       <span class="ocr-selector-trigger-text">{{ selectedEngineLabel }}</span>
-      <RefreshCw v-if="healthLoading" :size="13" class="spin" aria-label="正在检测 OCR 状态" />
+      <RefreshCw v-if="healthLoading" :size="13" class="yuxi-rotate" aria-label="正在检测 OCR 状态" />
       <ChevronDown v-else :size="14" />
     </button>
 
@@ -254,7 +254,7 @@ onMounted(() => {
   border: 1px solid var(--gray-100);
   border-radius: 8px;
   background: var(--gray-0);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-popover);
 }
 
 .ocr-selector-header {
@@ -391,24 +391,10 @@ onMounted(() => {
   text-align: center;
 }
 
-.spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .ocr-selector-trigger,
   .ocr-selector-option {
     transition: none;
-  }
-
-  .spin {
-    animation: none;
   }
 }
 </style>

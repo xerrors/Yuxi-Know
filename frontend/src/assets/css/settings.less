@@ -1,0 +1,352 @@
+/* 显式类由设置面板主动使用，浮层容器不接管后代的通用类名。 */
+.settings-page {
+  min-width: 0;
+  container: settings-page / inline-size;
+}
+
+.settings-section-block {
+  margin-bottom: 24px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.settings-section-title {
+  margin: 0 0 12px;
+  color: var(--gray-900);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.settings-section-description,
+.settings-form-description,
+.settings-service-description,
+.settings-service-field small {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.settings-section-description {
+  margin: 0 0 12px;
+}
+
+.settings-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+
+  .settings-section-title {
+    margin-bottom: 6px;
+  }
+
+  .settings-section-description {
+    margin-bottom: 0;
+  }
+}
+
+.settings-header-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-header-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@container settings-page (max-width: 520px) {
+  .settings-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+.settings-surface-card,
+.settings-form-panel,
+.settings-service-card,
+.settings-table-surface,
+.settings-table-wrapper {
+  border: 1px solid var(--gray-150);
+  border-radius: 8px;
+  background: var(--gray-0);
+}
+
+.settings-surface-card,
+.settings-service-card {
+  padding: 16px;
+}
+
+.settings-form-panel {
+  container: settings-form / inline-size;
+}
+
+.settings-form-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 14px 16px;
+
+  & + .settings-form-row {
+    border-top: 1px solid var(--gray-150);
+  }
+}
+
+.settings-form-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-form-label {
+  color: var(--gray-900);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.settings-form-description {
+  margin: 4px 0 0;
+}
+
+.settings-form-control {
+  flex: 0 1 340px;
+  width: 340px;
+  max-width: 100%;
+  min-width: 0;
+
+  &.is-compact {
+    flex-basis: 260px;
+    width: 260px;
+  }
+
+  &.is-number {
+    flex: none;
+    width: 88px;
+  }
+
+  > .ant-select,
+  > .ant-input-number {
+    width: 100%;
+  }
+}
+
+@container settings-form (max-width: 520px) {
+  .settings-form-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .settings-form-control {
+    flex: none;
+    width: 100%;
+    max-width: 340px;
+
+    &.is-compact {
+      flex: none;
+      width: 100%;
+      max-width: 260px;
+    }
+
+    &.is-number {
+      width: 88px;
+    }
+  }
+}
+
+.settings-service-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  container: settings-services / inline-size;
+}
+
+.settings-service-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+
+  h4 {
+    margin: 0;
+    color: var(--gray-900);
+    font-size: 14px;
+    font-weight: 500;
+  }
+}
+
+.settings-service-heading {
+  min-width: 0;
+}
+
+.settings-service-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.settings-service-description {
+  margin: 4px 0 0;
+}
+
+.settings-service-field-name {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.settings-service-actions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 8px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.settings-service-card:hover .settings-service-actions,
+.settings-service-card:focus-within .settings-service-actions,
+.settings-service-actions.editing {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.settings-service-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+
+.settings-service-field {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 6px;
+
+  &:only-child {
+    grid-column: 1 / -1;
+  }
+}
+
+/* 凭据概览用禁用控件展示，编辑态仍由 Ant Design 主题拥有。 */
+.settings-service-field .ant-input:disabled {
+  color: var(--gray-600);
+  -webkit-text-fill-color: var(--gray-600);
+}
+
+.settings-service-field .ant-input:disabled,
+.settings-service-field .ant-input-affix-wrapper-disabled {
+  background: var(--gray-25);
+}
+
+.settings-masked-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: 0.02em;
+}
+
+@container settings-services (max-width: 520px) {
+  .settings-service-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-service-header {
+    flex-wrap: wrap;
+  }
+
+  .settings-service-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+@media (hover: none) {
+  .settings-service-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.settings-management-content {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.settings-error {
+  margin-bottom: 16px;
+}
+
+.settings-empty {
+  padding: 48px 0;
+  text-align: center;
+}
+
+.settings-table-surface,
+.settings-table-wrapper {
+  overflow: hidden;
+}
+
+.settings-table-wrapper {
+  .ant-table {
+    background: transparent;
+    font-size: 13px;
+  }
+
+  .ant-table-thead > tr > th {
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--gray-150);
+    background: var(--gray-50);
+    color: var(--gray-500);
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+
+    &::before {
+      display: none;
+    }
+  }
+
+  .ant-table-tbody > tr > td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--gray-100);
+    color: var(--gray-800);
+    transition: background 0.15s ease;
+  }
+
+  .ant-table-tbody > tr:last-child > td {
+    border-bottom: none;
+  }
+
+  .ant-table-tbody > tr > td.ant-table-cell-row-hover {
+    background: var(--gray-25);
+  }
+}
+
+.settings-table-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.settings-table-icon {
+  flex-shrink: 0;
+  color: var(--gray-400);
+}
+
+.settings-table-name {
+  overflow: hidden;
+  color: var(--gray-900);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

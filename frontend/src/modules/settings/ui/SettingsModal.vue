@@ -407,7 +407,6 @@ watch(
   }
 }
 
-/* Sidebar Styles - Matching SettingView.vue style */
 .settings-sider {
   width: 176px;
   height: 100%;
@@ -461,10 +460,8 @@ watch(
     margin-top: auto;
     padding: 14px 12px 12px;
     border-radius: 12px;
-    border: 1px solid rgba(4, 106, 130, 0.12);
-    background:
-      radial-gradient(circle at top right, rgba(95, 174, 194, 0.18), transparent 48%),
-      linear-gradient(180deg, var(--main-5) 0%, var(--gray-0) 100%);
+    border: 1px solid var(--gray-150);
+    background: var(--gray-0);
     overflow: hidden;
   }
 
@@ -482,7 +479,7 @@ watch(
     gap: 6px;
     padding: 4px 8px;
     border-radius: 999px;
-    background: rgba(4, 106, 130, 0.08);
+    background: var(--main-30);
     color: var(--main-700);
     font-size: 12px;
     font-weight: 600;
@@ -494,7 +491,7 @@ watch(
     height: 24px;
     border: none;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.72);
+    background: var(--gray-50);
     color: var(--gray-600);
     display: flex;
     align-items: center;
@@ -556,8 +553,7 @@ watch(
   }
 
   .settings-content {
-    padding: 16px 16px; /* Keep inner readability without outer panel padding */
-    // margin-bottom: 40px; /* Matches SettingView .setting margin-bottom */
+    padding: 16px;
     overflow-y: scroll;
     height: auto;
     flex: 1;
@@ -565,55 +561,6 @@ watch(
 
     > div:has(> .async-panel-loading) {
       height: 100%;
-    }
-
-    .model-providers-section,
-    .user-management,
-    .department-management,
-    .apikey-management {
-      min-height: auto;
-    }
-
-    .header-section {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-end;
-      gap: 16px;
-      margin-bottom: 16px;
-    }
-
-    .header-content {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .section-title {
-      font-size: 16px;
-      font-weight: 500;
-      color: var(--gray-900);
-      line-height: 1.4;
-      margin: 12px 0 12px;
-    }
-
-    .section-description {
-      font-size: 14px;
-      color: var(--gray-600);
-      line-height: 1.4;
-      margin: 0;
-    }
-
-    .section-subtitle {
-      margin: 0;
-      font-size: 16px;
-      font-weight: 500;
-      color: var(--gray-900);
-    }
-
-    .add-btn {
-      flex-shrink: 0;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
     }
 
     @media (max-width: 900px) {

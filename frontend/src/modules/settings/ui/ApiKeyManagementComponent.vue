@@ -1,14 +1,14 @@
 <template>
-  <div class="apikey-management">
+  <div class="apikey-management settings-page">
     <!-- 头部区域 -->
-    <div class="header-section">
-      <div class="header-content">
-        <div class="section-title">API Key 管理</div>
-        <p class="section-description">
+    <div class="settings-header">
+      <div class="settings-header-copy">
+        <div class="settings-section-title">API Key 管理</div>
+        <p class="settings-section-description">
           用于外部系统调用 Agent 对话或知识库查询接口。密钥仅显示一次，请妥善保管。
         </p>
       </div>
-      <div class="header-actions">
+      <div class="settings-header-actions">
         <a-button
           @click="handleRefresh"
           :loading="refreshing"
@@ -17,7 +17,7 @@
         >
           <template #icon><RefreshCw :size="16" :class="{ 'yuxi-rotate': refreshing }" /></template>
         </a-button>
-        <a-button type="primary" @click="showCreateModal" class="add-btn lucide-icon-btn">
+        <a-button type="primary" @click="showCreateModal" class="lucide-icon-btn">
           <Plus :size="14" />
           创建 API Key
         </a-button>
@@ -25,9 +25,9 @@
     </div>
 
     <!-- 主内容区域 -->
-    <div class="content-section">
+    <div class="settings-management-content">
       <a-spin :spinning="loading">
-        <div v-if="error" class="error-message">
+        <div v-if="error" class="settings-error">
           <a-alert type="error" :message="error" show-icon />
         </div>
 
@@ -39,13 +39,12 @@
               :rowKey="(record) => record.id"
               :pagination="false"
               :scroll="{ x: 1040 }"
-              class="settings-table"
             >
               <template #bodyCell="{ column, record }">
                 <template v-if="column.key === 'name'">
-                  <div class="table-cell-title">
-                    <KeyIcon :size="15" class="cell-icon" />
-                    <span class="cell-main-text" :title="record.name">{{ record.name }}</span>
+                  <div class="settings-table-title">
+                    <KeyIcon :size="15" class="settings-table-icon" />
+                    <span class="settings-table-name" :title="record.name">{{ record.name }}</span>
                   </div>
                 </template>
                 <template v-if="column.key === 'prefix'">
@@ -96,7 +95,7 @@
           </div>
         </template>
 
-        <div v-else class="empty-state">
+        <div v-else class="settings-empty">
           <a-empty description="暂无 API Key，点击上方按钮创建一个" />
         </div>
       </a-spin>
@@ -411,150 +410,26 @@ onMounted(() => {
 
 <style lang="less" scoped>
 .apikey-management {
-  .header-section {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    gap: 16px;
-    margin-bottom: 16px;
-
-    .header-content {
-      flex: 1;
-      min-width: 0;
-
-      .section-title {
-        font-size: 16px;
-        font-weight: 500;
-        color: var(--gray-900);
-        line-height: 1.4;
-        margin: 12px 0 12px;
-      }
-
-      .section-description {
-        font-size: 14px;
-        color: var(--gray-600);
-        line-height: 1.4;
-        margin: 0;
-      }
-    }
-
-    .header-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
+  .code-badge {
+    font-family: 'JetBrains Mono', 'Fira Code', 'Menlo', monospace;
+    font-size: 12px;
+    color: var(--gray-700);
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: 4px;
+    padding: 2px 6px;
+    letter-spacing: 0.5px;
   }
 
-  .content-section {
-    .error-message {
-      margin-bottom: 16px;
-    }
+  .status-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
 
-    .empty-state {
-      padding: 48px 0;
-    }
-
-    .settings-table-wrapper {
-      border: 1px solid var(--gray-150);
-      border-radius: 8px;
-      overflow: hidden;
-      background: var(--gray-0);
-
-      :deep(.ant-table) {
-        background: transparent;
-        font-size: 13px;
-      }
-
-      :deep(.ant-table-thead > tr > th) {
-        background: var(--gray-50);
-        color: var(--gray-500);
-        font-weight: 500;
-        font-size: 12px;
-        padding: 9px 14px;
-        border-bottom: 1px solid var(--gray-150);
-        white-space: nowrap;
-
-        &::before {
-          display: none !important;
-        }
-      }
-
-      :deep(.ant-table-tbody > tr > td) {
-        padding: 10px 14px;
-        color: var(--gray-800);
-        border-bottom: 1px solid var(--gray-100);
-        transition: background 0.15s ease;
-      }
-
-      :deep(.ant-table-tbody > tr:last-child > td) {
-        border-bottom: none;
-      }
-
-      :deep(.ant-table-tbody > tr:hover > td) {
-        background: var(--gray-25) !important;
-      }
-
-      .table-cell-title {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        min-width: 0;
-        max-width: 100%;
-
-        .cell-icon {
-          color: var(--gray-400);
-          flex-shrink: 0;
-        }
-
-        .cell-main-text {
-          font-weight: 500;
-          color: var(--gray-900);
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-      }
-
-      .code-badge {
-        font-family: 'JetBrains Mono', 'Fira Code', 'Menlo', monospace;
-        font-size: 12px;
-        color: var(--gray-700);
-        background: var(--gray-50);
-        border: 1px solid var(--gray-200);
-        border-radius: 4px;
-        padding: 2px 6px;
-        letter-spacing: 0.5px;
-      }
-
-      .status-cell {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-
-        :deep(.ant-switch.ant-switch-checked) {
-          background-color: var(--gray-700) !important;
-
-          &:hover:not(.ant-switch-disabled) {
-            background-color: var(--gray-800) !important;
-          }
-        }
-
-        .status-text {
-          font-size: 12px;
-          color: var(--gray-400);
-
-          &.enabled {
-            color: var(--gray-700);
-            font-weight: 500;
-          }
-        }
-      }
-
-      .time-text {
-        color: var(--gray-500);
-        font-size: 12px;
-      }
-    }
+  .time-text {
+    color: var(--gray-500);
+    font-size: 12px;
   }
 }
 
