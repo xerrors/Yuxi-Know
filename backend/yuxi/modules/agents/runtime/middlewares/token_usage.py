@@ -23,9 +23,9 @@ from langchain_core.messages.ai import UsageMetadata, add_usage
 from langchain_core.messages.utils import count_tokens_approximately
 from langgraph.types import Command
 
+from yuxi.modules.models.providers.builtin import USAGE_UNTRUSTED_PROVIDER_IDS
 from yuxi.modules.models.providers.cache import model_cache
 
-TOKEN_USAGE_PROVIDER_BLACKLIST = frozenset({"siliconflow-cn", "siliconflow"})
 ZERO_TOTAL = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
 TOKEN_USAGE_CONTEXT_FIELDS = frozenset(
     {
@@ -104,7 +104,7 @@ class TokenUsageMiddleware(AgentMiddleware[TokenUsageState]):
     ``wrap_model_call`` 在每次模型调用后构建用量快照写入 state；快照同时
     保留上下文估算字段（``TOKEN_USAGE_CONTEXT_FIELDS``）与按模型分桶的
     Run/Thread 累计聚合。``before_agent`` 在 Run 入口重置 Run 级累计，
-    并剔除已禁用 Provider 的历史用量桶。
+    并剔除用量不可信 Provider（见 providers.builtin）的历史用量桶。
     """
 
     state_schema = TokenUsageState
@@ -125,8 +125,8 @@ class TokenUsageMiddleware(AgentMiddleware[TokenUsageState]):
             latest_model = latest.get("model")
             latest_bucket_key = latest.get("bucket_key")
             latest_provider_id = latest_model.get("provider_id") if isinstance(latest_model, Mapping) else None
-            if latest_provider_id in TOKEN_USAGE_PROVIDER_BLACKLIST or (
-                isinstance(latest_bucket_key, str) and latest_bucket_key.split(":", 1)[0] in TOKEN_USAGE_PROVIDER_BLACKLIST
+            if latest_provider_id in USAGE_UNTRUSTED_PROVIDER_IDS or (
+                isinstance(latest_bucket_key, str) and latest_bucket_key.split(":", 1)[0] in USAGE_UNTRUSTED_PROVIDER_IDS
             ):
                 latest = None
         return {
@@ -134,8 +134,8 @@ class TokenUsageMiddleware(AgentMiddleware[TokenUsageState]):
                 **context_fields,
                 "current_run_id": run_id,
                 "latest": latest,
-                "run": _without_blacklisted_providers(previous.get("run")) if same_run else _empty_aggregate(),
-                "thread": _without_blacklisted_providers(previous.get("thread")),
+                "run": _without_untrusted_providers(previous.get("run")) if same_run else _empty_aggregate(),
+                "thread": _without_untrusted_providers(previous.get("thread")),
             }
         }
 
@@ -206,10 +206,10 @@ class TokenUsageMiddleware(AgentMiddleware[TokenUsageState]):
         previous_run = previous_snapshot.get("run") if previous_snapshot.get("current_run_id") == run_id else None
         measured_at = datetime.now(UTC).isoformat()
         latest_usage = None
-        run_usage = _without_blacklisted_providers(previous_run if isinstance(previous_run, Mapping) else _empty_aggregate())
-        thread_usage = _without_blacklisted_providers(previous_snapshot.get("thread"))
+        run_usage = _without_untrusted_providers(previous_run if isinstance(previous_run, Mapping) else _empty_aggregate())
+        thread_usage = _without_untrusted_providers(previous_snapshot.get("thread"))
 
-        if identity.get("provider_id") not in TOKEN_USAGE_PROVIDER_BLACKLIST:
+        if identity.get("provider_id") not in USAGE_UNTRUSTED_PROVIDER_IDS:
             bucket_key, identity_source = _bucket_key(identity, request.model)
             run_usage = _add_call_to_aggregate(
                 run_usage,
@@ -357,13 +357,13 @@ def _add_unavailable_call(aggregate: Mapping[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _without_blacklisted_providers(aggregate: Mapping[str, Any]) -> dict[str, Any]:
-    """移除历史 checkpoint 中已禁用 Provider 的错误用量桶。"""
+def _without_untrusted_providers(aggregate: Mapping[str, Any]) -> dict[str, Any]:
+    """移除历史 checkpoint 中用量不可信 Provider 的错误用量桶。"""
     result = _aggregate_from_state(aggregate)
     result["models"] = {
         key: bucket
         for key, bucket in result["models"].items()
-        if not (isinstance(bucket.get("model"), Mapping) and bucket["model"].get("provider_id") in TOKEN_USAGE_PROVIDER_BLACKLIST)
+        if not (isinstance(bucket.get("model"), Mapping) and bucket["model"].get("provider_id") in USAGE_UNTRUSTED_PROVIDER_IDS)
     }
     _recompute_aggregate_totals(result)
     return result

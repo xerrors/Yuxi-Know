@@ -478,8 +478,8 @@ def test_timeout_and_crashed_executor_cleanup_preserve_other_commands(resources)
     assert run(backend, "printf still-usable") == "still-usable"
 
 
-def test_abandoned_lifecycle_can_be_rebuilt_and_stale_generation_is_rejected(resources):
-    """进程丢锁后的生命周期不永久禁用 UI，旧句柄不能作用于新代次。"""
+def test_abandoned_lifecycle_can_be_rebuilt_and_stale_generation_handle_converges(resources):
+    """进程丢锁后的生命周期不永久禁用 UI，旧代次句柄清理时收敛移除且不触碰新 VM。"""
     uid, _, provider, backend = resources
     provider.get(uid)
     with provider.repository.user_lock(uid) as conn:
@@ -497,11 +497,9 @@ def test_abandoned_lifecycle_can_be_rebuilt_and_stale_generation_is_rejected(res
             (command_id, uid, row["generation"] - 1),
         )
         command = provider.repository.commands(conn, uid)[0]
-    with pytest.raises(StateConflictError, match="代次"):
-        provider._cleanup_command(command)
+    provider._cleanup_command(command)
     with provider.repository.connect() as conn:
-        assert provider.repository.commands(conn, uid)[0]["id"] == command_id
-        conn.execute("DELETE FROM sandbox_commands WHERE id=%s", (command_id,))
+        assert not provider.repository.commands(conn, uid)
     assert run(backend, "printf new-environment") == "new-environment"
 
 

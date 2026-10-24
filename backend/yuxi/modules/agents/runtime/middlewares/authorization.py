@@ -39,16 +39,16 @@ class RuntimeAuthorizationMiddleware(AgentMiddleware):
         return {"warnings": capability_warnings(runtime.context)}
 
     async def awrap_model_call(self, request, handler):
-        """隐藏本轮已撤销的已注册工具，执行处仍再次检查。"""
+        """复查身份与 MCP 策略并同步 Skill 投影，隐藏本轮已撤销的已注册工具。"""
         context = request.runtime.context
         mcp_policy = await refresh_execution_authorization(context, state=request.state)
         tools = [tool for tool in request.tools if tool_allowed(context, tool.name, request.state, mcp_policy)]
         return await handler(request.override(tools=tools))
 
     async def awrap_tool_call(self, request, handler):
-        """Agent 失权终止，依赖失权返回不含资源信息的错误。"""
+        """Agent 失权终止，依赖失权返回不含资源信息的错误；工具边界不重建资源与投影。"""
         context = request.runtime.context
-        mcp_policy = await refresh_execution_authorization(context, state=request.state)
+        mcp_policy = await _execution_mcp_policy(context, state=request.state)
         name = request.tool_call["name"]
         if not tool_allowed(context, name, request.state, mcp_policy):
             return ToolMessage(content="能力受限：当前调用者无权使用该工具。", tool_call_id=request.tool_call["id"], status="error")
@@ -115,28 +115,40 @@ def tool_allowed(context, name: str, state: dict, mcp_policy: dict[str, set[str]
 
 
 async def refresh_execution_authorization(context, *, state=None) -> dict[str, set[str]]:
-    """在实际模型、摘要与工具请求前解析当前权限并同步投影。"""
-    mcp_policy = await _refresh_execution_resources(context, state=state)
+    """在实际模型与摘要请求前复查身份、解析当前权限并同步 Skill 投影。"""
+    mcp_policy = await _execution_mcp_policy(context, state=state)
     await sync_agent_context_skills(context)
     return mcp_policy
 
 
 async def _refresh_execution_resources(context, *, state=None) -> dict[str, set[str]]:
-    """刷新模型输入与工具可见性，读取资源不扫描投影。"""
+    """模型边界刷新上下文资源与 Skill 快照，并解析当前 MCP 策略。"""
     async with pg_manager.get_async_session_context() as db:
         user, agent, _ = await _require_execution_actor(context, db=db)
         await refresh_agent_context_resources(context, db=db, user=user, agent=agent)
-        snapshot = context.skill_runtime_snapshot
-        candidates = set(context.mcps)
-        if snapshot:
-            active = [*snapshot["preloaded_skills"], *((state or {}).get("activated_skills", []))]
-            for slug in expand_skill_closure(active, snapshot["runtime_skills"]):
-                if slug in snapshot["effective_skills"]:
-                    candidates.update(snapshot["runtime_skills"][slug]["mcps"])
-        servers = await available_mcp_servers(db, candidates, user_id=user.id)
-        unavailable = getattr(context, "mcp_unavailable", {})
-        servers = {slug: server for slug, server in servers.items() if slug not in unavailable}
-        return {slug: set(server.disabled_tools or []) for slug, server in servers.items()}
+        return await _resolve_mcp_policy(context, db=db, user=user, state=state)
+
+
+async def _execution_mcp_policy(context, *, state=None) -> dict[str, set[str]]:
+    """工具与摘要边界只复查身份并解析 MCP 策略；资源与 Skill 快照由模型边界刷新。"""
+    async with pg_manager.get_async_session_context() as db:
+        user, _, _ = await _require_execution_actor(context, db=db)
+        return await _resolve_mcp_policy(context, db=db, user=user, state=state)
+
+
+async def _resolve_mcp_policy(context, *, db, user, state=None) -> dict[str, set[str]]:
+    """按当前快照与激活 Skill 求候选 MCP，返回各服务的禁用工具集合。"""
+    snapshot = context.skill_runtime_snapshot
+    candidates = set(context.mcps)
+    if snapshot:
+        active = [*snapshot["preloaded_skills"], *(state or {}).get("activated_skills", [])]
+        for slug in expand_skill_closure(active, snapshot["runtime_skills"]):
+            if slug in snapshot["effective_skills"]:
+                candidates.update(snapshot["runtime_skills"][slug]["mcps"])
+    servers = await available_mcp_servers(db, candidates, user_id=user.id)
+    unavailable = getattr(context, "mcp_unavailable", {})
+    servers = {slug: server for slug, server in servers.items() if slug not in unavailable}
+    return {slug: set(server.disabled_tools or []) for slug, server in servers.items()}
 
 
 async def _require_execution_actor(context, *, db):

@@ -67,6 +67,8 @@ class CubeSandboxProvider:
         state = row["state"] if row else "not_created"
         error = row["error"] if row else None
         if row and state in {"creating", "rebuilding", "resuming", "pausing"}:
+            # 拿不到锁说明过渡操作仍在其他进程进行，保持原状态；拿到锁仍是过渡态说明
+            # 操作进程已中断。这里只改响应不落库，持久失败由 _ensure 的显式拒绝和 rebuild 承担。
             with self.repository.user_lock(uid, wait=False) as connection:
                 if connection is not None:
                     current = self.repository.environment(connection, uid)
@@ -353,7 +355,7 @@ class CubeSandboxProvider:
         )
 
     def _cleanup_command(self, command: dict) -> None:
-        """以持久句柄核对代次，命令停止确认前不移除记录。"""
+        """以持久句柄核对代次；目标环境已更替时移除不再可作用的句柄。"""
         uid = command["uid"]
         with self.repository.user_lock(uid) as connection:
             row = self.repository.environment(connection, uid)
@@ -361,7 +363,10 @@ class CubeSandboxProvider:
             if current is None:
                 return
             if row is None or row["generation"] != command["generation"]:
-                raise StateConflictError("旧环境命令句柄代次不匹配，拒绝操作新 VM")
+                # 重建先销毁旧 VM 再递增代次，旧句柄的 uuid 标识不可能命中新环境；
+                # 保留只会永久阻塞该用户休眠并让维护循环反复失败。
+                self.repository.remove_command(connection, uid, command["id"])
+                return
             self.adapter.cancel(self._reference(row), command["pgid"], command["id"])
             self.repository.remove_command(connection, uid, command["id"])
 

@@ -75,3 +75,33 @@ def test_standalone_operations_read_latest_while_file_processes_have_clean_envir
         assert json.loads(provider.execute("fixture", "print-env", "/", 10, python=True)[0]) == {}
     finally:
         sandbox_run_env.reset(token)
+
+
+def test_stale_generation_command_handle_is_removed_without_touching_new_environment():
+    """旧代次句柄的目标环境已随重建销毁，清理必须收敛移除而不是永久失败。"""
+    cancel_calls = []
+    removed = []
+
+    @contextmanager
+    def user_lock(uid):
+        yield None
+
+    commands = [
+        {"id": "stale", "uid": "one", "generation": 1, "pgid": 4242},
+        {"id": "fresh", "uid": "one", "generation": 2, "pgid": 777},
+    ]
+    repository = SimpleNamespace(
+        user_lock=user_lock,
+        environment=lambda *args: {"generation": 2, "sandbox_id": "new", "traffic_token": "", "envd_token": "t"},
+        commands=lambda *args, **kwargs: commands,
+        remove_command=lambda connection, uid, command_id: removed.append(command_id),
+    )
+    adapter = SimpleNamespace(cancel=lambda *args, **kwargs: cancel_calls.append(args))
+    value = CubeSandboxProvider(adapter=adapter, repository=repository)
+
+    value._cleanup_command({"id": "stale", "uid": "one", "generation": 1, "pgid": 4242})
+    assert removed == ["stale"] and cancel_calls == []
+
+    value._cleanup_command({"id": "fresh", "uid": "one", "generation": 2, "pgid": 777})
+    assert removed == ["stale", "fresh"]
+    assert cancel_calls == [(Environment("new", "", "t"), 777, "fresh")]

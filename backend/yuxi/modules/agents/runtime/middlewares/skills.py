@@ -10,7 +10,7 @@ from deepagents.middleware._utils import append_to_system_message
 from deepagents.middleware.skills import SKILLS_SYSTEM_PROMPT
 from langchain.agents import AgentState
 from langchain.agents.middleware import AgentMiddleware, ModelRequest, ModelResponse
-from langchain.tools.tool_node import ToolCallRequest
+from langchain.agents.middleware.types import ToolCallRequest
 from langgraph.types import Command
 
 from yuxi.infrastructure.observability.logging import logger
@@ -124,7 +124,7 @@ class SkillsMiddleware(AgentMiddleware):
     def _collect_prompt_metadata(self, slugs: list[str], runtime_context) -> list[RuntimeSkill]:
         """收集指定 slugs 的提示词元数据"""
         runtime_skills = self._get_runtime_skills(runtime_context)
-        return [dict(runtime_skills[slug]) for slug in slugs]
+        return [runtime_skills[slug] for slug in slugs]
 
     def _process_tool_call_result(self, result: Any, request: ToolCallRequest) -> Any:
         """处理工具调用结果，检查并处理 skill 动态激活"""
@@ -255,7 +255,7 @@ class SkillsMiddleware(AgentMiddleware):
             locations.append(f"**{name} Skills**: `{source_path}`{suffix}")
         return "\n".join(locations)
 
-    def _format_skills_list(self, skills_meta: list[dict[str, str]]) -> str:
+    def _format_skills_list(self, skills_meta: list[RuntimeSkill]) -> str:
         """格式化 skills 列表"""
         if not skills_meta:
             return f"(No skills available yet. You can create skills in {' or '.join(self.skills_sources_for_prompt)})"
@@ -266,7 +266,7 @@ class SkillsMiddleware(AgentMiddleware):
             lines.append(f"  -> Read `{skill['path']}` for full instructions")
         return "\n".join(lines)
 
-    def _build_skills_section(self, skills_meta: list[dict[str, str]]) -> str:
+    def _build_skills_section(self, skills_meta: list[RuntimeSkill]) -> str:
         """构建 skills 提示段"""
         skills_locations = self._format_skills_locations(self.skills_sources_for_prompt)
         skills_list = self._format_skills_list(skills_meta)

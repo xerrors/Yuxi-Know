@@ -2,6 +2,11 @@
 
 from typing import Any
 
+# usage_metadata 与真实账单存在已知偏差、且无法在适配层修复的 provider。
+# Token 用量观测按 provider_id 丢弃这些来源的累计，避免错误数据污染 Run/Thread 聚合；
+# 修复上游用量口径后应从这里移除，而不是在观测层逐处规避。
+USAGE_UNTRUSTED_PROVIDER_IDS = frozenset({"siliconflow-cn", "siliconflow"})
+
 BUILTIN_PROVIDERS: list[dict[str, Any]] = [
     {
         "provider_id": "fluxionai",

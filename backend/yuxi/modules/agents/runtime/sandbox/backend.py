@@ -10,6 +10,8 @@ from pathlib import PurePosixPath
 
 from deepagents.backends import CompositeBackend
 from deepagents.backends.protocol import (
+    FILE_NOT_FOUND,
+    PERMISSION_DENIED,
     EditResult,
     ExecuteResponse,
     FileDownloadResponse,
@@ -33,6 +35,73 @@ _IMAGE_EXTENSIONS = {".gif", ".heic", ".heif", ".jpeg", ".jpg", ".png", ".webp"}
 _DOCUMENT_EXTENSIONS = {".doc", ".docx", ".pdf", ".ppt", ".pptx", ".xls", ".xlsx"}
 _DOCUMENT_READ_ERROR = "read_file does not support PDF or Office documents. Use ocr_parse_file to convert the file to Markdown first."
 _BINARY_READ_ERROR = "read_file only supports UTF-8 text and image files. This file type is not supported."
+# 搜索内容匹配的单文件预算；本地扫描与 VM Guest 脚本共用同一上限。
+_SEARCH_MAX_FILE_BYTES = 10 * 1024 * 1024
+
+# VM Home 文件操作的 Guest 脚本，调用处在其前拼接 params 字面量。以模块常量持有并
+# 接受编译断言，脚本编辑引入的语法缺陷在测试层暴露而不是运行时让 ls/read/write 全部失效。
+_GUEST_FILE_SCRIPT = """import os,sys,json,stat,base64
+try:
+    path=params['path']
+    if params['operation']=='list':
+        result=[]
+        with os.scandir(path) as entries:
+            for entry in entries:
+                info=entry.stat()
+                result.append({'path':os.path.join(path,entry.name),'is_dir':stat.S_ISDIR(info.st_mode),'size':info.st_size,'modified_at':str(info.st_mtime)})
+                if len(result)>10000: raise ValueError('directory entries exceed limit')
+    else:
+        writing=params['operation']=='write'
+        if writing: os.makedirs(os.path.dirname(path),exist_ok=True)
+        flags=os.O_NONBLOCK | (os.O_WRONLY|os.O_CREAT if writing else os.O_RDONLY)
+        if writing and not params['overwrite']: flags |= os.O_EXCL
+        fd=os.open(path,flags,0o600)
+        with os.fdopen(fd,'wb' if writing else 'rb') as file:
+            if not stat.S_ISREG(os.fstat(file.fileno()).st_mode): raise ValueError('only regular files supported')
+            if writing:
+                content=sys.stdin.buffer.read(params['size'])
+                if len(content)!=params['size']: raise ValueError('incomplete file input')
+                if params['overwrite']: file.truncate(0)
+                file.write(content)
+                result=True
+            else:
+                content=file.read(params['max_bytes']+1)
+                if len(content)>params['max_bytes']: raise ValueError('file exceeds transfer limit')
+                result=base64.b64encode(content).decode()
+    print(json.dumps({'result':result}))
+except Exception as error:
+    print(json.dumps({'error':type(error).__name__}))
+"""
+
+# VM 侧 glob/grep 的 Guest 搜索脚本，搜索参数经 SEARCH_* 环境变量传入。
+_GUEST_SEARCH_SCRIPT = """import os,json,fnmatch
+from pathlib import Path
+root=Path(os.environ["SEARCH_ROOT"])
+pattern=os.environ["SEARCH_PATTERN"]
+text=json.loads(os.environ["SEARCH_TEXT"])
+limit=int(os.environ["SEARCH_LIMIT"])
+result=[]
+scanned=0
+paths=[root] if root.is_file() else root.rglob("*")
+for p in paths:
+    scanned+=1
+    if scanned>10000: raise ValueError("file search entries exceed limit")
+    if p.is_symlink(): continue
+    relative=str(p.relative_to(root)) if p!=root else p.name
+    if not (fnmatch.fnmatch(relative,pattern) or p.match(pattern)): continue
+    if text is None:
+        result.append({"path":str(p),"is_dir":p.is_dir(),"size":p.stat().st_size})
+    elif p.is_file():
+        if p.stat().st_size>int(os.environ["SEARCH_MAX_FILE_BYTES"]): continue
+        try: content=p.read_text()
+        except (UnicodeError,PermissionError): continue
+        for n,line in enumerate(content.splitlines(),1):
+            if text in line:
+                result.append({"path":str(p),"line":n,"text":line})
+                if len(result)>limit: break
+    if len(result)>limit: break
+print(json.dumps({"matches":result[:limit],"truncated":len(result)>limit}))
+"""
 
 
 def create_agent_composite_backend(context) -> CompositeBackend:
@@ -62,11 +131,11 @@ class UserSandboxBackend(BaseSandbox):
 
     @property
     def id(self) -> str:
-        """读取 Backend 身份不创建或唤醒环境。"""
+        """读取 Backend 身份不创建或唤醒环境；container 执行环境按 Run 创建，身份仍固定为用户。"""
         return self._uid
 
     def read(self, file_path: str, offset: int = 0, limit: int = 2000) -> ReadResult:
-        """保持文本分页与图片协议，Home 文件通过 Cube 读取。"""
+        """保持文本分页与图片协议；挂载内本地读取，VM Home 以普通账号经执行节点读取。"""
         try:
             path = normalize_runtime_path(file_path)
             if limit is not None and limit <= 0:
@@ -152,7 +221,7 @@ class UserSandboxBackend(BaseSandbox):
             return GlobResult(error=self._file_error(path, exc))
 
     def grep(self, pattern: str, path: str | None = None, glob: str | None = None, *, max_count: int | None = None) -> GrepResult:
-        """搜索普通文本文件，保留结构化行号与字面匹配语义。"""
+        """搜索普通文本文件，单文件超过搜索预算时与 VM 侧一致跳过。"""
         try:
             max_count = 1000 if max_count is None else max_count
             if max_count <= 0:
@@ -162,10 +231,14 @@ class UserSandboxBackend(BaseSandbox):
                 try:
                     entries = self._files.walk(path, glob or "*")
                 except NotADirectoryError:
-                    entries = [{"path": path, "is_dir": False}]
+                    # 单文件路径直接搜索同样按预算跳过，与目录扫描和 VM 侧一致。
+                    info = self._files.workspace.stat_authorized_path(self._files.scope(path), root="/")
+                    entries = [{"path": path, "is_dir": False, "size": info["size"]}]
                 matches = []
                 for entry in entries:
                     if entry["is_dir"]:
+                        continue
+                    if entry.get("size", 0) > _SEARCH_MAX_FILE_BYTES:
                         continue
                     raw = self._files.read(entry["path"], MAX_FILE_BYTES)
                     if b"\0" in raw:
@@ -206,18 +279,22 @@ class UserSandboxBackend(BaseSandbox):
             raise
 
     def upload_files(self, files: list[tuple[str, bytes]]) -> list[FileUploadResponse]:
-        """批量上传保留逐项结果，文件落在同一共享 Workspace。"""
+        """批量上传保留逐项结果，大小与路径校验失败如实回传原因。"""
         results = []
         for path, content in files:
             try:
                 self._write_bytes(normalize_runtime_path(path), content, overwrite=True)
                 results.append(FileUploadResponse(path=path, error=None))
+            except FileNotFoundError:
+                results.append(FileUploadResponse(path=path, error=FILE_NOT_FOUND))
+            except ValueError as exc:
+                results.append(FileUploadResponse(path=path, error=str(exc) or PERMISSION_DENIED))
             except Exception:
-                results.append(FileUploadResponse(path=path, error="permission_denied"))
+                results.append(FileUploadResponse(path=path, error=PERMISSION_DENIED))
         return results
 
     def download_files(self, paths: list[str]) -> list[FileDownloadResponse]:
-        """批量下载有界原始字节，不在响应里暴露控制凭据。"""
+        """批量下载有界原始字节，缺失与超限不折叠成权限语义。"""
         results = []
         for path in paths:
             try:
@@ -225,9 +302,11 @@ class UserSandboxBackend(BaseSandbox):
                     FileDownloadResponse(path=path, content=self._read_bytes(normalize_runtime_path(path), MAX_FILE_BYTES), error=None)
                 )
             except FileNotFoundError:
-                results.append(FileDownloadResponse(path=path, content=None, error="file_not_found"))
+                results.append(FileDownloadResponse(path=path, content=None, error=FILE_NOT_FOUND))
+            except ValueError as exc:
+                results.append(FileDownloadResponse(path=path, content=None, error=str(exc) or PERMISSION_DENIED))
             except Exception:
-                results.append(FileDownloadResponse(path=path, content=None, error="permission_denied"))
+                results.append(FileDownloadResponse(path=path, content=None, error=PERMISSION_DENIED))
         return results
 
     def regular_file_exists(self, path: str) -> bool:
@@ -328,43 +407,7 @@ class UserSandboxBackend(BaseSandbox):
         if data is not None and len(data) > MAX_FILE_BYTES:
             raise ValueError("file exceeds transfer limit")
         parameters = {"operation": operation, "path": path, "overwrite": overwrite, "max_bytes": max_bytes, "size": len(data or b"")}
-        script = (
-            "params="
-            + repr(parameters)
-            + "\n"
-            + """import os,sys,json,stat,base64
-try:
-    path=params['path']
-    if params['operation']=='list':
-        result=[]
-        with os.scandir(path) as entries:
-            for entry in entries:
-                info=entry.stat()
-                result.append({'path':os.path.join(path,entry.name),'is_dir':stat.S_ISDIR(info.st_mode),'size':info.st_size})
-                if len(result)>10000: raise ValueError('directory entries exceed limit')
-    else:
-        writing=params['operation']=='write'
-        if writing: os.makedirs(os.path.dirname(path),exist_ok=True)
-        flags=os.O_NONBLOCK | (os.O_WRONLY|os.O_CREAT if writing else os.O_RDONLY)
-        if writing and not params['overwrite']: flags |= os.O_EXCL
-        fd=os.open(path,flags,0o600)
-        with os.fdopen(fd,'wb' if writing else 'rb') as file:
-            if not stat.S_ISREG(os.fstat(file.fileno()).st_mode): raise ValueError('only regular files supported')
-            if writing:
-                content=sys.stdin.buffer.read(params['size'])
-                if len(content)!=params['size']: raise ValueError('incomplete file input')
-                if params['overwrite']: file.truncate(0)
-                file.write(content)
-                result=True
-            else:
-                content=file.read(params['max_bytes']+1)
-                if len(content)>params['max_bytes']: raise ValueError('file exceeds transfer limit')
-                result=base64.b64encode(content).decode()
-    print(json.dumps({'result':result}))
-except Exception as error:
-    print(json.dumps({'error':type(error).__name__}))
-"""
-        )
+        script = "params=" + repr(parameters) + "\n" + _GUEST_FILE_SCRIPT
         output, exit_code, truncated = self._provider.execute(
             self._uid,
             script,
@@ -396,42 +439,15 @@ except Exception as error:
 
     def _guest_search(self, path: str, *, pattern: str, text: str | None = None, max_count: int | None = None) -> dict:
         """Guest 搜索作为可取消命令执行，返回有界结构化结果。"""
-        script = """import os,json,fnmatch
-from pathlib import Path
-root=Path(os.environ["SEARCH_ROOT"])
-pattern=os.environ["SEARCH_PATTERN"]
-text=json.loads(os.environ["SEARCH_TEXT"])
-limit=int(os.environ["SEARCH_LIMIT"])
-result=[]
-scanned=0
-paths=[root] if root.is_file() else root.rglob("*")
-for p in paths:
-    scanned+=1
-    if scanned>10000: raise ValueError("file search entries exceed limit")
-    if p.is_symlink(): continue
-    relative=str(p.relative_to(root)) if p!=root else p.name
-    if not (fnmatch.fnmatch(relative,pattern) or p.match(pattern)): continue
-    if text is None:
-        result.append({"path":str(p),"is_dir":p.is_dir(),"size":p.stat().st_size})
-    elif p.is_file():
-        if p.stat().st_size>10485760: continue
-        try: content=p.read_text()
-        except (UnicodeError,PermissionError): continue
-        for n,line in enumerate(content.splitlines(),1):
-            if text in line:
-                result.append({"path":str(p),"line":n,"text":line})
-                if len(result)>limit: break
-    if len(result)>limit: break
-print(json.dumps({"matches":result[:limit],"truncated":len(result)>limit}))
-"""
         envs = {
             "SEARCH_ROOT": path,
             "SEARCH_PATTERN": pattern,
             "SEARCH_TEXT": json.dumps(text),
             "SEARCH_LIMIT": str(1000 if max_count is None else max_count),
+            "SEARCH_MAX_FILE_BYTES": str(_SEARCH_MAX_FILE_BYTES),
         }
         prefix = " ".join(f"{key}={shlex.quote(value)}" for key, value in envs.items())
-        response = self.execute(prefix + " python3 -c " + shlex.quote(script))
+        response = self.execute(prefix + " python3 -c " + shlex.quote(_GUEST_SEARCH_SCRIPT))
         if response.exit_code != 0 or response.truncated:
             raise RuntimeError("Guest file search failed or exceeded output budget")
         return json.loads(response.output)

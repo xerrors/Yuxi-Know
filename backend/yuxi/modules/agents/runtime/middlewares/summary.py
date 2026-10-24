@@ -154,17 +154,16 @@ class YuxiSummarizationMiddleware(SummarizationMiddleware):
     ) -> ModelResponse | ExtendedModelResponse:
         effective_messages = self._get_effective_messages(request)
         total_tokens = self._count_tokens(effective_messages, request.system_message, request.tools)
-        truncated_messages, _ = self._truncate_args(effective_messages, total_tokens)
-        should_compact = self._should_summarize(truncated_messages, total_tokens)
+        should_compact = self._should_summarize(effective_messages, total_tokens)
 
         overflow_triggered = False
         if not should_compact:
             try:
-                return await handler(request.override(messages=truncated_messages))
+                return await handler(request.override(messages=effective_messages))
             except ContextOverflowError:
                 overflow_triggered = True
 
-        compacted_messages = self._compact_messages(truncated_messages)
+        compacted_messages = self._compact_messages(effective_messages)
         if should_compact:
             _emit_compression_started_once()
 
@@ -370,7 +369,7 @@ def create_summary_middleware(
     trim_tokens_to_summarize: int | None = None,
     tool_result_offload_token_limit: int | None = _DEFAULT_SUMMARY_TOOL_RESULT_LIMIT_TOKENS,
 ) -> YuxiSummarizationMiddleware:
-    """创建绑定单次运行 backend 的摘要中间件。"""
+    """创建绑定单次运行 backend 的摘要中间件；tool_result_offload_token_limit 为 None 时关闭工具结果 offload。"""
     middleware_kwargs = {
         "model": model,
         "backend": backend,
@@ -469,10 +468,9 @@ def _extract_text_content(content: Any) -> str:
     return "" if content is None else str(content)
 
 
-def _tool_result_path(tool_name: str | None, content: str, prefix: str) -> str:
+def _tool_result_path(tool_name: str | None, digest: str, prefix: str) -> str:
     safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "-", (tool_name or "").strip()).strip(".-") or "tool-result"
-    digest = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
-    return f"{prefix}/{safe_name}-{digest}.txt"
+    return f"{prefix}/{safe_name}-{digest[:16]}.txt"
 
 
 def _write_tool_result(backend, path: str, content: str) -> str:
@@ -486,7 +484,10 @@ def _write_tool_result(backend, path: str, content: str) -> str:
 
 
 def _should_offload_tool_message(message: ToolMessage, token_limit: int | None) -> bool:
-    if token_limit is None or token_limit <= 0:
+    """token_limit 为 None 表示关闭工具结果 offload；非正值表示全部 offload。"""
+    if token_limit is None:
+        return False
+    if token_limit <= 0:
         return True
     content = _extract_text_content(message.content)
     estimated_tokens = max((len(content) + _APPROX_CHARS_PER_TOKEN - 1) // _APPROX_CHARS_PER_TOKEN, 1)
@@ -502,11 +503,8 @@ def _replace_tool_message_content(
 ) -> ToolMessage:
     content = _extract_text_content(message.content)
     tool_name = message.name if isinstance(message.name, str) and message.name else None
-    path = _write_tool_result(
-        backend,
-        _tool_result_path(tool_name, content, large_tool_results_prefix),
-        content,
-    )
+    digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
+    path = _write_tool_result(backend, _tool_result_path(tool_name, digest, large_tool_results_prefix), content)
     preview, omitted_chars = _build_tool_result_preview(
         content,
         tool_result_token_limit,
@@ -518,7 +516,7 @@ def _replace_tool_message_content(
         "[Tool result saved]",
         f"Tool: {tool_name or 'unknown'}",
         f"Approx tokens: {approx_tokens}",
-        f"SHA-256: {hashlib.sha256(content.encode('utf-8')).hexdigest()}",
+        f"SHA-256: {digest}",
         f"Full output path: {path}",
     ]
     if preview:
