@@ -265,7 +265,7 @@ async def search_threads_view(
         return {"items": [], "has_more": False, "limit": limit, "offset": offset}
 
     conv_repo = ConversationRepository(db)
-    search_items, has_more = await conv_repo.search_conversations_by_message_content(
+    search_items, has_more = await conv_repo.search_conversations(
         uid=str(current_uid),
         agent_id=agent_id,
         query=normalized_query,
@@ -273,6 +273,10 @@ async def search_threads_view(
         offset=offset,
         exclude_sources=INVOCATION_CONVERSATION_SOURCES,
     )
+
+    run_repo = AgentRunRepository(db)
+    thread_ids = [item["conversation"].thread_id for item in search_items]
+    run_map = await run_repo.get_latest_top_level_runs_for_threads(str(current_uid), thread_ids)
 
     items = []
     for item in search_items:
@@ -285,23 +289,28 @@ async def search_threads_view(
             }
             for snippet in item.get("snippets", [])
         ]
-        items.append(
+        thread_payload = await _serialize_thread(
+            conv,
+            thread_status=_thread_status(
+                *run_map.get(conv.thread_id, (None, None)),
+                conv.last_viewed_run_id,
+            ),
+            db=db,
+            workdir_path=conv.project.workdir_path,
+        )
+        thread_payload.update(
             {
-                "id": conv.thread_id,
                 "thread_id": conv.thread_id,
-                "uid": conv.uid,
-                "agent_id": conv.agent_id,
-                "title": conv.title,
-                "is_pinned": bool(conv.is_pinned),
+                # 搜索结果的时间戳与 latest_match_at/snippets 保持同一 UTC 后缀格式，避免同一条记录两种格式。
                 "created_at": format_utc_datetime(conv.created_at),
                 "updated_at": format_utc_datetime(conv.updated_at),
-                "metadata": conv.extra_metadata or {},
                 "matched_count": item.get("matched_count", 0),
                 "message_id": item.get("message_id"),
                 "latest_match_at": format_utc_datetime(item.get("latest_match_at")),
                 "snippets": snippets,
             }
         )
+        items.append(thread_payload)
 
     return {"items": items, "has_more": has_more, "limit": limit, "offset": offset}
 

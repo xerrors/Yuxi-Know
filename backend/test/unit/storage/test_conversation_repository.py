@@ -390,7 +390,7 @@ async def test_list_conversations_paginates_only_non_pinned_items(conversation_s
 
 
 @pytest.mark.asyncio
-async def test_search_conversations_by_message_content_filters_user_status_and_tool_messages(conversation_session):
+async def test_search_conversations_filters_user_status_and_tool_messages(conversation_session):
     now = utc_now_naive()
     active = Conversation(
         thread_id="thread-active",
@@ -469,7 +469,7 @@ async def test_search_conversations_by_message_content_filters_user_status_and_t
     await conversation_session.commit()
 
     repo = ConversationRepository(conversation_session)
-    items, has_more = await repo.search_conversations_by_message_content(
+    items, has_more = await repo.search_conversations(
         uid="user-a",
         query="大陆",
         limit=20,
@@ -484,7 +484,7 @@ async def test_search_conversations_by_message_content_filters_user_status_and_t
 
 
 @pytest.mark.asyncio
-async def test_search_conversations_by_message_content_excludes_invocation_sources(conversation_session):
+async def test_search_conversations_excludes_invocation_sources(conversation_session):
     normal, agent_call, agent_eval, now = _seed_invocation_excluding_conversations()
     conversation_session.add_all([normal, agent_call, agent_eval])
     await conversation_session.flush()
@@ -510,7 +510,7 @@ async def test_search_conversations_by_message_content_excludes_invocation_sourc
     await conversation_session.commit()
 
     repo = ConversationRepository(conversation_session)
-    items, has_more = await repo.search_conversations_by_message_content(
+    items, has_more = await repo.search_conversations(
         uid="user-a",
         query="导航隐藏检查",
         limit=20,
@@ -523,7 +523,7 @@ async def test_search_conversations_by_message_content_excludes_invocation_sourc
 
 
 @pytest.mark.asyncio
-async def test_search_conversations_by_message_content_filters_agent_and_paginates(conversation_session):
+async def test_search_conversations_filters_agent_and_paginates(conversation_session):
     now = utc_now_naive()
     old = now - timedelta(days=1)
     first = Conversation(
@@ -586,14 +586,14 @@ async def test_search_conversations_by_message_content_filters_agent_and_paginat
     await conversation_session.commit()
 
     repo = ConversationRepository(conversation_session)
-    first_page, has_more = await repo.search_conversations_by_message_content(
+    first_page, has_more = await repo.search_conversations(
         uid="user-a",
         agent_id="agent-a",
         query="大陆",
         limit=1,
         offset=0,
     )
-    second_page, second_has_more = await repo.search_conversations_by_message_content(
+    second_page, second_has_more = await repo.search_conversations(
         uid="user-a",
         agent_id="agent-a",
         query="大陆",
@@ -605,3 +605,162 @@ async def test_search_conversations_by_message_content_filters_agent_and_paginat
     assert [item["conversation"].thread_id for item in first_page] == ["thread-second"]
     assert second_has_more is False
     assert [item["conversation"].thread_id for item in second_page] == ["thread-first"]
+
+
+@pytest.mark.asyncio
+async def test_search_conversations_matches_title_without_message_hit(conversation_session):
+    now = utc_now_naive()
+    old = now - timedelta(days=1)
+    title_only = Conversation(
+        thread_id="thread-title-only",
+        project_id="project-thread-title-only",
+        uid="user-a",
+        agent_id="agent-a",
+        title="大陆标题命中",
+        status="active",
+        created_at=now,
+        updated_at=now,
+    )
+    body_match = Conversation(
+        thread_id="thread-body-match",
+        project_id="project-thread-body-match",
+        uid="user-a",
+        agent_id="agent-a",
+        title="正文命中",
+        status="active",
+        created_at=old,
+        updated_at=old,
+    )
+    conversation_session.add_all([title_only, body_match])
+    await conversation_session.flush()
+    await conversation_session.commit()
+    conversation_session.add(
+        Message(
+            conversation=body_match,
+            role="user",
+            content="大陆正文命中",
+            message_type="text",
+            created_at=old,
+        )
+    )
+    await conversation_session.commit()
+
+    repo = ConversationRepository(conversation_session)
+    items, has_more = await repo.search_conversations(uid="user-a", query="大陆", limit=20, offset=0)
+
+    assert has_more is False
+    assert [item["conversation"].thread_id for item in items] == ["thread-title-only", "thread-body-match"]
+
+    title_item = items[0]
+    assert title_item["matched_count"] == 0
+    assert title_item["latest_match_at"] is None
+    assert title_item["message_id"] is None
+    assert title_item["snippets"] == []
+
+    body_item = items[1]
+    assert body_item["matched_count"] == 1
+    assert "大陆正文命中" in body_item["snippets"][0]["content"]
+
+
+@pytest.mark.asyncio
+async def test_search_conversations_title_match_stays_within_user_and_agent_scope(conversation_session):
+    now = utc_now_naive()
+    mine = Conversation(
+        thread_id="thread-mine",
+        project_id="project-thread-mine",
+        uid="user-a",
+        agent_id="agent-a",
+        title="大陆我的标题",
+        status="active",
+        created_at=now,
+        updated_at=now,
+    )
+    other_user = Conversation(
+        thread_id="thread-other-user-title",
+        project_id="project-thread-other-user-title",
+        uid="user-b",
+        agent_id="agent-a",
+        title="大陆别人的标题",
+        status="active",
+        created_at=now,
+        updated_at=now,
+    )
+    deleted = Conversation(
+        thread_id="thread-deleted-title",
+        project_id="project-thread-deleted-title",
+        uid="user-a",
+        agent_id="agent-a",
+        title="大陆已删除标题",
+        status="deleted",
+        created_at=now,
+        updated_at=now,
+    )
+    other_agent = Conversation(
+        thread_id="thread-other-agent-title",
+        project_id="project-thread-other-agent-title",
+        uid="user-a",
+        agent_id="agent-b",
+        title="大陆其他智能体标题",
+        status="active",
+        created_at=now,
+        updated_at=now,
+    )
+    conversation_session.add_all([mine, other_user, deleted, other_agent])
+    await conversation_session.commit()
+
+    repo = ConversationRepository(conversation_session)
+    items, has_more = await repo.search_conversations(
+        uid="user-a",
+        agent_id="agent-a",
+        query="大陆",
+        limit=20,
+        offset=0,
+    )
+
+    assert has_more is False
+    assert [item["conversation"].thread_id for item in items] == ["thread-mine"]
+
+
+async def test_search_conversations_treats_like_wildcards_as_literals(conversation_session):
+    """查询中的 %/_ 按字面匹配，不得作为 ilike 通配符扩大命中面（负向：去掉转义后 pattern 会命中含 50x 的正文）。"""
+    now = utc_now_naive()
+    literal = Conversation(
+        thread_id="thread-literal-percent",
+        project_id="project-thread-literal-percent",
+        uid="user-a",
+        agent_id="agent-a",
+        title="进度报告",
+        status="active",
+        created_at=now,
+        updated_at=now,
+    )
+    wildcard_bait = Conversation(
+        thread_id="thread-wildcard-bait",
+        project_id="project-thread-wildcard-bait",
+        uid="user-a",
+        agent_id="agent-a",
+        title="另一份报告",
+        status="active",
+        created_at=now,
+        updated_at=now,
+    )
+    conversation_session.add_all([literal, wildcard_bait])
+    await conversation_session.flush()
+    for conversation, content in ((literal, "完成率 50% 目标"), (wildcard_bait, "完成率 50x 目标")):
+        conversation_session.add(
+            Message(
+                conversation=conversation,
+                role="user",
+                content=content,
+                message_type="text",
+                created_at=now,
+            )
+        )
+    await conversation_session.commit()
+
+    repo = ConversationRepository(conversation_session)
+    items, _ = await repo.search_conversations(uid="user-a", query="50%", limit=20, offset=0)
+    assert [item["conversation"].thread_id for item in items] == ["thread-literal-percent"]
+
+    items, _ = await repo.search_conversations(uid="user-a", query="完成率_ 目标", limit=20, offset=0)
+    assert items == []
