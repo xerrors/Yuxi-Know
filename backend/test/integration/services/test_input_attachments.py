@@ -273,7 +273,7 @@ async def test_failed_preparation_blocks_dispatch_and_cancel_keeps_submission(fi
         session = await SessionRepository(db).get_session_by_thread_id("input-thread")
         session.queue_paused = False
         await db.commit()
-    assert await scheduler.dispatch_next_input(uid=SCOPE.uid, agent_slug="main", thread_id="input-thread") is None
+    assert await scheduler.dispatch_next_input(uid=SCOPE.uid, agent_slug="main", thread_id="input-thread") is True
     async with factory() as db:
         item = await db.get(AgentInput, receipt["input_id"])
         assert item.status == "pending" and await AttachmentRepository(db).has_unready(item.id)
@@ -299,7 +299,7 @@ async def test_failed_preparation_blocks_dispatch_and_cancel_keeps_submission(fi
     if archive_via:
         await scheduler.recover_pending_dispatches()
     else:
-        assert await scheduler.dispatch_next_input(uid=SCOPE.uid, agent_slug="main", thread_id="input-thread") is None
+        assert await scheduler.dispatch_next_input(uid=SCOPE.uid, agent_slug="main", thread_id="input-thread") is True
     async with factory() as db:
         item = await db.get(AgentInput, receipt["input_id"])
         assert item.status == "cancelled" and not await AttachmentRepository(db).has_unready(item.id)

@@ -95,7 +95,7 @@ class FakeAgent:
 
     def __init__(self, events=(), checkpoint=None, error=None, missing=False):
         self.events = events
-        self.checkpoint = checkpoint or SimpleNamespace(values={})
+        self.checkpoint = checkpoint or SimpleNamespace(values={}, tasks=())
         self.error = error
         self.missing = missing
         self.input = None
@@ -256,7 +256,7 @@ async def test_cancelled_steer_continuation_keeps_extension_event_ids_unique(mon
                     "data": {"type": "yuxi.context_compression", "summary": f"segment-{self.calls}"},
                 },
             }
-            yield GraphExecutionResult(checkpoint=SimpleNamespace(values=state), steer_before_model=self.calls == 1)
+            yield GraphExecutionResult(checkpoint=SimpleNamespace(values=state, tasks=()), steer_before_model=self.calls == 1)
 
     _patch_stream_scaffolding(monkeypatch, agent=Agent())
     monkeypatch.setattr(svc, "save_messages_from_langgraph_state", AsyncMock(side_effect=["running", "completed"]))
@@ -274,7 +274,7 @@ async def test_execution_failure_cannot_publish_completed_result(monkeypatch, mo
     agent = FakeAgent(missing=defect == "missing_checkpoint")
     _patch_stream_scaffolding(monkeypatch, agent=agent)
     if defect == "bad_interrupt":
-        monkeypatch.setattr(svc, "_extract_interrupt_info", lambda _: (_ for _ in ()).throw(ValueError("decode failed")))
+        monkeypatch.setattr(svc, "_extract_interrupts", lambda _: (_ for _ in ()).throw(ValueError("decode failed")))
     if defect == "save_rejected":
         monkeypatch.setattr(svc, "save_messages_from_langgraph_state", AsyncMock(side_effect=ValueError("binding rejected")))
     results = [event async for event in execute(mode)]
@@ -532,7 +532,12 @@ async def test_foreign_explicit_thread_is_not_routed_to_parent(monkeypatch):
 @pytest.mark.parametrize("mode", ["chat", "resume"])
 async def test_interrupt_settlement_binds_waitpoint_to_own_run(monkeypatch, mode):
     """问答等待从 checkpoint 解析并交由业务事务绑定真实 Run。"""
-    state = SimpleNamespace(values={"__interrupt__": [{"questions": [{"question_id": "q", "question": "Where?"}]}]})
+    state = SimpleNamespace(
+        values={},
+        tasks=[
+            SimpleNamespace(interrupts=[SimpleNamespace(value={"questions": [{"question_id": "q", "question": "Where?"}]})], result=None)
+        ],
+    )
     agent = FakeAgent(checkpoint=state)
     _patch_stream_scaffolding(monkeypatch, agent=agent)
     saved = AsyncMock(return_value="interrupted")

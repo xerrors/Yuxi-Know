@@ -176,8 +176,10 @@ async def invalidate_option_cache(key: str) -> None:
 def normalize_option_value(field: dict[str, Any], value: Any) -> Any:
     """在配置持久化边界解析字段类型与有效范围。"""
     if field.get("type") == "integer":
-        if type(value) is not int or value < field.get("min", 0):
-            raise ValueError(f"{field['key']} 必须是非负整数")
+        minimum = field.get("min", 0)
+        if type(value) is not int or value < minimum:
+            hint = "非负整数" if minimum <= 0 else f"不小于 {minimum} 的整数"
+            raise ValueError(f"{field['key']} 必须是{hint}")
         return value
 
     if field.get("type") == "list[str]":

@@ -209,7 +209,7 @@ for (const action of ['reset', 'cleanup']) {
   })
 }
 
-test('FIFO 领取后用真实 item 替换乐观输入并订阅所属 Turn', async (t) => {
+test('FIFO 领取只用真实 item 替换对应乐观输入，并通知持久运行恢复', async (t) => {
   const state = {
     queuedInputs: [],
     inputQueueMonitor: null,
@@ -233,16 +233,15 @@ test('FIFO 领取后用真实 item 替换乐观输入并订阅所属 Turn', asyn
     turn_id: 'turn',
     items: [item]
   }))
-  const started = []
+  const consumed = []
   const queue = useAgentInputQueue({
     getThreadState: () => state,
-    resetThreadExecution() {},
-    startRunStream: (...args) => started.push(args)
+    onInputConsumed: (...args) => consumed.push(args)
   })
   t.after(() => queue.stopAllInputMonitors('thread'))
   await queue.syncQueuedInputs('thread')
   await new Promise((resolve) => setImmediate(resolve))
   assert.deepEqual(state.itemState.items.input_1, item)
   assert.deepEqual(state.optimisticInputs, {})
-  assert.deepEqual(started, [['thread', 'run', null, { turnId: 'turn', inputId: 'input' }]])
+  assert.deepEqual(consumed, [['thread']])
 })

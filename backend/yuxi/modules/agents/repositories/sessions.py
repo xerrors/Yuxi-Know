@@ -114,6 +114,44 @@ class SessionRepository:
         )
         return result.scalar_one_or_none()
 
+    async def lock_tree_sessions(self, *, tree_root_thread_id: str, uid: str, app_id: str | None) -> list[Session]:
+        """按固定次序锁定同一授权树，归档不能越过成员正在接收的输入。"""
+        return list(
+            (
+                await self.db.scalars(
+                    select(Session)
+                    .where(Session.tree_root_thread_id == tree_root_thread_id, Session.uid == uid, Session.app_id == app_id)
+                    .order_by(Session.thread_id)
+                    .with_for_update(key_share=True)
+                    .execution_options(populate_existing=True)
+                )
+            ).all()
+        )
+
+    async def has_unfinished_work(self, *, thread_ids: list[str], uid: str, app_id: str | None) -> bool:
+        """统一判断授权会话范围内的输入、轮次、运行与清理责任。"""
+        from yuxi.modules.agents.models.inputs import AgentInput
+        from yuxi.modules.agents.models.turns import AgentTurn
+
+        member_threads = select(Session.thread_id).where(Session.thread_id.in_(thread_ids), Session.uid == uid, Session.app_id == app_id)
+        pending_input = select(AgentInput.id).where(AgentInput.thread_id.in_(member_threads), AgentInput.status == "pending").exists()
+        active_turn = (
+            select(AgentTurn.id)
+            .where(AgentTurn.thread_id.in_(member_threads), AgentTurn.status.in_(("running", "waiting", "cancelling")))
+            .exists()
+        )
+        active_run = (
+            select(AgentRun.id)
+            .where(
+                AgentRun.thread_id.in_(member_threads),
+                AgentRun.uid == uid,
+                AgentRun.app_id == app_id,
+                or_(AgentRun.status.notin_(AGENT_RUN_TERMINAL_STATUSES), AgentRun.runtime_cleanup_pending.is_(True)),
+            )
+            .exists()
+        )
+        return bool(await self.db.scalar(select(or_(pending_input, active_turn, active_run))))
+
     async def get_session_by_id(self, session_record_id: int) -> Session | None:
         result = await self.db.execute(select(Session).where(Session.id == session_record_id))
         return result.scalar_one_or_none()

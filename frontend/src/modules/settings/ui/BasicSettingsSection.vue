@@ -107,6 +107,24 @@
               />
             </div>
           </div>
+          <div class="settings-form-row">
+            <div class="settings-form-copy">
+              <label class="settings-form-label" for="max-cooperation-concurrency">协作树并发执行上限</label>
+              <p class="settings-form-description" id="cooperation-concurrency-help">
+                每棵协作树（含根会话）同时处于执行中的任务上限，默认 4；排队与等待中的任务不占名额。
+              </p>
+            </div>
+            <div class="settings-form-control is-number">
+              <a-input-number
+                id="max-cooperation-concurrency"
+                aria-describedby="cooperation-concurrency-help"
+                :value="configStore.config?.max_cooperation_concurrency ?? 4"
+                :min="1"
+                :precision="0"
+                @change="handleCooperationConcurrencyChange"
+              />
+            </div>
+          </div>
         </section>
       </section>
 
@@ -119,7 +137,9 @@
 import { computed } from 'vue'
 import { useConfigStore } from '@/modules/settings/model/config'
 import {
+  COOPERATION_CONCURRENCY_KEY,
   COOPERATION_DEPTH_KEY,
+  applyCooperationConcurrency,
   applyCooperationDepth
 } from '@/modules/settings/model/cooperationDepth'
 import { useUserStore } from '@/modules/identity'
@@ -138,6 +158,11 @@ const handleChange = (key, e) => {
 /** 只提交完整的非负整数，清空输入不会修改已保存的限制。 */
 const handleCooperationDepthChange = (value) => {
   applyCooperationDepth(value, (depth) => handleChange(COOPERATION_DEPTH_KEY, depth))
+}
+
+/** 只提交不小于 1 的整数，清空输入不会修改已保存的上限。 */
+const handleCooperationConcurrencyChange = (value) => {
+  applyCooperationConcurrency(value, (limit) => handleChange(COOPERATION_CONCURRENCY_KEY, limit))
 }
 
 const handleChatModelSelect = (spec) => {

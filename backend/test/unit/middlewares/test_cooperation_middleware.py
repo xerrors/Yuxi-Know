@@ -1,14 +1,20 @@
 """协作工具只接受直属成员名称，路径由执行身份生成。"""
 
+import operator
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
+from typing import Annotated, TypedDict
 from unittest.mock import AsyncMock
 
 import pytest
 from langchain_core.messages import SystemMessage
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.graph import END, START, StateGraph
+from langgraph.types import Command
 from pydantic import ValidationError
 
 from yuxi.modules.agents.runtime.middlewares.cooperation import CooperationMiddleware
+from yuxi.modules.agents.services.execution import _extract_interrupts
 
 pytestmark = pytest.mark.unit
 
@@ -49,8 +55,9 @@ async def test_identity_prompt_uses_persisted_member_and_refreshes_for_new_run(m
         ]
     )
     monkeypatch.setattr(cooperation.pg_manager, "get_async_session_context", database)
+    monkeypatch.setattr(cooperation, "system_options", SimpleNamespace(get=AsyncMock(return_value={"max_cooperation_concurrency": 4})))
     monkeypatch.setattr(SessionCooperationService, "caller", caller)
-    context = SimpleNamespace(run_id="run-1", uid="user-id")
+    context = SimpleNamespace(run_id="run-1", uid="user-id", worker_id="worker")
     request = SimpleNamespace(
         runtime=SimpleNamespace(context=context),
         system_message=SystemMessage(content="原始 Agent 指令"),
@@ -63,6 +70,7 @@ async def test_identity_prompt_uses_persisted_member_and_refreshes_for_new_run(m
     assert caller.await_count == 1
     first = "\n".join(block["text"] for block in handler.call_args.args[0].system_message.content)
     assert '"role": "根会话"' in first and '"session_id": "root-id"' in first
+    assert '"tree_execution_slots": 4' in first
     assert "原始 Agent 指令" in first
     assert "@agent:<id>" in first
     assert "create_session 的 agent_id" in first
@@ -90,7 +98,7 @@ async def test_identity_lookup_failure_does_not_call_model(monkeypatch):
 
     monkeypatch.setattr(cooperation.pg_manager, "get_async_session_context", database)
     monkeypatch.setattr(SessionCooperationService, "caller", AsyncMock(side_effect=ValueError("执行归属已失效")))
-    request = SimpleNamespace(runtime=SimpleNamespace(context=SimpleNamespace(run_id="run-1", uid="user-id")))
+    request = SimpleNamespace(runtime=SimpleNamespace(context=SimpleNamespace(run_id="run-1", uid="user-id", worker_id="worker")))
     handler = AsyncMock()
     with pytest.raises(ValueError, match="执行归属已失效"):
         await CooperationMiddleware().awrap_model_call(request, handler)
@@ -156,7 +164,9 @@ async def test_create_session_exposes_only_owned_depth_denial_as_error_tool_resu
     error = InvalidOperationError("协作深度 3 超过最大协作深度 2" if known else "PRIVATE_ERROR_DETAIL", code=code)
     monkeypatch.setattr(cooperation.pg_manager, "get_async_session_context", database)
     monkeypatch.setattr(SessionCooperationService, "create_session", AsyncMock(side_effect=error))
-    runtime = SimpleNamespace(context=SimpleNamespace(run_id="run", uid="user", _cooperation_config_snapshot={}), tool_call_id="create")
+    runtime = SimpleNamespace(
+        context=SimpleNamespace(run_id="run", uid="user", worker_id="worker", _cooperation_config_snapshot={}), tool_call_id="create"
+    )
     tool = next(tool for tool in CooperationMiddleware().tools if tool.name == "create_session")
     if known:
         result = await tool.coroutine(name="child", description="task", runtime=runtime)
@@ -166,3 +176,101 @@ async def test_create_session_exposes_only_owned_depth_denial_as_error_tool_resu
         with pytest.raises(InvalidOperationError) as rejected:
             await tool.coroutine(name="child", description="task", runtime=runtime)
         assert rejected.value is error
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tool_name", ["wait_inputs", "wait_sessions"])
+async def test_parallel_wait_tools_preserve_deadline_and_fixed_resume_result(monkeypatch, tool_name):
+    """真实图重放不能延长另一等待的 deadline，也不能用迟到查询替换已固定的超时结果。"""
+    from yuxi.modules.agents.runtime.middlewares import cooperation
+    from yuxi.modules.agents.services.cooperation import SessionCooperationService
+
+    class WaitState(TypedDict):
+        """独立保存两个工具的返回值。"""
+
+        results: Annotated[list, operator.add]
+
+    @asynccontextmanager
+    async def database():
+        """只隔离外部数据库，图执行与中断恢复使用真实 LangGraph。"""
+        yield object()
+
+    phase = "initial"
+    deadline = "2026-10-24T00:00:00+00:00"
+    waits = [
+        {
+            "kind": "cooperation",
+            **(
+                {"target_inputs": [f"input-{index}"]}
+                if tool_name == "wait_inputs"
+                else {"target_sessions": [f"session-{index}"], "after_cursor": 3}
+            ),
+            "deadline": deadline,
+        }
+        for index in range(2)
+    ]
+
+    async def prepare(_service, **arguments):
+        """模拟恢复时目标已变化，首次等待请求仍须由 checkpoint 固定。"""
+        target = (arguments.get("input_ids") or arguments["targets"])[0]
+        index = int(target[-1])
+        if phase == "initial":
+            return waits[index]
+        if index == 0:
+            return {"late_database_result": "completed after the fixed timeout", "wait_timed_out": False}
+        return {**waits[index], "deadline": "2026-10-24T00:10:00+00:00"}
+
+    monkeypatch.setattr(cooperation.pg_manager, "get_async_session_context", database)
+    monkeypatch.setattr(SessionCooperationService, "wait_inputs" if tool_name == "wait_inputs" else "wait_updates", prepare)
+
+    def build_graph():
+        """重建生产 middleware，验证恢复不依赖上一次图实例或 Python 闭包。"""
+        tool = next(tool for tool in CooperationMiddleware().tools if tool.name == tool_name)
+        builder = StateGraph(WaitState)
+
+        def node(index):
+            """给每个工具提供独立执行调用身份。"""
+
+            async def run(_state):
+                """通过生产工具产生和恢复中断。"""
+                runtime = SimpleNamespace(
+                    context=SimpleNamespace(run_id=f"run-{phase}", uid="user", worker_id="worker", _cooperation_config_snapshot={}),
+                    tool_call_id=f"wait-{index}",
+                )
+                arguments = (
+                    {"input_ids": [f"input-{index}"]}
+                    if tool_name == "wait_inputs"
+                    else {"targets": [f"session-{index}"], "after_cursor": 3}
+                )
+                result = await tool.coroutine(runtime=runtime, **arguments)
+                return {"results": [{"index": index, "value": result}]}
+
+            return run
+
+        for index in range(2):
+            builder.add_node(f"wait-{index}", node(index))
+            builder.add_edge(START, f"wait-{index}")
+            builder.add_edge(f"wait-{index}", END)
+        return builder.compile(checkpointer=saver)
+
+    saver = InMemorySaver()
+    config = {"configurable": {"thread_id": tool_name}}
+    graph = build_graph()
+    await graph.ainvoke({"results": []}, config)
+    pending = _extract_interrupts(await graph.aget_state(config))
+    ids = [next(item.id for item in pending if item.value == wait) for wait in waits]
+    phase = "resumed"
+    frozen_timeout = {"results": [], "wait_timed_out": True}
+    graph = build_graph()
+    await graph.ainvoke(Command(resume={ids[0]: frozen_timeout}), config)
+    snapshot = await graph.aget_state(config)
+    finished = next(task.result for task in snapshot.tasks if task.name == "wait-0")
+    assert finished["results"] == [{"index": 0, "value": frozen_timeout}]
+    remaining = _extract_interrupts(snapshot)
+    assert [(item.id, item.value) for item in remaining] == [(ids[1], waits[1])]
+    second_result = {"results": ["second exact result"], "wait_timed_out": False}
+    graph = build_graph()
+    await graph.ainvoke(Command(resume={ids[1]: second_result}), config)
+    final = await graph.aget_state(config)
+    assert {item["index"]: item["value"] for item in final.values["results"]} == {0: frozen_timeout, 1: second_result}
+    assert _extract_interrupts(final) == []

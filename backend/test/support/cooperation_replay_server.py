@@ -78,6 +78,51 @@ def depth_calls(messages, results):
     return []
 
 
+def parallel_wait_completion(messages, results):
+    """两个子任务分别阻塞，父模型同轮等待两份精确结果。"""
+    users = " ".join(str(message["content"]) for message in messages if message["role"] == "user")
+    gate = re.search(r'WAIT_GATE:(/[^\s"\\]+)', users).group(1)
+    child = re.search(r"COOP_PARALLEL_WAIT_CHILD:([01])", users)
+    if child:
+        index = int(child.group(1))
+        output = f"PARALLEL_CHILD_RESULT_{index}"
+        if "parallel-delay" not in results:
+            command = "python3 -c " + shlex.quote(
+                "from pathlib import Path\nimport time\n"
+                f"gate = Path({f'{gate}-{index}'!r})\nstarted = Path({f'{gate}-{index}-started'!r})\n"
+                "temporary = started.with_suffix('.tmp')\ntemporary.write_text('started')\ntemporary.replace(started)\n"
+                "deadline = time.monotonic() + 120\n"
+                "while not gate.exists() and time.monotonic() < deadline:\n    time.sleep(0.05)\n"
+                f"assert gate.exists(), 'parallel wait gate was not released'\nprint({output!r})"
+            )
+            return [("parallel-delay", "execute", {"command": command})], output
+        assert output in str(results["parallel-delay"]), "子任务没有通过自己的阻塞点"
+        return [], output
+    if "parallel-create-0" not in results:
+        return [
+            (
+                f"parallel-create-{index}",
+                "create_session",
+                {"name": f"parallel{index}", "description": f"COOP_PARALLEL_WAIT_CHILD:{index} WAIT_GATE:{gate}"},
+            )
+            for index in range(2)
+        ], OUTPUT
+    created = [json.loads(results[f"parallel-create-{index}"]) for index in range(2)]
+    if "parallel-wait-0" not in results and "parallel-wait-1" not in results:
+        return [
+            (f"parallel-wait-{index}", "wait_inputs", {"input_ids": [created[index]["input_id"]], "timeout_seconds": 180})
+            for index in range(2)
+        ], OUTPUT
+    for index in range(2):
+        wait = json.loads(results[f"parallel-wait-{index}"])
+        assert wait["wait_timed_out"] is False, "并行等待不能以超时冒充任务完成"
+        assert len(wait["results"]) == 1
+        result = wait["results"][0]
+        assert result["input_id"] == created[index]["input_id"] and result["terminal"], "等待结果不属于指定 Input"
+        assert result["output"] == f"PARALLEL_CHILD_RESULT_{index}", "等待结果被另一个并行中断覆盖"
+    return [], OUTPUT
+
+
 class CooperationReplayHandler(BaseHTTPRequestHandler):
     """只接受协作测试声明的模型契约。"""
 
@@ -93,7 +138,8 @@ class CooperationReplayHandler(BaseHTTPRequestHandler):
         messages = request["messages"]
         serialized = json.dumps(messages, ensure_ascii=False)
         child = any(
-            m["role"] == "user" and any(marker in str(m["content"]) for marker in ("COOPERATION_CHILD:", "COOP_CAPACITY_CHILD:"))
+            m["role"] == "user"
+            and any(marker in str(m["content"]) for marker in ("COOPERATION_CHILD:", "COOP_CAPACITY_CHILD:", "COOP_PARALLEL_WAIT_CHILD:"))
             for m in messages
         )
         summary = (
@@ -145,13 +191,16 @@ class CooperationReplayHandler(BaseHTTPRequestHandler):
             return
         results = {m.get("tool_call_id"): m.get("content") for m in messages if m["role"] == "tool"}
         calls = []
-        if "COOP_DEPTH:" in serialized:
+        completion = OUTPUT
+        if "COOP_PARALLEL_WAIT_" in serialized:
+            calls, completion = parallel_wait_completion(messages, results)
+        elif "COOP_DEPTH:" in serialized:
             calls = depth_calls(messages, results)
         elif "COOP_CAPACITY" in serialized:
             calls = capacity_calls(messages, results)
         else:
             calls = self.shared_sandbox_calls(serialized, child, results)
-        self.write_completion(calls)
+        self.write_completion(calls, content=completion)
 
     def shared_sandbox_calls(self, serialized, child, results):
         """按父子消息与工具结果验证同一共享路径。"""
@@ -244,7 +293,7 @@ class CooperationReplayHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def write_completion(self, calls):
+    def write_completion(self, calls, *, content=OUTPUT):
         """返回固定 streaming 模型响应。"""
         common = {
             "id": "chatcmpl-cooperation",
@@ -264,7 +313,7 @@ class CooperationReplayHandler(BaseHTTPRequestHandler):
                 for index, (call_id, name, args) in enumerate(calls)
             ]
         else:
-            delta["content"] = OUTPUT
+            delta["content"] = content
         payloads = [
             {**common, "choices": [{"index": 0, "delta": delta, "finish_reason": None}]},
             {

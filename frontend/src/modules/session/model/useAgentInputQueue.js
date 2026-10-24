@@ -12,8 +12,7 @@ const controlKey = () =>
 export function useAgentInputQueue({
   getThreadState,
   isThreadActive = () => true,
-  resetThreadExecution,
-  startRunStream,
+  onInputConsumed,
   onStreamError
 }) {
   const snapshotVersions = new Map()
@@ -71,15 +70,12 @@ export function useAgentInputQueue({
             advanceSnapshot(threadId)
             const state = getThreadState(threadId)
             removeInput(state, currentInputId)
-            stopInputMonitor(threadId, currentInputId)
-            if (!state?.activeRunId) resetThreadExecution(threadId, { preserveInputMonitors: true })
             mergeItemSnapshot(state.itemState, input.items || [])
             delete state.optimisticInputs[currentInputId]
-            state.pendingInputId = currentInputId
-            void startRunStream(threadId, input.run_id, null, {
-              turnId: input.turn_id,
-              inputId: currentInputId
-            })
+            if (state.pendingInputId === currentInputId) state.pendingInputId = null
+            // Input 只拥有历史归属；当前执行由持久 Turn 恢复入口选择。
+            if (await onInputConsumed?.(threadId) !== false)
+              stopInputMonitor(threadId, currentInputId)
             continue
           }
           if (input.status === 'cancelled') {

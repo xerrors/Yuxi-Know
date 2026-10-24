@@ -182,6 +182,20 @@ def test_cooperation_depth_defaults_to_two_and_preserves_zero():
     assert system_options.resolve({"max_cooperation_depth": 0})["max_cooperation_depth"] == 0
 
 
+def test_cooperation_concurrency_defaults_to_four_and_preserves_one():
+    """并发执行上限默认 4，允许降到 1 但不允许清零冻结整树。"""
+    assert system_options.resolve({})["max_cooperation_concurrency"] == 4
+    assert system_options.resolve({"max_cooperation_concurrency": 1})["max_cooperation_concurrency"] == 1
+
+
+@pytest.mark.parametrize("value", [0, -1, True, 2.5, "4", None])
+def test_cooperation_concurrency_rejects_non_integer_or_below_one_values(value):
+    """配置持久化边界拒绝错误数值，不把 0 当成合法上限。"""
+    field = {"key": "max_cooperation_concurrency", "type": "integer", "min": 1}
+    with pytest.raises(ValueError, match="不小于 1 的整数"):
+        options.normalize_option_value(field, value)
+
+
 @pytest.mark.parametrize("value", [-1, True, 1.5, "2", None])
 def test_cooperation_depth_rejects_non_integer_or_negative_values(value):
     """配置持久化边界拒绝错误数值，不按字符串或布尔值凑成深度。"""

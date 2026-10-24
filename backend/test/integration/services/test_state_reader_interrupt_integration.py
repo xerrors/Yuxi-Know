@@ -9,19 +9,22 @@ __interrupt__ channel」在真实存储后端上同样可读——这是 InMemor
 from __future__ import annotations
 
 import asyncio
+import operator
 import os
 import uuid
-from typing import TypedDict
+from typing import Annotated, TypedDict
 
 import pytest
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 from psycopg_pool import AsyncConnectionPool
-import yuxi.modules.agents.services.checkpoint_state as svc
-from yuxi.infrastructure.postgres.manager import PostgresManager
-from yuxi.infrastructure.postgres.checkpointer import get_langgraph_checkpointer
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
+import yuxi.modules.agents.services.checkpoint_state as svc
+from yuxi.infrastructure.postgres.checkpointer import get_langgraph_checkpointer, setup_langgraph_checkpointer
+from yuxi.infrastructure.postgres.manager import PostgresManager
+from yuxi.modules.agents.services.execution import _extract_interrupts, _waitpoint_from_interrupt, build_pending_interrupt_payload
+
+pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
 
 
 class _State(TypedDict):
@@ -56,6 +59,7 @@ async def test_pending_interrupt_recovered_from_real_postgres_checkpoint(monkeyp
         AsyncConnectionPool(_pg_url(), min_size=1, max_size=2, open=False, kwargs={"autocommit": True}) as pool,
     ):
         manager.langgraph_pool = pool
+        await setup_langgraph_checkpointer(manager)
         graph = StateGraph(_State)
         graph.add_node("approval", _approval_node)
         graph.add_edge(START, "approval")
@@ -68,7 +72,7 @@ async def test_pending_interrupt_recovered_from_real_postgres_checkpoint(monkeyp
         _values, interrupt_info = await svc._read_checkpoint_state(uid=uid, thread_id=thread_id)
 
         assert interrupt_info is not None
-        assert interrupt_info.value == {"question": "是否允许执行该命令？", "tool": "execute"}
+        assert [item.value for item in interrupt_info] == [{"question": "是否允许执行该命令？", "tool": "execute"}]
 
         await get_langgraph_checkpointer(manager).adelete_thread(thread_id)
 
@@ -85,6 +89,7 @@ async def test_completed_checkpoint_returns_no_interrupt(monkeypatch):
         AsyncConnectionPool(_pg_url(), min_size=1, max_size=2, open=False, kwargs={"autocommit": True}) as pool,
     ):
         manager.langgraph_pool = pool
+        await setup_langgraph_checkpointer(manager)
         graph = StateGraph(_State)
         graph.add_node("done", lambda state: {"messages": [*state["messages"], "ok"]})
         graph.add_edge(START, "done")
@@ -121,6 +126,7 @@ async def test_explicit_waitpoint_cleanup_keeps_context_without_executing_approv
         AsyncConnectionPool(_pg_url(), min_size=1, max_size=2, open=False, kwargs={"autocommit": True}) as pool,
     ):
         manager.langgraph_pool = pool
+        await setup_langgraph_checkpointer(manager)
         saver = get_langgraph_checkpointer(manager)
         graph = StateGraph(_State)
         graph.add_node("approval", approval)
@@ -145,5 +151,87 @@ async def test_explicit_waitpoint_cleanup_keeps_context_without_executing_approv
             values, pending = await svc._read_checkpoint_state(uid=uid, thread_id=thread_id)
             assert values["messages"] == ["prior-context"]
             assert pending is None
+        finally:
+            await saver.adelete_thread(thread_id)
+
+
+@pytest.mark.parametrize("partial_resume", [False, True])
+async def test_parallel_waits_recover_by_checkpoint_interrupt_id(monkeypatch, partial_resume):
+    """真实图和 PostgreSQL 保留两个等待的身份，按 ID 恢复后各自收到准确结果。"""
+
+    class WaitState(TypedDict):
+        """并行节点通过 reducer 保存彼此独立的恢复结果。"""
+
+        results: Annotated[list, operator.add]
+
+    def wait_input(_state):
+        """等待精确任务结果。"""
+        value = interrupt({"kind": "cooperation", "target_inputs": ["input-1"], "deadline": "2026-10-24T00:00:00+00:00"})
+        return {"results": [{"node": "input", "value": value}]}
+
+    def wait_session(_state):
+        """等待会话游标后的更新。"""
+        value = interrupt(
+            {"kind": "cooperation", "target_sessions": ["session-1"], "after_cursor": 3, "deadline": "2026-10-24T00:01:00+00:00"}
+        )
+        return {"results": [{"node": "session", "value": value}]}
+
+    manager = _new_manager()
+    monkeypatch.setattr(svc, "pg_manager", manager)
+    thread_id = f"pytest-parallel-interrupt-{uuid.uuid4()}"
+    uid = "pytest-user"
+    async with (
+        asyncio.timeout(20),
+        AsyncConnectionPool(_pg_url(), min_size=1, max_size=2, open=False, kwargs={"autocommit": True}) as pool,
+    ):
+        manager.langgraph_pool = pool
+        await setup_langgraph_checkpointer(manager)
+        saver = get_langgraph_checkpointer(manager)
+        builder = StateGraph(WaitState)
+        for name, node in (("input", wait_input), ("session", wait_session)):
+            builder.add_node(name, node)
+            builder.add_edge(START, name)
+            builder.add_edge(name, END)
+        graph = builder.compile(checkpointer=saver)
+        config = {"configurable": {"uid": uid, "thread_id": thread_id}}
+        try:
+            await graph.ainvoke({"results": []}, config)
+            _values, pending = await svc._read_checkpoint_state(uid=uid, thread_id=thread_id)
+            assert pending is not None and len(pending) == 2
+            snapshot = await graph.aget_state(config)
+            expected_interrupts = {item.id: item.value for item in snapshot.interrupts}
+            assert {item.id: item.value for item in pending} == expected_interrupts
+            assert {item.id: item.value for item in _extract_interrupts(snapshot)} == expected_interrupts
+
+            payload = build_pending_interrupt_payload(pending, thread_id)
+            waitpoint = _waitpoint_from_interrupt(payload, "interrupted-run")
+            entries = waitpoint["waits"]
+            assert len(entries) == 2 and len({entry["interrupt_id"] for entry in entries}) == 2
+            input_id = next(entry["interrupt_id"] for entry in entries if "target_inputs" in entry)
+            session_id = next(entry["interrupt_id"] for entry in entries if "target_sessions" in entry)
+            input_result = {"results": [{"input_id": "input-1", "output": "precise task result"}], "wait_timed_out": False}
+            session_result = {"updates": [{"id": 4, "session_id": "session-1"}], "cursor": 4, "wait_timed_out": False}
+
+            # 原缺陷的单值恢复在真实图上因多个等待没有中断 ID 而失败。
+            with pytest.raises(RuntimeError, match="multiple pending interrupts"):
+                await graph.ainvoke(Command(resume={"results": []}), config)
+
+            if partial_resume:
+                await graph.ainvoke(Command(resume={input_id: input_result}), config)
+                _values, pending = await svc._read_checkpoint_state(uid=uid, thread_id=thread_id)
+                assert [item.id for item in pending] == [session_id]
+                assert build_pending_interrupt_payload(pending, thread_id)["waits"] == [
+                    next(entry for entry in entries if entry["interrupt_id"] == session_id)
+                ]
+                assert [item.id for item in _extract_interrupts(await graph.aget_state(config))] == [session_id]
+                await graph.ainvoke(Command(resume={session_id: session_result}), config)
+            else:
+                # 与原提取顺序相反地构造映射，结果不得依赖等待的列表顺序。
+                await graph.ainvoke(Command(resume={session_id: session_result, input_id: input_result}), config)
+
+            values, pending = await svc._read_checkpoint_state(uid=uid, thread_id=thread_id)
+            assert pending is None
+            assert {item["node"]: item["value"] for item in values["results"]} == {"input": input_result, "session": session_result}
+            assert (await graph.aget_state(config)).next == ()
         finally:
             await saver.adelete_thread(thread_id)

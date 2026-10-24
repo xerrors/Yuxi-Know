@@ -5,7 +5,7 @@
 ## 当前运行模型
 
 - 普通输入先把原始消息保存在 PostgreSQL Input，并提交 Receipt。调度器消费就绪输入时创建正式 Message、Turn/Run 并绑定附件，事务提交后才通过 ARQ 投递 worker；输入优先级与合批规则见[输入队列机制](../mechanisms/agent-request-queue.md)。
-- `ARQ_MAX_JOBS` 是单个 worker 中 AgentRun、后台作业与已登记控制工作共用的执行上限。后台作业还受 PostgreSQL 全局最多 4 个 `running` claim 的约束；每棵协作树最多同时执行 4 个 Run，取消收尾同样占位，协作等待释放执行名额。协作树限额不会限制其他树的总并发，也不等于用户 VM 的命令或资源配额。
+- `ARQ_MAX_JOBS` 是单个 worker 中 AgentRun、后台作业与已登记控制工作共用的执行上限。后台作业还受 PostgreSQL 全局最多 4 个 `running` claim 的约束。每棵协作树的 Run 上限由管理员系统配置 `max_cooperation_concurrency` 控制，默认 4、最小 1，在领取下一次执行时读取当前值；降低上限不取消已领取的 Run，增加上限也不能突破 worker 或模型供应商容量。取消收尾同样占位，协作等待释放执行名额。协作树限额不会限制其他树的总并发，也不等于用户 VM 的命令或资源配额。
 - Run 事件写入 Redis Stream，SSE 使用自适应 `XRANGE` 轮询；PostgreSQL 低频补偿权威终态。
 - 取消请求先提交 PostgreSQL durable 状态，再写入带 TTL 的 Redis key。每个运行中的 Run 约每 200ms 读取该 key，另有约 1 秒的 PostgreSQL durable watcher；模型事件循环只检查进程内 Event。
 - 取消链路不使用 Redis Pub/Sub，也不为每个 Run 长期占用一个 Redis 连接。100 个活跃 Run 的取消 key 读取上界约为 500 次/秒。
@@ -54,7 +54,7 @@ AgentRun 另行持久保存服务端权威时间点，用于历史诊断；它�
 
 ## 调整容量
 
-1. 分别确定 worker 作业并发、活跃用户 VM 数、每棵协作树的 Run 数和模型请求速率。`ARQ_MAX_JOBS` 由所有作业共用，调低上限也会影响恢复与控制工作的执行机会；协作树仍受 4 个执行名额限制。
+1. 分别确定 worker 作业并发、活跃用户 VM 数、每棵协作树的 Run 数和模型请求速率。`ARQ_MAX_JOBS` 由所有作业共用，调低上限也会影响恢复与控制工作的执行机会；协作树的独立上限通过系统设置 `max_cooperation_concurrency` 调整。
 2. 核算 PostgreSQL 最坏预算：所有 API/worker 的 SQLAlchemy 与 LangGraph 池之和，必须低于 `POSTGRES_MAX_CONNECTIONS`，并给 migrator、健康检查、连接抖动和人工运维留余量。增加 API 或 worker 副本会按副本数放大对应的两类池。
 3. Redis 池服务短操作，不再按“每 Run 一个订阅连接”计算。仍要覆盖同时进行的 SSE 读取、事件写入、取消 key 读取、缓存和 ARQ 操作；观察 `connected_clients`、连接池错误和 SSE 事件完整性后再收缩。
 4. 按实际 Cube 模板和活跃用户 VM 测量执行节点的 CPU、内存、磁盘与网络，并为宿主、Cube 控制服务和共享文件系统留余量。仓库的模板构建脚本传入 `--cpu 1000 --memory 1024`；已有实例沿用创建时的模板，模板参数不能替代节点实测。

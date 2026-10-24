@@ -63,6 +63,13 @@ system_options = Option(
                 "default": 2,
             },
             {
+                "key": "max_cooperation_concurrency",
+                "label": "协作树并发执行上限",
+                "type": "integer",
+                "min": 1,
+                "default": 4,
+            },
+            {
                 "key": "default_ocr_engine",
                 "label": "默认 OCR 解析引擎",
                 "type": "ocr_engine",

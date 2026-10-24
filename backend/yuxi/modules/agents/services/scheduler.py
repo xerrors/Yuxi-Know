@@ -65,12 +65,12 @@ async def claim_next_input(*, db: AsyncSession, agent_session: Session, binding:
     return Dispatch(run_id=run_id, binding=binding)
 
 
-async def dispatch_next_input(*, uid: str, agent_slug: str, thread_id: str) -> str | None:
-    """自管事务领取可执行队头；提交并物化目录后才投递。"""
+async def dispatch_next_input(*, uid: str, agent_slug: str, thread_id: str) -> bool:
+    """自管事务领取并投递；返回本轮发布是否未失败，没有可执行工作同样为 True。"""
     async with pg_manager.get_async_session_context() as db:
         agent_session = await SessionRepository(db).lock_session_by_thread_id(thread_id)
         if agent_session is None or agent_session.uid != uid or agent_session.agent_id != agent_slug:
-            return None
+            return True
         from yuxi.modules.agents.services.attachments import prepare_input_attachments
 
         # 归档只停止执行；已接收文件仍要完成提交，领取门禁由 claim_next_input 执行。
@@ -81,22 +81,26 @@ async def dispatch_next_input(*, uid: str, agent_slug: str, thread_id: str) -> s
                 continue
         dispatch = await claim_next_input(db=db, agent_session=agent_session, binding=binding)
 
-    if dispatch is not None:
-        await deliver(dispatch)
+    delivered = await deliver(dispatch) if dispatch is not None else True
     from yuxi.modules.agents.services.attachments import cleanup_prepared_sources
 
     async with pg_manager.get_async_session_context() as db:
         await cleanup_prepared_sources(db=db, thread_id=thread_id)
-    return dispatch.run_id if dispatch else None
+    return delivered
 
 
-async def deliver(dispatch: Dispatch) -> None:
-    """仅在 owning transaction 提交之后物化目录并投递同一个 pending Run。"""
+async def deliver(dispatch: Dispatch) -> bool:
+    """提交后物化目录并发布 Run；队列失败保留 pending，由恢复扫描按原身份补投。"""
     if dispatch.binding.materialize_managed:
         ensure_bound_user_workdir(dispatch.binding.uid, dispatch.binding.workdir_path)
     from yuxi.modules.agents.services.transport import enqueue_agent_run
 
-    await enqueue_agent_run(dispatch.run_id)
+    try:
+        await enqueue_agent_run(dispatch.run_id)
+    except Exception:
+        logger.exception("Failed to publish committed AgentRun: %s", dispatch.run_id)
+        return False
+    return True
 
 
 async def recover_pending_dispatches() -> None:
@@ -142,14 +146,16 @@ async def recover_pending_dispatches() -> None:
                 if current is None or current.status != "pending" or turn is None or turn.current_run_id != run.id:
                     continue
                 binding = await resolve_session_workdir_binding(agent_session=agent_session, uid=run.uid, db=db)
-            await deliver(Dispatch(run_id=run.id, binding=binding))
+            if not await deliver(Dispatch(run_id=run.id, binding=binding)):
+                failures += 1
         except Exception:
             failures += 1
             logger.exception("Failed to republish pending AgentRun: %s", run.id)
 
     for uid, agent_slug, thread_id in scopes:
         try:
-            await dispatch_next_input(uid=uid, agent_slug=agent_slug, thread_id=thread_id)
+            if not await dispatch_next_input(uid=uid, agent_slug=agent_slug, thread_id=thread_id):
+                failures += 1
         except Exception:
             failures += 1
             logger.exception("Failed to recover ready AgentInput: %s", thread_id)

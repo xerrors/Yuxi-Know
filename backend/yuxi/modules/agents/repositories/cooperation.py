@@ -5,12 +5,11 @@ from sqlalchemy import func, or_, select, text
 from yuxi.modules.agents.models.cooperation import CooperationEvent, CooperationRuntime
 from yuxi.modules.agents.models.inputs import AgentInput, AgentInputReceipt
 from yuxi.modules.agents.models.messages import Message
-from yuxi.modules.agents.models.runs import AgentRun
+from yuxi.modules.agents.models.runs import AGENT_RUN_TERMINAL_STATUSES, AgentRun
 from yuxi.modules.agents.models.sessions import Session
 from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.modules.agents.runtime_locks import cooperation_lock_key, user_environment_lock_key
-
-TREE_EXECUTION_LIMIT = 4
+from yuxi.modules.system.options import system_options
 
 
 class CooperationRepository:
@@ -32,24 +31,45 @@ class CooperationRepository:
             )
         )
 
+    async def has_unfinished_execution(self, caller: Session) -> bool:
+        """检查授权整树的执行与清理责任，待消费输入不阻止用户恢复。"""
+        members = select(Session.thread_id).where(
+            Session.tree_root_thread_id == caller.tree_root_thread_id,
+            Session.uid == caller.uid,
+            Session.app_id == caller.app_id,
+        )
+        active_turn = (
+            select(AgentTurn.id)
+            .where(AgentTurn.thread_id.in_(members), AgentTurn.status.in_(("running", "waiting", "cancelling")))
+            .exists()
+        )
+        active_run = (
+            select(AgentRun.id)
+            .where(
+                AgentRun.thread_id.in_(members),
+                or_(AgentRun.status.notin_(AGENT_RUN_TERMINAL_STATUSES), AgentRun.runtime_cleanup_pending.is_(True)),
+            )
+            .exists()
+        )
+        return bool(await self.db.scalar(select(or_(active_turn, active_run))))
+
     async def summary(self, caller: Session) -> list:
         """批量读取整树协作状态，不加载 checkpoint 或结果正文。"""
         members = list(
             (
                 await self.db.scalars(
-                    select(Session)
-                    .where(
+                    select(Session).where(
                         Session.tree_root_thread_id == caller.tree_root_thread_id,
                         Session.uid == caller.uid,
                         Session.app_id == caller.app_id,
                         Session.status != "deleted",
                     )
-                    .order_by(Session.cooperation_path)
                 )
             ).all()
         )
         if not members:
             return []
+        members = order_tree_members(members)
         ids = [member.thread_id for member in members]
         turns = {
             turn.thread_id: turn
@@ -225,7 +245,7 @@ class CooperationRepository:
                 AgentRun.worker_id.is_not(None),
             )
         )
-        if active >= TREE_EXECUTION_LIMIT:
+        if active >= (await system_options.get(self.db))["max_cooperation_concurrency"]:
             return False
         from sqlalchemy.dialects.postgresql import insert
 
@@ -235,3 +255,21 @@ class CooperationRepository:
             .on_conflict_do_nothing(index_elements=[CooperationRuntime.tree_root_thread_id])
         )
         return True
+
+
+def order_tree_members(members: list[Session]) -> list[Session]:
+    """从根开始按 parent 关系先序遍历；兄弟按名称排序，路径字符序不得决定层级。"""
+    children: dict[str | None, list[Session]] = {}
+    for member in members:
+        children.setdefault(member.parent_thread_id, []).append(member)
+    for siblings in children.values():
+        siblings.sort(key=lambda member: member.cooperation_name)
+    ordered = []
+    pending = [member for member in members if member.parent_thread_id is None]
+    while pending:
+        member = pending.pop()
+        ordered.append(member)
+        pending.extend(reversed(children.get(member.thread_id, [])))
+    if len(ordered) != len(members):
+        raise ValueError("协作树成员无法从根会话完整遍历")
+    return ordered

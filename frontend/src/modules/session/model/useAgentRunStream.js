@@ -97,10 +97,10 @@ export function useAgentRunStream({
     ts.runReconnectTimer = null
   }
 
-  const settleTurn = (threadId, turnId, status, runId, touchedThreadIds) => {
-    if (!isThreadActive(threadId)) return
+  const settleTurn = async (threadId, turnId, status, runId, touchedThreadIds, turn = null) => {
+    if (!isThreadActive(threadId)) return false
     const ts = getThreadState(threadId)
-    if (!ts || ts.currentTurnId !== turnId) return
+    if (!ts || ts.currentTurnId !== turnId) return false
     ts.runStateVersion = (ts.runStateVersion || 0) + 1
     const version = ts.runStateVersion
     ts.cooperationWaiting = false
@@ -121,27 +121,26 @@ export function useAgentRunStream({
       ts.currentTurnId = null
       ts.pendingInterrupt = null
     }
-    void (async () => {
-      let refreshed = false
-      try {
-        await fetchThreadMessages({ threadId, turnId, fresh: true })
-        refreshed = true
-      } catch (error) {
-        console.warn('Failed to refresh terminal history; retaining streamed output:', error)
-      }
-      if (
-        !isThreadActive(threadId) ||
-        getThreadState(threadId) !== ts ||
-        ts.runStateVersion !== version
-      )
-        return
-      if (status !== 'requires_action' && refreshed)
-        resetThreadExecution(threadId, { preserveInputMonitors: true })
-      void fetchAgentState(threadId)
-      if (status === 'requires_action') onInterruptDetected?.({ threadId, runId })
-      else onTerminalDetected?.({ threadId, runId, touchedThreadIds: [...touchedThreadIds] })
-      if (status === 'completed') onScrollToBottom?.(threadId)
-    })()
+    let refreshed = false
+    try {
+      await fetchThreadMessages({ threadId, turnId, fresh: true })
+      refreshed = true
+    } catch (error) {
+      console.warn('Failed to refresh terminal history; retaining streamed output:', error)
+    }
+    if (
+      !isThreadActive(threadId) ||
+      getThreadState(threadId) !== ts ||
+      ts.runStateVersion !== version
+    )
+      return false
+    if (status !== 'requires_action' && refreshed)
+      resetThreadExecution(threadId, { preserveInputMonitors: true })
+    void fetchAgentState(threadId)
+    if (status === 'requires_action') onInterruptDetected?.({ threadId, runId, turn })
+    else onTerminalDetected?.({ threadId, runId, touchedThreadIds: [...touchedThreadIds] })
+    if (status === 'completed') onScrollToBottom?.(threadId)
+    return refreshed
   }
 
   const reconcileTurn = async (threadId, turnId, fallbackRunId) => {
@@ -159,7 +158,7 @@ export function useAgentRunStream({
       ['requires_action', 'completed', 'failed', 'cancelled'].includes(turn.status) &&
       !(turn.status === 'requires_action' && ts.cancellationPending)
     ) {
-      settleTurn(threadId, turnId, turn.status, currentRunId, new Set([threadId]))
+      void settleTurn(threadId, turnId, turn.status, currentRunId, new Set([threadId]), turn)
       return true
     }
     ts.activeRunId = currentRunId
@@ -201,8 +200,7 @@ export function useAgentRunStream({
     ts.pendingInterrupt = null
     ts.activeRunSteerable = !ts.cooperationWaiting && !ts.cancellationPending
     ts.isStreaming = true
-    if (options.inputId) ts.pendingInputId = options.inputId
-    onRunStarted?.({ threadId, runId, inputId: options.inputId })
+    onRunStarted?.({ threadId, runId })
 
     let sawTurnEnd = false
     try {
@@ -273,7 +271,7 @@ export function useAgentRunStream({
         if (eventId) ts.threadCursor = String(eventId)
         if (['requires_action', 'completed', 'failed', 'cancelled'].includes(status)) {
           sawTurnEnd = true
-          settleTurn(
+          void settleTurn(
             threadId,
             turnId,
             status,
@@ -314,10 +312,11 @@ export function useAgentRunStream({
     }
   }
 
-  const resumeActiveRunForThread = async (threadId) => {
-    if (!threadId || !isThreadActive(threadId)) return
+  /** 恢复持久运行事实；终态等历史收尾，运行态只启动订阅。 */
+  const resumeActiveRunForThread = async (threadId, { refreshHistory = false } = {}) => {
+    if (!threadId || !isThreadActive(threadId)) return false
     const ts = getThreadState(threadId)
-    if (!ts) return
+    if (!ts) return false
     const version = ts.runStateVersion
     const thread = await agentApi.getPublicThread(threadId)
     if (
@@ -325,16 +324,22 @@ export function useAgentRunStream({
       getThreadState(threadId) !== ts ||
       ts.runStateVersion !== version
     )
-      return
+      return false
     const turnId = thread.yuxi.current_turn?.id
     if (!turnId) {
+      stopRunStreamSubscription(threadId)
       ts.cooperationWaiting = false
       ts.cancellationPending = false
       ts.activeRunId = null
       ts.currentTurnId = null
       ts.turnStatus = null
       ts.isStreaming = false
-      return
+      ts.pendingInterrupt = null
+      ts.activeRunSteerable = false
+      if (refreshHistory) await fetchThreadMessages({ threadId, fresh: true })
+      if (!isThreadActive(threadId) || getThreadState(threadId) !== ts || ts.runStateVersion !== version)
+        return false
+      return true
     }
     const turn = await agentApi.getThreadTurn(threadId, turnId)
     if (
@@ -342,7 +347,8 @@ export function useAgentRunStream({
       getThreadState(threadId) !== ts ||
       ts.runStateVersion !== version
     )
-      return
+      return false
+    if (ts.currentTurnId !== turnId) stopRunStreamSubscription(threadId)
     ts.runStateVersion = (ts.runStateVersion || 0) + 1
     ts.cancellationPending =
       cancellationRequests.has(turnId) || turn.yuxi.cancellation_pending === true
@@ -359,9 +365,12 @@ export function useAgentRunStream({
       if (!ts.runStreamAbortController) {
         void startRunStream(threadId, turn.yuxi.current_run_id, ts.threadCursor, { turnId })
       }
-    } else {
-      settleTurn(threadId, turnId, turn.status, turn.yuxi.current_run_id, new Set([threadId]))
+      const restoredVersion = ts.runStateVersion
+      if (refreshHistory) await fetchThreadMessages({ threadId, fresh: true })
+      return isThreadActive(threadId) && getThreadState(threadId) === ts &&
+        ts.runStateVersion === restoredVersion
     }
+    return settleTurn(threadId, turnId, turn.status, turn.yuxi.current_run_id, new Set([threadId]), turn)
   }
 
   const requestTurnCancellation = async (threadId) => {
