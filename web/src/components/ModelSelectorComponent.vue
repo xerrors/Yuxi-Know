@@ -175,13 +175,14 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import ActionDropdown from '@/components/common/ActionDropdown.vue'
 import ActionTrigger from '@/components/common/ActionTrigger.vue'
 import { modelProviderApi } from '@/apis/system_api'
 import { Eye, RefreshCw, X, Check } from '@lucide/vue'
 import { useModelStatus } from '@/composables/useModelStatus'
+import { invalidateModelDirectory, useModelDirectory } from '@/composables/useModelDirectory'
 import { useUserStore } from '@/stores/user'
 import { loadModelMetadataCatalog, resolveModelDisplayMetadata } from '@/utils/modelMetadata'
 
@@ -223,6 +224,7 @@ const props = defineProps({
 const emit = defineEmits(['select-model'])
 const userStore = useUserStore()
 const { getStatusIcon, getStatusClass, getStatusTooltip, checkV2Statuses } = useModelStatus()
+const modelDirectory = useModelDirectory(props.modelType)
 const MODEL_METADATA_NOTICE_DISMISSED_KEY = 'yuxi_model_metadata_notice_dismissed'
 
 // v2 模型数据：每次展开下拉时实时从后端拉取
@@ -344,8 +346,10 @@ const refreshCache = async () => {
   state.refreshingCache = true
   try {
     await modelProviderApi.refreshModelCache()
-    // 刷新后重新拉取模型列表
+    invalidateModelDirectory(props.modelType)
+    // 刷新后重新拉取模型列表与别名
     await fetchV2Models()
+    await syncResolvedModelAlias()
   } catch (error) {
     modelsError.value = '模型刷新失败，请重试'
     console.error('Failed to refresh cache:', error)
@@ -387,9 +391,31 @@ const extractModelName = (spec) => {
   return separatorIndex >= 0 ? spec.slice(separatorIndex + 1) : spec
 }
 
+// 选中态优先展示后端配置的别名，目录未就绪时回退到供应商原始模型名。
+const resolvedModelAlias = ref('')
+const syncResolvedModelAlias = async () => {
+  const spec = props.model_spec
+  if (!spec) {
+    resolvedModelAlias.value = ''
+    return
+  }
+  try {
+    await modelDirectory.load()
+    // 目录加载期间 spec 已切换时放弃本次结果，由 watch 重新触发解析。
+    if (props.model_spec !== spec) return
+    resolvedModelAlias.value = modelDirectory.resolveDisplayName({ spec })
+  } catch {
+    resolvedModelAlias.value = ''
+  }
+}
+
+watch(() => props.model_spec, syncResolvedModelAlias)
+onMounted(syncResolvedModelAlias)
+
 const displayModelText = computed(() => {
   const spec = props.model_spec
   if (!spec) return props.placeholder
+  if (resolvedModelAlias.value) return resolvedModelAlias.value
 
   const modelName = extractModelName(spec)
   if (props.displayName === 'mini') {
@@ -399,7 +425,10 @@ const displayModelText = computed(() => {
   return spec
 })
 
-const displayModelTitle = computed(() => props.model_spec || props.placeholder)
+// 悬停标题保持完整 spec（别名命中时优先别名），不回退到截取名。
+const displayModelTitle = computed(
+  () => resolvedModelAlias.value || props.model_spec || props.placeholder
+)
 
 // 检查当前模型状态
 const checkCurrentModelStatus = async () => {
