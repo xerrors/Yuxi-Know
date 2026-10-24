@@ -1,0 +1,32 @@
+# 单位目录用户计数改为单次聚合查询
+
+状态：implemented
+类型：bug-fix
+Owner：backend/package/yuxi/repositories/department_repository.py
+
+## 问题
+
+`GET /api/departments` 返回每个单位的 `user_count`，`list_with_user_count` 原实现先取全部部门，再对每个部门单独执行一次 `COUNT`（N+1）。查询次数随部门数线性放大，用户量大时单次请求耗时显著（6k 用户实测 ~200ms）。该接口被智能体"指定可见用户"等共享弹窗高频拉取，用户感知为弹窗打开慢。
+
+## 决策
+
+### 实现方案
+
+`DepartmentRepository.list_with_user_count` 保持部门列表查询与 `created_at desc` 排序不变，改为追加一次 `SELECT department_id, COUNT(id) ... WHERE is_deleted = 0 AND department_id IS NOT NULL GROUP BY department_id` 聚合，在内存中按部门 id 回填 `user_count`（缺失计 0）。总计固定 2 次查询，与部门数无关。计数口径不变：仅统计有效用户，未分配/已删除单位用户不计入。响应契约（字段名、结构、排序）无变化。
+
+## 替代方案
+
+- 数据库侧 LEFT JOIN + GROUP BY 单条 SQL：查询次数更少，但部门行与计数在一条结果里重复序列化，且与现有 `to_dict` 投影分叉更大；两次固定查询已满足目标。
+- Redis 缓存计数：引入失效与一致性问题，计数正确性 Owner 仍在 PostgreSQL，收益不匹配复杂度。
+
+## 后果
+
+接口耗时不再随部门数放大；计数语义与原实现一致，前端与管理端无需变更。`user_count` 口径（`is_deleted = 0`）与本文件 `get_with_user_count`、`count_users` 保持一致，三处谓词调整需同步。
+
+## 验证
+
+| 验收主张 | 失败面 | 语义 Owner | 直接证据 / 命令 | 负向案例 | 当前结果 |
+|---|---|---|---|---|---|
+| 计数不随部门数放大（固定 2 次查询） | 恢复逐部门 COUNT 循环 | `list_with_user_count` | `backend/test/unit/repositories/test_department_repository.py::test_list_with_user_count_uses_bounded_queries`（`_CountingSession` 计 execute 次数） | 恢复 N+1 循环后 `execute_count == 2` 断言失败 | Passed |
+| `user_count` 等于部门有效用户数，删除用户不计入 | 聚合漏掉 `is_deleted` 过滤 | `GET /api/departments` 投影 | `backend/test/integration/api/test_department_router.py::test_departments_list_user_counts_aggregate_active_users`（建 3 用户删 1 后断言 baseline+2） | 移除 `is_deleted == 0` 过滤时断言失败（NULL 过滤为等价 no-op，负向由 `is_deleted` 条件承担） | Passed |
+| 回归不破坏既有部门接口行为 | 排序/字段投影漂移 | department 路由与仓储既有测试 | `test_department_repository.py` 2 passed、`test_department_router.py` 3 passed；全量 `test/unit`（netinsp 镜像环境）2462 passed，另有 4 项与本改动无关的既有失败为镜像依赖噪声；`verify_engineering_contracts.py` 与其 unittest 通过；`ruff check`/`format` 干净 | 不适用 | Passed |

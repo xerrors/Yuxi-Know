@@ -70,3 +70,30 @@ async def test_delete_department_migrates_users_and_revokes_department_keys(depa
     assert persisted_key.is_enabled is False
     assert persisted_key.revoked_at is not None
     assert persisted_key.department_id is None
+
+
+class _CountingSession:
+    """记录 execute 次数的会话代理，用于守卫聚合查询不随部门数放大。"""
+
+    def __init__(self, session):
+        self._session = session
+        self.execute_count = 0
+
+    async def execute(self, *args, **kwargs):
+        self.execute_count += 1
+        return await self._session.execute(*args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._session, name)
+
+
+async def test_list_with_user_count_uses_bounded_queries(department_session):
+    """部门目录用户计数必须是单次聚合查询，不得逐部门 COUNT（负向：恢复 N+1 循环后计数超过 2）。"""
+    session, _default_department, deleted_department, user, _api_key = department_session
+    counting = _CountingSession(session)
+    departments = await DepartmentRepository(counting).list_with_user_count()
+    assert len(departments) == 2
+    assert counting.execute_count == 2
+    counts = {department["id"]: department["user_count"] for department in departments}
+    assert counts[deleted_department.id] == 1
+    assert counts[_default_department.id] == 0
