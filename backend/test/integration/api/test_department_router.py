@@ -101,3 +101,65 @@ async def test_superadmin_cannot_delete_default_department(test_client, admin_he
     delete_response = await test_client.delete(f"/api/departments/{default_department['id']}", headers=admin_headers)
     assert delete_response.status_code == 400, delete_response.text
     assert delete_response.json()["detail"] == "默认部门不允许删除"
+
+
+async def test_departments_list_user_counts_aggregate_active_users(test_client, admin_headers):
+    """GET /api/departments 的 user_count 增量等于新增有效用户数，删除用户不计入。"""
+    suffix = uuid.uuid4().hex[:8]
+    department_id = None
+    department_admin_id = None
+    user_ids: list[int] = []
+    try:
+        created = await test_client.post(
+            "/api/departments",
+            json={
+                "name": f"pytest_count_{suffix}",
+                "description": "聚合计数测试单位",
+                "admin_uid": f"ptc_{suffix}",
+                "admin_password": "RouterCount123!",
+            },
+            headers=admin_headers,
+        )
+        assert created.status_code == 201, created.text
+        department_id = created.json()["id"]
+        baseline_count = created.json()["user_count"]
+
+        list_users_response = await test_client.get("/api/auth/users", headers=admin_headers)
+        assert list_users_response.status_code == 200, list_users_response.text
+        department_admin = next(
+            (user for user in list_users_response.json() if user["uid"] == f"ptc_{suffix}"), None
+        )
+        assert department_admin is not None
+        department_admin_id = department_admin["id"]
+
+        for index in range(3):
+            response = await test_client.post(
+                "/api/auth/users",
+                json={
+                    "username": f"pcount_{suffix}_{index}",
+                    "password": "RouterUser123!",
+                    "role": "user",
+                    "department_id": department_id,
+                },
+                headers=admin_headers,
+            )
+            assert response.status_code == 200, response.text
+            user_ids.append(response.json()["id"])
+        removed = await test_client.delete(f"/api/auth/users/{user_ids.pop()}", headers=admin_headers)
+        assert removed.status_code == 200, removed.text
+
+        listing = await test_client.get("/api/departments", headers=admin_headers)
+        assert listing.status_code == 200, listing.text
+        target = next((department for department in listing.json() if department["id"] == department_id), None)
+        assert target is not None
+        assert target["user_count"] == baseline_count + 2
+    finally:
+        for user_id in user_ids:
+            response = await test_client.delete(f"/api/auth/users/{user_id}", headers=admin_headers)
+            assert response.status_code in {200, 404}, response.text
+        if department_admin_id is not None:
+            response = await test_client.delete(f"/api/auth/users/{department_admin_id}", headers=admin_headers)
+            assert response.status_code in {200, 404}, response.text
+        if department_id is not None:
+            response = await test_client.delete(f"/api/departments/{department_id}", headers=admin_headers)
+            assert response.status_code in {200, 404}, response.text
