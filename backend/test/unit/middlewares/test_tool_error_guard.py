@@ -20,13 +20,14 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.tools import tool
+from langchain_mcp_adapters.tools import convert_mcp_tool_to_langchain_tool
+from mcp import types as mcp_types
 from langgraph.errors import GraphBubbleUp
 from langgraph.types import interrupt
 
 from yuxi.modules.agents.runtime.agent_backends.chatbot import graph as chatbot_graph
 from yuxi.modules.agents.runtime.middlewares import ToolErrorGuardMiddleware
 from yuxi.modules.agents.tool_results import normalize_tool_result
-from yuxi.modules.extensions.tools.knowledge import tools as kb_tools
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
 
@@ -58,6 +59,20 @@ _TOOL_ARGS = {
     "cancel_now": {"reason": "取消"},
     "query_kb": {"kb_id": "review-kb", "query_text": "needle"},
 }
+
+
+def _knowledge_query_tool(session):
+    """由官方 adapter 将 SDK 会话和工具协议转换为实际 Agent 工具。"""
+    result = convert_mcp_tool_to_langchain_tool(
+        session,
+        mcp_types.Tool(
+            name="query_kb",
+            description="检索知识库",
+            inputSchema={"type": "object", "properties": {"kb_id": {"type": "string"}, "query_text": {"type": "string"}}},
+        ),
+    )
+    result.handle_tool_error = True
+    return result
 
 
 class _ScriptedToolModel(BaseChatModel):
@@ -105,11 +120,14 @@ async def _call_hook(hook: str, request: ToolCallRequest, handler):
     return result
 
 
-async def _run_agent(middleware, tool_name: str) -> dict:
+async def _run_agent(middleware, tool_name: str, *, mcp_session=None) -> dict:
     model = _ScriptedToolModel(tool_name=tool_name)
+    tools = [parse_sandbox_file, ask_human, cancel_now]
+    if mcp_session is not None:
+        tools.append(_knowledge_query_tool(mcp_session))
     agent = create_agent(
         model=model,
-        tools=[parse_sandbox_file, ask_human, cancel_now, kb_tools.query_kb],
+        tools=tools,
         middleware=list(middleware),
         context_schema=dict,
     )
@@ -330,12 +348,11 @@ async def test_cancel_waits_for_tool_effect_before_releasing_execution():
 
 
 @pytest.mark.parametrize("failure_type", [RuntimeError, ValueError])
-async def test_knowledge_query_failure_uses_error_message_and_public_projection(monkeypatch, caplog, failure_type):
+async def test_knowledge_query_failure_uses_error_message_and_public_projection(caplog, failure_type):
     """真实工具和中间件装配保留失败状态，并隐藏底层错误内容。"""
     private_detail = "private-provider-credential"
-    monkeypatch.setattr(kb_tools, "call_knowledge_mcp", AsyncMock(side_effect=failure_type(private_detail)))
-
-    state = await _run_agent([ToolErrorGuardMiddleware()], "query_kb")
+    session = SimpleNamespace(call_tool=AsyncMock(side_effect=failure_type(private_detail)))
+    state = await _run_agent([ToolErrorGuardMiddleware()], "query_kb", mcp_session=session)
 
     [result] = [message for message in state["messages"] if isinstance(message, ToolMessage)]
     assert result.status == "error"
@@ -346,10 +363,31 @@ async def test_knowledge_query_failure_uses_error_message_and_public_projection(
     assert state["messages"][-1].content == "已根据工具结果继续回答"
 
 
-async def test_knowledge_empty_query_remains_success(monkeypatch):
-    """空检索结果与执行失败保持不同状态。"""
-    monkeypatch.setattr(kb_tools, "call_knowledge_mcp", AsyncMock(return_value={"results": []}))
-    state = await _run_agent([ToolErrorGuardMiddleware()], "query_kb")
+async def test_knowledge_empty_query_remains_success():
+    """SDK 的空检索 structuredContent 经真实 adapter 后仍为成功。"""
+    session = SimpleNamespace(
+        call_tool=AsyncMock(return_value=mcp_types.CallToolResult(content=[], structuredContent={"results": []}))
+    )
+    state = await _run_agent([ToolErrorGuardMiddleware()], "query_kb", mcp_session=session)
     [result] = [message for message in state["messages"] if isinstance(message, ToolMessage)]
     assert result.status == "success"
+    assert result.artifact["structured_content"] == {"results": []}
     assert normalize_tool_result(result.model_dump()).error is None
+    assert state["messages"][-1].content == "已根据工具结果继续回答"
+
+
+async def test_knowledge_protocol_error_remains_tool_error():
+    """MCP isError 经 adapter 保留单次工具失败，对话仍能继续。"""
+    guidance = "Knowledge tool failed (404): 资源不存在或不可见"
+    session = SimpleNamespace(
+        call_tool=AsyncMock(
+            return_value=mcp_types.CallToolResult(isError=True, content=[mcp_types.TextContent(type="text", text=guidance)])
+        )
+    )
+    state = await _run_agent([ToolErrorGuardMiddleware()], "query_kb", mcp_session=session)
+    [result] = [message for message in state["messages"] if isinstance(message, ToolMessage)]
+    assert result.status == "error"
+    assert result.tool_call_id == "call-1"
+    assert guidance in str(result.content)
+    assert normalize_tool_result(result.model_dump()).error
+    assert state["messages"][-1].content == "已根据工具结果继续回答"

@@ -659,13 +659,8 @@ def builtin_skill_specs():
             "knowledge-base",
             {
                 "name": "knowledge-base",
-                "tool_dependencies": [
-                    "list_kbs",
-                    "query_kb",
-                    "find_kb_document",
-                    "open_kb_document",
-                    "search_file",
-                ],
+                "tool_dependencies": [],
+                "mcp_dependencies": ["knowledge"],
             },
         ),
         ("mysql-reporter", {"name": "mysql reporter", "tool_dependencies": [], "mcp_dependencies": []}),
@@ -2070,3 +2065,43 @@ def test_builtin_hash_uses_canonical_tree_and_executable_mode(tmp_path, monkeypa
     second = builtin_service.list_builtin_skill_specs()[0]["content_hash"]
     assert second == compute_skill_directory_hash(source).hex()
     assert second != first
+
+
+@pytest.mark.parametrize("bound_agent_id", [None, 42])
+@pytest.mark.parametrize("tool_name", ["list_kbs", "query_kb", "search_file", "open_kb_document", "find_kb_document"])
+@pytest.mark.asyncio
+async def test_shared_and_bound_skills_reject_removed_local_knowledge_dependencies(bound_agent_id, tool_name):
+    """共享与专属 Skill 新输入不能依赖已取消的本地知识工具。"""
+    from yuxi.modules.extensions.skills.access import validate_skill_dependencies
+
+    with pytest.raises(ValueError, match=f"存在无效工具依赖: {tool_name}"):
+        await validate_skill_dependencies(
+            db=object(),
+            parent=SimpleNamespace(slug="consumer", bound_agent_id=bound_agent_id),
+            tool_dependencies=[tool_name],
+            mcp_dependencies=[],
+            skill_dependencies=[],
+            available_skills={},
+        )
+
+
+@pytest.mark.parametrize("bound_agent_id", [None, 42])
+@pytest.mark.asyncio
+async def test_shared_and_bound_skills_accept_knowledge_mcp_dependency(monkeypatch, bound_agent_id):
+    """当前 Skill 契约以 mcp_dependencies 声明知识能力。"""
+    from yuxi.modules.extensions.mcp import service as mcp_service
+    from yuxi.modules.extensions.skills.access import validate_skill_dependencies
+
+    async def enabled_slugs(*, db):
+        """仅替换持久配置读取，保留真实本地工具注册与依赖校验。"""
+        return ["knowledge"]
+
+    monkeypatch.setattr(mcp_service, "get_enabled_mcp_server_slugs", enabled_slugs)
+    assert await validate_skill_dependencies(
+        db=object(),
+        parent=SimpleNamespace(slug="consumer", bound_agent_id=bound_agent_id),
+        tool_dependencies=[],
+        mcp_dependencies=["knowledge"],
+        skill_dependencies=[],
+        available_skills={},
+    ) == ([], ["knowledge"], [])

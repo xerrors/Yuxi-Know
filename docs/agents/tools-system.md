@@ -1,6 +1,6 @@
 # 工具系统
 
-Yuxi 的工具分成三层：内置工具、知识库工具和 MCP 工具。Graph 创建时准备可执行工具，运行时再根据用户权限、Agent 配置和 Skill 激活状态决定模型能看到什么。
+Yuxi 的工具分成两层：本地注册的内置工具，以及由 MCP server 提供的工具（含内置 `knowledge` MCP 提供的知识库工具）。Graph 创建时准备可执行工具，运行时再根据用户权限、Agent 配置和 Skill 激活状态决定模型能看到什么。
 
 ## 注册一个内置工具
 
@@ -16,7 +16,7 @@ def example_tool(text: str) -> str:
     return text
 ```
 
-- `category` 用于前端分组，常见值是 `builtin` 和 `knowledge`；
+- `category` 用于前端分组，当前只有本地注册的 `builtin`；知识库工具不再本地注册；
 - `tags` 用于展示和筛选；
 - `display_name` 是给用户看的名称，工具 ID 是给代码和模型协议使用的稳定名称；
 - 内置工具模块由 `yuxi.modules.extensions.tools.builtin` 包显式导入，装饰器在进程加载时执行注册。
@@ -80,7 +80,7 @@ reason 去除首尾空白后为 1–4000 字符，写明实际问题或经验、
 
 ## 知识库工具
 
-知识库工具以 `@tool(category="knowledge")` 注册，但不默认出现在模型工具列表。Agent 激活内置 `knowledge-base` Skill 后，Skills middleware 才会向模型开放：
+知识库工具不再以 `@tool` 本地注册。它们由内置 `knowledge` MCP server（`extensions/mcp/builtin.py`，默认启用）提供，Agent 激活或预加载内置 `knowledge-base` Skill（`mcp_dependencies: ["knowledge"]`）后，运行装配从该 server 的真实目录加载：
 
 | 工具 | 作用 |
 | --- | --- |
@@ -90,19 +90,9 @@ reason 去除首尾空白后为 1–4000 字符，写明实际问题或经验、
 | `open_kb_document` | 按 `file_id` 分段读取解析后的文档 |
 | `search_file` | 按文件名搜索可见知识库中的文件 |
 
-五个工具保留名称、参数和面向模型的结果结构，数据读取统一经过平台 HTTP MCP。运行时自动附带代表当前用户及会话选择的短期委托，无需在 Agent 的 MCP 字段添加本平台 Knowledge，也无需个人 OAuth 连接。
+工具名称、参数 Schema 与结构化结果直接来自 Knowledge MCP 的目录与响应，与其他托管 MCP 的装配路径一致。每次出站调用自动附带代表当前用户及会话选择的短期委托，无需在 Agent 的 MCP 字段添加本平台 Knowledge，也无需个人 OAuth 连接；管理页不能为该 server 配置共享凭据。
 
-Knowledge 在每次工具调用处重新检查 `kb_id`、`file_id`、文件名与当前读取权限；模型提示词和 Agent 配置不能授予权限。关闭 Knowledge 时 MCP 返回 404，实际调用显示知识能力不可用。鉴权、范围和存储边界见[知识库机制详解](../mechanisms/knowledge-base.md#agent-如何看到知识库)。
-
-需要在 Python 中直接取得知识库工具时：
-
-```python
-from yuxi.modules.extensions.tools.knowledge.tools import get_common_kb_tools
-
-kb_tools = get_common_kb_tools()
-```
-
-返回的具体顺序由函数实现维护，不要把顺序当作协议。
+Knowledge 在每次工具调用处重新检查 `kb_id`、`file_id`、文件名与当前读取权限；模型提示词和 Agent 配置不能授予权限。关闭 Knowledge 时保留内置 server 身份，能力发现与执行按不可用处理。共享和 Agent 专属 Skill 通过 `mcp_dependencies: ["knowledge"]` 声明知识能力；这五个名称不能作为本地 `tool_dependencies`。鉴权、范围和存储边界见[知识库机制详解](../mechanisms/knowledge-base.md#agent-如何看到知识库)。
 
 ## 内置工具：网页搜索
 

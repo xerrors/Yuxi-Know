@@ -15,7 +15,7 @@ MCP（Model Context Protocol）让智能体调用外部服务提供的工具。�
 
 平台登录和 MCP 资源授权分别签发凭据；部署密钥、状态与调用隔离的实现见 [MCP 授权与运行身份](../mechanisms/mcp.md)。
 
-平台自带 Knowledge 由内置 `knowledge-base` Skill 的工具适配自动调用，使用内部短期用户委托，无需按本页添加服务器或连接 OAuth。对外客户端仍使用 `knowledge` API Key，见[知识库 MCP 接入](../advanced/knowledge-mcp.md)；内部身份与会话范围见[知识库机制](../mechanisms/knowledge-base.md#agent-如何看到知识库)。
+平台自带 Knowledge 是内置 `knowledge` MCP server（见下节），由内置 `knowledge-base` Skill 的 `mcp_dependencies` 门控装配，每次调用使用内部短期用户委托，无需按本页添加服务器或连接 OAuth，管理页也不能为其配置共享凭据。对外客户端仍使用 `knowledge` API Key，见[知识库 MCP 接入](../advanced/knowledge-mcp.md)；内部身份与会话范围见[知识库机制](../mechanisms/knowledge-base.md#agent-如何看到知识库)。
 
 接入前需确认服务支持发现协议、PKCE、回调地址和真实工具调用。
 
@@ -154,6 +154,8 @@ OAuth 元数据只能使用超管配置的 MCP 来源与授权服务器来源，
 
 内置 DeepWiki 使用 `deepwiki-official` 标识，通过 `https://mcp.deepwiki.com/mcp` 提供 Streamable HTTP 服务，无需认证即可查询公开 GitHub 仓库。详见 [DeepWiki 官方文档](https://docs.devin.ai/work-with-devin/deepwiki-mcp)。
 
+内置 `knowledge` 指向本平台 `/api/mcp`，默认启用，连接配置由代码管理。它使用平台委托鉴权（`auth_mode=delegation`，见[授权与运行身份](../mechanisms/mcp.md)）：工具调用按当前用户与会话选择签发短期委托，无需填写共享凭据。管理端工具发现和连接测试使用当前查看者身份。关闭 `YUXI_KNOWLEDGE_ENABLED` 后，内置身份和管理员开关保留，但服务不进入可用能力集合；重新开启仍按原开关提供工具。范围与权限见[知识库机制](../mechanisms/knowledge-base.md#agent-如何看到知识库)。
+
 开发者在 [`builtin.py`](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/mcp/builtin.py) 的 `BUILTIN_MCP_MANIFEST` 中维护清单：
 
 ```python
@@ -173,7 +175,7 @@ BUILTIN_MCP_MANIFEST = {
 
 清单连接字段支持 `type`（`http`、`sse`）或 `transport`（`streamable_http`、`sse`）、HTTP URL、headers、timeout 和 sse_read_timeout。同时声明 type 与 transport 时必须一致。展示字段 name、description 放在 `extra_data`，名称缺省时使用清单键。管理表单使用相同清单结构解析，再转换为上面的平铺管理接口字段；`extra_data` 不发送给远端 MCP 客户端。
 
-`app-init` 部署任务把当前内置定义同步到 PostgreSQL，该阶段只处理本地定义；远端建连和工具发现由测试或运行时加载触发。运行时从代码读取内置连接字段，从数据库读取启停与禁用工具状态。新内置 MCP 默认未添加，管理员启用后才参与运行；页面不能修改其连接配置。同步保留管理员的启停与禁用工具列表，失败会阻止部署初始化完成。
+`app-init` 部署任务把代码拥有的内置连接定义同步到 PostgreSQL，该阶段只处理本地定义；远端建连和工具发现由测试或运行时加载触发。运行时按对应鉴权方式装配连接，从数据库读取启停与禁用工具状态。内置 `knowledge` 默认启用且同时受部署开关限制，其他新内置 MCP 默认停用，管理员启用后才参与运行；页面不能修改其连接配置。同步保留管理员的启停与禁用工具列表，失败会阻止部署初始化完成。
 
 ## 常用管理接口
 

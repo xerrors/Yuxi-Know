@@ -2,7 +2,7 @@
 
 状态：implemented
 类型：architecture
-Owner：backend/yuxi/api/routers/public_v1/knowledge_mcp.py
+Owner：backend/yuxi/modules/knowledge/mcp/server.py
 
 ## 问题
 
@@ -12,15 +12,15 @@ Owner：backend/yuxi/api/routers/public_v1/knowledge_mcp.py
 
 ### 实现方案
 
-Agent 保留五个知识查询工具的名称、参数和结果形状，数据读取全部经平台 Knowledge MCP HTTP 地址；选择器和来源标注也使用该边界。可信 runtime 按运行用户 uid 和原会话选择签发五分钟委托 JWT，每个 HTTP 请求重新签发，不落库。固定的同实例 issuer、独立 audience/purpose 和短有效期隔离登录凭据；MCP 每次请求复核当前账号状态，每次工具执行重新读取知识库权限并与签名选择取交集。显式空列表保持空范围，Knowledge 不借用 Public end_user 所属管理员的权限。
+Agent 侧五个知识查询工具的名称、参数和结果形状与 MCP 保持一致，数据读取全部经平台 Knowledge MCP HTTP 地址；选择器和来源标注也使用该边界（工具装配已由[内置 MCP 装配决定](./2026-10-24-knowledge-builtin-mcp.md)取代本地适配，契约不变）。可信 runtime 按运行用户 uid 和原会话选择签发五分钟委托 JWT，每个 HTTP 请求重新签发，不落库。固定的同实例 issuer、独立 audience/purpose 和短有效期隔离登录凭据；MCP 每次请求复核当前账号状态，每次工具执行重新读取知识库权限并与签名选择取交集。显式空列表保持空范围，Knowledge 不借用 Public end_user 所属管理员的权限。
 
 外部 API Key 与内部委托使用相同五个只读工具。`list_kbs` 可附带文档能力，供资源选择器和来源标注使用。不提供 Agent 原件下载工具，原有管理文件下载接口保留。内部 HTTP 客户端不跟随重定向，不读取环境代理，避免委托凭据离开平台连接。
 
-`YUXI_KNOWLEDGE_ENABLED` 默认开启。关闭时，API 集中装配层不初始化知识库执行器、不注册 Knowledge MCP 及管理路由；worker 不领取或补发知识任务，保留 PostgreSQL pending 意图和投影清理意图。Compose 关闭覆盖把 Milvus、etcd 和 Neo4j 副本数设为零，不删除持久挂载；原代码、Schema、配置和数据保留。普通工具和 Skill 继续装配，知识工具返回安全的 MCP 不可用错误，不存在本地调用 fallback。内部故障使用保留标识 `platform:knowledge`，不覆盖用户同名外部 MCP 的状态。
+`YUXI_KNOWLEDGE_ENABLED` 默认开启。关闭时，API 集中装配层不初始化知识库执行器、不注册 Knowledge MCP 及管理路由；worker 不领取或补发知识任务，保留 PostgreSQL pending 意图和投影清理意图。Compose 关闭覆盖把 Milvus、etcd 和 Neo4j 副本数设为零，不删除持久挂载；原代码、Schema、配置和数据保留。普通聊天继续，内置 Skill 文件保留，知识工具不进入可用目录，会话知识选择保留。不存在本地调用 fallback。
 
 启用 Knowledge 时，API 与 worker 在普通安全初始化之前校验显式共享的 `JWT_SECRET_KEY` 和 `YUXI_INSTANCE_ID`。worker 在任何恢复、补发和消费之前初始化已有知识库执行器，并建立真实 Neo4j 会话。后端未就绪使进程启动失败，由现有 Compose 重启策略恢复，pending 任务不被提前领取；worker 关闭释放共享图连接。关闭模式跳过这些 Knowledge 前提。
 
-身份签验由 identity security/service 拥有；权限由 Knowledge access/service 拥有；Agent MCP 客户端和工具适配拥有传输与运行态错误；bootstrap、worker 与 Compose 拥有启动顺序和启停。本决定部分取代[内置知识库 MCP](./2026-10-15-knowledge-mcp.md)的仅 API Key 与始终挂载条款，并对[资源选择](./2026-09-27-explicit-resource-selection.md)增加知识库在 MCP 执行交集的例外。外部客户端说明与错误指导继续由[模型调用体验](./2026-10-15-knowledge-mcp-client-experience.md)拥有。
+Knowledge MCP 模块拥有专属身份签验、SDK Auth、协议服务端与产品读取，通用 identity 提供用户及密钥基础能力；权限由 Knowledge access/service 拥有；通用 MCP 负责标准工具发现和管理员执行策略；bootstrap、worker 与 Compose 拥有启动顺序和启停。本决定部分取代[内置知识库 MCP](./2026-10-15-knowledge-mcp.md)的仅 API Key 与始终挂载条款，并对[资源选择](./2026-09-27-explicit-resource-selection.md)增加知识库在 MCP 执行交集的例外。外部客户端说明与错误指导继续由[模型调用体验](./2026-10-15-knowledge-mcp-client-experience.md)拥有。
 
 ## 替代方案
 

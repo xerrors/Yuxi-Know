@@ -4,9 +4,13 @@ import asyncio
 import json
 import uuid
 from http.server import BaseHTTPRequestHandler
+from io import BytesIO
+from zipfile import ZipFile
 
 import asyncpg
 import pytest
+from langchain_core.messages import AIMessage, ToolMessage
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from sqlalchemy import select
 
 from test.e2e.e2e_helpers import (
@@ -20,6 +24,7 @@ from test.e2e.e2e_helpers import (
 )
 from test.live_api_cleanup import make_test_session_title
 from test.support.openai_replay_server import send_openai_sse_response, serve_replay_handler
+from yuxi.bootstrap.capabilities import knowledge_enabled
 from yuxi.infrastructure.minio import get_minio_client
 from yuxi.infrastructure.minio.client import MinIOClient
 from yuxi.infrastructure.postgres.manager import pg_manager
@@ -30,7 +35,8 @@ pytestmark = [pytest.mark.e2e, pytest.mark.asyncio, pytest.mark.self_managed_res
 CONTENT = b"MCP transport proof.\nThe persistent needle belongs to this document.\n"
 
 
-async def test_worker_uses_mcp_for_five_tools_and_preserves_sources(e2e_client, e2e_headers):
+@pytest.mark.parametrize("skill_source", ["builtin", "shared", "agent_bound"])
+async def test_worker_uses_mcp_for_five_tools_and_preserves_sources(e2e_client, e2e_headers, skill_source):
     """固定模型只发调用；索引、消息、正文和引用由真实系统独立证明。"""
     suffix = uuid.uuid4().hex[:12]
     provider = f"mcp-e2e-{suffix}"
@@ -38,6 +44,15 @@ async def test_worker_uses_mcp_for_five_tools_and_preserves_sources(e2e_client, 
     file_id = f"pytest_mcp_{suffix}"
     kb_id = thread_id = turn_id = None
     observed = {}
+    prompts = []
+    advertised = []
+    skill_slug = "knowledge-base" if skill_source == "builtin" else f"mcp-skill-{suffix}"
+    shared_skill_created = False
+    marker = f"CURRENT_KNOWLEDGE_SKILL_{suffix}"
+    skill_content = (
+        f"---\nname: {skill_slug}\nslug: {skill_slug}\ndescription: Current knowledge MCP dependency\n"
+        f"mcp_dependencies: [knowledge]\n---\n# Knowledge MCP\n{marker}\n"
+    )
     calls = []
     buckets = []
     minio = get_minio_client()
@@ -66,6 +81,8 @@ async def test_worker_uses_mcp_for_five_tools_and_preserves_sources(e2e_client, 
                 self.end_headers()
                 self.wfile.write(body)
                 return
+            prompts.append(json.dumps(request["messages"], ensure_ascii=False))
+            advertised.append({item["function"]["name"] for item in request.get("tools", [])})
             for message in request["messages"]:
                 if message.get("role") == "tool":
                     observed[message["tool_call_id"]] = message["content"]
@@ -180,6 +197,21 @@ async def test_worker_uses_mcp_for_five_tools_and_preserves_sources(e2e_client, 
                     ("find_kb_document", {"kb_id": kb_id, "file_id": file_id, "patterns": ["needle"]}),
                 ]
             )
+            if skill_source == "shared":
+                prepared = await e2e_client.post(
+                    "/api/skills/import/prepare",
+                    headers=e2e_headers,
+                    files={"file": ("SKILL.md", skill_content.encode(), "text/markdown")},
+                )
+                assert prepared.status_code == 200, prepared.text
+                confirmed = await e2e_client.post(
+                    f"/api/skills/install-drafts/{prepared.json()['data']['draft_id']}/confirm",
+                    headers=e2e_headers,
+                    json={"slugs": [skill_slug], "share_config": None},
+                )
+                assert confirmed.status_code == 200, confirmed.text
+                assert confirmed.json()["data"][0]["success"] is True, confirmed.text
+                shared_skill_created = True
             agent = await e2e_client.post(
                 "/api/agent",
                 headers=e2e_headers,
@@ -195,13 +227,28 @@ async def test_worker_uses_mcp_for_five_tools_and_preserves_sources(e2e_client, 
                             "tools": [],
                             "knowledges": [kb_id],
                             "mcps": [],
-                            "skills": ["knowledge-base"],
-                            "preload_skills": ["knowledge-base"],
+                            "skills": [] if skill_source == "agent_bound" else [skill_slug],
+                            "preload_skills": [] if skill_source == "agent_bound" else [skill_slug],
                         }
                     },
                 },
             )
             assert agent.status_code == 200, agent.text
+            if skill_source == "agent_bound":
+                package = BytesIO()
+                with ZipFile(package, "w") as archive:
+                    archive.writestr("SKILL.md", skill_content)
+                bound = await e2e_client.post(
+                    f"/api/agent/{slug}/self-skill/upload",
+                    headers=e2e_headers,
+                    files={"file": ("knowledge.zip", package.getvalue(), "application/zip")},
+                )
+                assert bound.status_code == 200, bound.text
+                skill_slug = bound.json()["skill"]["slug"]
+            current_skill = await e2e_client.get(f"/api/system/skills/{skill_slug}", headers=e2e_headers)
+            assert current_skill.status_code == 200, current_skill.text
+            assert current_skill.json()["data"]["mcp_dependencies"] == ["knowledge"]
+            assert current_skill.json()["data"]["tool_dependencies"] == []
             response = await e2e_client.post(
                 "/api/v1/agents/sessions",
                 headers={**e2e_headers, "Idempotency-Key": suffix},
@@ -215,6 +262,9 @@ async def test_worker_uses_mcp_for_five_tools_and_preserves_sources(e2e_client, 
             assert turn["status"] == "completed", turn
             assert "MCP_AGENT_OK" in output_text(turn["yuxi"]["output"])
             assert set(observed) == {f"call-mcp-{index}" for index in range(5)}
+            assert {name for name, _ in calls}.issubset(advertised[0]), advertised[0]
+            if skill_source != "builtin":
+                assert marker in prompts[0]
             assert [item["kb_id"] for item in json.loads(observed["call-mcp-0"])] == [kb_id]
             assert "persistent needle" in observed["call-mcp-1"]
             assert file_id in observed["call-mcp-2"]
@@ -226,12 +276,14 @@ async def test_worker_uses_mcp_for_five_tools_and_preserves_sources(e2e_client, 
             assert any(source["file_id"] == file_id and "persistent needle" in source["content"] for source in sources.json()["sources"])
             conn = await asyncpg.connect(postgres_dsn())
             try:
+                manifest = json.loads(await conn.fetchval("SELECT manifest FROM agent_runs WHERE id=$1", accepted["run_id"]))
                 rows = await conn.fetch(
                     "SELECT execution_status, extra_metadata FROM messages WHERE run_id=$1 AND message_type='tool_audit'",
                     accepted["run_id"],
                 )
             finally:
                 await conn.close()
+            assert skill_slug in {item["slug"] for item in manifest["resources"]["skills"]}
             assert len(rows) == 5 and all(row["execution_status"] == "completed" for row in rows), rows
             assert all(json.loads(row["extra_metadata"])["output"]["status"] == "success" for row in rows)
         finally:
@@ -239,6 +291,9 @@ async def test_worker_uses_mcp_for_five_tools_and_preserves_sources(e2e_client, 
                 await archive_public_thread(e2e_client, e2e_headers, thread_id, turn_id=turn_id)
             removed = await e2e_client.delete(f"/api/agent/{slug}", headers=e2e_headers)
             assert removed.status_code in {200, 404}, removed.text
+            if shared_skill_created:
+                removed = await e2e_client.delete(f"/api/system/skills/{skill_slug}", headers=e2e_headers)
+                assert removed.status_code == 200, removed.text
             if kb_id:
                 removed = await e2e_client.delete(f"/api/knowledge/knowledge-bases/{kb_id}", headers=e2e_headers)
                 assert removed.status_code == 200, removed.text
@@ -258,6 +313,8 @@ async def test_worker_preserves_selection_and_completes_after_knowledge_error(e2
     unavailable_kb_id = f"kb_unavailable_{suffix}"
     thread_id = turn_id = None
     observed = []
+    advertised = []
+    knowledge_deployed = knowledge_enabled()
 
     class Handler(BaseHTTPRequestHandler):
         """发起一个知识工具，再根据真实错误继续生成最终回答。"""
@@ -265,6 +322,7 @@ async def test_worker_preserves_selection_and_completes_after_knowledge_error(e2
         def do_POST(self):
             """重放模型协议并记录模型实际接收的工具结果。"""
             request = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            advertised.append({item["function"]["name"] for item in request.get("tools", [])})
             observed[:] = [message["content"] for message in request["messages"] if message.get("role") == "tool"]
             if observed:
                 delta, finish = {"role": "assistant", "content": "KNOWLEDGE_FAILURE_HANDLED"}, "stop"
@@ -329,19 +387,76 @@ async def test_worker_preserves_selection_and_completes_after_knowledge_error(e2
             turn = await wait_for_terminal_turn(e2e_client, e2e_headers, thread_id, turn_id)
             assert turn["status"] == "completed", turn
             assert "KNOWLEDGE_FAILURE_HANDLED" in output_text(turn["yuxi"]["output"])
-            assert len(observed) == 1 and ("404" in observed[0] or "知识库 MCP 不可用" in observed[0]), observed
+            assert turn["yuxi"]["result_run_id"] == accepted["run_id"]
+            assert advertised and all(("query_kb" in names) is knowledge_deployed for names in advertised), advertised
+            assert len(observed) == 1, observed
+            expected_error = "Knowledge tool failed (404)" if knowledge_deployed else "能力受限：当前调用者无权使用该工具。"
+            assert expected_error in observed[0], observed
             conn = await asyncpg.connect(postgres_dsn())
             try:
                 snapshot = await conn.fetchval("SELECT config_snapshot FROM sessions WHERE thread_id=$1", thread_id)
-                audit = await conn.fetchrow(
-                    "SELECT execution_status, extra_metadata FROM messages WHERE run_id=$1 AND message_type='tool_audit'",
+                run = await conn.fetchrow(
+                    "SELECT r.status, r.turn_id, m.run_id AS output_run_id, m.content AS output_content "
+                    "FROM agent_runs r JOIN messages m ON m.id=r.output_message_id WHERE r.id=$1",
+                    accepted["run_id"],
+                )
+                models = await conn.fetch(
+                    "SELECT operation_id, extra_metadata FROM messages WHERE run_id=$1 AND message_type='model_audit'",
+                    accepted["run_id"],
+                )
+                audits = await conn.fetch(
+                    "SELECT run_id, turn_id, operation_id, execution_status, extra_metadata "
+                    "FROM messages WHERE run_id=$1 AND message_type='tool_audit'",
                     accepted["run_id"],
                 )
             finally:
                 await conn.close()
             assert json.loads(snapshot)["knowledges"] == selection
-            assert audit and audit["execution_status"] == "failed"
-            assert json.loads(audit["extra_metadata"])["output"]["status"] == "error"
+            assert (run["status"], run["turn_id"], run["output_run_id"]) == ("completed", turn_id, accepted["run_id"])
+            assert "KNOWLEDGE_FAILURE_HANDLED" in run["output_content"]
+            if knowledge_deployed:
+                assert len(audits) == 1, audits
+                audit = audits[0]
+                assert (audit["run_id"], audit["turn_id"], audit["operation_id"]) == (
+                    accepted["run_id"],
+                    turn_id,
+                    "call-knowledge-unavailable",
+                )
+                assert audit["execution_status"] == "failed"
+                metadata = json.loads(audit["extra_metadata"])
+                assert metadata["tool_name"] == "query_kb"
+                assert metadata["input"] == {"kb_id": unavailable_kb_id, "query_text": "needle"}
+                assert metadata["output"]["status"] == "error"
+                assert expected_error in json.dumps(metadata["output"], ensure_ascii=False)
+            else:
+                # 授权在 BaseTool 之前拒绝，因此没有实际执行 lifecycle；拒绝结果由 checkpoint 拥有。
+                assert audits == [], audits
+                declarations = [
+                    (model["operation_id"], call)
+                    for model in models
+                    for call in json.loads(model["extra_metadata"]).get("tool_calls", [])
+                    if call["id"] == "call-knowledge-unavailable"
+                ]
+                assert len(declarations) == 1, declarations
+                operation_id, declaration = declarations[0]
+                assert declaration["name"] == "query_kb"
+                assert declaration["args"] == {"kb_id": unavailable_kb_id, "query_text": "needle"}
+                async with AsyncPostgresSaver.from_conn_string(postgres_dsn()) as saver:
+                    saved = await saver.aget_tuple({"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}})
+                assert saved is not None
+                assert saved.metadata["run_id"] == accepted["run_id"]
+                assert saved.metadata["turn_id"] == turn_id
+                messages = saved.checkpoint["channel_values"]["messages"]
+                source_models = [message for message in messages if isinstance(message, AIMessage) and message.id == operation_id]
+                assert len(source_models) == 1
+                assert declaration in source_models[0].tool_calls
+                rejected = [
+                    message for message in messages if isinstance(message, ToolMessage) and message.tool_call_id == declaration["id"]
+                ]
+                assert len(rejected) == 1 and rejected[0].status == "error"
+                assert rejected[0].content == expected_error
+                assert isinstance(messages[-1], AIMessage)
+                assert messages[-1].text == run["output_content"]
         finally:
             if thread_id:
                 await archive_public_thread(e2e_client, e2e_headers, thread_id, turn_id=turn_id)

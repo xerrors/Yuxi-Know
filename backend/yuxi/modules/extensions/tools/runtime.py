@@ -48,6 +48,7 @@ async def resolve_configured_runtime_tools(context) -> list[Any]:
         uid=getattr(context, "uid", None),
         run_tools=context.mcp_tools,
         unavailable=getattr(context, "mcp_unavailable", None),
+        context=context,
     )
 
     for server_name, mcp_tools in loaded.items():

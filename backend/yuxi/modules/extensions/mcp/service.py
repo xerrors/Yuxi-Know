@@ -3,12 +3,11 @@
 from collections.abc import Callable
 from typing import Any
 
-from langchain_mcp_adapters.client import MultiServerMCPClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.infrastructure.observability.logging import logger
-from yuxi.modules.extensions.mcp.builtin import BUILTIN_MCP_MANIFEST
+from yuxi.modules.extensions.mcp.builtin import BUILTIN_MCP_DEFAULTS, BUILTIN_MCP_MANIFEST, builtin_mcp_available
 from yuxi.modules.extensions.mcp.config import RemoteMCPConfig, normalize_mcp_manifest_entry
 from yuxi.modules.extensions.mcp.models import MCPServer
 from yuxi.modules.extensions.mcp.oauth_config import config_revision, configure_mcp_auth
@@ -22,11 +21,10 @@ from yuxi.modules.extensions.mcp.repository import (
     save_mcp_server,
 )
 from yuxi.modules.extensions.mcp.runtime import (
-    get_mcp_tools as load_mcp_tools,
+    SharedMCPAuth,
 )
 from yuxi.modules.extensions.mcp.runtime import (
-    to_camel_case,
-    validate_remote_transport,
+    get_mcp_tools as load_mcp_tools,
 )
 
 BUILTIN_MCP_SERVERS = BUILTIN_MCP_MANIFEST["mcpServers"]
@@ -39,6 +37,7 @@ _SYNCED_MCP_FIELDS = (
     "headers",
     "timeout",
     "sse_read_timeout",
+    "auth_mode",
 )
 
 
@@ -57,14 +56,17 @@ def is_builtin_mcp_server(server: MCPServer) -> bool:
 
 
 async def ensure_builtin_mcp_servers_in_db() -> None:
-    """Ensure built-in MCP server definitions exist in the database."""
+    """同步代码拥有的连接字段，保留管理员启停和工具开关。"""
     from yuxi.infrastructure.postgres.manager import pg_manager
 
     async with pg_manager.get_async_session_context() as session:
         any_changed = False
 
         for slug, entry in BUILTIN_MCP_SERVERS.items():
-            config = normalize_mcp_manifest_entry(slug, entry)
+            config = {
+                **normalize_mcp_manifest_entry(slug, entry),
+                **BUILTIN_MCP_DEFAULTS.get(slug, {"auth_mode": "headers", "enabled": False}),
+            }
             result = await session.execute(select(MCPServer).filter(MCPServer.slug == slug))
             existing = result.scalar_one_or_none()
             if not existing:
@@ -78,7 +80,9 @@ async def ensure_builtin_mcp_servers_in_db() -> None:
                         headers=config.get("headers"),
                         timeout=config.get("timeout"),
                         sse_read_timeout=config.get("sse_read_timeout"),
-                        enabled=0,
+                        # delegation 表示凭据由 Agent 运行时按当前用户签发；enabled 表达清单声明的默认启停。
+                        auth_mode=config.get("auth_mode", "headers"),
+                        enabled=1 if config.get("enabled") else 0,
                         created_by="system",
                         updated_by="system",
                     )
@@ -87,15 +91,15 @@ async def ensure_builtin_mcp_servers_in_db() -> None:
                 logger.info(f"Added built-in MCP server '{slug}' to database")
                 continue
 
+            if existing.created_by != "system":
+                raise ValueError(f"内置 MCP slug 冲突：{slug} 已由用户服务占用，请先显式处理")
+
             server_changed = False
             for field in _SYNCED_MCP_FIELDS:
                 next_value = config.get(field)
                 if getattr(existing, field) != next_value:
                     setattr(existing, field, next_value)
                     server_changed = True
-            if existing.created_by != "system":
-                existing.created_by = "system"
-                server_changed = True
             if server_changed:
                 existing.updated_by = "system"
                 any_changed = True
@@ -123,7 +127,7 @@ async def get_enabled_mcp_servers(*, names: list[str] | None = None, db: AsyncSe
         async with pg_manager.get_async_session_context() as session:
             return await get_enabled_mcp_servers(names=names, db=session)
 
-    return await list_enabled_mcp_servers(db, names=names)
+    return [server for server in await list_enabled_mcp_servers(db, names=names) if builtin_mcp_available(server.slug)]
 
 
 async def get_mcp_tools(
@@ -132,13 +136,20 @@ async def get_mcp_tools(
     disabled_tools: list[str] | None = None,
 ) -> list[Callable[..., Any]]:
     """共享 headers 的底层入口；个人授权必须经 get_enabled_mcp_tools 传入可信 uid。"""
-    config = (
-        additional_servers.get(server_slug)
-        if additional_servers and server_slug in additional_servers
-        else await get_enabled_mcp_server_config(server_slug)
-    )
+    if additional_servers and server_slug in additional_servers:
+        config = additional_servers[server_slug]
+    else:
+        servers = await get_enabled_mcp_servers(names=[server_slug])
+        server = servers[0] if servers else None
+        if server is not None and getattr(server, "auth_mode", "headers") != "headers":
+            raise ValueError("个人授权或平台委托的 MCP 必须经可信用户身份加载")
+        config = _to_runtime_mcp_config(server) if server is not None else None
     if config and config.get("auth_mode") == "oauth":
         raise ValueError("个人 OAuth MCP 必须经可信用户身份加载")
+    if config and config.get("auth_mode") == "delegation":
+        raise ValueError("平台委托 MCP 由 Agent 运行时按当前用户装配，不支持共享连接加载")
+    if config and "auth" in config:
+        raise ValueError("共享 headers 连接不允许自带 auth，出站策略由装配层注入")
     return await load_mcp_tools(server_slug, config, disabled_tools=disabled_tools)
 
 
@@ -326,7 +337,12 @@ async def toggle_tool_enabled(
 
 
 async def resolve_runtime_mcp_tools(
-    server_slugs: list[str], *, uid: str | None, run_tools: dict[str, list] | None = None, unavailable: dict[str, str] | None = None
+    server_slugs: list[str],
+    *,
+    uid: str | None,
+    run_tools: dict[str, list] | None = None,
+    unavailable: dict[str, str] | None = None,
+    context=None,
 ) -> dict[str, list]:
     """按本人当前权限读取工具，本 Run 的目录由调用方独占持有，不跨运行或用户复用。"""
     import asyncio
@@ -355,6 +371,10 @@ async def resolve_runtime_mcp_tools(
             if server.auth_mode == "oauth":
                 return await personal_mcp_tools(server, uid, include_disabled=True)
             config = _to_runtime_mcp_config(server)
+            if server.auth_mode == "delegation":
+                config.pop("headers", None)
+                config.update(_delegation_connection(server, uid=uid, context=context))
+                return await load_mcp_tools(server.slug, config, disabled_tools=[])
             return await get_mcp_tools(server.slug, additional_servers={server.slug: config}, disabled_tools=[])
         except Exception as exc:
             unavailable[server.slug] = runtime_mcp_failure_message(exc)
@@ -405,7 +425,7 @@ async def available_mcp_servers(db: AsyncSession, server_slugs, *, user_id: int)
     available = {
         server.slug: server
         for server, connection in rows
-        if server.enabled and connection_status(server, connection) in {"connected", "not_required"}
+        if builtin_mcp_available(server.slug) and server.enabled and connection_status(server, connection) in {"connected", "not_required"}
     }
     return {slug: available[slug] for slug in dict.fromkeys(server_slugs) if slug in available}
 
@@ -419,45 +439,56 @@ async def personal_connection_states(db: AsyncSession, servers: list[MCPServer],
 
 
 async def get_enabled_mcp_tools(server_slug: str, *, uid: str | None = None) -> list:
-    """单服务执行入口按当前配置与可信 uid 装配，过滤已禁用工具。"""
+    """单服务执行入口仅装配共享 headers 与个人 OAuth；委托经运行装配。"""
     servers = await get_enabled_mcp_servers(names=[server_slug])
     if not servers:
         return []
     server = servers[0]
     if server.auth_mode == "oauth":
         return await personal_mcp_tools(server, uid)
+    if server.auth_mode == "delegation":
+        raise ValueError("平台委托 MCP 由 Agent 运行时按当前用户装配，不支持单服务直接加载")
     config = _to_runtime_mcp_config(server)
     return await get_mcp_tools(server_slug, additional_servers={server_slug: config}, disabled_tools=server.disabled_tools or [])
 
 
 async def get_all_mcp_tools(server_slug: str, *, uid: str | None = None) -> list:
-    """管理页重新发现全部工具；OAuth 只使用当前查看者授权。"""
-    servers = await get_enabled_mcp_servers(names=[server_slug])
+    """管理页工具清单只读取已启用服务；停用或部署不可用时为空目录。"""
+    from yuxi.infrastructure.postgres.manager import pg_manager
+
+    async with pg_manager.get_async_session_context() as db:
+        servers = await get_enabled_mcp_servers(names=[server_slug], db=db)
     if not servers:
         return []
-    server = servers[0]
-    if server.auth_mode == "oauth":
-        return await personal_mcp_tools(server, uid, include_disabled=True)
-    return await get_mcp_tools(
-        server_slug,
-        additional_servers={server_slug: _to_runtime_mcp_config(server)},
-        disabled_tools=[],
-    )
+    return await inspect_mcp_server_tools(servers[0], uid=uid)
 
 
 async def inspect_mcp_server_tools(server: MCPServer, *, uid: str | None = None) -> list:
     """管理端严格建连，包括停用服务；不吞异常、不修改运行状态。"""
+    if not builtin_mcp_available(server.slug):
+        raise ValueError("MCP 服务在当前部署不可用")
     if getattr(server, "auth_mode", "headers") == "oauth":
         return await personal_mcp_tools(server, uid, include_disabled=True)
-    config = {key: value for key, value in _to_runtime_mcp_config(server).items() if key != "disabled_tools"}
-    validate_remote_transport(config)
-    client = MultiServerMCPClient({server.slug: config})
-    tools = await client.get_tools()
-    for tool in tools:
-        if tool.metadata is None:
-            tool.metadata = {}
-        tool.metadata["id"] = f"mcp__{to_camel_case(server.slug)}__{to_camel_case(tool.name)}"
-    return tools
+    config = _to_runtime_mcp_config(server)
+    config["auth"] = None
+    if getattr(server, "auth_mode", "headers") == "delegation":
+        config.pop("headers", None)
+        config.update(_delegation_connection(server, uid=uid, management=True))
+    return await load_mcp_tools(server.slug, config, disabled_tools=[])
+
+
+def _delegation_connection(server, *, uid, context=None, management=False):
+    """内部服务直接提供 SDK 认证，执行请求复用通用出站策略。"""
+    from yuxi.modules.knowledge.mcp.client import knowledge_mcp_connection
+
+    policy = None if management else SharedMCPAuth(server.slug, server.to_mcp_config(), uid=uid, auth_mode=server.auth_mode)
+    return knowledge_mcp_connection(
+        server.slug,
+        uid=uid,
+        context=context,
+        management=management,
+        before_request=policy.validate_request if policy is not None else None,
+    )
 
 
 def _to_runtime_mcp_config(server: MCPServer) -> dict[str, Any]:

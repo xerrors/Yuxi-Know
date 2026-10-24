@@ -109,9 +109,9 @@ app = FastAPI(
 app.add_exception_handler(DomainError, domain_error_handler)
 app.include_router(router, prefix="/api")
 if knowledge_enabled():
-    from yuxi.api.routers.public_v1.knowledge_mcp import KnowledgeMCP
+    from yuxi.api.routers.public_v1.knowledge_mcp import create_knowledge_mcp
 
-    app.state.knowledge_mcp = KnowledgeMCP()
+    app.state.knowledge_mcp = create_knowledge_mcp()
     app.router.routes.append(app.state.knowledge_mcp.route)
 
 # CORS 设置

@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from unittest.mock import AsyncMock
 
 import pytest
+
 from yuxi.modules.agents.runtime import context as context_module
 from yuxi.modules.knowledge.read_models import KnowledgeBaseSummary
 from yuxi.modules.workspace.paths import ensure_user_workspace
@@ -174,8 +175,8 @@ async def test_resolve_agent_resource_options_empty_fields_loads_nothing(monkeyp
 
     monkeypatch.setitem(
         sys.modules,
-        "yuxi.modules.extensions.tools.knowledge.client",
-        types.SimpleNamespace(list_knowledge_bases=fail_if_loaded, KnowledgeMCPError=RuntimeError),
+        "yuxi.modules.knowledge.mcp.client",
+        types.SimpleNamespace(knowledge_resource_options=fail_if_loaded, KnowledgeMCPError=RuntimeError, KnowledgeMCPUnavailable=RuntimeError),
     )
 
     assert await context_module.resolve_agent_resource_options(set(), db=object(), user=object()) == {}
@@ -184,7 +185,7 @@ async def test_resolve_agent_resource_options_empty_fields_loads_nothing(monkeyp
 @pytest.mark.asyncio
 async def test_normalize_agent_context_config_defaults_mcps_off_and_filters_explicit_lists(monkeypatch):
     async def fake_get_knowledge_bases_by_user(_user):
-        return [{"kb_id": "kb-a", "name": "kb-a", "description": ""}, {"kb_id": "kb-b", "name": "kb-b", "description": ""}]
+        return [{"key": "kb-a", "name": "kb-a", "description": ""}, {"key": "kb-b", "name": "kb-b", "description": ""}]
 
     async def fake_get_all_mcp_servers(_db):
         return [
@@ -213,8 +214,12 @@ async def test_normalize_agent_context_config_defaults_mcps_off_and_filters_expl
     )
     monkeypatch.setitem(
         sys.modules,
-        "yuxi.modules.extensions.tools.knowledge.client",
-        types.SimpleNamespace(list_knowledge_bases=fake_get_knowledge_bases_by_user, KnowledgeMCPError=RuntimeError),
+        "yuxi.modules.knowledge.mcp.client",
+        types.SimpleNamespace(
+            knowledge_resource_options=fake_get_knowledge_bases_by_user,
+            KnowledgeMCPError=RuntimeError,
+            KnowledgeMCPUnavailable=RuntimeError,
+        ),
     )
     monkeypatch.setitem(
         sys.modules,
@@ -314,7 +319,7 @@ async def test_prepare_agent_runtime_context_filters_resources_and_derives_runti
     monkeypatch.setattr(context_module, "_load_workspace_agent_context", lambda uid: "workspace policy")
 
     async def fake_get_knowledge_bases_by_user(_user):
-        return [{"kb_id": "kb-a", "name": "kb-a", "description": ""}, {"kb_id": "kb-b", "name": "kb-b", "description": ""}]
+        return [{"key": "kb-a", "name": "kb-a", "description": ""}, {"key": "kb-b", "name": "kb-b", "description": ""}]
 
     async def fake_get_all_mcp_servers(_db):
         return [types.SimpleNamespace(slug="mcp-a", name="MCP A", description="", enabled=True)]
@@ -401,8 +406,12 @@ async def test_prepare_agent_runtime_context_filters_resources_and_derives_runti
     )
     monkeypatch.setitem(
         sys.modules,
-        "yuxi.modules.extensions.tools.knowledge.client",
-        types.SimpleNamespace(list_knowledge_bases=fake_get_knowledge_bases_by_user, KnowledgeMCPError=RuntimeError),
+        "yuxi.modules.knowledge.mcp.client",
+        types.SimpleNamespace(
+            knowledge_resource_options=fake_get_knowledge_bases_by_user,
+            KnowledgeMCPError=RuntimeError,
+            KnowledgeMCPUnavailable=RuntimeError,
+        ),
     )
     monkeypatch.setitem(
         sys.modules,
@@ -613,8 +622,7 @@ async def test_resource_field_declarations_drive_write_runtime_and_schema(monkey
     """新增声明自动参与写入校验和展开，普通列表保持原样。"""
     from types import SimpleNamespace
 
-    from yuxi.modules.agents.services.configuration import merge_agent_config_json
-    from yuxi.modules.agents.services.configuration import prepare_agent_config_write
+    from yuxi.modules.agents.services.configuration import merge_agent_config_json, prepare_agent_config_write
 
     async def options(names, **kwargs):
         return {name: [{"key": "visible"}] for name in names}

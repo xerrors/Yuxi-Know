@@ -137,7 +137,9 @@ async def test_reference_loading_reads_knowledge_permissions_only_for_knowledge_
     monkeypatch.setattr(references, "require_thread", AsyncMock())
     monkeypatch.setattr(references, "AgentTurnRepository", lambda _db: SimpleNamespace(get_for_scope=get_turn))
     monkeypatch.setattr(references, "TurnReferenceRepository", lambda _db: repo)
-    monkeypatch.setattr(references, "list_knowledge_bases", listed)
+    from yuxi.modules.knowledge.mcp import references as knowledge_references
+
+    monkeypatch.setattr(knowledge_references, "list_knowledge_bases", listed)
     scope = SimpleNamespace(uid="user-a", app_id=None)
 
     retrievals[:] = [tool("web_search", {"results": [{"url": "https://example.com", "content": "网页证据"}]})]
@@ -308,3 +310,34 @@ async def test_annotation_timeout_explains_model_configuration_and_keeps_answer_
     assert error.value.code == "references_timeout"
     assert message.content == "正文"
     assert message.extra_metadata == {"keep": "original"}
+
+
+@pytest.mark.asyncio
+async def test_mcp_adapter_recorded_output_preserves_reference_identity_and_span():
+    """真实 adapter 和 recorder 转换后保留结构化证据，不能把文本块误当 chunk。"""
+    from langchain_mcp_adapters.tools import convert_mcp_tool_to_langchain_tool
+    from mcp import types
+
+    from yuxi.modules.agents.services.message_recorder import tool_event_output
+
+    payload = {
+        "kb_id": "kb-a",
+        "results": [{"id": "chunk-a", "file_id": "file-a", "content": "独立证据", "metadata": {"start_line": 10, "end_line": 12}}],
+    }
+
+    class Session:
+        """仅提供固定 MCP 协议结果。"""
+
+        async def call_tool(self, *args, **kwargs):
+            """结构化结果与展示文本刻意不同，保证引用读取权威字段。"""
+            return types.CallToolResult(content=[types.TextContent(type="text", text="展示摘要")], structuredContent=payload)
+
+    adapter = convert_mcp_tool_to_langchain_tool(Session(), types.Tool(name="query_kb", inputSchema={"type": "object", "properties": {}}))
+    result = await adapter.ainvoke({"type": "tool_call", "id": "call-a", "name": "query_kb", "args": {}})
+    message = tool("query_kb", {})
+    message.extra_metadata["output"] = tool_event_output({"output": result})
+    sources = collect_reference_sources([message], {"kb-a"})
+    assert [(item["file_id"], item["content"], item["start_line"], item["end_line"]) for item in sources] == [
+        ("file-a", "独立证据", 10, 12)
+    ]
+    assert collect_reference_sources([message], set()) == []

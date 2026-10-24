@@ -105,6 +105,7 @@ class SkillsMiddleware(AgentMiddleware):
                 uid=getattr(runtime_context, "uid", None),
                 run_tools=runtime_context.mcp_tools,
                 unavailable=getattr(runtime_context, "mcp_unavailable", None),
+                context=runtime_context,
             )
 
         # 本地工具已在构图时注册；最终可见性与执行权限统一由 Authorization 门控。

@@ -31,17 +31,8 @@ def test_registry_and_catalog_reads_do_not_expose_mutable_global_containers(monk
     assert [item["slug"] for item in get_tool_metadata()] == ["first", "second"]
 
 
-def test_documented_knowledge_tool_collection_uses_registered_instances():
-    """正式 Python 扩展入口继续返回五个已注册知识库工具。"""
-    from yuxi.modules.extensions.tools.knowledge.tools import get_common_kb_tools
-
-    tools = get_common_kb_tools()
-    assert {tool.name for tool in tools} == {
-        "list_kbs",
-        "query_kb",
-        "find_kb_document",
-        "open_kb_document",
-        "search_file",
-    }
-    registered = registry.get_all_tool_instances()
-    assert all(any(tool is item for item in registered) for tool in tools)
+def test_knowledge_tools_are_no_longer_locally_registered():
+    """知识工具只由内置 Knowledge MCP 装配提供，注册表不再保留原生副本。"""
+    knowledge_names = {"list_kbs", "query_kb", "find_kb_document", "open_kb_document", "search_file"}
+    assert not knowledge_names & {tool.name for tool in registry.get_all_tool_instances()}
+    assert not [name for name, extra in registry.get_all_extra_metadata().items() if extra.category == "knowledge"]

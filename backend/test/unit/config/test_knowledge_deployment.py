@@ -18,6 +18,32 @@ def test_knowledge_is_enabled_by_default(monkeypatch):
     assert knowledge_enabled() is True
 
 
+def test_builtin_knowledge_server_uses_generic_delegation_auth():
+    """内置 knowledge server 走通用平台委托模式，slug 与签发器、Skill 依赖一致。"""
+    from yuxi.modules.extensions.mcp.builtin import BUILTIN_MCP_DEFAULTS, BUILTIN_MCP_MANIFEST, KNOWLEDGE_MCP_SLUG
+
+    entry = BUILTIN_MCP_MANIFEST["mcpServers"][KNOWLEDGE_MCP_SLUG]
+    assert "auth_mode" not in entry and "enabled" not in entry
+    assert BUILTIN_MCP_DEFAULTS[KNOWLEDGE_MCP_SLUG] == {"auth_mode": "delegation", "enabled": True}
+
+    frontmatter = (project_root() / "backend/yuxi/modules/extensions/skills/builtin/knowledge-base/SKILL.md").read_text(encoding="utf-8")
+    assert f'mcp_dependencies: ["{KNOWLEDGE_MCP_SLUG}"]' in frontmatter
+
+
+def test_builtin_manifest_preserves_identity_when_deployment_disabled(tmp_path):
+    """关闭部署只影响可用性，内置身份和默认管理员意图保持稳定。"""
+    env = os.environ | {
+        "YUXI_KNOWLEDGE_ENABLED": "false",
+        "PYTHONPATH": str(project_root() / "backend"),
+    }
+    script = """
+from yuxi.modules.extensions.mcp.builtin import BUILTIN_MCP_MANIFEST, KNOWLEDGE_MCP_SLUG, builtin_mcp_available
+print(KNOWLEDGE_MCP_SLUG in BUILTIN_MCP_MANIFEST["mcpServers"], builtin_mcp_available(KNOWLEDGE_MCP_SLUG))
+"""
+    result = subprocess.run([sys.executable, "-c", script], cwd=tmp_path, env=env, capture_output=True, text=True, check=True)
+    assert result.stdout.splitlines()[-1] == "True False"
+
+
 @pytest.mark.parametrize("value, expected", [("true", True), ("false", False), (" FALSE ", False)])
 def test_knowledge_switch_has_explicit_boolean_semantics(monkeypatch, value, expected):
     """配置边界只接受可解释的布尔开关。"""
@@ -40,7 +66,6 @@ def test_compose_defaults_to_full_knowledge_and_shared_mcp_identity(filename):
     for name in ("api", "worker", "app-init"):
         env = services[name]["environment"]
         assert env["YUXI_KNOWLEDGE_ENABLED"] == "${YUXI_KNOWLEDGE_ENABLED:-true}"
-        assert env["YUXI_KNOWLEDGE_MCP_URL"] == "${YUXI_KNOWLEDGE_MCP_URL:-http://api:5050/api/mcp}"
         assert "JWT_SECRET_KEY" in env
         assert "YUXI_INSTANCE_ID" in env
     for name in ("milvus", "etcd", "graph"):

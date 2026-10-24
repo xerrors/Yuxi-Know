@@ -1,7 +1,6 @@
 x-api-worker-env: &api-worker-env
   HOST_IP: ${HOST_IP:-}
   YUXI_KNOWLEDGE_ENABLED: ${YUXI_KNOWLEDGE_ENABLED:-true}
-  YUXI_KNOWLEDGE_MCP_URL: ${YUXI_KNOWLEDGE_MCP_URL:-http://api:5050/api/mcp}
   RUNNING_IN_DOCKER: "true"
   YUXI_ENV: production
   PYTHONPATH: /app

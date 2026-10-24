@@ -60,6 +60,7 @@ uv run --locked --group test pytest \
     test/integration/services/test_database_relation_integrity.py \
     test/integration/services/test_database_access_paths.py \
     test/integration/services/test_mcp_oauth.py \
+    test/integration/services/test_mcp_delegation_lifecycle.py \
     test/integration/services/test_arq_worker_dispatch.py \
     test/integration/services/test_background_job_repository.py \
     test/integration/services/test_chunk_config_boundary.py \

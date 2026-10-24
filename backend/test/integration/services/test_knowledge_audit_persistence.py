@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from test.integration.support.module_audit import isolated_audit_store
 from test.unit.support.milvus import FakeCollection, make_kb
-from yuxi.modules.agents.services.references import _knowledge_sources
+from yuxi.modules.knowledge.mcp.references import knowledge_reference_sources
 from yuxi.modules.identity.models import User
 from yuxi.modules.identity.repositories.users import UserRepository
 from yuxi.modules.knowledge.implementations.milvus import MilvusKB
@@ -54,7 +54,7 @@ async def test_retrieval_to_agent_reference_uses_postgres_filename(monkeypatch, 
             search_mode="keyword" if mode == "graph" else mode,
             use_graph_retrieval=mode == "graph",
         )
-        sources = _knowledge_sources(chunks, "query_kb", "kb-source")
+        sources = knowledge_reference_sources(chunks, "query_kb", "kb-source")
         assert len(sources) == 1
         assert sources[0]["title"] == "当前文档.md"
         assert sources[0]["content"] == "权威正文"

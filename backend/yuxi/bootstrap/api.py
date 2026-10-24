@@ -13,7 +13,8 @@ from yuxi.infrastructure.postgres.schema import require_current_schema
 from yuxi.modules.agents.runtime.sandbox import check_sandbox_provider
 from yuxi.modules.agents.services.transport import get_redis_client
 from yuxi.modules.identity.oidc import get_oidc_config
-from yuxi.modules.identity.security import AuthUtils, require_knowledge_delegation_config
+from yuxi.modules.identity.security import AuthUtils
+from yuxi.modules.knowledge.mcp.auth import require_knowledge_delegation_config
 
 
 class RequiredStartupComponentError(RuntimeError):

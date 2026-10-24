@@ -93,7 +93,7 @@
                 {{ formatExtensionCardTitle(previewServer.name) }}
               </div>
               <div class="mcp-basic-info-meta">
-                <span>{{ previewServer.auth_mode === 'oauth' ? '个人账号授权' : '共享服务' }} · {{ previewServer.enabled ? '已启用' : '已停用' }}</span>
+                <span>{{ mcpAuthLabel(previewServer.auth_mode) }} · {{ previewServer.enabled ? '已启用' : '已停用' }}</span>
                 <span v-if="previewServer.is_builtin" class="mcp-basic-info-tag"> 内置 </span>
               </div>
             </div>
@@ -154,7 +154,7 @@ import InfoCard from '@/shared/ui/InfoCard.vue'
 import PageShoulder from '@/shared/ui/PageShoulder.vue'
 import McpFormModal from './McpFormModal.vue'
 import McpConnectionControls from './McpConnectionControls.vue'
-import { mcpConnectionLabel } from '@/modules/extensions/model/mcpOAuth'
+import { mcpAuthLabel, mcpConnectionLabel } from '@/modules/extensions/model/mcpOAuth'
 import { formatExtensionCardTitle } from '@/modules/extensions/model/extensionDisplayName'
 import { getExtensionIconColor } from '@/shared/lib/extensionIconColor'
 import { useThemeStore } from '@/shared/model/theme'

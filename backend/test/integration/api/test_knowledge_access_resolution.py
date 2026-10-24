@@ -7,8 +7,8 @@ import pytest
 
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.infrastructure.postgres.models import load_models
-from yuxi.modules.extensions.tools.knowledge import tools
-from yuxi.modules.extensions.tools.knowledge.client import KnowledgeMCPError, KnowledgeMCPUnavailable
+from yuxi.modules.extensions.mcp.repository import get_mcp_server
+from yuxi.modules.extensions.mcp.service import resolve_runtime_mcp_tools
 from yuxi.modules.knowledge.repositories.bases import KnowledgeBaseRepository
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
@@ -39,8 +39,14 @@ async def test_knowledge_tools_reject_access_after_http_revocation(test_client, 
                 "share_config": share_config,
             }
         )
-        runtime = SimpleNamespace(context=SimpleNamespace(uid=uid, knowledges=[kb_id]))
-        assert [kb["kb_id"] for kb in await tools.list_kbs.coroutine(dummy="", runtime=runtime)] == [kb_id]
+        async with pg_manager.get_async_session_context() as db:
+            knowledge_server = await get_mcp_server(db, "knowledge")
+        assert knowledge_server is not None and knowledge_server.auth_mode == "delegation"
+        assembled = await resolve_runtime_mcp_tools(["knowledge"], uid=uid, context=SimpleNamespace(uid=uid, knowledges=[kb_id]))
+        loaded = {tool.name: tool for tool in assembled["knowledge"]}
+        listed = await loaded["list_kbs"].ainvoke({"type": "tool_call", "id": "list-access", "name": "list_kbs", "args": {}})
+        assert listed.status == "success"
+        assert [kb["kb_id"] for kb in listed.artifact["structured_content"]["knowledge_bases"]] == [kb_id]
 
         share_config["read_scope"]["user_uids"] = [owner_uid]
         changed = await test_client.put(
@@ -52,9 +58,11 @@ async def test_knowledge_tools_reject_access_after_http_revocation(test_client, 
         persisted = await repository.get_by_kb_id(kb_id)
         assert persisted is not None and persisted.share_config == share_config
 
-        with pytest.raises(KnowledgeMCPError, match=r"Knowledge tool failed \(404\)") as refused:
-            await tools.query_kb.coroutine(kb_id=kb_id, query_text="private", runtime=runtime)
-        assert not isinstance(refused.value, KnowledgeMCPUnavailable)
+        denied_result = await loaded["query_kb"].ainvoke(
+            {"type": "tool_call", "id": "query-access", "name": "query_kb", "args": {"kb_id": kb_id, "query_text": "private"}}
+        )
+        assert denied_result.status == "error"
+        assert "Knowledge tool failed (404)" in str(denied_result.content)
         denied = await test_client.post(
             "/api/v1/knowledge/tools/query_kb",
             headers=standard_user["headers"],

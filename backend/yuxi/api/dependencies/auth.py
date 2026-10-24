@@ -7,12 +7,11 @@ from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.identity.models import User
 from yuxi.modules.identity.security import AuthUtils
 from yuxi.modules.identity.services.public_auth import verify_api_key
+from yuxi.modules.knowledge.mcp import KNOWLEDGE_MCP_PATH
 from yuxi.shared.datetime import utc_now
 
 # 定义OAuth2密码承载器，指定token URL
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token", auto_error=False)
-
-KNOWLEDGE_MCP_PATH = "/api/mcp"
 
 KNOWLEDGE_TOOL_PATHS = frozenset(
     f"/api/v1/knowledge/tools/{name}"

@@ -48,20 +48,32 @@ class SharedMCPAuth(httpx.Auth):
 
     requires_request_body = True
 
-    def __init__(self, slug, config):
+    def __init__(self, slug, config, *, uid=None, auth_mode="headers"):
         """绑定共享工具装配时捕获的连接字段。"""
         self.slug = slug
+        self.uid, self.auth_mode = uid, auth_mode
         self.endpoint = (config.get("transport"), config.get("url"), dict(config.get("headers") or {}))
 
     async def async_auth_flow(self, request):
-        """配置撤销在网络副作用前拒绝；管理端临时连接检查不使用此适配器。"""
+        """共享凭据复用同一出站检查。"""
+        await self.validate_request(request)
+        yield request
+
+    async def validate_request(self, request):
+        """配置撤销在网络副作用前拒绝，内部认证可直接复用此检查。"""
         from yuxi.infrastructure.postgres.manager import pg_manager
-        from yuxi.modules.extensions.mcp.repository import get_mcp_server
-        from yuxi.shared.errors import StateConflictError
+        from yuxi.modules.extensions.mcp.repository import get_mcp_server, runtime_mcp_policy
+        from yuxi.shared.errors import PermissionDeniedError, StateConflictError
 
         async with pg_manager.get_async_session_context() as db:
-            server = await get_mcp_server(db, self.slug)
-            if not server or not server.enabled or server.auth_mode != "headers":
+            if self.uid is not None:
+                policy = await runtime_mcp_policy(db, self.slug, self.uid)
+                if policy is None or policy[0].is_login_locked():
+                    raise PermissionDeniedError("MCP 用户不可用")
+                server = policy[1]
+            else:
+                server = await get_mcp_server(db, self.slug)
+            if not server or not server.enabled or server.auth_mode != self.auth_mode:
                 raise StateConflictError("MCP 配置已改变，请重新运行")
             if (server.transport, server.url, server.headers or {}) != self.endpoint:
                 raise StateConflictError("MCP 配置已改变，请重新运行")
@@ -69,7 +81,6 @@ class SharedMCPAuth(httpx.Auth):
                 payload = json.loads(request.content)
                 if payload.get("method") == "tools/call" and payload.get("params", {}).get("name") in (server.disabled_tools or []):
                     raise StateConflictError("MCP 工具已停用")
-        yield request
 
 
 async def get_mcp_tools(
@@ -84,7 +95,7 @@ async def get_mcp_tools(
     validate_remote_transport(server_config)
     try:
         client_config = {key: value for key, value in server_config.items() if key != "disabled_tools"}
-        client_config["auth"] = SharedMCPAuth(server_slug, client_config)
+        client_config.setdefault("auth", SharedMCPAuth(server_slug, client_config))
         client = await get_mcp_client({server_slug: client_config})
         tools = cast(list[Any], await client.get_tools())
         for tool in tools:

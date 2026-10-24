@@ -83,7 +83,7 @@
             </div>
             <div class="mcp-info-row">
               <dt>认证方式</dt>
-              <dd>{{ server.auth_mode === 'oauth' ? '个人账号授权' : '共享凭据' }}</dd>
+              <dd>{{ mcpAuthLabel(server.auth_mode) }}</dd>
             </div>
             <div class="mcp-info-row">
               <dt>传输类型</dt>
@@ -242,6 +242,7 @@ import McpFormModal from './McpFormModal.vue'
 import McpConnectionControls from './McpConnectionControls.vue'
 import ExtensionDetailLayout from '@/shared/ui/ExtensionDetailLayout.vue'
 import { mcpApi } from '@/apis/mcp_api'
+import { mcpAuthLabel } from '@/modules/extensions/model/mcpOAuth'
 import { formatFullDateTime } from '@/shared/lib/time'
 
 const route = useRoute()

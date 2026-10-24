@@ -7,11 +7,12 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from starlette.testclient import TestClient
 
 from yuxi.api.dependencies import auth
-from yuxi.api.routers.public_v1 import knowledge_mcp
+from yuxi.api.routers.public_v1.knowledge_mcp import create_knowledge_mcp
+from yuxi.modules.knowledge.mcp import server as knowledge_mcp
 from yuxi.modules.knowledge.base import KBNotFoundError
 
 HEADERS = {"Authorization": "Bearer yxkey_alice", "Accept": "application/json, text/event-stream"}
@@ -55,7 +56,7 @@ def client(monkeypatch):
     monkeypatch.setattr(auth, "verify_api_key", verify)
     monkeypatch.setattr(knowledge_mcp, "visible_knowledge_bases", visible)
     monkeypatch.setattr(knowledge_mcp.knowledge_tools, "query_kb", retrieve)
-    adapter = knowledge_mcp.KnowledgeMCP()
+    adapter = create_knowledge_mcp()
 
     @asynccontextmanager
     async def lifespan(app):
@@ -64,6 +65,7 @@ def client(monkeypatch):
             yield
 
     app = FastAPI(lifespan=lifespan)
+    app.state.knowledge_mcp = adapter
     app.router.routes.append(adapter.route)
     with TestClient(app, base_url="http://localhost:5050") as client:
         yield client
@@ -237,3 +239,32 @@ def test_removed_download_is_not_discoverable_or_callable(client):
     result = rpc(client, "tools/call", {"name": "download_kb_file", "arguments": {"kb_id": "alice", "file_id": "source"}}).json()["result"]
     assert result["isError"]
     assert result["content"][0]["text"] == "Unknown knowledge tool"
+
+
+def test_api_key_rejection_preserves_response_and_never_enters_mcp(client, monkeypatch):
+    """API 认证失败的状态、正文和响应头原样传出，协议执行器不能被调用。"""
+    from yuxi.api.routers.public_v1 import knowledge_mcp as api_adapter
+
+    monkeypatch.setattr(
+        api_adapter, "get_current_user",
+        AsyncMock(side_effect=HTTPException(403, "当前凭据不能读取知识库", headers={"X-Auth-Rejection": "knowledge"})),
+    )
+    manager = AsyncMock(side_effect=AssertionError("拒绝请求不得进入 MCP"))
+    monkeypatch.setattr(client.app.state.knowledge_mcp.manager, "handle_request", manager)
+    response = rpc(client, "tools/list")
+    assert response.status_code == 403
+    assert response.json() == {"detail": "当前凭据不能读取知识库"}
+    assert response.headers["X-Auth-Rejection"] == "knowledge"
+    manager.assert_not_awaited()
+
+
+@pytest.mark.parametrize("authorization", ["", "Bearer invalid-delegation"])
+def test_invalid_delegate_returns_bearer_challenge_before_mcp(client, monkeypatch, authorization):
+    """缺失或无效委托直接返回标准 401，不能进入 MCP manager。"""
+    manager = AsyncMock(side_effect=AssertionError("拒绝请求不得进入 MCP"))
+    monkeypatch.setattr(client.app.state.knowledge_mcp.manager, "handle_request", manager)
+    response = rpc(client, "tools/list", headers={**HEADERS, "Authorization": authorization})
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Invalid Knowledge delegation"}
+    assert response.headers["WWW-Authenticate"] == "Bearer"
+    manager.assert_not_awaited()

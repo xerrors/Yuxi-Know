@@ -37,6 +37,8 @@ class MCPOAuthConfig(BaseModel):
 
 def configure_mcp_auth(server, auth_mode: str, oauth_config: dict | None) -> None:
     """管理员配置只保存脱敏元数据，客户端 secret 单独加密。"""
+    if auth_mode == "delegation":
+        raise ValueError("平台委托 MCP 由内置清单同步，不能通过管理接口配置")
     if auth_mode not in {"headers", "oauth"}:
         raise ValueError("MCP 认证方式必须为 headers 或 oauth")
     server.auth_mode = auth_mode

@@ -2,7 +2,7 @@
 
 状态：implemented
 类型：bug-fix
-Owner：backend/yuxi/modules/extensions/tools/knowledge/tools.py
+Owner：backend/yuxi/modules/agents/runtime/middlewares/tool_error_guard.py
 
 ## 问题
 
@@ -12,7 +12,7 @@ Owner：backend/yuxi/modules/extensions/tools/knowledge/tools.py
 
 ### 实现方案
 
-`query_kb` 让检索异常进入现有 ToolErrorGuardMiddleware，生成绑定同一调用的错误 ToolMessage，继续沿既有审计与公开投影传递；正常空结果仍是成功。SessionWorkspace 在打开附件上传框时固定目标草稿，确认始终写回该目标；当前新草稿创建正式 Thread 时跟随既有草稿迁移。UserSandboxBackend 的 grep 在路由前统一默认上限为 1000，正数显式上限保持有效；只在发现第 N+1 条匹配时标记截断，两条路径返回前 N 条。
+知识库失败状态与正常空结果的区分由[内置 MCP 装配决定](./2026-10-24-knowledge-builtin-mcp.md)及其后续集成边界决定拥有；本记录中的原本地工具错误链路与验证只说明该修复的依据。SessionWorkspace 在打开附件上传框时固定目标草稿，确认始终写回该目标；当前新草稿创建正式 Thread 时跟随既有草稿迁移。UserSandboxBackend 的 grep 在路由前统一默认上限为 1000，正数显式上限保持有效；只在发现第 N+1 条匹配时标记截断，两条路径返回前 N 条。
 
 目标是修复三处已复现行为。非目标是拆分大型组件/路由、改变 API/Schema、增加配置、迁移历史数据或重构其他知识库工具。现有非正数上限没有有效业务含义，明确返回搜索错误。
 
@@ -33,7 +33,7 @@ Owner：backend/yuxi/modules/extensions/tools/knowledge/tools.py
 
 ## 后果
 
-异常内容由现有中间件脱敏，仅公开错误类型及修复提示。附件在其他会话确认后保留在原草稿，必须通过切回原会话核验。真实 VM 与 worker 验收依赖可用 Cube 环境。E2E 只归档自身会话、删除 UUID 临时文件和新建 Workdir 中的测试文件，再删除临时 Agent 与模型供应商；保留持久审计，不递归删除可能与其他 Project 重叠的目录。
+知识库错误内容与转换边界见上述 MCP 决定。附件在其他会话确认后保留在原草稿，必须通过切回原会话核验。真实 VM 与 worker 验收依赖可用 Cube 环境。E2E 只归档自身会话、删除 UUID 临时文件和新建 Workdir 中的测试文件，再删除临时 Agent 与模型供应商；保留持久审计，不递归删除可能与其他 Project 重叠的目录。
 
 实际执行：
 

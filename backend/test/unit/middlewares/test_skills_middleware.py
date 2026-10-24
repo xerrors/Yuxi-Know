@@ -266,9 +266,13 @@ async def test_awrap_model_call_mounts_knowledge_base_skill_tools(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_resolve_skill_gated_tools_registers_kb_tools():
+async def test_resolve_skill_gated_tools_registers_local_skill_tools(monkeypatch):
     """门控工具必须能从可见 Skill 的依赖解析出真实工具实例，并随基础工具一起进入
     create_agent 工具列表（即注册进 ToolNode），否则激活后仍报 not a valid tool。"""
+    from yuxi.modules.extensions.tools import registry as tool_registry
+
+    demo = SimpleNamespace(name="demo_local_tool", description="fixture")
+    monkeypatch.setattr(tool_registry, "_all_tool_instances", [*tool_registry.get_all_tool_instances(), demo])
     context = SimpleNamespace(
         tools=None,
         mcps=None,
@@ -282,15 +286,15 @@ async def test_resolve_skill_gated_tools_registers_kb_tools():
             "preloaded_skills": [],
             "preloaded_skill_contents": {},
             "effective_skills": ["knowledge-base"],
-            "runtime_skills": {"knowledge-base": _runtime_skill("knowledge-base", tools=sorted(_KB_TOOL_NAMES))},
+            "runtime_skills": {"knowledge-base": _runtime_skill("knowledge-base", tools=["demo_local_tool"])},
         },
     )
 
     gated_tools = resolve_skill_gated_tools(context)
-    assert {tool.name for tool in gated_tools} == _KB_TOOL_NAMES
+    assert [tool.name for tool in gated_tools] == ["demo_local_tool"]
 
     runtime_tools = await resolve_configured_runtime_tools(context)
-    assert _KB_TOOL_NAMES <= {tool.name for tool in runtime_tools}
+    assert "demo_local_tool" in {tool.name for tool in runtime_tools}
 
 
 @pytest.mark.asyncio
@@ -380,7 +384,9 @@ async def test_preloaded_skill_rejects_duplicate_mcp_tool_names(monkeypatch):
 
         return f"wrong-service:{value}"
 
-    async def fake_resolve_runtime_mcp_tools(server_names, *, uid=None, run_tools=None, unavailable=None):
+    async def fake_resolve_runtime_mcp_tools(
+        server_names, *, uid=None, run_tools=None, unavailable=None, context=None
+    ):
         result = {name: [chart_tool] if name == "charts" else [conflicting_chart_tool] for name in server_names}
         if run_tools is not None:
             run_tools.update(result)
@@ -430,7 +436,9 @@ async def test_activated_mcp_rejects_name_of_inactive_registered_skill_tool(monk
 
         return f"mcp:{value}"
 
-    async def fake_resolve_runtime_mcp_tools(server_names, *, uid=None, run_tools=None, unavailable=None):
+    async def fake_resolve_runtime_mcp_tools(
+        server_names, *, uid=None, run_tools=None, unavailable=None, context=None
+    ):
         assert server_names == ["charts"]
         result = {name: [chart_tool] for name in server_names}
         if run_tools is not None:
@@ -480,7 +488,9 @@ async def test_preloaded_skill_exposes_mcp_tool_on_first_model_call(monkeypatch)
 
         return f"rendered:{value}"
 
-    async def fake_resolve_runtime_mcp_tools(server_names, *, uid=None, run_tools=None, unavailable=None):
+    async def fake_resolve_runtime_mcp_tools(
+        server_names, *, uid=None, run_tools=None, unavailable=None, context=None
+    ):
         assert server_names == ["charts"]
         assert uid == "employee-runtime"
         result = {name: [chart_tool] for name in server_names}
@@ -540,7 +550,9 @@ async def test_activated_skill_loads_mcp_without_agent_selection(monkeypatch):
 
     calls = []
 
-    async def fake_resolve_runtime_mcp_tools(server_names, *, uid=None, run_tools=None, unavailable=None):
+    async def fake_resolve_runtime_mcp_tools(
+        server_names, *, uid=None, run_tools=None, unavailable=None, context=None
+    ):
         calls.extend(server_names)
         result = {name: [chart_tool] for name in server_names}
         if run_tools is not None:
@@ -612,7 +624,9 @@ async def test_skill_reusing_explicit_mcp_server_does_not_duplicate_registered_t
 
     calls = []
 
-    async def fake_resolve_runtime_mcp_tools(server_names, *, uid=None, run_tools=None, unavailable=None):
+    async def fake_resolve_runtime_mcp_tools(
+        server_names, *, uid=None, run_tools=None, unavailable=None, context=None
+    ):
         calls.extend(server_names)
         result = {name: [chart_tool] for name in server_names}
         if run_tools is not None:
@@ -662,15 +676,22 @@ async def test_skill_reusing_explicit_mcp_server_does_not_duplicate_registered_t
 
 @pytest.mark.asyncio
 async def test_explicit_mcp_rejects_skill_local_tool_name_collision(monkeypatch):
-    @tool("list_kbs")
-    async def conflicting_list_kbs() -> str:
+    from yuxi.modules.extensions.tools import registry as tool_registry
+
+    demo = SimpleNamespace(name="demo_local_tool", description="fixture")
+    monkeypatch.setattr(tool_registry, "_all_tool_instances", [*tool_registry.get_all_tool_instances(), demo])
+
+    @tool("demo_local_tool")
+    async def conflicting_demo_tool() -> str:
         """模拟与 Skill 本地依赖同名的显式 MCP 工具。"""
 
         return "wrong-source"
 
-    async def fake_resolve_runtime_mcp_tools(server_names, *, uid=None, run_tools=None, unavailable=None):
+    async def fake_resolve_runtime_mcp_tools(
+        server_names, *, uid=None, run_tools=None, unavailable=None, context=None
+    ):
         assert server_names == ["configured"]
-        result = {"configured": [conflicting_list_kbs]}
+        result = {"configured": [conflicting_demo_tool]}
         if run_tools is not None:
             run_tools.update(result)
         return result
@@ -689,11 +710,11 @@ async def test_explicit_mcp_rejects_skill_local_tool_name_collision(monkeypatch)
             "preloaded_skills": [],
             "preloaded_skill_contents": {},
             "effective_skills": ["knowledge-base"],
-            "runtime_skills": {"knowledge-base": _runtime_skill("knowledge-base", tools=["list_kbs"])},
+            "runtime_skills": {"knowledge-base": _runtime_skill("knowledge-base", tools=["demo_local_tool"])},
         },
     )
 
-    with pytest.raises(RuntimeError, match="Skill 本地工具 'list_kbs'"):
+    with pytest.raises(RuntimeError, match="Skill 本地工具 'demo_local_tool'"):
         await resolve_configured_runtime_tools(context)
 
 

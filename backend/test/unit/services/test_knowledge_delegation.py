@@ -5,7 +5,8 @@ from datetime import timedelta
 import jwt
 import pytest
 
-from yuxi.modules.identity import security
+from yuxi.modules.identity.security import AuthUtils
+from yuxi.modules.knowledge.mcp import auth as security
 from yuxi.shared.datetime import utc_now
 
 
@@ -19,14 +20,14 @@ def signing_config(monkeypatch):
 @pytest.mark.parametrize("selection", ["all", [], ["kb-a"]])
 def test_delegation_preserves_exact_scope_and_cannot_authenticate_as_login(selection):
     """同一签名密钥不能跨 audience 重放。"""
-    token = security.create_knowledge_token(uid="user", selection=selection, run_id="run")
+    token = security.create_knowledge_token(uid="user", selection=selection)
     payload = security.verify_knowledge_token(token)
     assert payload["sub"] == "user" and payload["selection"] == selection
-    assert payload["run_id"] == "run"
+    assert set(payload) == {"sub", "iss", "aud", "purpose", "selection", "iat", "exp"}
     assert payload["exp"] - payload["iat"] == 300
-    assert security.AuthUtils.decode_token(token) is None
+    assert AuthUtils.decode_token(token) is None
     with pytest.raises(ValueError):
-        security.verify_knowledge_token(security.AuthUtils.create_access_token({"sub": "1"}))
+        security.verify_knowledge_token(AuthUtils.create_access_token({"sub": "1"}))
 
 
 @pytest.mark.parametrize(

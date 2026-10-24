@@ -39,8 +39,10 @@ flowchart LR
     MilvusKB --> Graph[("Neo4j，图谱操作")]
     Connector --> External["外部检索与阅读 API"]
 
-    Context["可信用户与 Context.knowledges"] --> Tools["Agent 知识库工具适配"]
-    Skill["knowledge-base Skill"] --> Tools
+    Context["可信用户与会话选择"] --> Integration["Knowledge 提供 SDK Auth"]
+    Integration --> Loader["通用 MCP 装配"]
+    Skill["knowledge-base Skill（mcp_dependencies）"] --> Loader
+    Loader --> Tools["五个工具：名称与 Schema 来自 MCP 目录"]
     Tools -->|HTTP MCP 与短期委托| MCP["Knowledge MCP"]
     MCP --> Visible["当前用户权限 ∩ 会话选择"]
     Visible --> Service["知识库工具 service"]
@@ -137,21 +139,23 @@ JobTracker 保存任务登记、执行方上报的进度与结果摘要，并提
 
 ## Agent 如何看到知识库
 
-`query_kb` 的检索异常由工具错误中间件转换为绑定当前调用的错误 ToolMessage，审计与公开结果保留失败状态，界面展示错误。正常检索没有命中时返回成功的空结果。错误中间件隐藏底层异常详情，工具失败后模型可以继续处理本轮任务。
+Knowledge MCP 服务端把工具级失败返回为错误结果，MCP adapter 转为绑定当前调用的错误 ToolMessage，审计与公开结果保留失败状态。正常检索没有命中时返回成功的空结果。服务端提供安全的错误指导语，工具失败后模型可以继续处理本轮任务。
 
-Agent 保留 `Context.knowledges` 的归一化选择：`"all"` 表示当前可读范围，数组表示固定的会话选择。Agent 侧五个工具适配、资源选择器和回答引用过滤通过平台 HTTP MCP 读取知识库，不直接调用知识库 Manager、repository 或访问 service。选择器和引用过滤通过 `list_kbs(include_capabilities=true)` 取得 `supports_documents` 能力摘要；普通工具列表默认不返回这些附加字段。
+Agent 保留 `Context.knowledges` 的归一化选择：`"all"` 表示当前可读范围，数组表示固定的会话选择。知识库工具是内置 `knowledge` MCP server 提供的 MCP 工具：运行装配从该 server 的真实目录（initialize + tools/list）取得五个工具的名称、参数 Schema 与说明，每次调用经 HTTP MCP 读取数据；资源选择器和回答引用过滤也通过同一 MCP 边界读取知识库，不直接调用知识库 Manager、repository 或访问 service。选择器和引用过滤通过 `list_kbs(include_capabilities=true)` 取得 `supports_documents` 能力摘要；普通工具列表默认不返回这些附加字段。
 
-可信运行时从当前上下文取得用户、会话选择和可选 Run 标识，在每次 MCP HTTP 出站请求前签发五分钟委托 Token。Token 使用部署共享的 `JWT_SECRET_KEY` 与 `YUXI_INSTANCE_ID`，限定 `aud=yuxi-knowledge-mcp`、`purpose=agent-knowledge-read`；普通登录 JWT 不能代替委托。Token 不持久化，不放入模型参数、prompt 或工具结果，用户无需创建内部 API Key 或进行 OAuth 登录。配置和地址见[部署参考](../advanced/deployment.md#可选关闭知识库)。
+`knowledge/mcp` 拥有内部凭据与 SDK Auth，直接从可信 Context 读取用户、会话选择和 Run 身份。通用 MCP 装配该认证对象并复用现有 loader，运行工具在每次 HTTP 出站前复查管理员策略；Knowledge Auth 签发五分钟委托 Token。Token 使用部署共享的 `JWT_SECRET_KEY` 与 `YUXI_INSTANCE_ID`，限定 `aud=yuxi-knowledge-mcp`、`purpose=agent-knowledge-read`；普通登录 JWT 不能代替委托。Token 不持久化，不放入模型参数、prompt 或工具结果，用户无需创建内部 API Key 或进行 OAuth 登录。配置和地址见[部署参考](../advanced/deployment.md#可选关闭知识库)。
 
 Knowledge MCP 每个 HTTP 请求验证签名、用途、有效期和账号当前状态；每次工具调用再由知识域按当前用户读取权限查询资源，与 Token 携带的会话选择求交集。工具目标必须属于该范围，文档归属由知识库查询实现校验。撤权后后续调用拒绝该资源；权限查询失败向调用边界传播，不返回空列表掩盖存储故障。授权查询与实际读取遵循各自事务边界。外部 API Key 请求按 Key 所属用户解析全部可读知识库，接入契约见[知识库 MCP](../advanced/knowledge-mcp.md)。
 
-知识库工具由内置 `knowledge-base` Skill 提供。预加载时从首轮开放；渐进加载时在模型读取 `SKILL.md` 后开放。工具职责由[工具系统](../agents/tools-system.md#知识库工具)维护，选择和激活仍受当前资源权限约束。
+知识库工具由内置 `knowledge-base` Skill 的 `mcp_dependencies: ["knowledge"]` 门控：预加载时首轮由运行装配从内置 server 加载工具；渐进加载时在模型读取 `SKILL.md` 后由 Skills middleware 动态加载。工具职责由[工具系统](../agents/tools-system.md#知识库工具)维护，选择和激活仍受当前资源权限约束。
 
-推荐顺序是：列出可见知识库 → 检索候选片段 → 用 `file_id` 打开或定位原文。五个 Agent 工具保持各自名称、参数和面向模型的结果结构；工具适配层把 MCP 的结构化响应转换为这些结果。
+引用消费 MCP 的结构化结果，保留知识库、文件和原文行范围；工具的文本展示块不替代该结果。知识选择器和历史引用读取按当前用户权限执行，不受 Agent 工具启停开关限制，但部署关闭时不可用。
+
+推荐顺序是：列出可见知识库 → 检索候选片段 → 用 `file_id` 打开或定位原文。五个工具的名称、参数 Schema 与结构化结果直接来自 Knowledge MCP 的目录与响应；工具级拒绝按单次调用返回服务端指导语，连接层故障由授权中间件把 `knowledge` server 标记为不可用并在本轮隐藏其工具。
 
 知识库不会挂载为 Agent 可直接遍历的目录；Agent 通过五个只读工具检索和阅读正文，原件下载由知识库管理接口提供。
 
-Knowledge 默认启用。显式关闭后，知识库管理路由和 MCP 均未注册，返回 HTTP 404；Agent 工具通过现有工具错误链路报告 MCP 不可用，普通聊天继续运行。待执行任务与清理意图保留，关闭期间不派发或执行知识库任务，已失联任务仍按租约规则收敛。容器停启与数据保留方式由[部署参考](../advanced/deployment.md#可选关闭知识库)维护。
+Knowledge 默认启用。显式关闭后，知识库管理路由和 MCP 均未注册，返回 HTTP 404；Agent 不装配知识库工具，普通聊天继续运行，会话知识选择保留。模型强行调用未声明的工具时，通用授权边界返回拒绝结果，不发生工具执行。待执行任务与清理意图保留，关闭期间不派发或执行知识库任务，已失联任务仍按租约规则收敛。容器停启与数据保留方式由[部署参考](../advanced/deployment.md#可选关闭知识库)维护。
 
 ## 权限
 
@@ -182,7 +186,7 @@ Agent 的 `knowledges` 只能缩小用户已有权限。协作成员沿用执行
 | 暂存上传、URL 和工作区原件 | [原件暂存 service](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/knowledge/services/uploads.py) 计算内容指纹并写入独立对象和原始名称元数据 | 路由校验权限、调用来源安全读取入口并适配响应；正式文件、目录、导入回执和后台作业由导入 service 登记 |
 | 异步导入、解析、索引和图谱构建 | [知识库作业 service](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/knowledge/services/background_jobs.py) 组织领域动作、进度和失败结论 | background_jobs registry/worker 拥有调度与 lease；文档处理由 Manager 分派，图谱构建直接调用 KnowledgeGraphService |
 | 删除与旧代次投影清理 | [投影清理 service](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/knowledge/services/projection_cleanup.py) 定时消费持久 outbox | 清理独立于 BackgroundJobContext；事件行锁与知识库投影锁保护外部删除，提交 applied 后才完成 |
-| Agent 知识能力与委托 | [Agent MCP 客户端](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/tools/knowledge/client.py) 签发可信用户委托并读取 MCP 结果；[Knowledge MCP](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/api/routers/public_v1/knowledge_mcp.py) 验证身份、选择范围与工具权限 | 访问 service 查询实时可见性；工具 service 校验目标并组织领域操作 |
+| Agent 知识能力与委托 | [Knowledge 客户端](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/knowledge/mcp/client.py) 提供内部认证连接与产品读取；[Knowledge MCP 服务端](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/knowledge/mcp/server.py) 验证身份、选择范围与工具权限 | 访问 service 查询实时可见性；工具 service 校验目标并组织领域操作 |
 | Public API 的知识能力 | [访问 service](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/knowledge/services/access.py) 查询当前 Key 用户的可读范围；[工具 service](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/knowledge/services/tools.py) 组织领域工具操作 | Public 路由适配响应，执行时复查可见性与文档归属 |
 
 Agent Context 中的资源选项查询用于配置界面；执行权限仍由访问 service 与实际读取边界核验。增加用例时沿上述 Owner 修改，状态与持久化查询继续留在其负责的领域实现。
@@ -195,7 +199,7 @@ Agent Context 中的资源选项查询用于配置界面；执行权限仍由访
 - [JobTracker](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/background_jobs/service.py)：任务登记、进度观察与取消请求
 - [后台作业 worker](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/workers/background_jobs.py)：Handler 执行、lease 与领域终态 Hook
 - [作业 Handler registry](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/background_jobs/registry.py)：领域 Handler 注册和惰性加载
-- [知识库工具](https://github.com/xerrors/Yuxi/blob/main/backend/yuxi/modules/extensions/tools/knowledge/tools.py)：Agent 工具契约、MCP 调用适配
+- [Knowledge MCP](https://github.com/xerrors/Yuxi/tree/main/backend/yuxi/modules/knowledge/mcp)：服务端、内部认证、产品读取及知识引用转换
 - [知识库 unit tests](https://github.com/xerrors/Yuxi/tree/main/backend/test/unit/knowledge)
 - [权限与路由 tests](https://github.com/xerrors/Yuxi/tree/main/backend/test/unit/routers)
 - [知识库 HTTP integration](https://github.com/xerrors/Yuxi/blob/main/backend/test/integration/api/test_knowledge_router.py)

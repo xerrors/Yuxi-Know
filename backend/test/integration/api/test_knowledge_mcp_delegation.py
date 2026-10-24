@@ -12,10 +12,11 @@ from sqlalchemy import delete, select
 
 from yuxi.infrastructure.minio import get_minio_client
 from yuxi.infrastructure.minio.client import MinIOClient
-from yuxi.modules.extensions.tools.knowledge.client import call_knowledge_mcp
+from yuxi.infrastructure.postgres.manager import pg_manager
+from yuxi.modules.knowledge.mcp.client import call_knowledge_mcp
 from yuxi.modules.identity.models import User
 from yuxi.modules.identity.repositories.users import UserRepository
-from yuxi.modules.identity.security import create_knowledge_token
+from yuxi.modules.knowledge.mcp.auth import create_knowledge_token
 from yuxi.modules.knowledge.models import KnowledgeFile
 from yuxi.shared.datetime import utc_now
 
@@ -272,10 +273,13 @@ async def test_internal_mcp_does_not_send_delegate_to_environment_proxy(delegate
     monkeypatch.setenv("NO_PROXY", "")
     monkeypatch.setenv("no_proxy", "")
     fixture = delegated_document
-    opened = await call_knowledge_mcp(
-        "open_kb_document",
-        {"kb_id": fixture["kb_id"], "file_id": fixture["file_id"]},
-        uid=fixture["uid"],
-        selection=[fixture["kb_id"]],
-    )
-    assert "Delegated MCP needle" in opened["content"]
+    try:
+        opened = await call_knowledge_mcp(
+            "open_kb_document",
+            {"kb_id": fixture["kb_id"], "file_id": fixture["file_id"]},
+            uid=fixture["uid"],
+            selection=[fixture["kb_id"]],
+        )
+        assert "Delegated MCP needle" in opened["content"]
+    finally:
+        await pg_manager.close()

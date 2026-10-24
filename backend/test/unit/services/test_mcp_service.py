@@ -332,16 +332,22 @@ async def test_each_independent_discovery_reads_current_remote_tools(monkeypatch
 async def test_get_mcp_tools_sets_handle_tool_error(monkeypatch):
 
     config = {"transport": "streamable_http", "url": "demo-tool", "disabled_tools": []}
+    server = SimpleNamespace(
+        slug="demo",
+        auth_mode="headers",
+        disabled_tools=[],
+        to_mcp_config=lambda: config,
+    )
 
-    async def fake_get_enabled_mcp_server_config(server_name: str, db=None):
-        del db
-        return config
+    async def fake_get_enabled_mcp_servers(*, names=None, db=None):
+        del names, db
+        return [server]
 
     async def fake_get_mcp_client(server_configs):
         tool = SimpleNamespace(name="demo_tool", metadata={})
         return _FakeClient([tool])
 
-    monkeypatch.setattr(mcp_service, "get_enabled_mcp_server_config", fake_get_enabled_mcp_server_config)
+    monkeypatch.setattr(mcp_service, "get_enabled_mcp_servers", fake_get_enabled_mcp_servers)
     monkeypatch.setattr(mcp_runtime, "get_mcp_client", fake_get_mcp_client)
 
     tools = await mcp_service.get_mcp_tools("demo")
@@ -367,6 +373,47 @@ async def test_additional_unsupported_config_is_rejected_before_discovery(monkey
     monkeypatch.setattr(mcp_runtime, "get_mcp_client", forbidden)
     with pytest.raises(ValueError, match="仅支持 sse 或 streamable_http"):
         await mcp_service.get_mcp_tools("deepwiki-official", additional_servers={"deepwiki-official": {"transport": "websocket"}})
+
+
+async def test_shared_get_mcp_tools_rejects_carried_auth(monkeypatch):
+    """共享 headers 入口不允许调用方自带 auth 静默跳过出站策略。"""
+    forbidden = AsyncMock(side_effect=AssertionError("carried auth reached discovery"))
+    monkeypatch.setattr(mcp_service, "load_mcp_tools", forbidden)
+    carried = {"transport": "streamable_http", "url": "demo", "auth": object()}
+    with pytest.raises(ValueError, match="auth"):
+        await mcp_service.get_mcp_tools("demo", additional_servers={"demo": carried})
+
+
+async def test_get_enabled_mcp_tools_rejects_delegation_mode(monkeypatch):
+    """委托 MCP 只能经运行装配持有可信上下文，单服务入口不得直接加载。"""
+
+    async def fake_get_enabled_mcp_servers(*, names, db=None):
+        return [MCPServer(slug="knowledge", transport="streamable_http", url="k", auth_mode="delegation", enabled=1)]
+
+    monkeypatch.setattr(mcp_service, "get_enabled_mcp_servers", fake_get_enabled_mcp_servers)
+    with pytest.raises(ValueError, match="平台委托"):
+        await mcp_service.get_enabled_mcp_tools("knowledge", uid="u")
+
+
+async def test_get_all_mcp_tools_skips_disabled_server(monkeypatch, mcp_session):
+    """管理页工具清单不发现停用服务，连接测试才严格建连。"""
+    mcp_session.add(
+        MCPServer(
+            slug="offline",
+            name="停用",
+            transport="streamable_http",
+            url="https://offline.example/mcp",
+            enabled=0,
+            created_by="admin",
+            updated_by="admin",
+        )
+    )
+    await mcp_session.commit()
+    monkeypatch.setattr(postgres_manager.pg_manager, "get_async_session_context", lambda: _AsyncSessionContext(mcp_session))
+    forbidden = AsyncMock(side_effect=AssertionError("disabled server reached discovery"))
+    monkeypatch.setattr(mcp_service, "inspect_mcp_server_tools", forbidden)
+
+    assert await mcp_service.get_all_mcp_tools("offline") == []
 
 
 def test_model_cannot_serialize_stdio_for_execution():
@@ -447,10 +494,11 @@ async def test_inspection_connects_disabled_server_without_mutating_runtime(monk
         configs.append(config)
         return SimpleNamespace(get_tools=get_tools)
 
-    monkeypatch.setattr(mcp_service, "MultiServerMCPClient", client)
+    monkeypatch.setattr(mcp_runtime, "MultiServerMCPClient", client)
     if outcome == "error":
-        with pytest.raises(RuntimeError, match="fixture-credential"):
+        with pytest.raises(RuntimeError, match="工具加载失败") as error:
             await mcp_service.inspect_mcp_server_tools(server)
+        assert "fixture-credential" in str(error.value.__cause__)
     else:
         tools = await mcp_service.inspect_mcp_server_tools(server)
         assert len(tools) == (0 if outcome == "empty" else 1)
@@ -469,7 +517,7 @@ async def test_inspection_rejects_unmigrated_stdio_before_connecting(monkeypatch
     def client(_):
         pytest.fail("自定义旧 stdio 不应启动子进程")
 
-    monkeypatch.setattr(mcp_service, "MultiServerMCPClient", client)
+    monkeypatch.setattr(mcp_runtime, "MultiServerMCPClient", client)
     with pytest.raises(ValueError, match="stdio"):
         await mcp_service.inspect_mcp_server_tools(MCPServer(slug="fixture-stdio", transport="stdio", enabled=0))
 
@@ -555,3 +603,56 @@ async def test_runtime_does_not_swallow_identity_or_database_failure(monkeypatch
     monkeypatch.setattr(postgres_manager.pg_manager, "get_async_session_context", _FailingSessionContext)
     with pytest.raises(RuntimeError, match="database-secret"):
         await mcp_service.resolve_runtime_mcp_tools(["demo"], uid="user", unavailable={})
+
+
+async def test_builtin_sync_rejects_user_slug_without_overwriting_configuration(monkeypatch, mcp_session):
+    """新内置 slug 碰撞必须明确拒绝，不能接管用户连接或认证模式。"""
+    server = MCPServer(
+        slug="knowledge",
+        name="用户同名服务",
+        transport="streamable_http",
+        url="https://user.example/mcp",
+        auth_mode="headers",
+        headers={"X-Custom": "user"},
+        enabled=1,
+        disabled_tools=["user_tool"],
+        created_by="admin",
+        updated_by="admin",
+    )
+    mcp_session.add(server)
+    await mcp_session.commit()
+    monkeypatch.setattr(postgres_manager.pg_manager, "get_async_session_context", lambda: _AsyncSessionContext(mcp_session))
+    with pytest.raises(ValueError, match="slug 冲突.*knowledge"):
+        await mcp_service.ensure_builtin_mcp_servers_in_db()
+    await mcp_session.refresh(server)
+    assert (server.created_by, server.url, server.auth_mode) == ("admin", "https://user.example/mcp", "headers")
+    assert server.headers == {"X-Custom": "user"} and server.disabled_tools == ["user_tool"]
+
+
+async def test_deployment_switch_keeps_builtin_identity_and_admin_intent(monkeypatch, mcp_session):
+    """部署关闭过滤候选但不覆盖原行，恢复后继续使用管理员工具开关。"""
+    from yuxi.modules.extensions.mcp.builtin import builtin_mcp_available
+
+    monkeypatch.setattr(postgres_manager.pg_manager, "get_async_session_context", lambda: _AsyncSessionContext(mcp_session))
+    await mcp_service.ensure_builtin_mcp_servers_in_db()
+    server = await mcp_session.scalar(select(MCPServer).where(MCPServer.slug == "knowledge"))
+    server.disabled_tools = ["query_kb"]
+    await mcp_session.commit()
+    monkeypatch.setenv("YUXI_KNOWLEDGE_ENABLED", "false")
+    await mcp_service.ensure_builtin_mcp_servers_in_db()
+    await mcp_session.refresh(server)
+    assert server.enabled == 1 and server.disabled_tools == ["query_kb"]
+    assert mcp_service.is_builtin_mcp_server(server) and not builtin_mcp_available(server.slug)
+    assert "knowledge" not in await mcp_service.get_enabled_mcp_server_slugs(db=mcp_session)
+    with pytest.raises(ValueError, match="当前部署不可用"):
+        await mcp_service.inspect_mcp_server_tools(server, uid="viewer")
+    with pytest.raises(PermissionError, match="系统内置"):
+        await mcp_service.delete_mcp_server(mcp_session, server.slug)
+    monkeypatch.setenv("YUXI_KNOWLEDGE_ENABLED", "true")
+    await mcp_service.ensure_builtin_mcp_servers_in_db()
+    assert "knowledge" in await mcp_service.get_enabled_mcp_server_slugs(db=mcp_session)
+    server.enabled = 0
+    await mcp_session.commit()
+    await mcp_service.ensure_builtin_mcp_servers_in_db()
+    await mcp_session.refresh(server)
+    assert server.enabled == 0 and server.disabled_tools == ["query_kb"]

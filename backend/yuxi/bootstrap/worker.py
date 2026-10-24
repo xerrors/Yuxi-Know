@@ -26,7 +26,8 @@ from yuxi.modules.agents.services.leases import (
     reconcile_pending_runtime_cleanups,
 )
 from yuxi.modules.agents.services.scheduler import recover_pending_dispatches
-from yuxi.modules.identity.security import AuthUtils, require_knowledge_delegation_config
+from yuxi.modules.identity.security import AuthUtils
+from yuxi.modules.knowledge.mcp.auth import require_knowledge_delegation_config
 from yuxi.modules.schedules.service import claim_and_dispatch_due_jobs, recover_scheduled_dispatches
 from yuxi.workers.background_jobs import reconcile_and_publish_jobs
 

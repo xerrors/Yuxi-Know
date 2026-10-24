@@ -3,7 +3,6 @@
 import asyncio
 import hashlib
 import json
-import re
 from urllib.parse import urlsplit
 
 from markdown_it import MarkdownIt
@@ -19,15 +18,17 @@ from yuxi.modules.agents.repositories.turn import AgentTurnRepository
 from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.agents.services.thread_access import require_thread
 from yuxi.modules.agents.tool_results import normalize_tool_result
-from yuxi.modules.extensions.tools.knowledge.client import KnowledgeMCPError, list_knowledge_bases
+from yuxi.modules.knowledge.mcp.references import (
+    enrich_knowledge_sources,
+    knowledge_reference_visibility,
+    knowledge_sources_from_tool,
+)
 from yuxi.modules.models.chat import load_chat_model
 from yuxi.modules.system.options import system_options
 from yuxi.shared.datetime import format_utc_datetime, utc_now
 from yuxi.shared.errors import ContentTooLargeError, OperationTimeoutError, ResourceNotFoundError, StateConflictError, UpstreamError
 
-KNOWLEDGE_REFERENCE_TOOLS = frozenset({"query_kb", "open_kb_document", "find_kb_document"})
 WEB_REFERENCE_TOOLS = frozenset({"web_search", "web_fetch"})
-REFERENCE_TOOLS = KNOWLEDGE_REFERENCE_TOOLS | WEB_REFERENCE_TOOLS
 
 
 class ReferenceMatch(BaseModel):
@@ -153,10 +154,14 @@ def collect_reference_sources(messages: list[Message], visible_kb_ids: set[str])
     for message in messages:
         metadata = message.extra_metadata or {}
         tool_name = metadata.get("tool_name")
-        if tool_name not in REFERENCE_TOOLS:
-            continue
         try:
-            payload = json.loads(normalize_tool_result(metadata.get("output")).audit_content)
+            output = metadata.get("output")
+            artifact = output.get("artifact") if isinstance(output, dict) else None
+            payload = (
+                artifact["structured_content"]
+                if isinstance(artifact, dict) and "structured_content" in artifact
+                else json.loads(normalize_tool_result(output).audit_content)
+            )
         except (json.JSONDecodeError, TypeError):
             continue
         if not isinstance(payload, (dict, list)) or isinstance(payload, dict) and payload.get("error"):
@@ -165,10 +170,7 @@ def collect_reference_sources(messages: list[Message], visible_kb_ids: set[str])
         if tool_name in WEB_REFERENCE_TOOLS:
             candidates = _web_sources({"results": [payload]} if tool_name == "web_fetch" else payload)
         else:
-            kb_id = (metadata.get("input") or {}).get("kb_id")
-            if kb_id not in visible_kb_ids:
-                continue
-            candidates = _knowledge_sources(payload, tool_name, kb_id)
+            candidates = knowledge_sources_from_tool(metadata, payload, visible_kb_ids)
 
         for source in candidates:
             content_hash = hashlib.sha256(source["content"].encode()).hexdigest()
@@ -260,17 +262,9 @@ async def _load_reference_input(db, scope, thread_id, turn_id):
     if result is None:
         return None, None, []
     messages = await repo.list_retrievals(turn_id)
-    visible = []
-    if any((message.extra_metadata or {}).get("tool_name") in KNOWLEDGE_REFERENCE_TOOLS for message in messages):
-        try:
-            visible = await list_knowledge_bases(scope.uid)
-        except KnowledgeMCPError:
-            visible = []
-    document_support = {item["kb_id"]: item["supports_documents"] for item in visible}
+    document_support = await knowledge_reference_visibility(scope.uid, messages)
     sources = collect_reference_sources(messages, set(document_support))
-    for source in sources:
-        if source["kind"] == "knowledge":
-            source["supports_documents"] = document_support[source["kb_id"]]
+    enrich_knowledge_sources(sources, document_support)
     return *result, sources
 
 
@@ -341,47 +335,4 @@ def _web_sources(payload: dict) -> list[dict]:
         if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
             continue
         sources.append({"kind": "web", "title": item.get("title") or parsed.hostname, "url": url, "content": content})
-    return sources
-
-
-def _knowledge_sources(payload: dict | list, tool_name: str, kb_id: str) -> list[dict]:
-    """保留 chunk 权威范围，编号原文窗口可进一步定位摘录。"""
-    if tool_name == "query_kb":
-        if isinstance(payload, list):
-            items = payload
-        else:
-            items = payload.get("results") or payload.get("data", {}).get("chunks") or []
-    elif isinstance(payload, dict):
-        items = payload.get("windows", []) if tool_name == "find_kb_document" else [payload]
-    else:
-        return []
-
-    sources = []
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        content = item.get("content")
-        if not isinstance(content, str) or not content.strip():
-            continue
-        metadata = item.get("metadata") or {}
-        file_id = item.get("file_id") or metadata.get("file_id") or (payload.get("file_id") if isinstance(payload, dict) else "")
-        start = metadata.get("start_line") or item.get("start_line")
-        end = metadata.get("end_line") or item.get("end_line")
-        numbered = tool_name != "query_kb"
-        if numbered:
-            content = re.sub(r"(?m)^[ \t]*\d+\t", "", content)
-        sources.append(
-            {
-                "kind": "knowledge",
-                "title": metadata.get("source") or metadata.get("title") or file_id or "知识库片段",
-                "kb_id": kb_id,
-                "file_id": file_id or "",
-                "chunk_id": metadata.get("chunk_id") or item.get("id") or "",
-                "generation": metadata.get("generation"),
-                "start_line": start if type(start) is int and start > 0 else None,
-                "end_line": end if type(end) is int and end > 0 else None,
-                "numbered": numbered,
-                "content": content,
-            }
-        )
     return sources

@@ -137,7 +137,7 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --no-build
 
 确认环境文件中的 `YUXI_KNOWLEDGE_ENABLED` 为 `true` 或未设置，然后检查就绪状态并检索已有文档。该开关不是热切换；修改后需要重新创建 API 和 worker。仅设置环境开关不会停止存储容器，停启本地容器应使用上面的 Compose 叠加配置。
 
-API 与 worker 必须共享持久化的 `JWT_SECRET_KEY` 和 `YUXI_INSTANCE_ID`，用于内部 MCP 短期用户委托。启用 Knowledge 时，两种进程在连接数据库前校验显式委托配置，不使用各进程临时生成的身份；worker 还会在派发知识任务前连接已有知识库后端与 Neo4j，因此完整部署必须启动 Milvus、etcd 和 Neo4j。容器内 MCP 地址默认为 `http://api:5050/api/mcp`；直接在宿主运行后端时，通过 `YUXI_KNOWLEDGE_MCP_URL` 指向实际 API 地址。
+API 与 worker 必须共享持久化的 `JWT_SECRET_KEY` 和 `YUXI_INSTANCE_ID`，用于内部 MCP 短期用户委托。启用 Knowledge 时，两种进程在连接数据库前校验显式委托配置，不使用各进程临时生成的身份；worker 还会在派发知识任务前连接已有知识库后端与 Neo4j，因此完整部署必须启动 Milvus、etcd 和 Neo4j。Knowledge 是平台自有服务，容器内 MCP 地址固定为 `http://api:5050/api/mcp`，不提供环境变量覆盖；直接在宿主运行后端时无法访问该容器内地址，知识工具与引用读取需要在容器拓扑内执行。
 
 ### 共享内容更新与失败重试
 
