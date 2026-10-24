@@ -26,6 +26,7 @@ from yuxi.knowledge.parser.capabilities import (
     IMAGE_FILE_EXTENSIONS,
     get_ocr_engine_ids,
 )
+from yuxi.knowledge.parser.text_encoding import decode_user_text
 from yuxi.knowledge.parser.zip_utils import process_zip_file as _process_zip_file
 from yuxi.knowledge.utils.pdf_utils import validate_pdf_page_tree_loadable
 from yuxi.storage.minio import get_minio_client
@@ -161,9 +162,9 @@ async def parse_resolved_document(source: str, params: dict | None = None) -> st
             result = await parse_pdf_async(str(file_path_obj), params=params)
 
         elif file_ext in [".txt", ".md"]:
-            async with aiofiles.open(file_path_obj, encoding="utf-8") as f:
-                content = await f.read()
-            result = content
+            async with aiofiles.open(file_path_obj, "rb") as f:
+                raw_content = await f.read()
+            result = decode_user_text(raw_content, file_path_obj.name)
 
         elif file_ext == ".docx":
             try:
@@ -179,8 +180,9 @@ async def parse_resolved_document(source: str, params: dict | None = None) -> st
             result = await parse_image_async(str(file_path_obj), params=params)
 
         elif file_ext in [".html", ".htm"]:
-            async with aiofiles.open(file_path_obj, encoding="utf-8") as f:
-                content = await f.read()
+            async with aiofiles.open(file_path_obj, "rb") as f:
+                raw_content = await f.read()
+            content = decode_user_text(raw_content, file_path_obj.name)
             text = await asyncio.to_thread(md_convert, content, heading_style="ATX")
             result = f"{text}"
 
@@ -196,9 +198,9 @@ async def parse_resolved_document(source: str, params: dict | None = None) -> st
         elif file_ext == ".json":
             import json
 
-            async with aiofiles.open(file_path_obj, encoding="utf-8") as f:
-                content = await f.read()
-            data = json.loads(content)
+            async with aiofiles.open(file_path_obj, "rb") as f:
+                raw_content = await f.read()
+            data = json.loads(decode_user_text(raw_content, file_path_obj.name))
             json_str = json.dumps(data, ensure_ascii=False, indent=2)
             result = f"```json\n{json_str}\n```"
 
@@ -373,9 +375,13 @@ def _convert_docx_with_python_docx(file_path: Path) -> str:
 
 
 def _convert_csv_to_markdown(file_path: Path) -> str:
+    import io
+
     import pandas as pd
 
-    dataframe = pd.read_csv(file_path)
+    # pandas 默认按 UTF-8 读取；先按用户上传文本的编码规则解码，再交给 pandas 推断列类型。
+    text = decode_user_text(file_path.read_bytes(), file_path.name)
+    dataframe = pd.read_csv(io.StringIO(text))
     tables: list[str] = []
     for i in range(len(dataframe)):
         row_dataframe = dataframe.iloc[[i]]
