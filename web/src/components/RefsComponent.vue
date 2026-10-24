@@ -24,8 +24,8 @@
         />
       </span>
       <!-- 模型名称 -->
-      <span v-if="showKey('model') && getModelName(msg)" class="item" @click="console.log(msg)">
-        <Bot size="12" /> {{ getModelName(msg) }}
+      <span v-if="showKey('model') && displayModelName" class="item" @click="console.log(msg)">
+        <Bot size="12" /> {{ displayModelName }}
       </span>
       <!-- 复制 -->
       <span v-if="showKey('copy')" class="item btn" @click="copyText(msg.content)" title="复制">
@@ -122,6 +122,7 @@ import {
   ChevronDown
 } from '@lucide/vue'
 import { agentApi } from '@/apis'
+import { useModelDirectory } from '@/composables/useModelDirectory'
 import { formatChatTime } from '@/utils/time'
 import KnowledgeSourceSection from '@/components/KnowledgeSourceSection.vue'
 import WebSearchSourceSection from '@/components/WebSearchSourceSection.vue'
@@ -270,13 +271,25 @@ const regenerateMessage = () => {
   emit('retry')
 }
 
-// 获取模型名称
-const getModelName = (msg) => {
-  if (msg.response_metadata?.model_name) {
-    return msg.response_metadata.model_name
-  }
-  return null
-}
+// 模型名称：优先展示后端配置的别名，目录未就绪或未命中时回退到响应原始名称。
+const modelDirectory = useModelDirectory('chat')
+const resolvedModelName = ref('')
+const rawModelName = computed(() => msg.value?.response_metadata?.model_name || '')
+const displayModelName = computed(() => resolvedModelName.value || rawModelName.value)
+watch(
+  rawModelName,
+  async (raw) => {
+    resolvedModelName.value = ''
+    if (!raw) return
+    try {
+      await modelDirectory.load()
+      resolvedModelName.value = modelDirectory.resolveDisplayName({ modelId: raw })
+    } catch {
+      resolvedModelName.value = ''
+    }
+  },
+  { immediate: true }
+)
 // Handle like action
 const likeThisResponse = async (msg) => {
   if (feedbackState.hasSubmitted) {
