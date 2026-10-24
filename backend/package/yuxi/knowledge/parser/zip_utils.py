@@ -5,6 +5,7 @@ import time
 import zipfile
 from pathlib import Path
 
+from yuxi.knowledge.parser.text_encoding import decode_user_text
 from yuxi.knowledge.utils.kb_utils import build_kb_image_proxy_url
 from yuxi.storage.minio import get_minio_client
 from yuxi.utils import logger
@@ -48,7 +49,7 @@ async def process_zip_file(
         md_file = next((n for n in md_files if Path(n).name == "full.md"), md_files[0])
 
         with zf.open(md_file) as f:
-            markdown_content = f.read().decode("utf-8")
+            markdown_content = decode_user_text(f.read(), md_file)
 
         images_info = []
         images_dir = find_images_directory(zf, md_file)

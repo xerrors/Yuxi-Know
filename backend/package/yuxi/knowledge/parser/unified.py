@@ -26,6 +26,7 @@ from yuxi.knowledge.parser.capabilities import (
     IMAGE_FILE_EXTENSIONS,
     get_ocr_engine_ids,
 )
+from yuxi.knowledge.parser.text_encoding import decode_user_text
 from yuxi.knowledge.parser.zip_utils import process_zip_file as _process_zip_file
 from yuxi.knowledge.utils.pdf_utils import validate_pdf_page_tree_loadable
 from yuxi.storage.minio import get_minio_client
@@ -35,7 +36,6 @@ _OFFICE_BACKENDS = {
     ".docx": (InputFormat.DOCX, MsWordDocumentBackend),
     ".pptx": (InputFormat.PPTX, MsPowerpointDocumentBackend),
     ".xlsx": (InputFormat.XLSX, MsExcelDocumentBackend),
-    ".xls": (InputFormat.XLS, MsExcelDocumentBackend),
 }
 _docling_office_lock = threading.Lock()
 
@@ -161,9 +161,9 @@ async def parse_resolved_document(source: str, params: dict | None = None) -> st
             result = await parse_pdf_async(str(file_path_obj), params=params)
 
         elif file_ext in [".txt", ".md"]:
-            async with aiofiles.open(file_path_obj, encoding="utf-8") as f:
-                content = await f.read()
-            result = content
+            async with aiofiles.open(file_path_obj, "rb") as f:
+                raw_content = await f.read()
+            result = decode_user_text(raw_content, file_path_obj.name)
 
         elif file_ext == ".docx":
             try:
@@ -179,8 +179,9 @@ async def parse_resolved_document(source: str, params: dict | None = None) -> st
             result = await parse_image_async(str(file_path_obj), params=params)
 
         elif file_ext in [".html", ".htm"]:
-            async with aiofiles.open(file_path_obj, encoding="utf-8") as f:
-                content = await f.read()
+            async with aiofiles.open(file_path_obj, "rb") as f:
+                raw_content = await f.read()
+            content = decode_user_text(raw_content, file_path_obj.name)
             text = await asyncio.to_thread(md_convert, content, heading_style="ATX")
             result = f"{text}"
 
@@ -188,7 +189,7 @@ async def parse_resolved_document(source: str, params: dict | None = None) -> st
             result = await asyncio.to_thread(_convert_csv_to_markdown, file_path_obj)
 
         elif file_ext == ".xls":
-            result = await asyncio.to_thread(_convert_xls_to_markdown, file_path_obj)
+            result = await asyncio.to_thread(_convert_legacy_excel_to_markdown, file_path_obj)
 
         elif file_ext == ".xlsx":
             result = await asyncio.to_thread(_convert_with_docling, file_path_obj, params=params)
@@ -196,9 +197,9 @@ async def parse_resolved_document(source: str, params: dict | None = None) -> st
         elif file_ext == ".json":
             import json
 
-            async with aiofiles.open(file_path_obj, encoding="utf-8") as f:
-                content = await f.read()
-            data = json.loads(content)
+            async with aiofiles.open(file_path_obj, "rb") as f:
+                raw_content = await f.read()
+            data = json.loads(decode_user_text(raw_content, file_path_obj.name))
             json_str = json.dumps(data, ensure_ascii=False, indent=2)
             result = f"```json\n{json_str}\n```"
 
@@ -373,9 +374,13 @@ def _convert_docx_with_python_docx(file_path: Path) -> str:
 
 
 def _convert_csv_to_markdown(file_path: Path) -> str:
+    import io
+
     import pandas as pd
 
-    dataframe = pd.read_csv(file_path)
+    # pandas 默认按 UTF-8 读取；先按用户上传文本的编码规则解码，再交给 pandas 推断列类型。
+    text = decode_user_text(file_path.read_bytes(), file_path.name)
+    dataframe = pd.read_csv(io.StringIO(text))
     tables: list[str] = []
     for i in range(len(dataframe)):
         row_dataframe = dataframe.iloc[[i]]
@@ -383,14 +388,30 @@ def _convert_csv_to_markdown(file_path: Path) -> str:
     return "\n\n".join(tables)
 
 
-def _convert_xls_to_markdown(file_path: Path) -> str:
-    """使用 pandas + xlrd 解析旧版 .xls 文件并转为 Markdown（Docling 不支持该格式）。"""
-    import pandas as pd
+def _convert_legacy_excel_to_markdown(file_path: Path) -> str:
+    """按真实文件头解析 .xls，兼容常见的"伪 xls"。
 
-    # 文档提取不假定首行是表头，也不把文本编号和 NA 等字面值转换成分析数据。
-    sheet_map = pd.read_excel(
-        file_path, engine="xlrd", sheet_name=None, header=None, dtype=object, keep_default_na=False
-    )
+    WPS 与各类网页系统导出的 `.xls` 实际可能是 xlsx 改名、XML Spreadsheet 2003 或
+    网页表格另存，而 xlrd 只认旧版 BIFF 二进制；扩展名直读会让这些文件原样抛出底层
+    英文异常并落为 error_parsing。嗅探失败时给出可执行的中文错误。
+    """
+    with file_path.open("rb") as handle:
+        head = handle.read(8)
+
+    if head.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"):
+        return _convert_xls_to_markdown(file_path)
+    if head.startswith(b"PK\x03\x04"):
+        return _convert_xlsx_workbook_to_markdown(file_path)
+    if head[:2] in (b"\xff\xfe", b"\xfe\xff") or head.lstrip(b" \t\r\n\xef\xbb\xbf").startswith(b"<"):
+        text = decode_user_text(file_path.read_bytes(), file_path.name)
+        if "schemas-microsoft-com:office:spreadsheet" in text:
+            return _convert_spreadsheetml_to_markdown(text, file_path.name)
+        return _convert_html_tables_to_markdown(text, file_path.name)
+    raise ValueError(f"{file_path.name} 不是可识别的 Excel 工作簿，请在 WPS/Excel 中另存为 .xlsx 后重新上传")
+
+
+def _render_sheet_map_to_markdown(sheet_map: dict, filename: str) -> str:
+    """把工作表字典渲染为 Markdown；无任何非空表时显式失败，不产出空文档。"""
     blocks: list[str] = []
     for sheet_name, dataframe in sheet_map.items():
         if dataframe.empty:
@@ -398,4 +419,71 @@ def _convert_xls_to_markdown(file_path: Path) -> str:
         if len(sheet_map) > 1:
             blocks.append(f"## {sheet_name}")
         blocks.append(dataframe.to_markdown(index=False, headers=[""] * len(dataframe.columns), disable_numparse=True))
+    if not blocks:
+        raise ValueError(f"{filename} 未解析出任何表格内容，工作簿可能为空")
     return "\n\n".join(blocks)
+
+
+def _convert_xls_to_markdown(file_path: Path) -> str:
+    """使用 pandas + xlrd 解析旧版 BIFF .xls 文件并转为 Markdown（Docling 不支持该格式）。"""
+    import pandas as pd
+
+    # 文档提取不假定首行是表头，也不把文本编号和 NA 等字面值转换成分析数据。
+    sheet_map = pd.read_excel(
+        file_path, engine="xlrd", sheet_name=None, header=None, dtype=object, keep_default_na=False
+    )
+    return _render_sheet_map_to_markdown(sheet_map, file_path.name)
+
+
+def _convert_xlsx_workbook_to_markdown(file_path: Path) -> str:
+    """解析 zip 容器（以 .xls 命名的 xlsx）：openpyxl 读取，渲染口径与 BIFF 路径一致。"""
+    import pandas as pd
+
+    sheet_map = pd.read_excel(
+        file_path, engine="openpyxl", sheet_name=None, header=None, dtype=object, keep_default_na=False
+    )
+    return _render_sheet_map_to_markdown(sheet_map, file_path.name)
+
+
+def _convert_spreadsheetml_to_markdown(text: str, filename: str) -> str:
+    """解析 XML Spreadsheet 2003（WPS/Excel 早期另存格式）为 Markdown 网格。"""
+    import xml.etree.ElementTree as ET
+
+    import pandas as pd
+
+    ns = "urn:schemas-microsoft-com:office:spreadsheet"
+    sheet_map: dict[str, pd.DataFrame] = {}
+    for worksheet in ET.fromstring(text).findall(f"{{{ns}}}Worksheet"):
+        sheet_name = worksheet.get(f"{{{ns}}}Name", "")
+        rows: list[list[str]] = []
+        width = 0
+        for row in worksheet.findall(f".//{{{ns}}}Row"):
+            cells: list[str] = []
+            for cell in row.findall(f"{{{ns}}}Cell"):
+                index = cell.get(f"{{{ns}}}Index")
+                if index is not None:
+                    cells.extend([""] * (int(index) - len(cells) - 1))
+                data = cell.find(f"{{{ns}}}Data")
+                cells.append((data.text or "") if data is not None else "")
+                cells.extend([""] * int(cell.get(f"{{{ns}}}MergeAcross") or 0))
+            rows.append(cells)
+            width = max(width, len(cells))
+        grid = [row + [""] * (width - len(row)) for row in rows]
+        sheet_map[sheet_name] = pd.DataFrame(grid, columns=range(width)) if grid else pd.DataFrame()
+    return _render_sheet_map_to_markdown(sheet_map, filename)
+
+
+def _convert_html_tables_to_markdown(text: str, filename: str) -> str:
+    """解析网页另存的 .xls（HTML 表格）：read_html 保留 <th> 表头。"""
+    import io
+
+    import pandas as pd
+
+    tables = [table for table in pd.read_html(io.StringIO(text)) if not table.empty]
+    if not tables:
+        raise ValueError(f"{filename} 未解析出任何表格内容，页面可能不含数据表")
+    if len(tables) == 1:
+        return tables[0].to_markdown(index=False, disable_numparse=True)
+    return "\n\n".join(
+        f"## 表 {i + 1}\n\n{table.to_markdown(index=False, disable_numparse=True)}" for i, table in enumerate(tables)
+    )
