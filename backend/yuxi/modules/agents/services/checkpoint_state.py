@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from yuxi.infrastructure.postgres.checkpointer import get_langgraph_checkpointer
 from yuxi.infrastructure.postgres.manager import pg_manager
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
@@ -15,20 +13,21 @@ from yuxi.modules.identity.models import User
 from yuxi.shared.errors import ResourceNotFoundError
 
 
-async def _read_checkpoint_state(*, uid: str, thread_id: str) -> tuple[dict, Any | None]:
-    """读取完整 checkpoint 快照与同批中断；调用方先校验线程可见性。"""
+async def _read_checkpoint_state(*, uid: str, thread_id: str) -> tuple[dict, list | None]:
+    """读取完整 checkpoint 快照与同批全部中断；调用方先校验线程可见性。"""
     checkpointer = get_langgraph_checkpointer(pg_manager)
     saved = await checkpointer.aget_tuple({"configurable": {"uid": uid, "thread_id": thread_id, "checkpoint_ns": ""}})
     if saved is None:
         return {}, None
 
     # 面板只展示完整快照，pending writes 中的业务增量留给执行图合并。
-    interrupt_info = None
-    for _task_id, channel, interrupts in saved.pending_writes or []:
-        if channel == "__interrupt__" and interrupts:
-            interrupt_info = interrupts[0]
-            break
-    return saved.checkpoint["channel_values"], interrupt_info
+    # 已完成工具的业务写入与旧 interrupt 同批保留；__resume__ 本身不证明任务完成。
+    completed_tasks = {task_id for task_id, channel, _value in saved.pending_writes or [] if not channel.startswith("__")}
+    interrupts = []
+    for task_id, channel, items in saved.pending_writes or []:
+        if channel == "__interrupt__" and task_id not in completed_tasks and items:
+            interrupts.extend(items)
+    return saved.checkpoint["channel_values"], interrupts or None
 
 
 async def get_agent_state_view(
@@ -49,9 +48,9 @@ async def get_agent_state_view(
             raise ResourceNotFoundError("对话线程不存在")
 
         latest_run = await run_repo.get_latest_run_by_thread_for_user(thread_id, current_uid)
-        values, interrupt_info = await _read_checkpoint_state(uid=current_uid, thread_id=thread_id)
+        values, interrupts = await _read_checkpoint_state(uid=current_uid, thread_id=thread_id)
         response = {"agent_state": extract_agent_state(values)}
-        if latest_run and latest_run.status == "interrupted" and interrupt_info:
+        if latest_run and latest_run.status == "interrupted" and interrupts:
             turn = await AgentTurnRepository(db).get_for_scope(
                 turn_id=latest_run.turn_id,
                 thread_id=thread_id,
@@ -66,7 +65,7 @@ async def get_agent_state_view(
                 and turn.waitpoint["run_id"] == latest_run.id
             ):
                 response["interrupt"] = {
-                    **build_pending_interrupt_payload(interrupt_info, thread_id),
+                    **build_pending_interrupt_payload(interrupts, thread_id),
                     "run_id": latest_run.id,
                 }
         if include_relations:

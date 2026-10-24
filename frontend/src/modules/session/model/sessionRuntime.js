@@ -9,7 +9,6 @@ import { useAgentInputQueue } from './useAgentInputQueue'
 import { useAgentStreamHandler } from './useAgentStreamHandler'
 import { useStreamSmoother } from './useStreamSmoother'
 import { itemsToMessages, mergeItemSnapshot } from './agentItems'
-import { bindMessageInputRun } from './messageDebug'
 import { extractPendingInterrupt, pendingInterruptFromWaitpoint } from './useApproval'
 import { useSessionFeedbackStore } from './sessionFeedback'
 
@@ -30,6 +29,7 @@ export const useSessionRuntimeStore = defineStore('sessionRuntime', () => {
   const pendingSends = reactive({})
   const observers = new Map()
   const requests = new Map()
+  const cooperationSnapshots = new Map()
   const streamSmoother = useStreamSmoother({
     getThreadState: (id) => chatState.threadStates[id] || null
   })
@@ -221,22 +221,59 @@ export const useSessionRuntimeStore = defineStore('sessionRuntime', () => {
       void resumeQueuedInputs(payload.threadId)
       notify('onTerminalDetected', payload)
     },
-    onRunStarted: ({ threadId, runId, inputId }) => {
-      const chunks = getThreadState(threadId)?.optimisticInputs || {}
-      bindMessageInputRun(Object.values(chunks).flat(), inputId, runId)
+    onRunStarted: ({ threadId }) => {
       chatThreads.upsertThread({ id: threadId, status: 'in_progress' })
     }
   })
   const queue = useAgentInputQueue({
     getThreadState,
     isThreadActive: (threadId) => observers.has(threadId),
-    resetThreadExecution,
-    startRunStream: stream.startRunStream
+    onInputConsumed: (threadId) => resumeActiveRunForThread(threadId, { fresh: true })
   })
   const resumeQueuedInputs = (threadId) =>
     once(`queue:${threadId}`, () => queue.resumeQueuedInputs(threadId))
-  const resumeActiveRunForThread = (threadId) =>
-    once(`resume:${threadId}`, () => stream.resumeActiveRunForThread(threadId))
+  /** 摘要更新后等待旧恢复结束，再通过同一入口读取新的持久快照。 */
+  const resumeActiveRunForThread = async (threadId, { fresh = false } = {}) => {
+    if (!threadId || !observers.has(threadId)) return false
+    const state = getThreadState(threadId)
+    const key = `resume:${threadId}`
+    if (fresh && requests.has(key)) {
+      try {
+        await requests.get(key)
+      } catch {
+        /* 新请求负责重试。 */
+      }
+      if (!observers.has(threadId) || !isCurrentThreadState(threadId, state)) return false
+    }
+    return once(key, () => stream.resumeActiveRunForThread(threadId, { refreshHistory: fresh }))
+  }
+
+  /** 摘要只触发已打开成员回读详情，不覆盖共享运行事实。 */
+  const reconcileCooperationSessions = async (sessions) => {
+    if (sessions.length < 2) return
+    await Promise.all(sessions.map(async (session) => {
+      const threadId = session.session_id
+      if (!observers.has(threadId)) return
+      const state = getThreadState(threadId)
+      const snapshot = JSON.stringify([
+        session.turn_id, session.turn_status, session.current_run_id, session.result_run_id,
+        session.run_status, session.waiting_for
+      ])
+      await once(`cooperation:${threadId}`, async () => {
+        try {
+          // 摘要只有待处理布尔值，队列仍须发现同一轮内新增的独立 Input。
+          await resumeQueuedInputs(threadId)
+          if (!isCurrentThreadState(threadId, state) || cooperationSnapshots.get(threadId) === snapshot) return
+          if (!(await resumeActiveRunForThread(threadId, { fresh: true }))) return
+          if (isCurrentThreadState(threadId, state)) {
+            cooperationSnapshots.set(threadId, snapshot)
+          }
+        } catch (error) {
+          console.warn('Failed to reconcile cooperation member:', error)
+        }
+      })
+    }))
+  }
 
   /** 最后一个视图释放时才终止观察；隐藏视图仍保有运行状态。 */
   const observeThread = (threadId, observer) => {
@@ -249,6 +286,7 @@ export const useSessionRuntimeStore = defineStore('sessionRuntime', () => {
       listeners.delete(observer)
       if (listeners.size || observers.get(threadId) !== listeners) return
       observers.delete(threadId)
+      cooperationSnapshots.delete(threadId)
       cleanupThreadState(threadId)
       delete threadRuns.value[threadId]
       delete historyPages[threadId]
@@ -260,6 +298,7 @@ export const useSessionRuntimeStore = defineStore('sessionRuntime', () => {
   onScopeDispose(() => {
     for (const id of Object.keys(chatState.threadStates)) cleanupThreadState(id)
     observers.clear()
+    cooperationSnapshots.clear()
     requests.clear()
   })
   return {
@@ -277,6 +316,7 @@ export const useSessionRuntimeStore = defineStore('sessionRuntime', () => {
     requestTurnCancellation: stream.requestTurnCancellation,
     resumeActiveRunForThread,
     resumeQueuedInputs,
+    reconcileCooperationSessions,
     startInputMonitor: queue.startInputMonitor,
     cancelInput: queue.cancelInput,
     promoteInput: queue.promoteInput,

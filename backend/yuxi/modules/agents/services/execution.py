@@ -156,18 +156,10 @@ async def _persist_model_request_timing(
         )
 
 
-def _extract_interrupt_info(state) -> Any | None:
-    """从 LangGraph state 中提取中断信息"""
-    if hasattr(state, "tasks") and state.tasks:
-        for task in state.tasks:
-            if hasattr(task, "interrupts") and task.interrupts:
-                return task.interrupts[0]
-
-    interrupt_data = state.values.get("__interrupt__")
-    if isinstance(interrupt_data, list) and interrupt_data:
-        return interrupt_data[0]
-
-    return None
+def _extract_interrupts(state) -> list:
+    """从当前 checkpoint 任务收集未完成工具的全部中断。"""
+    # 部分恢复后已完成工具仍保留旧 interrupt；只有实际结果才能排除该任务。
+    return [item for task in state.tasks if not task.result for item in task.interrupts]
 
 
 def _coerce_interrupt_payload(info: Any) -> dict:
@@ -223,17 +215,35 @@ def _build_tool_approval_payload(payload: dict, thread_id: str) -> dict[str, Any
     }
 
 
-def build_pending_interrupt_payload(info: Any, thread_id: str) -> dict[str, Any]:
-    """将 checkpoint 中断信息转换为前端可恢复的统一载荷。"""
-    coerced = _coerce_interrupt_payload(info)
-    if coerced.get("kind") == "cooperation":
-        return {**coerced, "status": "cooperation_waiting", "thread_id": thread_id}
+def build_pending_interrupt_payload(interrupts: list, thread_id: str) -> dict[str, Any]:
+    """将 checkpoint 中断列表转换为前端可恢复的统一载荷；多个协作等待聚合为一次恢复。"""
+    coerced_items = [_coerce_interrupt_payload(item) for item in interrupts]
+    if len(coerced_items) > 1 and not all(item.get("kind") == "cooperation" for item in coerced_items):
+        # 并行等待只有全为协作等待才有统一恢复入口；混合或重复的审批/回答显式失败优于静默丢弃。
+        raise ValueError("同一轮并行产生了多个等待点，只有全部为协作等待才能聚合恢复")
+    if coerced_items[0].get("kind") == "cooperation":
+        waits = [_cooperation_wait_entry(info, coerced) for info, coerced in zip(interrupts, coerced_items)]
+        return {"status": "cooperation_waiting", "thread_id": thread_id, "waits": waits}
+    coerced = coerced_items[0]
     approval_payload = _build_tool_approval_payload(coerced, thread_id)
     if approval_payload:
         return {"status": "human_approval_required", **approval_payload}
 
     question_payload = _build_ask_user_question_payload(coerced, thread_id)
     return {"status": "ask_user_question_required", **question_payload}
+
+
+def _cooperation_wait_entry(info: Any, coerced: dict) -> dict:
+    """把单个协作等待固定为携带中断 ID 的恢复条目。"""
+    interrupt_id = getattr(info, "id", None)
+    if not isinstance(interrupt_id, str) or not interrupt_id:
+        raise ValueError("协作等待缺少可恢复的中断 ID")
+    target = (
+        {"target_inputs": coerced["target_inputs"]}
+        if "target_inputs" in coerced
+        else {"target_sessions": coerced["target_sessions"], "after_cursor": coerced["after_cursor"]}
+    )
+    return {"interrupt_id": interrupt_id, **target, "deadline": coerced["deadline"]}
 
 
 def _interrupt_terminal_details(interrupt: dict[str, Any]) -> tuple[str, str]:
@@ -254,17 +264,11 @@ def _interrupt_terminal_details(interrupt: dict[str, Any]) -> tuple[str, str]:
 def _waitpoint_from_interrupt(interrupt: dict[str, Any], run_id: str) -> dict:
     """为具体 interrupted Run 固定等待点和审批调用身份。"""
     if interrupt.get("status") == "cooperation_waiting":
-        target = (
-            {"target_inputs": interrupt["target_inputs"]}
-            if "target_inputs" in interrupt
-            else {"target_sessions": interrupt["target_sessions"], "after_cursor": interrupt["after_cursor"]}
-        )
         return {
             "id": hash_id("wait_", run_id, length=64),
             "run_id": run_id,
             "kind": "cooperation",
-            **target,
-            "deadline": interrupt["deadline"],
+            "waits": interrupt["waits"],
         }
     if interrupt.get("status") == "human_approval_required":
         approval = dict(interrupt.get("approval") or {})
@@ -451,8 +455,8 @@ async def stream_agent_execution(
                         yield public_event
             if final_state is None:
                 raise ValueError("Agent 执行流缺少最终 checkpoint")
-            interrupt_info = _extract_interrupt_info(final_state)
-            interrupt = build_pending_interrupt_payload(interrupt_info, thread_id) if interrupt_info else None
+            interrupts = _extract_interrupts(final_state)
+            interrupt = build_pending_interrupt_payload(interrupts, thread_id) if interrupts else None
             waitpoint = _waitpoint_from_interrupt(interrupt, meta["run_id"]) if interrupt else None
             error_type, error_message = _interrupt_terminal_details(interrupt) if interrupt else (None, None)
             state = extract_agent_state(final_state.values)

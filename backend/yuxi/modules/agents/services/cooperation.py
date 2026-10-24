@@ -40,17 +40,18 @@ from yuxi.modules.system.options import system_options
 from yuxi.modules.workspace.repositories.projects import ProjectRepository
 from yuxi.modules.workspace.services.bindings import resolve_session_workdir_binding
 from yuxi.shared.datetime import format_utc_datetime, utc_now
-from yuxi.shared.errors import InvalidOperationError, StateConflictError
+from yuxi.shared.errors import InvalidOperationError, ResourceNotFoundError, StateConflictError
 
 
 class SessionCooperationService:
     """工具调用复用会话输入主链路，授权以持久 Run 为准。"""
 
-    def __init__(self, db, *, run_id: str, uid: str, config_snapshot: dict | None = None):
+    def __init__(self, db, *, run_id: str, uid: str, worker_id: str, config_snapshot: dict | None = None):
         """绑定工具调用的来源身份。"""
         self.db = db
         self.run_id = run_id
         self.uid = uid
+        self.worker_id = worker_id
         self.config_snapshot = config_snapshot
         self.repo = CooperationRepository(db)
 
@@ -118,26 +119,27 @@ class SessionCooperationService:
             await self.db.flush()
         elif child.cooperation_path != path or child.agent_id != selected_agent_id:
             raise ValueError("幂等创建请求的名称或 Agent 已变化")
-        payload = await self._accept(run=run, target=child, description=description, call_id=call_id)
+        payload = await self._accept(target=child, description=description, call_id=call_id)
         return {**session_identity(child), **payload}
 
     async def submit_input(self, *, target: str, description: str, call_id: str) -> dict:
         """同树提交新工作，审批等待明确拒绝，普通忙碌状态持久排队。"""
         if not description.strip():
             raise ValueError("工作输入不能为空")
-        run, caller = await self.caller()
+        _, caller = await self.caller()
         member = await self.require_target(caller, target)
         agent = await AgentRepository(self.db).get_by_slug(member.agent_id, for_key_share=True)
         if agent is None:
             raise ValueError("Agent 已删除")
-        return await self._accept(run=run, target=member, description=description, call_id=call_id)
+        return await self._accept(target=member, description=description, call_id=call_id)
 
     async def send_message(self, *, target: str, content: str, call_id: str) -> dict:
         """持久投递信息，不创建工作或自动唤醒空闲会话。"""
         if not content.strip() or len(content) > 100000:
             raise ValueError("协作消息不能为空且不能超过 100000 字符")
-        run, caller = await self.caller()
+        _, caller = await self.caller()
         member = await self.require_target(caller, target)
+        run = await self._lock_source_run()
         event = await self.repo.append(
             sender=caller,
             recipient=member,
@@ -188,10 +190,21 @@ class SessionCooperationService:
 
     async def cancel_turn(self, *, target: str, turn_id: str, call_id: str) -> dict:
         """取消精确目标 Turn，控制权限允许树内任意成员。"""
-        run, caller = await self.caller()
+        _, caller = await self.caller()
         member = await self.require_target(caller, target)
 
         member = await SessionRepository(self.db).lock_session_by_thread_id(member.thread_id)
+        target_turn = await AgentTurnRepository(self.db).get_for_scope(
+            turn_id=turn_id,
+            thread_id=member.thread_id,
+            uid=member.uid,
+            app_id=member.app_id,
+            for_update=True,
+        )
+        if target_turn is None:
+            raise ResourceNotFoundError("Turn 不存在")
+        # 双向取消按相同 Run 顺序领取，避免各持来源 Run 后等待对方。
+        run = await self._lock_source_run(target_turn.current_run_id)
         key = f"cooperation:{run.turn_id}:{call_id}"
         await self.repo.lock_tool_receipt(run, member, key)
         return await cancel_turn(
@@ -229,8 +242,14 @@ class SessionCooperationService:
         run = await AgentRunRepository(self.db).get_run_for_user(self.run_id, self.uid)
         if run is not None:
             await self.db.refresh(run)
-        if run is None or run.status != "running" or run.lease_expires_at is None or run.lease_expires_at <= utc_now():
-            raise ValueError("协作操作需要有效的运行中 Run")
+        if (
+            run is None
+            or run.status != "running"
+            or run.worker_id != self.worker_id
+            or run.lease_expires_at is None
+            or run.lease_expires_at <= utc_now()
+        ):
+            raise ValueError("协作操作需要当前 Worker 持有有效租约的运行中 Run")
         caller = await self.db.get(Session, run.session_record_id)
         turn = await self.db.get(AgentTurn, run.turn_id)
         if (
@@ -268,9 +287,18 @@ class SessionCooperationService:
             raise ValueError("目标 Session 不存在或不属于当前授权树")
         return member
 
-    async def _accept(self, *, run: AgentRun, target: Session, description: str, call_id: str) -> dict:
+    async def _accept(self, *, target: Session, description: str, call_id: str) -> dict:
         """复用 Input/Receipt 接收，不为排队输入提前创建 Turn。"""
         target = await SessionRepository(self.db).lock_session_by_thread_id(target.thread_id)
+
+        # 接收与整树停止在同一 Session 行锁上串行化；入口检查后才提交的停止意图在此拒绝迟到的提交。
+        from yuxi.modules.agents.models.cooperation import CooperationRuntime
+
+        runtime = await self.db.get(CooperationRuntime, target.tree_root_thread_id, populate_existing=True)
+        if runtime is not None and runtime.stopped:
+            raise StateConflictError("协作树已停止，不能提交新工作")
+
+        run = await self._lock_source_run()
 
         key = f"cooperation:{run.turn_id}:{call_id}"
         intent = str(uuid.uuid5(uuid.NAMESPACE_URL, description))
@@ -299,6 +327,24 @@ class SessionCooperationService:
         await self.db.commit()
         await dispatch_next_input(uid=run.uid, agent_slug=target.agent_id, thread_id=target.thread_id)
         return await self._input_result(target, receipt.input_id)
+
+    async def _lock_source_run(self, target_run_id: str | None = None) -> AgentRun:
+        """按稳定顺序锁定工具涉及的 Run，将来源身份保护到副作用事务提交。"""
+        repo = AgentRunRepository(self.db)
+        source = None
+        for run_id in sorted({self.run_id, target_run_id} - {None}):
+            run = await repo.lock_run_for_user(run_id, self.uid)
+            if run_id == self.run_id:
+                source = run
+        if (
+            source is None
+            or source.status != "running"
+            or source.worker_id != self.worker_id
+            or source.lease_expires_at is None
+            or source.lease_expires_at <= utc_now()
+        ):
+            raise StateConflictError("协作来源 Run 已失效，不能执行工具副作用")
+        return source
 
     async def _input_result(self, target: Session, input_id: str) -> dict:
         """从持久 Input 读取派发归属，回执仅提供稳定目标。"""
@@ -481,19 +527,27 @@ async def _recover_cooperation_wait(turn_id: str) -> None:
         wait = turn.waitpoint or {}
         if turn.status != "waiting" or wait.get("kind") != "cooperation":
             return
-        if "target_inputs" in wait:
-            results = await read_task_results(db, member, input_ids=wait["target_inputs"])
-            result = {"results": results, "wait_timed_out": False}
-            ready = all(item["terminal"] for item in results)
-        else:
-            result = await read_updates(db, member, targets=wait["target_sessions"], after=wait["after_cursor"])
-            ready = bool(result["updates"])
-        if not ready:
-            from datetime import datetime
+        # 按 ID 恢复已就绪或超时项；未就绪项继续留在 checkpoint，不能推迟其他项的截止时间。
+        response = {}
+        for entry in wait["waits"]:
+            if "target_inputs" in entry:
+                value = {
+                    "results": await read_task_results(db, member, input_ids=entry["target_inputs"]),
+                    "wait_timed_out": False,
+                }
+                ready = all(item["terminal"] for item in value["results"])
+            else:
+                value = await read_updates(db, member, targets=entry["target_sessions"], after=entry["after_cursor"])
+                ready = bool(value["updates"])
+            if not ready:
+                from datetime import datetime
 
-            if utc_now() < datetime.fromisoformat(wait["deadline"]):
-                return
-            result["wait_timed_out"] = True
+                if utc_now() < datetime.fromisoformat(entry["deadline"]):
+                    continue
+                value["wait_timed_out"] = True
+            response[entry["interrupt_id"]] = value
+        if not response:
+            return
         previous = await db.get(AgentRun, turn.current_run_id)
         binding = await resolve_session_workdir_binding(agent_session=member, uid=member.uid, db=db)
         run = await create_resume_run(
@@ -502,8 +556,8 @@ async def _recover_cooperation_wait(turn_id: str) -> None:
             turn=turn,
             previous=previous,
             api_key_id=previous.api_key_id,
-            response=result,
-            metadata={"resume": result},
+            response=response,
+            metadata={"resume": response},
         )
         run_id = run.id
 
@@ -549,20 +603,8 @@ async def control_tree(*, db, scope: ActorScope, thread_id: str, idempotency_key
     if receipt is not None:
         require_receipt_replay(receipt, event_type, intent)
         return control_accepted(receipt)
-    if (
-        not stopped
-        and await db.scalar(
-            select(AgentTurn.id)
-            .join(Session, Session.thread_id == AgentTurn.thread_id)
-            .where(
-                Session.tree_root_thread_id == member.tree_root_thread_id,
-                AgentTurn.status.in_(["running", "waiting", "cancelling"]),
-            )
-            .limit(1)
-        )
-        is not None
-    ):
-        raise StateConflictError("整树仍有未结束的 Turn")
+    if not stopped:
+        await _require_tree_resumable(db=db, member=member)
     await db.execute(
         insert(CooperationRuntime)
         .values(tree_root_thread_id=member.tree_root_thread_id, stopped=stopped)
@@ -607,26 +649,7 @@ async def resume_tree_for_user_input(*, db, agent_session: Session) -> bool:
     runtime = await db.get(CooperationRuntime, agent_session.tree_root_thread_id, populate_existing=True)
     if runtime is None or not runtime.stopped:
         return False
-    active = await db.scalar(
-        select(AgentTurn.id)
-        .join(Session, Session.thread_id == AgentTurn.thread_id)
-        .where(
-            Session.tree_root_thread_id == agent_session.tree_root_thread_id,
-            AgentTurn.status.in_(["running", "waiting", "cancelling"]),
-        )
-        .limit(1)
-    )
-    cleanup = await db.scalar(
-        select(AgentRun.id)
-        .join(Session, Session.thread_id == AgentRun.thread_id)
-        .where(
-            Session.tree_root_thread_id == agent_session.tree_root_thread_id,
-            AgentRun.runtime_cleanup_pending.is_(True),
-        )
-        .limit(1)
-    )
-    if active is not None or cleanup is not None:
-        raise StateConflictError("正在停止全部任务，请等待清理完成")
+    await _require_tree_resumable(db=db, member=agent_session)
     runtime.stopped = False
     return True
 
@@ -692,3 +715,9 @@ async def reconcile_stopped_trees(*, tree_root_thread_id: str | None = None) -> 
             logger.exception("Stopped waiting cleanup failed: turn_id=%s", turn_id)
     if failures:
         raise RuntimeError(f"停止会话恢复失败：{failures} 条")
+
+
+async def _require_tree_resumable(*, db, member: Session) -> None:
+    """持有 Session → 树锁时，统一检查解除整树停止意图的前置条件。"""
+    if await CooperationRepository(db).has_unfinished_execution(member):
+        raise StateConflictError("正在停止全部任务，请等待清理完成")

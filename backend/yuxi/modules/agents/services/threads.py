@@ -28,6 +28,7 @@ from yuxi.modules.agents.services.public_resources import session_resource
 from yuxi.modules.agents.services.queue_control import pause_pending_queue
 from yuxi.modules.agents.services.scheduler import claim_next_input, deliver
 from yuxi.modules.agents.services.thread_access import require_thread
+from yuxi.modules.workspace.repositories.projects import ProjectRepository
 from yuxi.shared.datetime import format_utc_datetime, utc_now
 from yuxi.shared.errors import InvalidInputError, InvalidOperationError, ResourceNotFoundError, StateConflictError
 
@@ -153,19 +154,22 @@ async def update_thread(
 
 
 async def archive_thread(*, db: AsyncSession, scope: ActorScope, thread_id: str) -> None:
-    """当前会话的运行与待处理输入全部结束后才归档 Thread。"""
-    agent_session = await require_thread(db=db, scope=scope, thread_id=thread_id, lock=True)
+    """归档前保留未结束工作的入口，根会话承担整棵协作树的可达性。"""
+    agent_session = await require_thread(db=db, scope=scope, thread_id=thread_id)
     if agent_session.status == "archived":
         return
-    active_turn = await AgentTurnRepository(db).lock_active_for_thread(thread_id=thread_id, uid=scope.uid, app_id=scope.app_id)
-    inputs = await AgentInputRepository(db).list_pending_inputs(thread_id=thread_id, uid=scope.uid, app_id=scope.app_id)
-    active_run = await AgentRunRepository(db).get_active_run_by_thread_for_user(
-        agent_slug=agent_session.agent_id,
-        thread_id=thread_id,
-        uid=scope.uid,
-    )
-    if active_turn is not None or inputs or active_run is not None:
-        raise StateConflictError("Thread 仍有活跃执行或待处理输入")
+    repo = SessionRepository(db)
+    if agent_session.parent_thread_id is None:
+        # 与成员创建、项目删除共用 Project → 有序 Session 锁序，避免新增成员越过归档判定。
+        project = await ProjectRepository(db).lock_active_for_user(agent_session.project_id, scope.uid)
+        if project is None:
+            raise StateConflictError("Project 已不可访问")
+        members = await repo.lock_tree_sessions(tree_root_thread_id=thread_id, uid=scope.uid, app_id=scope.app_id)
+    else:
+        agent_session = await require_thread(db=db, scope=scope, thread_id=thread_id, lock=True)
+        members = [agent_session]
+    if await repo.has_unfinished_work(thread_ids=[member.thread_id for member in members], uid=scope.uid, app_id=scope.app_id):
+        raise StateConflictError("会话范围内仍有活跃执行或待处理输入，不能归档")
     agent_session.status = "archived"
     agent_session.updated_at = utc_now()
     await db.commit()

@@ -45,6 +45,7 @@ uv run --locked --group test pytest \
     test/integration/services/test_schema_migration_version.py \
     test/integration/services/test_agent_input_concurrency.py \
     test/integration/services/test_thread_priority_inputs.py \
+    test/integration/services/test_agent_dispatch_receipts.py \
     test/integration/services/test_agent_stop_recovery.py \
     test/integration/services/test_session_title_generation.py \
     test/integration/services/test_agent_run_lease.py \

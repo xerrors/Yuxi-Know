@@ -25,6 +25,8 @@ from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.agents.scope import ActorScope
 from yuxi.modules.agents.services import input_config, inputs, scheduler, threads, turns
+from yuxi.modules.system.models import ConfigOption
+from yuxi.modules.system.options import system_options
 from yuxi.modules.workspace.services.bindings import WorkdirBinding
 
 SCOPE = ActorScope(uid="input-user", app_id=None)
@@ -46,6 +48,10 @@ async def create_input_schema():
     manager.async_engine = engine
     manager._initialized = True
     await create_business_tables(manager)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with factory() as db:
+        db.add(ConfigOption(key=system_options.key, name=system_options.name, params=system_options.params, value={}))
+        await db.commit()
     async with engine.begin() as connection:
         await connection.execute(
             text(
@@ -161,6 +167,7 @@ async def sessions(monkeypatch):
         """回读已提交 Run，避免触碰 Redis worker。"""
         async with factory() as db:
             assert (await db.get(AgentRun, dispatch.run_id)).status == "pending"
+        return True
 
     @asynccontextmanager
     async def context():

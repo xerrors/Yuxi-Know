@@ -9,9 +9,12 @@ import pytest
 import pytest_asyncio
 
 from yuxi.infrastructure.postgres.models import load_models
-from sqlalchemy import delete, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from yuxi.modules.agents.input_messages import build_chat_input_message, serialize_input_message
+from yuxi.modules.agents.models.cooperation import CooperationEvent, CooperationRuntime
+from yuxi.modules.agents.models.inputs import AgentInput, AgentInputReceipt
 from yuxi.modules.agents.models.runs import AgentRun
 from yuxi.modules.agents.models.turns import AgentTurn
 from yuxi.modules.agents.models.sessions import Session
@@ -54,8 +57,8 @@ async def cooperation_user(test_client, admin_headers):
         assert deleted.status_code in (200, 404), deleted.text
 
 
-async def test_state_recovers_children_without_checkpoint_and_rejects_other_user(test_client, cooperation_user, admin_headers):
-    """创建已提交而父 checkpoint 从未写入的子 Run，页面仍能发现并读到终态。"""
+async def test_cooperation_observation_and_root_archive_preserve_scope_and_live_members(test_client, cooperation_user, admin_headers):
+    """协作观察按用户隔离，归档不能隐藏仍在等待的成员入口。"""
     uid = cooperation_user["user"]["uid"]
     project_id = str(uuid.uuid4())
     parent_thread, child_thread = (f"pytest-cooperation-state-{uuid.uuid4()}" for _ in range(2))
@@ -76,7 +79,14 @@ async def test_state_recovers_children_without_checkpoint_and_rejects_other_user
                 )
             )
             await db.flush()
-            parent = Session(thread_id=parent_thread, uid=uid, project_id=project_id, agent_id="state-probe", status="active")
+            parent = Session(
+                thread_id=parent_thread,
+                uid=uid,
+                project_id=project_id,
+                agent_id="state-probe",
+                status="active",
+                config_snapshot={"model": "test:state", "tool_approval_mode": "default"},
+            )
             child = Session(
                 thread_id=child_thread,
                 uid=uid,
@@ -173,6 +183,31 @@ async def test_state_recovers_children_without_checkpoint_and_rejects_other_user
             denied = await test_client.get(url, headers=admin_headers)
             assert denied.status_code == 404, denied.text
             assert child_id not in denied.text
+
+        async with sessions() as db:
+            member_turn = await db.get(AgentTurn, child_turn_id)
+            member_turn.status = "waiting"
+            member_turn.waitpoint = {"kind": "answer", "run_id": child_id}
+            (await db.get(AgentRun, child_id)).status = "interrupted"
+            await db.commit()
+        archive_url = f"/api/v1/agents/sessions/{parent_thread}/archive"
+        refused = await test_client.post(archive_url, headers=cooperation_user["headers"])
+        assert refused.status_code == 409, refused.text
+        async with sessions() as db:
+            assert (await db.scalar(select(Session).where(Session.thread_id == parent_thread))).status == "active"
+            assert (await db.get(AgentTurn, turn_id)).status == "completed"
+            member_turn = await db.get(AgentTurn, child_turn_id)
+            assert member_turn.status == "waiting"
+            member_turn.status = "completed"
+            member_turn.waitpoint = None
+            (await db.get(AgentRun, child_id)).status = "completed"
+            await db.commit()
+        archived = await test_client.post(archive_url, headers=cooperation_user["headers"])
+        assert archived.status_code == 200, archived.text
+        assert archived.json()["yuxi"]["archived"] is True
+        async with sessions() as db:
+            assert (await db.scalar(select(Session).where(Session.thread_id == parent_thread))).status == "archived"
+            assert (await db.scalar(select(Session).where(Session.thread_id == child_thread))).status == "active"
     finally:
         async with sessions() as db:
             await db.execute(
@@ -183,6 +218,103 @@ async def test_state_recovers_children_without_checkpoint_and_rejects_other_user
             await db.execute(delete(AgentTurn).where(AgentTurn.id.in_([turn_id, child_turn_id])))
             await db.execute(delete(Session).where(Session.thread_id == child_thread))
             await db.execute(delete(Session).where(Session.thread_id == parent_thread))
+            await db.execute(delete(Project).where(Project.id == project_id))
+            await db.commit()
+        await engine.dispose()
+
+
+@pytest.mark.parametrize("event_type", ["yuxi.session.tree.continue", "agent.session.input.message"])
+async def test_tree_resume_rejects_unconfirmed_cleanup_without_mutating_queue(test_client, cooperation_user, event_type):
+    """两种 HTTP 恢复入口均拒绝尚未清理的失败 Run，并保留原队列与停止意图。"""
+    uid = cooperation_user["user"]["uid"]
+    project_id, turn_id, run_id, input_id = (str(uuid.uuid4()) for _ in range(4))
+    thread_id = f"pytest-coop-resume-{uuid.uuid4().hex}"
+    load_models()
+    engine = create_async_engine(os.environ["POSTGRES_URL"])
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    snapshot = {"model": "test:state", "tool_approval_mode": "default"}
+    try:
+        async with sessions() as db:
+            db.add(
+                Project(
+                    id=project_id, uid=uid, selection_status="implicit", workdir_path=f"projects/{project_id}", directory_mode="managed"
+                )
+            )
+            await db.flush()
+            member = Session(
+                thread_id=thread_id,
+                uid=uid,
+                project_id=project_id,
+                agent_id="state-probe",
+                status="active",
+                queue_paused=True,
+                config_snapshot=snapshot,
+            )
+            db.add(member)
+            await db.flush()
+            db.add(AgentTurn(id=turn_id, thread_id=thread_id, uid=uid, status="failed", current_run_id=run_id, result_run_id=run_id))
+            await db.flush()
+            db.add(
+                AgentRun(
+                    id=run_id,
+                    uid=uid,
+                    agent_slug="state-probe",
+                    run_type="chat",
+                    session_record_id=member.id,
+                    thread_id=thread_id,
+                    runtime_scope_id=thread_id,
+                    turn_id=turn_id,
+                    status="failed",
+                    finished_at=utc_now(),
+                    runtime_cleanup_pending=True,
+                    input_payload={"context_snapshot": snapshot},
+                )
+            )
+            db.add(CooperationRuntime(tree_root_thread_id=thread_id, stopped=True))
+            db.add(
+                AgentInput(
+                    id=input_id,
+                    thread_id=thread_id,
+                    uid=uid,
+                    agent_slug="state-probe",
+                    kind="follow_up",
+                    status="pending",
+                    messages=[serialize_input_message(build_chat_input_message("ORIGINAL_PENDING_WORK"))],
+                    input_payload={"context_snapshot": snapshot},
+                )
+            )
+            await db.commit()
+
+        event = {"type": event_type}
+        if event_type == "agent.session.input.message":
+            event["input"] = [{"role": "user", "content": [{"type": "input_text", "text": "RESUME_AFTER_STOP"}]}]
+        response = await test_client.post(
+            f"/api/v1/agents/sessions/{thread_id}/events",
+            headers={**cooperation_user["headers"], "Idempotency-Key": f"resume-{uuid.uuid4().hex}"},
+            json={"events": [event]},
+        )
+        assert response.status_code == 409, response.text
+        async with sessions() as db:
+            assert (await db.get(CooperationRuntime, thread_id)).stopped is True
+            assert (await db.scalar(select(Session).where(Session.thread_id == thread_id))).queue_paused is True
+            run = await db.get(AgentRun, run_id)
+            assert run.status == "failed" and run.runtime_cleanup_pending
+            items = list((await db.scalars(select(AgentInput).where(AgentInput.thread_id == thread_id))).all())
+            assert len(items) == 1 and items[0].id == input_id
+            assert items[0].status == "pending" and items[0].turn_id is None and items[0].consumed_run_id is None
+            assert list((await db.scalars(select(AgentTurn.id).where(AgentTurn.thread_id == thread_id))).all()) == [turn_id]
+            assert list((await db.scalars(select(AgentRun.id).where(AgentRun.thread_id == thread_id))).all()) == [run_id]
+            assert not await db.scalar(select(AgentInputReceipt.id).where(AgentInputReceipt.thread_id == thread_id))
+    finally:
+        async with sessions() as db:
+            await db.execute(delete(AgentInputReceipt).where(AgentInputReceipt.thread_id == thread_id))
+            await db.execute(delete(AgentInput).where(AgentInput.thread_id == thread_id))
+            await db.execute(update(AgentTurn).where(AgentTurn.thread_id == thread_id).values(current_run_id=None, result_run_id=None))
+            await db.execute(delete(CooperationEvent).where(CooperationEvent.tree_root_thread_id == thread_id))
+            await db.execute(delete(AgentRun).where(AgentRun.thread_id == thread_id))
+            await db.execute(delete(AgentTurn).where(AgentTurn.thread_id == thread_id))
+            await db.execute(delete(CooperationRuntime).where(CooperationRuntime.tree_root_thread_id == thread_id))
+            await db.execute(delete(Session).where(Session.thread_id == thread_id))
             await db.execute(delete(Project).where(Project.id == project_id))
             await db.commit()
         await engine.dispose()

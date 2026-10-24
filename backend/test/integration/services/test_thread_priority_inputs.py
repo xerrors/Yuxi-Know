@@ -599,7 +599,7 @@ async def test_cancelled_steer_continuation_preserves_wire_ids_and_audit_order(s
                         idempotency_key="cancel-wire-steer",
                     )
             yield GraphExecutionResult(
-                checkpoint=SimpleNamespace(values={"messages": list(self.history)}),
+                checkpoint=SimpleNamespace(values={"messages": list(self.history)}, tasks=()),
                 steer_before_model=before_model,
             )
 

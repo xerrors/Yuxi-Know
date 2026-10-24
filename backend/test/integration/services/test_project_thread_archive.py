@@ -17,6 +17,7 @@ from yuxi.modules.agents.services.threads import archive_thread
 from yuxi.modules.identity.models import User
 from yuxi.modules.workspace.models import Project
 from yuxi.modules.workspace.services.projects import delete_project_view
+from yuxi.shared.datetime import utc_now
 from yuxi.shared.errors import DomainError, StateConflictError
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration, pytest.mark.self_managed_resources]
@@ -99,9 +100,17 @@ async def test_project_delete_rejects_pending_work_then_archives_history(pending
         await engine.dispose()
 
 
-@pytest.mark.parametrize("remaining_work", ["child_run", "runtime_cleanup"])
-async def test_archive_respects_independent_child_and_runtime_cleanup(remaining_work):
-    """子任务不阻止父 Thread 归档，但子任务或父运行时清理仍阻止 Project 删除。"""
+@pytest.mark.parametrize(
+    ("remaining_work", "archive_target"),
+    [
+        (work, target)
+        for work in ("child_run", "child_waiting", "child_pending", "child_cleanup", "runtime_cleanup")
+        for target in ("root", "child")
+        if target == "root" or work != "runtime_cleanup"
+    ],
+)
+async def test_archive_preserves_entry_for_unfinished_work(remaining_work, archive_target):
+    """根与成员使用相同结束条件，成员空闲后可在根仍有工作时归档。"""
     engine = create_async_engine(os.environ["POSTGRES_URL"], pool_pre_ping=True)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
     suffix = uuid.uuid4().hex
@@ -113,6 +122,7 @@ async def test_archive_respects_independent_child_and_runtime_cleanup(remaining_
     child_turn_id = f"child-turn-{suffix}"
     root_run_id = f"root-{suffix}"
     child_run_id = f"run-child-{suffix}"
+    archive_id = thread_id if archive_target == "root" else child_thread_id
     scope = ActorScope(uid=uid, app_id=None)
     try:
         async with sessions() as db:
@@ -131,7 +141,7 @@ async def test_archive_respects_independent_child_and_runtime_cleanup(remaining_
             parent = Session(thread_id=thread_id, uid=uid, agent_id="main", project_id=project_id)
             db.add(parent)
             await db.flush()
-            if remaining_work == "child_run":
+            if remaining_work != "runtime_cleanup":
                 child = Session(
                     thread_id=child_thread_id,
                     uid=uid,
@@ -163,8 +173,30 @@ async def test_archive_respects_independent_child_and_runtime_cleanup(remaining_
                 )
             )
             await db.flush()
-            if remaining_work == "child_run":
-                db.add(AgentTurn(id=child_turn_id, thread_id=child_thread_id, uid=uid, status="cancelling"))
+            if remaining_work == "child_pending":
+                child.queue_paused = True
+                db.add(
+                    AgentInput(
+                        id=child_turn_id,
+                        thread_id=child_thread_id,
+                        uid=uid,
+                        agent_slug="helper",
+                        kind="follow_up",
+                        status="pending",
+                        messages=[serialize_input_message(build_chat_input_message("queued child work"))],
+                    )
+                )
+            elif remaining_work != "runtime_cleanup":
+                child_status = {"child_run": "cancelling", "child_waiting": "waiting", "child_cleanup": "completed"}[remaining_work]
+                db.add(
+                    AgentTurn(
+                        id=child_turn_id,
+                        thread_id=child_thread_id,
+                        uid=uid,
+                        status=child_status,
+                        waitpoint={"kind": "answer"} if remaining_work == "child_waiting" else None,
+                    )
+                )
                 await db.flush()
                 db.add(
                     AgentRun(
@@ -177,20 +209,19 @@ async def test_archive_respects_independent_child_and_runtime_cleanup(remaining_
                         session_record_id=child.id,
                         run_type="chat",
                         created_by_run_id=root_run_id,
-                        status="cancel_requested",
+                        status={"child_run": "cancel_requested", "child_waiting": "interrupted", "child_cleanup": "completed"}[
+                            remaining_work
+                        ],
+                        runtime_cleanup_pending=remaining_work == "child_cleanup",
                         input_payload={},
                     )
                 )
             await db.commit()
 
         async with sessions() as db:
-            if remaining_work == "child_run":
-                await archive_thread(db=db, scope=scope, thread_id=thread_id)
-            else:
-                with pytest.raises(DomainError) as thread_error:
-                    await archive_thread(db=db, scope=scope, thread_id=thread_id)
-                assert isinstance(thread_error.value, StateConflictError)
-                await db.rollback()
+            with pytest.raises(StateConflictError):
+                await archive_thread(db=db, scope=scope, thread_id=archive_id)
+            await db.rollback()
             with pytest.raises(DomainError) as project_error:
                 await delete_project_view(uid=uid, project_id=project_id, db=db)
             assert isinstance(project_error.value, StateConflictError)
@@ -198,28 +229,46 @@ async def test_archive_respects_independent_child_and_runtime_cleanup(remaining_
 
         async with sessions() as db:
             assert (await db.get(Project, project_id)).status == "active"
-            assert (await db.scalar(select(Session).where(Session.thread_id == thread_id))).status == (
-                "archived" if remaining_work == "child_run" else "active"
-            )
-            if remaining_work == "child_run":
+            assert (await db.scalar(select(Session).where(Session.thread_id == thread_id))).status == "active"
+            if remaining_work == "child_pending":
+                queued = await db.get(AgentInput, child_turn_id)
+                queued.status = "cancelled"
+                queued.cancelled_at = utc_now()
+            elif remaining_work != "runtime_cleanup":
                 (await db.get(AgentRun, child_run_id)).status = "cancelled"
+                (await db.get(AgentRun, child_run_id)).runtime_cleanup_pending = False
                 (await db.get(AgentTurn, child_turn_id)).status = "cancelled"
             else:
                 (await db.get(AgentRun, root_run_id)).runtime_cleanup_pending = False
+            if archive_target == "child":
+                (await db.get(AgentRun, root_run_id)).status = "pending"
+                (await db.get(AgentTurn, turn_id)).status = "running"
             await db.commit()
 
         async with sessions() as db:
-            await archive_thread(db=db, scope=scope, thread_id=thread_id)
+            await archive_thread(db=db, scope=scope, thread_id=archive_id)
 
         async with sessions() as db:
-            agent_session = await db.scalar(select(Session).where(Session.thread_id == thread_id))
+            agent_session = await db.scalar(select(Session).where(Session.thread_id == archive_id))
             assert agent_session is not None and agent_session.status == "archived"
+            if archive_target == "child":
+                root = await db.scalar(select(Session).where(Session.thread_id == thread_id))
+                assert root.status == "active"
+                assert (await db.get(AgentRun, root_run_id)).status == "pending"
+                assert (await db.get(AgentTurn, turn_id)).status == "running"
+                with pytest.raises(StateConflictError):
+                    await delete_project_view(uid=uid, project_id=project_id, db=db)
+                await db.rollback()
+                (await db.get(AgentRun, root_run_id)).status = "completed"
+                (await db.get(AgentTurn, turn_id)).status = "completed"
+                await db.commit()
 
         async with sessions() as db:
             result = await delete_project_view(uid=uid, project_id=project_id, db=db)
-            assert result["archived_threads"] == (1 if remaining_work == "child_run" else 0)
+            assert result["archived_threads"] == (0 if remaining_work == "runtime_cleanup" else 1)
     finally:
         async with sessions() as db:
+            await db.execute(delete(AgentInput).where(AgentInput.thread_id == child_thread_id))
             await db.execute(delete(AgentRun).where(AgentRun.turn_id.in_([turn_id, child_turn_id])))
 
             await db.execute(delete(AgentTurn).where(AgentTurn.id.in_([turn_id, child_turn_id])))

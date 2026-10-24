@@ -1423,14 +1423,17 @@ const currentArtifactFiles = computed(() =>
     name: getPanelFileName({ path })
   }))
 )
-const cooperationObservationEnabled = ref(!props.embedded)
+const cooperationObservationEnabled = computed(
+  () => !props.embedded && workspaceActive.value && pageVisible.value
+)
 const {
   sessions: cooperationSessions,
   error: cooperationError,
   refresh: refreshCooperation
 } = useSessionCooperation({
   threadId: computed(() => (userStore.isLoggedIn ? currentChatId.value : '')),
-  enabled: cooperationObservationEnabled
+  enabled: cooperationObservationEnabled,
+  onSnapshot: sessionRuntime.reconcileCooperationSessions
 })
 
 const toggleMessageDebugPanel = () => {
@@ -2188,7 +2191,6 @@ onMounted(() => {
 
 onActivated(() => {
   workspaceActivated.value = true
-  cooperationObservationEnabled.value = !props.embedded
   nextTick(() => {
     startChatMainResizeObserver()
     if (chatMainRef.value) chatMainRef.value.scrollTop = retainedScrollTop
@@ -2197,7 +2199,6 @@ onActivated(() => {
 
 onDeactivated(() => {
   workspaceActivated.value = false
-  cooperationObservationEnabled.value = false
   stopChatMainResizeObserver()
   stopStreamingStateRefresh()
   scrollController.cleanup()

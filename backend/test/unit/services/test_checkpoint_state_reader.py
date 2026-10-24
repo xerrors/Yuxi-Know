@@ -73,7 +73,7 @@ async def test_checkpoint_reader_keeps_complete_snapshot_and_recovers_interrupt(
     snapshot = await graph.aget_state(config)
     assert values["artifacts"] == ["saved.txt"]
     assert snapshot.values["artifacts"] == ["saved.txt", "pending.txt"]
-    assert pending == snapshot.tasks[0].interrupts[0]
+    assert pending == list(snapshot.tasks[0].interrupts)
     assert values["messages"][0].content == "start"
 
     await graph.ainvoke(Command(resume="approved"), config)
@@ -86,6 +86,33 @@ async def test_checkpoint_reader_keeps_complete_snapshot_and_recovers_interrupt(
 async def test_checkpoint_reader_missing_thread_is_empty(checkpoint_reader):
     """尚无 checkpoint 的线程返回空视图。"""
     assert await svc._read_checkpoint_state(uid="user", thread_id="missing") == ({}, None)
+
+
+async def test_checkpoint_reader_keeps_next_human_interrupt_after_resume(checkpoint_reader):
+    """只有恢复记录而没有业务结果的任务仍在等待，不能丢弃下一次人工提问。"""
+    from yuxi.modules.agents.services.execution import _extract_interrupts
+
+    def questions(_state):
+        """同一任务连续中断，用于区分恢复写入和完成结果。"""
+        interrupt({"questions": [{"question_id": "first", "question": "第一题？"}]})
+        answer = interrupt({"questions": [{"question_id": "second", "question": "第二题？"}]})
+        return {"messages": [AIMessage(content=answer)]}
+
+    builder = StateGraph(ChatBotState)
+    builder.add_node("questions", questions)
+    builder.add_edge(START, "questions")
+    builder.add_edge("questions", END)
+    graph = builder.compile(checkpointer=checkpoint_reader)
+    config = {"configurable": {"thread_id": "questions"}}
+    await graph.ainvoke({"messages": [HumanMessage(content="start")]}, config)
+    await graph.ainvoke(Command(resume="first answer"), config)
+    _values, pending = await svc._read_checkpoint_state(uid="user", thread_id="questions")
+    assert len(pending) == 1
+    assert pending[0].value == {"questions": [{"question_id": "second", "question": "第二题？"}]}
+    assert _extract_interrupts(await graph.aget_state(config)) == pending
+    await graph.ainvoke(Command(resume="second answer"), config)
+    values, pending = await svc._read_checkpoint_state(uid="user", thread_id="questions")
+    assert pending is None and values["messages"][-1].content == "second answer"
 
 
 @pytest.mark.parametrize("include_relations", [False, True])
@@ -171,15 +198,17 @@ async def test_state_view_rejects_missing_or_invisible_thread_before_checkpoint(
 async def test_get_agent_state_view_returns_interrupt_only_for_waiting_owner(monkeypatch: pytest.MonkeyPatch, turn_status):
     thread_id = "thread-1"
 
-    async def read_checkpoint_state(*, uid, thread_id):
+    async def _read_checkpoint_state(*, uid, thread_id):
         assert uid == "user-1"
         assert thread_id == "thread-1"
-        return {}, SimpleNamespace(
-            value={
-                "action_requests": [{"name": "execute", "args": {"command": "pytest -q"}}],
-                "review_configs": [{"action_name": "execute", "allowed_decisions": ["approve", "reject"]}],
-            }
-        )
+        return {}, [
+            SimpleNamespace(
+                value={
+                    "action_requests": [{"name": "execute", "args": {"command": "pytest -q"}}],
+                    "review_configs": [{"action_name": "execute", "allowed_decisions": ["approve", "reject"]}],
+                }
+            )
+        ]
 
     session = SimpleNamespace(
         id=20,
@@ -199,7 +228,7 @@ async def test_get_agent_state_view_returns_interrupt_only_for_waiting_owner(mon
     )
     turn = SimpleNamespace(status=turn_status, current_run_id="run-1", waitpoint={"run_id": "run-1"})
     _patch_state_view_repositories(monkeypatch, session=session, latest_run=latest_run, turn=turn)
-    monkeypatch.setattr(svc, "_read_checkpoint_state", read_checkpoint_state)
+    monkeypatch.setattr(svc, "_read_checkpoint_state", _read_checkpoint_state)
     monkeypatch.setattr(svc, "tree_snapshot", AsyncMock(return_value={"sessions": []}))
     result = await svc.get_agent_state_view(
         thread_id=thread_id,

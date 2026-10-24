@@ -28,7 +28,8 @@ from yuxi.modules.agents.repositories.definitions import DEFAULT_SHARE_CONFIG
 from yuxi.modules.agents.repositories.runs import AgentRunRepository
 from yuxi.modules.agents.repositories.sessions import SessionRepository
 from yuxi.modules.agents.scope import ActorScope
-from yuxi.modules.agents.services.cooperation import SessionCooperationService, recover_cooperation_waits
+from yuxi.modules.agents.services.cooperation import SessionCooperationService, recover_cooperation_waits, tree_snapshot
+from yuxi.modules.agents.services.scheduler import deliver
 from yuxi.modules.identity.models import User
 from yuxi.shared.datetime import utc_now
 from yuxi.shared.errors import DomainError, StateConflictError
@@ -117,7 +118,7 @@ async def child(tree, name="reviewer", call_id="create-reviewer"):
     """通过真实输入主链路创建成员。"""
     factory, run_id, _, uid = tree
     async with factory() as db:
-        return await SessionCooperationService(db, run_id=run_id, uid=uid).create_session(
+        return await SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker").create_session(
             name=name, description=f"EXPLICIT_{name}", call_id=call_id
         )
 
@@ -150,7 +151,7 @@ async def test_agent_directory_returns_only_callable_role_metadata(tree):
     hidden_private = await _define_target_agent(tree, suffix="private", owner="another-user")
     hidden_shared = await _define_target_agent(tree, suffix="shared", visibility="shared", shared_uid="another-user")
     async with factory() as db:
-        result = await SessionCooperationService(db, run_id=run_id, uid=uid).list_agents()
+        result = await SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker").list_agents()
         root = await db.scalar(select(Session).where(Session.thread_id == root_id))
         roles = {agent["id"]: agent for agent in result["agents"]}
         assert allowed in roles and root.agent_id in roles
@@ -167,7 +168,7 @@ async def test_agent_directory_does_not_turn_private_governance_into_run_permiss
         user = await db.scalar(select(User).where(User.uid == uid))
         user.role = "superadmin"
         await db.commit()
-        result = await SessionCooperationService(db, run_id=run_id, uid=uid).list_agents()
+        result = await SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker").list_agents()
         assert hidden not in {role["id"] for role in result["agents"]}
 
 
@@ -197,7 +198,7 @@ async def test_agent_directory_uses_app_key_owner_visibility_for_end_user(tree):
             root_agent.visibility = "shared"
             root_agent.share_config = DEFAULT_SHARE_CONFIG
             await db.commit()
-            service = SessionCooperationService(db, run_id=run_id, uid=uid)
+            service = SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker")
             result = await service.list_agents()
             assert shared in {role["id"] for role in result["agents"]}
             assert private not in {role["id"] for role in result["agents"]}
@@ -224,7 +225,7 @@ async def test_agent_selection_rejects_deleted_execution_user(tree, operation):
         user = await db.scalar(select(User).where(User.uid == uid))
         user.is_deleted = 1
         await db.commit()
-        service = SessionCooperationService(db, run_id=run_id, uid=uid)
+        service = SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker")
         with pytest.raises(ValueError, match="账号已失效"):
             if operation == "list_agents":
                 await service.list_agents()
@@ -239,7 +240,9 @@ async def test_selected_agent_freezes_target_config_model_and_parent_approval(tr
     factory, run_id, root_id, uid = tree
     slug = await _define_target_agent(tree)
     async with factory() as db:
-        service = SessionCooperationService(db, run_id=run_id, uid=uid, config_snapshot={"system_prompt": "PARENT_OVERRIDE"})
+        service = SessionCooperationService(
+            db, run_id=run_id, uid=uid, worker_id="root-worker", config_snapshot={"system_prompt": "PARENT_OVERRIDE"}
+        )
         created = await service.create_session(name="reviewer", description="独立核验", call_id="choose", agent_id=slug)
         replay = await service.create_session(name="reviewer", description="独立核验", call_id="choose", agent_id=slug)
         assert created == replay
@@ -269,7 +272,7 @@ async def test_empty_selected_config_stays_frozen_when_target_changes(tree, monk
         target = await db.scalar(select(Agent).where(Agent.slug == slug))
         target.config_json = {"context": initial_context}
         await db.commit()
-        created = await SessionCooperationService(db, run_id=run_id, uid=uid).create_session(
+        created = await SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker").create_session(
             name="empty", description="使用空配置", call_id="empty", agent_id=slug
         )
     async with factory() as db:
@@ -308,7 +311,7 @@ async def test_selected_agent_rejects_inaccessible_target_before_persisting(tree
     if target_kind != "missing":
         slug = await _define_target_agent(tree, visibility=target_kind, owner="another-user", shared_uid="another-user")
     async with factory() as db:
-        service = SessionCooperationService(db, run_id=run_id, uid=uid)
+        service = SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker")
         with pytest.raises(ValueError, match="无权限运行"):
             await service.create_session(name="forbidden", description="拒绝", call_id="forbidden", agent_id=slug)
     async with factory() as db:
@@ -323,7 +326,7 @@ async def test_creation_replay_cannot_change_selected_agent(tree):
     first = await _define_target_agent(tree, suffix="first")
     second = await _define_target_agent(tree, suffix="second")
     async with factory() as db:
-        service = SessionCooperationService(db, run_id=run_id, uid=uid)
+        service = SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker")
         created = await service.create_session(name="reviewer", description="核验", call_id="same", agent_id=first)
         with pytest.raises(ValueError, match="Agent 已变化"):
             await service.create_session(name="reviewer", description="核验", call_id="same", agent_id=second)
@@ -358,7 +361,7 @@ async def test_creation_derives_direct_parent_and_path_from_calling_session(tree
         _, acquired = await AgentRunRepository(db).mark_running(parent["run_id"], worker_id="aaa-worker", lease_seconds=120)
         assert acquired
         await db.commit()
-        nested = await SessionCooperationService(db, run_id=parent["run_id"], uid=uid).create_session(
+        nested = await SessionCooperationService(db, run_id=parent["run_id"], uid=uid, worker_id="aaa-worker").create_session(
             name="bbb", description="仅由 aaa 创建的直属工作", call_id="create-bbb"
         )
     async with factory() as db:
@@ -374,7 +377,53 @@ async def test_creation_derives_direct_parent_and_path_from_calling_session(tree
         assert descendant.created_by_run_id == parent["run_id"]
 
 
-async def test_whole_tree_shares_four_slots_and_recursive_creation(tree):
+async def test_tree_summary_orders_by_parent_not_path_characters(tree):
+    """路径字符序（`-` 先于 `/`）不得决定层级；子会话必须紧跟真实父节点。"""
+    factory, _, root_id, uid = tree
+    member_a = await child(tree, name="a", call_id="create-a")
+    member_dash = await child(tree, name="a-b", call_id="create-a-b")
+    async with factory() as db:
+        _, acquired = await AgentRunRepository(db).mark_running(member_a["run_id"], worker_id="a-worker", lease_seconds=120)
+        assert acquired
+        await db.commit()
+        nested = await SessionCooperationService(db, run_id=member_a["run_id"], uid=uid, worker_id="a-worker").create_session(
+            name="child", description="仅由 a 创建的子会话", call_id="create-child"
+        )
+        await db.commit()
+    async with factory() as db:
+        root = await db.scalar(select(Session).where(Session.thread_id == root_id))
+        snapshot = await tree_snapshot(db, root)
+    ids = [item["session_id"] for item in snapshot["sessions"]]
+    assert ids == [root_id, member_a["session_id"], nested["session_id"], member_dash["session_id"]]
+
+
+async def test_tree_summary_fails_closed_when_members_unreachable_from_root(tree):
+    """父成员不可见而后代仍可见时，摘要显式失败而不是悄悄丢弃成员。"""
+    factory, _, root_id, uid = tree
+    parent = await child(tree, name="cut", call_id="create-cut")
+    async with factory() as db:
+        _, acquired = await AgentRunRepository(db).mark_running(parent["run_id"], worker_id="cut-worker", lease_seconds=120)
+        assert acquired
+        await db.commit()
+        await SessionCooperationService(db, run_id=parent["run_id"], uid=uid, worker_id="cut-worker").create_session(
+            name="orphan", description="父成员不可见后的后代", call_id="create-orphan"
+        )
+        await db.commit()
+        # 当前业务没有软删除路径；直写制造父成员不可见、后代仍可见的损坏前提。
+        hidden = await db.scalar(select(Session).where(Session.thread_id == parent["session_id"]))
+        hidden.status = "deleted"
+        await db.commit()
+        root = await db.scalar(select(Session).where(Session.thread_id == root_id))
+        with pytest.raises(ValueError, match="无法从根会话完整遍历"):
+            await tree_snapshot(db, root)
+
+
+async def test_whole_tree_shares_four_slots_and_recursive_creation(tree, monkeypatch):
+    """名额共享语义固定在上限 4，不随共享库中保存的其他配置值漂移。"""
+    monkeypatch.setattr(
+        "yuxi.modules.agents.repositories.cooperation.system_options",
+        SimpleNamespace(get=AsyncMock(return_value={"max_cooperation_concurrency": 4})),
+    )
     factory, _, _, uid = tree
     members = [await child(tree, name=f"worker{i}", call_id=f"create{i}") for i in range(4)]
 
@@ -391,9 +440,9 @@ async def test_whole_tree_shares_four_slots_and_recursive_creation(tree):
     assert sum(acquired) == 3
     running = members[acquired.index(True)]
     async with factory() as db:
-        grandchild = await SessionCooperationService(db, run_id=running["run_id"], uid=uid).create_session(
-            name="nested", description="EXPLICIT_NESTED", call_id="nested"
-        )
+        grandchild = await SessionCooperationService(
+            db, run_id=running["run_id"], uid=uid, worker_id=f"worker-{running['session_id']}"
+        ).create_session(name="nested", description="EXPLICIT_NESTED", call_id="nested")
     assert grandchild["path"].endswith("/nested")
     assert not await claim(grandchild)
     async with factory() as db:
@@ -405,11 +454,30 @@ async def test_whole_tree_shares_four_slots_and_recursive_creation(tree):
         )
 
 
+async def test_execution_slot_limit_reads_system_option(tree, monkeypatch):
+    """执行名额上限来自系统配置，降到 1 后成员执行被暂缓认领。"""
+    factory, _, _, uid = tree
+    member = await child(tree)
+    monkeypatch.setattr(
+        "yuxi.modules.agents.repositories.cooperation.system_options",
+        SimpleNamespace(get=AsyncMock(return_value={"max_cooperation_concurrency": 1})),
+    )
+    async with factory() as db:
+        _, acquired = await AgentRunRepository(db).mark_running(member["run_id"], worker_id="limit-worker", lease_seconds=120)
+        assert not acquired
+        assert (
+            await db.scalar(
+                select(func.count()).select_from(AgentRun).where(AgentRun.runtime_scope_id == tree[2], AgentRun.status == "running")
+            )
+            == 1
+        )
+
+
 async def test_message_is_durable_idempotent_and_does_not_create_work(tree):
     factory, run_id, _, uid = tree
     created = await child(tree)
     async with factory() as db:
-        service = SessionCooperationService(db, run_id=run_id, uid=uid)
+        service = SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker")
         first = await service.send_message(target=created["session_id"], content="information", call_id="message")
         await db.commit()
         replay = await service.send_message(target=created["path"], content="information", call_id="message")
@@ -444,7 +512,7 @@ async def test_cross_tree_and_cross_app_targets_are_rejected(tree):
         )
         db.add_all([stranger, other_app])
         await db.commit()
-        service = SessionCooperationService(db, run_id=run_id, uid=uid)
+        service = SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker")
         for target in [stranger.thread_id, other_app.thread_id]:
             with pytest.raises(ValueError, match="授权树"):
                 await service.send_message(target=target, content="forbidden", call_id=target)
@@ -462,7 +530,7 @@ async def test_busy_input_queues_but_human_wait_rejects(tree):
     factory, run_id, _, uid = tree
     member = await child(tree)
     async with factory() as db:
-        service = SessionCooperationService(db, run_id=run_id, uid=uid)
+        service = SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker")
         queued = await service.submit_input(target=member["session_id"], description="next", call_id="next")
         assert queued["status"] == "queued" and queued["turn_id"] is None
         turn = await db.get(AgentTurn, member["turn_id"])
@@ -474,11 +542,70 @@ async def test_busy_input_queues_but_human_wait_rejects(tree):
         assert isinstance(error.value, StateConflictError)
 
 
+async def test_dispatch_failure_after_persisted_accept_keeps_stable_receipt(tree, monkeypatch):
+    """真实领取提交后发布失败，回执及补投保持同一 Input、Turn 和 Run。"""
+    from yuxi.modules.agents.services.scheduler import recover_pending_dispatches
+
+    factory, run_id, _, uid = tree
+    member = await child(tree)
+    await complete_member(factory, member, "DONE")
+
+    async def broken_enqueue(_run_id):
+        """在已提交 Run 的真正发布点制造故障。"""
+        raise ConnectionError("dispatch backend unavailable")
+
+    monkeypatch.setattr("yuxi.modules.agents.services.scheduler.deliver", deliver)
+    monkeypatch.setattr("yuxi.modules.agents.services.scheduler.ensure_bound_user_workdir", lambda *_args: None)
+    monkeypatch.setattr("yuxi.modules.agents.services.transport.enqueue_agent_run", broken_enqueue)
+    async with factory() as db:
+        service = SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker")
+        accepted = await service.submit_input(target=member["session_id"], description="FOLLOWUP", call_id="dispatch-fail")
+        assert accepted["status"] == "started" and accepted["input_id"]
+        assert await service.submit_input(target=member["session_id"], description="FOLLOWUP", call_id="dispatch-fail") == accepted
+    async with factory() as db:
+        item = await db.get(AgentInput, accepted["input_id"])
+        run = await db.get(AgentRun, item.consumed_run_id)
+        turn = await db.get(AgentTurn, item.turn_id)
+        assert item.status == "consumed" and run.status == "pending"
+        assert turn.current_run_id == run.id == accepted["run_id"] and turn.id == accepted["turn_id"]
+        assert await db.scalar(select(func.count()).select_from(AgentInput).where(AgentInput.thread_id == member["session_id"])) == 2
+    enqueued = AsyncMock()
+    monkeypatch.setattr("yuxi.modules.agents.services.transport.enqueue_agent_run", enqueued)
+    await recover_pending_dispatches()
+    enqueued.assert_awaited_once_with(accepted["run_id"])
+    async with factory() as db:
+        item = await db.get(AgentInput, accepted["input_id"])
+        assert item.turn_id == accepted["turn_id"] and item.consumed_run_id == accepted["run_id"]
+        assert await db.scalar(select(func.count()).select_from(AgentRun).where(AgentRun.thread_id == member["session_id"])) == 2
+
+
+async def test_accept_does_not_hide_dispatch_claim_failure(tree, monkeypatch):
+    """领取事务失败不能伪装成投递延迟；持久 Input 仍能用原键取回。"""
+    factory, run_id, _, uid = tree
+    member = await child(tree)
+    await complete_member(factory, member, "DONE")
+
+    async def broken_claim(**_kwargs):
+        """制造领取事务中的业务错误，而非发布错误。"""
+        raise ValueError("invalid claim configuration")
+
+    monkeypatch.setattr("yuxi.modules.agents.services.scheduler.claim_next_input", broken_claim)
+    async with factory() as db:
+        service = SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker")
+        with pytest.raises(ValueError, match="invalid claim configuration"):
+            await service.submit_input(target=member["session_id"], description="FOLLOWUP", call_id="claim-fail")
+        replay = await service.submit_input(target=member["session_id"], description="FOLLOWUP", call_id="claim-fail")
+    async with factory() as db:
+        item = await db.get(AgentInput, replay["input_id"])
+        assert item.status == "pending" and item.turn_id is None
+        assert await db.scalar(select(func.count()).select_from(AgentInput).where(AgentInput.thread_id == member["session_id"])) == 2
+
+
 async def test_cooperation_wait_releases_slot_and_recovers_same_turn(tree):
     factory, run_id, root_id, uid = tree
     member = await child(tree)
     async with factory() as db:
-        service = SessionCooperationService(db, run_id=run_id, uid=uid)
+        service = SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker")
         wait = await service.wait_updates(targets=[member["session_id"]], after_cursor=0, timeout_seconds=300)
         assert wait["kind"] == "cooperation"
         run = await db.get(AgentRun, run_id)
@@ -488,7 +615,7 @@ async def test_cooperation_wait_releases_slot_and_recovers_same_turn(tree):
             worker_id="root-worker",
             status="interrupted",
             token_usage=None,
-            waitpoint={**wait, "id": "wait-root", "run_id": run_id},
+            waitpoint={"id": "wait-root", "run_id": run_id, "kind": "cooperation", "waits": [{**wait, "interrupt_id": "wait-root"}]},
         )
         await db.commit()
         _, acquired = await AgentRunRepository(db).mark_running(member["run_id"], worker_id="child-worker", lease_seconds=120)
@@ -516,7 +643,7 @@ async def test_tool_side_effects_replay_across_resume_runs(tree):
     factory, run_id, root_id, uid = tree
     member = await child(tree)
     async with factory() as db:
-        service = SessionCooperationService(db, run_id=run_id, uid=uid)
+        service = SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker")
         message = await service.send_message(target=member["session_id"], content="information", call_id="message")
         await db.commit()
         submitted = await service.submit_input(target=member["session_id"], description="FOLLOWUP", call_id="followup")
@@ -527,7 +654,7 @@ async def test_tool_side_effects_replay_across_resume_runs(tree):
             worker_id="root-worker",
             status="interrupted",
             token_usage=None,
-            waitpoint={**wait, "id": "replay-wait", "run_id": run_id},
+            waitpoint={"id": "replay-wait", "run_id": run_id, "kind": "cooperation", "waits": [{**wait, "interrupt_id": "replay-wait"}]},
         )
         await db.commit()
         await CooperationRepository(db).append(
@@ -548,7 +675,7 @@ async def test_tool_side_effects_replay_across_resume_runs(tree):
         _, acquired = await AgentRunRepository(db).mark_running(resumed_id, worker_id="resume-worker", lease_seconds=120)
         assert acquired
         await db.commit()
-        service = SessionCooperationService(db, run_id=resumed_id, uid=uid)
+        service = SessionCooperationService(db, run_id=resumed_id, uid=uid, worker_id="resume-worker")
         assert await service.create_session(name="reviewer", description="EXPLICIT_reviewer", call_id="create-reviewer") == member
         assert await service.send_message(target=member["session_id"], content="information", call_id="message") == message
         await db.commit()
@@ -588,7 +715,7 @@ async def test_same_call_id_in_new_turn_creates_new_work(tree):
     factory, run_id, root_id, uid = tree
     member = await child(tree)
     async with factory() as db:
-        service = SessionCooperationService(db, run_id=run_id, uid=uid)
+        service = SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker")
         first = await service.submit_input(target=member["session_id"], description="FOLLOWUP", call_id="same-call")
         old = await db.get(AgentRun, run_id)
         _, changed = await AgentRunRepository(db).set_terminal_status(run_id, status="failed", worker_id="root-worker")
@@ -613,7 +740,7 @@ async def test_same_call_id_in_new_turn_creates_new_work(tree):
         _, acquired = await AgentRunRepository(db).mark_running(new_run.id, worker_id="new-turn-worker", lease_seconds=120)
         assert acquired
         await db.commit()
-        second = await SessionCooperationService(db, run_id=new_run.id, uid=uid).submit_input(
+        second = await SessionCooperationService(db, run_id=new_run.id, uid=uid, worker_id="new-turn-worker").submit_input(
             target=member["session_id"], description="FOLLOWUP", call_id="same-call"
         )
         assert second["input_id"] != first["input_id"]
@@ -663,7 +790,7 @@ async def test_user_message_after_tree_stop_resumes_only_target_queue(tree, monk
     factory, run_id, root_id, uid = tree
     member = await child(tree)
     async with factory() as db:
-        service = SessionCooperationService(db, run_id=run_id, uid=uid)
+        service = SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker")
         old_root = await service.submit_input(target=root_id, description="old root", call_id="old-root")
         old_child = await service.submit_input(target=member["session_id"], description="old child", call_id="old-child")
         await control_tree(db=db, scope=ActorScope(uid=uid, app_id=None), thread_id=root_id, idempotency_key="stop-all", stopped=True)
@@ -694,6 +821,116 @@ async def test_user_message_after_tree_stop_resumes_only_target_queue(tree, monk
         assert descendant.queue_paused
 
 
+@pytest.mark.parametrize("resume_entry", ["continue", "user_message"])
+@pytest.mark.parametrize("cleanup_owner", ["root", "child"])
+async def test_tree_resume_requires_all_runtime_cleanup_and_replays_without_changing_later_stop(
+    tree, monkeypatch, resume_entry, cleanup_owner
+):
+    """两种恢复均等待整树清理，拒绝不改事实，成功与重放保留各自队列语义。"""
+    from yuxi.modules.agents.input_messages import build_chat_input_message
+    from yuxi.modules.agents.models.cooperation import CooperationRuntime
+    from yuxi.modules.agents.models.inputs import AgentInputReceipt
+    from yuxi.modules.agents.services.cooperation import control_tree
+    from yuxi.modules.agents.services.inputs import accept_message
+
+    monkeypatch.setattr("yuxi.modules.agents.services.turns.publish_cancel_signals", AsyncMock())
+    factory, run_id, root_id, uid = tree
+    member = await child(tree)
+    scope = ActorScope(uid=uid, app_id=None)
+    async with factory() as db:
+        service = SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker")
+        root_input = await service.submit_input(target=root_id, description="old root work", call_id="cleanup-old-root")
+        child_input = await service.submit_input(target=member["session_id"], description="old child work", call_id="cleanup-old-child")
+        child_run, acquired = await AgentRunRepository(db).mark_running(member["run_id"], worker_id="child-worker", lease_seconds=120)
+        assert acquired
+        root_run = await db.get(AgentRun, run_id)
+        for run, worker_id in [(root_run, "root-worker"), (child_run, "child-worker")]:
+            settlement = await settle_run(db=db, run=run, worker_id=worker_id, status="failed", token_usage=None)
+            assert settlement.changed and settlement.status == "failed"
+        await db.commit()
+    pending_cleanup = root_run if cleanup_owner == "root" else child_run
+    await complete_run_runtime_cleanup(child_run if cleanup_owner == "root" else root_run)
+    async with factory() as db:
+        await control_tree(db=db, scope=scope, thread_id=root_id, idempotency_key="stop-before-cleanup", stopped=True)
+
+    async def snapshot():
+        """独立连接读取恢复操作不得提前改变的业务事实。"""
+        async with factory() as db:
+            return {
+                "stopped": (await db.get(CooperationRuntime, root_id)).stopped,
+                "queues": list(
+                    await db.execute(select(Session.thread_id, Session.queue_paused).where(Session.uid == uid).order_by(Session.thread_id))
+                ),
+                "inputs": list(
+                    await db.execute(
+                        select(AgentInput.id, AgentInput.status, AgentInput.turn_id, AgentInput.consumed_run_id)
+                        .where(AgentInput.uid == uid)
+                        .order_by(AgentInput.id)
+                    )
+                ),
+                "receipts": list(
+                    await db.scalars(select(AgentInputReceipt.id).where(AgentInputReceipt.uid == uid).order_by(AgentInputReceipt.id))
+                ),
+                "turns": list(
+                    await db.execute(
+                        select(AgentTurn.id, AgentTurn.status, AgentTurn.current_run_id).where(AgentTurn.uid == uid).order_by(AgentTurn.id)
+                    )
+                ),
+                "runs": list(
+                    await db.execute(
+                        select(AgentRun.id, AgentRun.status, AgentRun.runtime_cleanup_pending)
+                        .where(AgentRun.uid == uid)
+                        .order_by(AgentRun.id)
+                    )
+                ),
+            }
+
+    async def resume():
+        """从真实用户入口请求同一恢复意图。"""
+        async with factory() as db:
+            if resume_entry == "continue":
+                return await control_tree(db=db, scope=scope, thread_id=root_id, idempotency_key="resume-after-cleanup", stopped=False)
+            return await accept_message(
+                db=db,
+                scope=scope,
+                thread_id=root_id,
+                idempotency_key="resume-after-cleanup",
+                mode=None,
+                messages=[build_chat_input_message("fresh user work")],
+            )
+
+    before = await snapshot()
+    assert before["stopped"] and all(paused for _, paused in before["queues"])
+    with pytest.raises(StateConflictError, match="停止全部任务.*清理"):
+        await resume()
+    assert await snapshot() == before
+
+    await complete_run_runtime_cleanup(pending_cleanup)
+    accepted = await resume()
+    async with factory() as db:
+        assert not (await db.get(CooperationRuntime, root_id)).stopped
+        root_item, child_item = await db.get(AgentInput, root_input["input_id"]), await db.get(AgentInput, child_input["input_id"])
+        if resume_entry == "continue":
+            assert root_item.status == child_item.status == "consumed"
+            for item in [root_item, child_item]:
+                run, acquired = await AgentRunRepository(db).mark_running(
+                    item.consumed_run_id, worker_id="after-cleanup", lease_seconds=120
+                )
+                assert acquired and run.status == "running"
+            await db.commit()
+        else:
+            assert root_item.status == child_item.status == "pending"
+            assert (await db.get(AgentInput, accepted["input_id"])).status == "consumed"
+            assert (await db.scalar(select(Session).where(Session.thread_id == member["session_id"]))).queue_paused
+
+    async with factory() as db:
+        await control_tree(db=db, scope=scope, thread_id=root_id, idempotency_key="stop-new-work", stopped=True)
+    stopped_again = await snapshot()
+    assert stopped_again["stopped"]
+    assert await resume() == accepted
+    assert await snapshot() == stopped_again
+
+
 async def test_tree_stop_pauses_idle_queues_before_user_can_resume(tree, monkeypatch):
     """停止扫描尚未遍历时，新用户恢复也不能唤醒其他成员的旧待办。"""
     from yuxi.modules.agents.input_messages import build_chat_input_message
@@ -705,7 +942,7 @@ async def test_tree_stop_pauses_idle_queues_before_user_can_resume(tree, monkeyp
     factory, run_id, root_id, uid = tree
     member = await child(tree)
     async with factory() as db:
-        service = SessionCooperationService(db, run_id=run_id, uid=uid)
+        service = SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker")
         await service.submit_input(target=root_id, description="old root", call_id="idle-root")
         old_child = await service.submit_input(target=member["session_id"], description="old child", call_id="idle-child")
         root_run = await db.get(AgentRun, run_id)
@@ -747,7 +984,7 @@ async def test_tree_stop_pauses_idle_queues_before_user_can_resume(tree, monkeyp
                 mode=None,
                 messages=[build_chat_input_message("new root work")],
             )
-        assert await dispatch_next_input(uid=uid, agent_slug=child_run.agent_slug, thread_id=member["session_id"]) is None
+        assert await dispatch_next_input(uid=uid, agent_slug=child_run.agent_slug, thread_id=member["session_id"]) is True
         async with factory() as db:
             assert (await db.get(AgentInput, old_child["input_id"])).status == "pending"
             assert (await db.scalar(select(Session).where(Session.thread_id == member["session_id"]))).queue_paused
@@ -823,7 +1060,7 @@ async def test_lost_worker_publishes_failure_to_waiting_member(tree, monkeypatch
         await db.commit()
     assert member["run_id"] in await reconcile_expired_run_leases()
     async with factory() as db:
-        updates = await SessionCooperationService(db, run_id=run_id, uid=uid).wait_updates(
+        updates = await SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker").wait_updates(
             targets=[member["session_id"]], after_cursor=0, timeout_seconds=300
         )
         assert any(update.get("status") == "failed" for update in updates["updates"]), updates
@@ -858,7 +1095,7 @@ async def test_wait_rejects_empty_and_self_targets(tree):
     """自身 waiting 通知不能制造无工作自唤醒循环。"""
     factory, run_id, root_id, uid = tree
     async with factory() as db:
-        service = SessionCooperationService(db, run_id=run_id, uid=uid)
+        service = SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker")
         for targets in [[], [root_id], ["/root"]]:
             with pytest.raises(ValueError, match="目标不能为空|自身"):
                 await service.wait_updates(targets=targets, after_cursor=0, timeout_seconds=1)
@@ -877,7 +1114,7 @@ async def test_stopped_member_at_model_boundary_requests_cancellation(tree, monk
         (await db.get(CooperationRuntime, root_id)).stopped = True
         await db.commit()
         with pytest.raises(asyncio.CancelledError, match="协作树已停止"):
-            await SessionCooperationService(db, run_id=run_id, uid=uid).list_sessions()
+            await SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker").list_sessions()
     async with factory() as db:
         run = await db.get(AgentRun, run_id)
         turn = await db.get(AgentTurn, run.turn_id)
@@ -897,7 +1134,7 @@ async def test_tree_stop_cancels_released_retry_without_lease_failure(tree, monk
     monkeypatch.setattr("yuxi.modules.agents.services.scheduler.deliver", delivery)
     factory, run_id, root_id, uid = tree
     async with factory() as db:
-        queued = await SessionCooperationService(db, run_id=run_id, uid=uid).submit_input(
+        queued = await SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker").submit_input(
             target=root_id, description="queued after retry", call_id="queue-before-retry"
         )
         old_turn_id = (await db.get(AgentRun, run_id)).turn_id
@@ -961,7 +1198,7 @@ async def test_resume_call_cannot_change_target_session(tree, monkeypatch, opera
         return await service.cancel_turn(target=target["session_id"], turn_id=target["turn_id"], call_id="replayed-call")
 
     async with factory() as db:
-        service = SessionCooperationService(db, run_id=run_id, uid=uid)
+        service = SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker")
         original = await invoke(service, first)
         await db.commit()
         await settle_run(
@@ -974,9 +1211,14 @@ async def test_resume_call_cannot_change_target_session(tree, monkeypatch, opera
                 "id": "replay-target-wait",
                 "run_id": run_id,
                 "kind": "cooperation",
-                "target_sessions": [first["session_id"]],
-                "after_cursor": 0,
-                "deadline": format_utc_datetime(utc_now() - timedelta(seconds=1)),
+                "waits": [
+                    {
+                        "interrupt_id": "replay-target-wait",
+                        "target_sessions": [first["session_id"]],
+                        "after_cursor": 0,
+                        "deadline": format_utc_datetime(utc_now() - timedelta(seconds=1)),
+                    }
+                ],
             },
         )
         old_turn_id = (await db.get(AgentRun, run_id)).turn_id
@@ -990,7 +1232,7 @@ async def test_resume_call_cannot_change_target_session(tree, monkeypatch, opera
         _, acquired = await AgentRunRepository(db).mark_running(resumed_id, worker_id="resume-worker", lease_seconds=120)
         assert acquired
         await db.commit()
-        service = SessionCooperationService(db, run_id=resumed_id, uid=uid)
+        service = SessionCooperationService(db, run_id=resumed_id, uid=uid, worker_id="resume-worker")
         assert await invoke(service, first) == original
         await db.commit()
         inputs_before = await db.scalar(select(func.count()).select_from(AgentInput).where(AgentInput.uid == uid))
@@ -1098,7 +1340,7 @@ async def test_exact_result_survives_next_turn_and_queued_input_keeps_identity(t
     factory, run_id, _, uid = tree
     member = await child(tree)
     async with factory() as db:
-        queued = await SessionCooperationService(db, run_id=run_id, uid=uid).submit_input(
+        queued = await SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker").submit_input(
             target=member["session_id"], description="B", call_id="submit-B"
         )
         assert queued["turn_id"] is None
@@ -1109,7 +1351,7 @@ async def test_exact_result_survives_next_turn_and_queued_input_keeps_identity(t
         await db.commit()
         assert dispatch is not None
     async with factory() as db:
-        service = SessionCooperationService(db, run_id=run_id, uid=uid)
+        service = SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker")
         a = await service.get_result(input_id=member["input_id"])
         assert a == await service.get_result(turn_id=member["turn_id"])
         assert a["output"] == "EXACT_A" and a["terminal"] and a["result_run_id"] == member["run_id"]
@@ -1126,9 +1368,10 @@ async def test_input_wait_recovers_after_queued_input_cancelled(tree):
     factory, run_id, _, uid = tree
     member = await child(tree)
     async with factory() as db:
-        service = SessionCooperationService(db, run_id=run_id, uid=uid)
+        service = SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker")
         queued = await service.submit_input(target=member["session_id"], description="queued", call_id="queued")
         wait = await service.wait_inputs(input_ids=[queued["input_id"]], timeout_seconds=300)
+        payload = execution.build_pending_interrupt_payload([SimpleNamespace(id="wait-recover", value=wait)], "thread")
         run = await db.get(AgentRun, run_id)
         turn_id = run.turn_id
         await settle_run(
@@ -1137,7 +1380,7 @@ async def test_input_wait_recovers_after_queued_input_cancelled(tree):
             worker_id="root-worker",
             status="interrupted",
             token_usage=None,
-            waitpoint=execution._waitpoint_from_interrupt({"status": "cooperation_waiting", **wait}, run_id),
+            waitpoint=execution._waitpoint_from_interrupt(payload, run_id),
         )
         await db.commit()
     await recover_cooperation_waits()
@@ -1152,7 +1395,7 @@ async def test_input_wait_recovers_after_queued_input_cancelled(tree):
         resumed = await db.get(AgentRun, (await db.get(AgentTurn, turn_id)).current_run_id)
         assert resumed.id != run_id and resumed.resume_from_run_id == run_id
         message = await db.get(Message, resumed.input_message_id)
-        result = message.extra_metadata["resume"]["results"][0]
+        result = message.extra_metadata["resume"]["wait-recover"]["results"][0]
         assert result["input_id"] == queued["input_id"] and result["terminal"]
         assert result["status"] == "cancelled" and result["turn_id"] is None
 
@@ -1162,7 +1405,7 @@ async def test_task_lookup_and_wait_reject_unknown_scope_and_self(tree):
     factory, run_id, _, uid = tree
     member = await child(tree)
     async with factory() as db:
-        service = SessionCooperationService(db, run_id=run_id, uid=uid)
+        service = SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker")
         for arguments in ({}, {"input_id": member["input_id"], "turn_id": member["turn_id"]}):
             with pytest.raises(ValueError, match="只能"):
                 await service.get_result(**arguments)
@@ -1171,7 +1414,7 @@ async def test_task_lookup_and_wait_reject_unknown_scope_and_self(tree):
         _, acquired = await AgentRunRepository(db).mark_running(member["run_id"], worker_id="self", lease_seconds=120)
         assert acquired
         with pytest.raises(ValueError, match="自身"):
-            await SessionCooperationService(db, run_id=member["run_id"], uid=uid).wait_inputs(
+            await SessionCooperationService(db, run_id=member["run_id"], uid=uid, worker_id="self").wait_inputs(
                 input_ids=[member["input_id"]], timeout_seconds=30
             )
         target = await db.scalar(select(Session).where(Session.thread_id == member["session_id"]))
@@ -1185,8 +1428,6 @@ async def test_task_lookup_and_wait_reject_unknown_scope_and_self(tree):
 async def test_summary_reads_whole_tree_with_constant_queries_and_omits_results(tree):
     """超过原分页上限的成员一次完整返回，批量查询不包含正文。"""
     from sqlalchemy import event
-
-    from yuxi.modules.agents.services.cooperation import tree_snapshot
 
     factory, _, root_id, _ = tree
     members = [await child(tree, name=f"summary{i}", call_id=f"summary{i}") for i in range(6)]
@@ -1252,6 +1493,7 @@ async def test_message_foreign_keys_do_not_deadlock_session_writers(tree, monkey
         await AgentRunRepository(db).set_terminal_status(run_id, status="failed", worker_id="root-worker")
         await AgentTurnRepository(db).set_terminal(await db.get(AgentTurn, run.turn_id), status="failed")
         await db.commit()
+    await complete_run_runtime_cleanup(run)
     monkeypatch.setattr("yuxi.modules.agents.services.scheduler.dispatch_next_input", AsyncMock())
     locked = asyncio.Event()
     tree_lock = text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))")
@@ -1344,9 +1586,14 @@ async def test_bad_wait_does_not_block_other_wait_recovery(tree):
                     "id": f"wait-{index}",
                     "run_id": run.id,
                     "kind": "cooperation",
-                    "target_sessions": ["unused"],
-                    "after_cursor": 0,
-                    "deadline": "invalid" if index == 0 else "2000-01-01T00:00:00+00:00",
+                    "waits": [
+                        {
+                            "interrupt_id": f"wait-{index}",
+                            "target_sessions": ["unused"],
+                            "after_cursor": 0,
+                            "deadline": "invalid" if index == 0 else "2000-01-01T00:00:00+00:00",
+                        }
+                    ],
                 },
             )
         bad_turn, good_turn = runs[0].turn_id, runs[1].turn_id
@@ -1360,7 +1607,7 @@ async def test_bad_wait_does_not_block_other_wait_recovery(tree):
         assert recovered.current_run_id != good_run and recovered.status == "running"
         new_run = await db.get(AgentRun, recovered.current_run_id)
         message = await db.get(Message, new_run.input_message_id)
-        assert message.extra_metadata["resume"]["wait_timed_out"] is True
+        assert message.extra_metadata["resume"]["wait-1"]["wait_timed_out"] is True
 
 
 async def test_expired_lease_failure_does_not_block_other_runs(tree, monkeypatch):
@@ -1462,20 +1709,22 @@ async def test_depth_limit_rejects_creation_without_session_or_input_side_effect
         raising=False,
     )
     factory, run_id, root_id, uid = tree
+    worker_id = "root-worker"
     for level in range(maximum):
         async with factory() as db:
-            created = await SessionCooperationService(db, run_id=run_id, uid=uid).create_session(
+            created = await SessionCooperationService(db, run_id=run_id, uid=uid, worker_id=worker_id).create_session(
                 name=f"level-{level}", description="有界协作", call_id=f"create-{level}"
             )
             run_id = created["run_id"]
-            _, acquired = await AgentRunRepository(db).mark_running(run_id, worker_id=f"depth-{level}", lease_seconds=120)
+            worker_id = f"depth-{level}"
+            _, acquired = await AgentRunRepository(db).mark_running(run_id, worker_id=worker_id, lease_seconds=120)
             assert acquired
             await db.commit()
     async with factory() as db:
         before = await db.scalar(select(func.count()).select_from(AgentInput).where(AgentInput.uid == uid))
     with pytest.raises(DomainError, match="协作深度") as rejected:
         async with factory() as db:
-            await SessionCooperationService(db, run_id=run_id, uid=uid).create_session(
+            await SessionCooperationService(db, run_id=run_id, uid=uid, worker_id=worker_id).create_session(
                 name="too-deep", description="应被拒绝", call_id="too-deep"
             )
     assert rejected.value.code == "cooperation_depth_exceeded"
@@ -1493,3 +1742,656 @@ async def test_existing_creation_replays_after_depth_limit_is_lowered(tree, monk
         raising=False,
     )
     assert await child(tree) == created
+
+
+async def test_accept_rejects_late_submission_committed_during_stop(tree, monkeypatch):
+    """入口检查与持久写入之间提交的整树停止，在写入边界拒绝迟到的提交。"""
+    from yuxi.modules.agents.services.cooperation import control_tree
+
+    factory, run_id, root_id, uid = tree
+    member = await child(tree)
+    real_lock = SessionRepository.lock_session_by_thread_id
+
+    async def stop_tree_then_lock(self, thread_id):
+        """模拟停止扫描在接收入口检查后、行锁领取前提交。"""
+        if thread_id == member["session_id"]:
+            monkeypatch.setattr(SessionRepository, "lock_session_by_thread_id", real_lock)
+            async with factory() as db:
+                await control_tree(
+                    db=db,
+                    scope=ActorScope(uid=uid, app_id=None),
+                    thread_id=root_id,
+                    idempotency_key="stop-during-submit",
+                    stopped=True,
+                )
+        return await real_lock(self, thread_id)
+
+    monkeypatch.setattr(SessionRepository, "lock_session_by_thread_id", stop_tree_then_lock)
+    async with factory() as db:
+        with pytest.raises(StateConflictError, match="协作树已停止") as error:
+            await SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker").submit_input(
+                target=member["session_id"], description="LATE", call_id="late"
+            )
+        assert isinstance(error.value, StateConflictError)
+    async with factory() as db:
+        assert await db.scalar(select(func.count()).select_from(AgentInput).where(AgentInput.thread_id == member["session_id"])) == 1
+        from yuxi.modules.agents.models.cooperation import CooperationRuntime
+
+        assert (await db.get(CooperationRuntime, root_id)).stopped is True
+
+
+async def test_accept_rejects_old_run_after_stop_cleanup_and_user_restart(tree, monkeypatch):
+    """停止已结束且新用户工作恢复整树时，旧工具调用仍不能写入。"""
+    from yuxi.modules.agents.input_messages import build_chat_input_message
+    from yuxi.modules.agents.models.cooperation import CooperationRuntime
+    from yuxi.modules.agents.services.cooperation import control_tree
+    from yuxi.modules.agents.services.inputs import accept_message
+
+    factory, run_id, root_id, uid = tree
+    member = await child(tree)
+    real_lock = SessionRepository.lock_session_by_thread_id
+    monkeypatch.setattr("yuxi.modules.agents.services.turns.publish_cancel_signals", AsyncMock())
+
+    async def restart_tree_then_lock(self, thread_id):
+        """在旧工具入口检查后，完成停止清理和下一次用户接收。"""
+        if thread_id == member["session_id"]:
+            monkeypatch.setattr(SessionRepository, "lock_session_by_thread_id", real_lock)
+            async with factory() as db:
+                await control_tree(
+                    db=db,
+                    scope=ActorScope(uid=uid, app_id=None),
+                    thread_id=root_id,
+                    idempotency_key="stop-before-restart",
+                    stopped=True,
+                )
+                old_run = await db.get(AgentRun, run_id)
+                await settle_run(db=db, run=old_run, worker_id="root-worker", status="cancelled", token_usage=None)
+                await db.commit()
+                await complete_run_runtime_cleanup(old_run)
+            async with factory() as db:
+                await accept_message(
+                    db=db,
+                    scope=ActorScope(uid=uid, app_id=None),
+                    thread_id=root_id,
+                    idempotency_key="restart-root",
+                    mode=None,
+                    messages=[build_chat_input_message("NEW_ROOT_WORK")],
+                )
+        return await real_lock(self, thread_id)
+
+    monkeypatch.setattr(SessionRepository, "lock_session_by_thread_id", restart_tree_then_lock)
+    async with factory() as db:
+        with pytest.raises(StateConflictError, match="来源 Run 已失效"):
+            await SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker").submit_input(
+                target=member["session_id"], description="STALE_TOOL_WORK", call_id="late-after-restart"
+            )
+    async with factory() as db:
+        assert (await db.get(CooperationRuntime, root_id)).stopped is False
+        assert (await db.get(AgentRun, run_id)).status == "cancelled"
+        assert await db.scalar(select(func.count()).select_from(AgentInput).where(AgentInput.thread_id == member["session_id"])) == 1
+
+
+async def test_stop_waits_for_inflight_child_creation_and_pauses_new_member(tree, monkeypatch):
+    """新成员未提交时停止等待父行锁，提交后扫描仍覆盖该新成员。"""
+    from sqlalchemy import text
+
+    from yuxi.modules.agents.models.cooperation import CooperationRuntime
+    from yuxi.modules.agents.services.cooperation import control_tree, dispatch_next_input
+
+    factory, run_id, root_id, uid = tree
+    accepting, release_accept, stop_finished = asyncio.Event(), asyncio.Event(), asyncio.Event()
+    stop_pid = asyncio.get_running_loop().create_future()
+    original_accept = SessionCooperationService._accept
+    monkeypatch.setattr("yuxi.modules.agents.services.turns.publish_cancel_signals", AsyncMock())
+
+    async def pause_before_accept(self, **kwargs):
+        """在父锁已领取且子成员已 flush 的边界让出执行。"""
+        accepting.set()
+        await release_accept.wait()
+        return await original_accept(self, **kwargs)
+
+    async def dispatch_after_stop(**kwargs):
+        """让接收先提交，停止先完成，再验证调度门禁。"""
+        await stop_finished.wait()
+        return await dispatch_next_input(**kwargs)
+
+    async def stop():
+        """在独立数据库连接发起真实整树控制。"""
+        async with factory() as db:
+            stop_pid.set_result(await db.scalar(text("SELECT pg_backend_pid()")))
+            try:
+                return await control_tree(
+                    db=db,
+                    scope=ActorScope(uid=uid, app_id=None),
+                    thread_id=root_id,
+                    idempotency_key="stop-racing-create",
+                    stopped=True,
+                )
+            finally:
+                stop_finished.set()
+
+    monkeypatch.setattr(SessionCooperationService, "_accept", pause_before_accept)
+    monkeypatch.setattr("yuxi.modules.agents.services.cooperation.dispatch_next_input", dispatch_after_stop)
+    creating = asyncio.create_task(child(tree, name="racing", call_id="racing-create"))
+    stopping = None
+    try:
+        await asyncio.wait_for(accepting.wait(), 3)
+        stopping = asyncio.create_task(stop())
+        pid = await asyncio.wait_for(stop_pid, 3)
+        async with asyncio.timeout(3):
+            async with factory() as db:
+                while not await db.scalar(text("SELECT cardinality(pg_blocking_pids(:pid)) > 0"), {"pid": pid}):
+                    await asyncio.sleep(0.01)
+        release_accept.set()
+        created, _ = await asyncio.wait_for(asyncio.gather(creating, stopping), 5)
+    finally:
+        release_accept.set()
+        for task in (creating, stopping):
+            if task is not None and not task.done():
+                task.cancel()
+        await asyncio.gather(*(task for task in (creating, stopping) if task is not None), return_exceptions=True)
+    async with factory() as db:
+        member = await db.scalar(select(Session).where(Session.thread_id == created["session_id"]))
+        item = await db.get(AgentInput, created["input_id"])
+        assert (await db.get(CooperationRuntime, root_id)).stopped is True
+        assert member.queue_paused and item.status == "pending" and item.turn_id is None
+        assert await db.scalar(select(func.count()).select_from(AgentRun).where(AgentRun.thread_id == member.thread_id)) == 0
+
+
+async def test_parallel_cooperation_waits_resume_with_interrupt_id_mapping(tree):
+    """同轮多个协作等待全部就绪后，按中断 ID 一次恢复并送达各自结果。"""
+    from datetime import timedelta
+
+    from yuxi.shared.datetime import format_utc_datetime
+
+    factory, run_id, _, uid = tree
+    member = await child(tree)
+    await complete_member(factory, member, "PARALLEL_DONE")
+    async with factory() as db:
+        sender = await db.scalar(select(Session).where(Session.thread_id == member["session_id"]))
+        recipient = await db.scalar(select(Session).where(Session.thread_id == tree[2]))
+        await CooperationRepository(db).append(sender=sender, recipient=recipient, key="parallel-wake", kind="message", content="ready")
+        deadline = format_utc_datetime(utc_now() + timedelta(seconds=300))
+        await settle_run(
+            db=db,
+            run=await db.get(AgentRun, run_id),
+            worker_id="root-worker",
+            status="interrupted",
+            token_usage=None,
+            waitpoint={
+                "id": "wait-parallel",
+                "run_id": run_id,
+                "kind": "cooperation",
+                "waits": [
+                    {"interrupt_id": "interrupt-inputs", "target_inputs": [member["input_id"]], "deadline": deadline},
+                    {
+                        "interrupt_id": "interrupt-sessions",
+                        "target_sessions": [member["session_id"]],
+                        "after_cursor": 0,
+                        "deadline": deadline,
+                    },
+                ],
+            },
+        )
+        await db.commit()
+    await recover_cooperation_waits()
+    async with factory() as db:
+        turn = await db.get(AgentTurn, (await db.get(AgentRun, run_id)).turn_id)
+        resumed = await db.get(AgentRun, turn.current_run_id)
+        assert resumed.run_type == "resume" and resumed.resume_from_run_id == run_id
+        message = await db.get(Message, resumed.input_message_id)
+        resume = message.extra_metadata["resume"]
+        assert set(resume) == {"interrupt-inputs", "interrupt-sessions"}
+        inputs_wait = resume["interrupt-inputs"]
+        assert inputs_wait["wait_timed_out"] is False
+        assert [item["input_id"] for item in inputs_wait["results"]] == [member["input_id"]]
+        assert all(item["terminal"] for item in inputs_wait["results"])
+        assert resume["interrupt-sessions"]["updates"]
+
+
+@pytest.mark.parametrize("completed", [True, False], ids=["ready", "timed-out"])
+async def test_parallel_wait_resumes_settled_entry_without_delaying_its_deadline(tree, completed):
+    """已完成或超时的等待立即按 ID 返回，其余挂起点交由 checkpoint 保留。"""
+    from datetime import timedelta
+
+    from yuxi.shared.datetime import format_utc_datetime
+
+    factory, run_id, _, _uid = tree
+    member = await child(tree)
+    if completed:
+        await complete_member(factory, member, "ONE_DONE")
+    async with factory() as db:
+        deadline = format_utc_datetime(utc_now() + timedelta(seconds=300))
+        input_deadline = deadline if completed else format_utc_datetime(utc_now() - timedelta(seconds=1))
+        await settle_run(
+            db=db,
+            run=await db.get(AgentRun, run_id),
+            worker_id="root-worker",
+            status="interrupted",
+            token_usage=None,
+            waitpoint={
+                "id": "wait-hold",
+                "run_id": run_id,
+                "kind": "cooperation",
+                "waits": [
+                    {"interrupt_id": "interrupt-inputs", "target_inputs": [member["input_id"]], "deadline": input_deadline},
+                    {
+                        "interrupt_id": "interrupt-sessions",
+                        "target_sessions": [member["session_id"]],
+                        "after_cursor": 0,
+                        "deadline": deadline,
+                    },
+                ],
+            },
+        )
+        await db.commit()
+    await recover_cooperation_waits()
+    async with factory() as db:
+        turn = await db.get(AgentTurn, (await db.get(AgentRun, run_id)).turn_id)
+        assert turn.status == "running" and turn.current_run_id != run_id
+        resumed = await db.get(AgentRun, turn.current_run_id)
+        response = (await db.get(Message, resumed.input_message_id)).extra_metadata["resume"]
+        assert set(response) == {"interrupt-inputs"}
+        assert response["interrupt-inputs"]["wait_timed_out"] is not completed
+        assert response["interrupt-inputs"]["results"][0]["terminal"] is completed
+
+
+async def _retry_root_with_new_owner(tree):
+    """通过真实 retry 释放、运行时清理和重新领取切换执行身份。"""
+    factory, run_id, _, _ = tree
+    async with factory() as db:
+        run = await db.get(AgentRun, run_id)
+        assert await AgentRunRepository(db).release_lease_for_retry(run_id, worker_id="root-worker")
+        await db.commit()
+        await complete_run_runtime_cleanup(run)
+    async with factory() as db:
+        _, acquired = await AgentRunRepository(db).mark_running(run_id, worker_id="retry-worker", lease_seconds=120)
+        assert acquired
+        await db.commit()
+
+
+@pytest.mark.parametrize("operation", ["create_session", "submit_input", "send_message"])
+async def test_replaced_worker_cannot_create_cooperation_side_effects(tree, operation):
+    """相同 Run 的新租约属于新 attempt，旧工具不能借它创建工作或消息。"""
+    factory, run_id, root_id, uid = tree
+    member = await child(tree)
+    await _retry_root_with_new_owner(tree)
+    async with factory() as db:
+        sessions_before = await db.scalar(select(func.count()).select_from(Session).where(Session.uid == uid))
+        inputs_before = await db.scalar(select(func.count()).select_from(AgentInput).where(AgentInput.uid == uid))
+        events_before = await db.scalar(
+            select(func.count()).select_from(CooperationEvent).where(CooperationEvent.tree_root_thread_id == root_id)
+        )
+        stale = SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker")
+        arguments = {
+            "create_session": {"name": "late", "description": "STALE_TASK"},
+            "submit_input": {"target": member["session_id"], "description": "STALE_TASK"},
+            "send_message": {"target": member["session_id"], "content": "STALE_MESSAGE"},
+        }[operation]
+        with pytest.raises(ValueError, match="当前 Worker"):
+            await getattr(stale, operation)(**arguments, call_id="replaced-attempt")
+    async with factory() as db:
+        run = await db.get(AgentRun, run_id)
+        assert run.status == "running" and run.worker_id == "retry-worker" and run.lease_expires_at > utc_now()
+        assert await db.scalar(select(func.count()).select_from(Session).where(Session.uid == uid)) == sessions_before
+        assert await db.scalar(select(func.count()).select_from(AgentInput).where(AgentInput.uid == uid)) == inputs_before
+        assert (
+            await db.scalar(select(func.count()).select_from(CooperationEvent).where(CooperationEvent.tree_root_thread_id == root_id))
+            == events_before
+        )
+        current = SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="retry-worker")
+        accepted = await getattr(current, operation)(**arguments, call_id="current-attempt")
+        await db.commit()
+    async with factory() as db:
+        if operation == "send_message":
+            assert (await db.get(CooperationEvent, accepted["message_id"])).content == "STALE_MESSAGE"
+        else:
+            assert (await db.get(AgentInput, accepted["input_id"])).status == ("consumed" if operation == "create_session" else "pending")
+            if operation == "create_session":
+                assert await db.scalar(select(Session.thread_id).where(Session.thread_id == accepted["session_id"]))
+
+
+@pytest.mark.parametrize("operation", ["create_session", "submit_input"])
+async def test_worker_replaced_while_waiting_for_session_lock_cannot_accept_work(tree, monkeypatch, operation):
+    """入口校验后换 owner，目标行锁后的写入边界仍拒绝旧 attempt。"""
+    factory, run_id, root_id, uid = tree
+    member = await child(tree)
+    target_id = root_id if operation == "create_session" else member["session_id"]
+    lock_session = SessionRepository.lock_session_by_thread_id
+
+    async def replace_owner_then_lock(repository, thread_id):
+        """在工具已过入口校验、即将等待 Session 行锁时切换执行者。"""
+        if thread_id == target_id:
+            monkeypatch.setattr(SessionRepository, "lock_session_by_thread_id", lock_session)
+            await _retry_root_with_new_owner(tree)
+        return await lock_session(repository, thread_id)
+
+    monkeypatch.setattr(SessionRepository, "lock_session_by_thread_id", replace_owner_then_lock)
+    async with factory() as db:
+        service = SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker")
+        arguments = (
+            {"name": "late", "description": "LATE_TASK"}
+            if operation == "create_session"
+            else {"target": member["session_id"], "description": "LATE_TASK"}
+        )
+        with pytest.raises((ValueError, StateConflictError), match="当前 Worker|来源 Run 已失效"):
+            await getattr(service, operation)(**arguments, call_id="owner-changed-under-lock")
+    async with factory() as db:
+        assert (await db.get(AgentRun, run_id)).worker_id == "retry-worker"
+        assert await db.scalar(select(func.count()).select_from(Session).where(Session.uid == uid)) == 2
+        assert await db.scalar(select(func.count()).select_from(AgentInput).where(AgentInput.uid == uid)) == 2
+
+
+@pytest.mark.parametrize("transition", ["retry", "cancel"])
+async def test_input_accept_holds_source_owner_until_receipt_commit(tree, monkeypatch, transition):
+    """来源检查通过后，retry 或取消必须等 Input/Receipt 同事务提交。"""
+    from sqlalchemy import text
+
+    from yuxi.modules.agents.models.inputs import AgentInputReceipt
+
+    factory, run_id, _, uid = tree
+    member = await child(tree)
+    guarded, release = asyncio.Event(), asyncio.Event()
+    accepting_pid = asyncio.get_running_loop().create_future()
+    changing_pid = asyncio.get_running_loop().create_future()
+    original_receipt = CooperationRepository.lock_tool_receipt
+    call_id = "accept-before-owner-transition"
+
+    async def hold_guarded_accept(repository, run, target, key):
+        """只暂停已锁来源、尚未建立回执的真实接收事务。"""
+        if key.endswith(f":{call_id}"):
+            accepting_pid.set_result(await repository.db.scalar(text("SELECT pg_backend_pid()")))
+            guarded.set()
+            await release.wait()
+        return await original_receipt(repository, run, target, key)
+
+    async def accept():
+        """在独立连接执行提交，保留生产提交边界。"""
+        async with factory() as db:
+            return await SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker").submit_input(
+                target=member["session_id"], description="COMMITTED_BEFORE_OWNER_CHANGE", call_id=call_id
+            )
+
+    async def change_owner():
+        """真实转换取锁后，用第三条连接确认接收事实已经可见。"""
+        async with factory() as db:
+            changing_pid.set_result(await db.scalar(text("SELECT pg_backend_pid()")))
+            repo = AgentRunRepository(db)
+            if transition == "retry":
+                assert await repo.release_lease_for_retry(run_id, worker_id="root-worker")
+            else:
+                run, _ = await repo.request_cancel_run(run_id=run_id, uid=uid)
+                assert run.status == "cancel_requested"
+            async with factory() as observing:
+                receipt = await observing.scalar(
+                    select(AgentInputReceipt).where(AgentInputReceipt.uid == uid, AgentInputReceipt.idempotency_key.endswith(f":{call_id}"))
+                )
+                assert receipt is not None
+                item = await observing.get(AgentInput, receipt.input_id)
+                assert item.thread_id == member["session_id"] and item.status == "pending"
+                assert item.origin_metadata["created_by_run_id"] == run_id
+            await db.commit()
+        if transition == "retry":
+            await complete_run_runtime_cleanup(await _read_run(factory, run_id))
+            async with factory() as db:
+                _, acquired = await AgentRunRepository(db).mark_running(run_id, worker_id="retry-worker", lease_seconds=120)
+                assert acquired
+                await db.commit()
+
+    monkeypatch.setattr(CooperationRepository, "lock_tool_receipt", hold_guarded_accept)
+    accepting = asyncio.create_task(accept())
+    changing = None
+    try:
+        await asyncio.wait_for(guarded.wait(), 3)
+        changing = asyncio.create_task(change_owner())
+        await _wait_for_database_blocker(factory, await asyncio.wait_for(changing_pid, 3), await accepting_pid)
+        release.set()
+        accepted, _ = await asyncio.wait_for(asyncio.gather(accepting, changing), 5)
+    finally:
+        release.set()
+        await _cancel_pending_tasks(accepting, changing)
+    async with factory() as db:
+        item = await db.get(AgentInput, accepted["input_id"])
+        run = await db.get(AgentRun, run_id)
+        assert item.status == "pending" and item.thread_id == member["session_id"]
+        assert run.status == ("running" if transition == "retry" else "cancel_requested")
+        assert run.worker_id == ("retry-worker" if transition == "retry" else "root-worker")
+
+
+async def test_message_waiting_for_tree_lock_holds_source_owner_until_event_commit(tree, monkeypatch):
+    """消息等待树锁时仍拥有来源锁，retry 不能越过消息事务提交。"""
+    from sqlalchemy import text
+
+    from yuxi.modules.agents.runtime_locks import cooperation_lock_key
+
+    factory, run_id, root_id, uid = tree
+    member = await child(tree)
+    reached_append = asyncio.Event()
+    sending_pid = asyncio.get_running_loop().create_future()
+    retrying_pid = asyncio.get_running_loop().create_future()
+    original_append = CooperationRepository.append
+
+    async def observe_append(repository, **kwargs):
+        """保留真实树锁获取，仅报告消息到达边界。"""
+        if kwargs["key"].endswith(":message-before-retry"):
+            sending_pid.set_result(await repository.db.scalar(text("SELECT pg_backend_pid()")))
+            reached_append.set()
+        return await original_append(repository, **kwargs)
+
+    async def send():
+        """与生产工具事务一样，在消息落库后提交。"""
+        async with factory() as db:
+            result = await SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker").send_message(
+                target=member["session_id"], content="BEFORE_RETRY", call_id="message-before-retry"
+            )
+            await db.commit()
+            return result
+
+    async def retry():
+        """真实释放和重新领取来源，并独立确认消息先于释放提交。"""
+        async with factory() as db:
+            retrying_pid.set_result(await db.scalar(text("SELECT pg_backend_pid()")))
+            assert await AgentRunRepository(db).release_lease_for_retry(run_id, worker_id="root-worker")
+            async with factory() as observing:
+                event = await observing.scalar(
+                    select(CooperationEvent).where(
+                        CooperationEvent.tree_root_thread_id == root_id, CooperationEvent.content == "BEFORE_RETRY"
+                    )
+                )
+                assert event is not None and event.source_run_id == run_id
+            await db.commit()
+        await complete_run_runtime_cleanup(await _read_run(factory, run_id))
+        async with factory() as db:
+            _, acquired = await AgentRunRepository(db).mark_running(run_id, worker_id="retry-worker", lease_seconds=120)
+            assert acquired
+            await db.commit()
+
+    monkeypatch.setattr(CooperationRepository, "append", observe_append)
+    sending = retrying = None
+    async with factory() as blocker:
+        blocker_pid = await blocker.scalar(text("SELECT pg_backend_pid()"))
+        await blocker.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"), {"key": cooperation_lock_key(root_id)})
+        try:
+            sending = asyncio.create_task(send())
+            await asyncio.wait_for(reached_append.wait(), 3)
+            message_pid = await sending_pid
+            await _wait_for_database_blocker(factory, message_pid, blocker_pid)
+            retrying = asyncio.create_task(retry())
+            await _wait_for_database_blocker(factory, await asyncio.wait_for(retrying_pid, 3), message_pid)
+            await blocker.commit()
+            result, _ = await asyncio.wait_for(asyncio.gather(sending, retrying), 5)
+        finally:
+            await blocker.rollback()
+            await _cancel_pending_tasks(sending, retrying)
+    async with factory() as db:
+        event = await db.get(CooperationEvent, result["message_id"])
+        assert event.content == "BEFORE_RETRY" and event.recipient_thread_id == member["session_id"]
+        assert (await db.get(AgentRun, run_id)).worker_id == "retry-worker"
+
+
+async def test_message_rejects_owner_replaced_before_source_lock(tree, monkeypatch):
+    """目标解析后、来源锁前换 owner，旧消息不能落库。"""
+    factory, run_id, root_id, uid = tree
+    member = await child(tree)
+    original_lock = AgentRunRepository.lock_run_for_user
+
+    async def replace_before_lock(repository, target_run_id, target_uid):
+        """只插入真实 retry 生命周期，不替换来源锁本身。"""
+        if target_run_id == run_id:
+            monkeypatch.setattr(AgentRunRepository, "lock_run_for_user", original_lock)
+            await _retry_root_with_new_owner(tree)
+        return await original_lock(repository, target_run_id, target_uid)
+
+    monkeypatch.setattr(AgentRunRepository, "lock_run_for_user", replace_before_lock)
+    async with factory() as db:
+        with pytest.raises((ValueError, StateConflictError), match="当前 Worker|来源 Run 已失效"):
+            await SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker").send_message(
+                target=member["session_id"], content="MUST_NOT_EXIST", call_id="message-after-owner-change"
+            )
+    async with factory() as db:
+        assert (await db.get(AgentRun, run_id)).worker_id == "retry-worker"
+        assert not await db.scalar(
+            select(CooperationEvent.id).where(CooperationEvent.tree_root_thread_id == root_id, CooperationEvent.content == "MUST_NOT_EXIST")
+        )
+
+
+async def test_cancel_rechecks_source_owner_after_waiting_for_target_turn(tree, monkeypatch):
+    """等待目标 Turn 锁期间来源被 retry 接管，旧调用不能取消目标。"""
+    from sqlalchemy import text
+
+    from yuxi.modules.agents.models.inputs import AgentInputReceipt
+
+    factory, run_id, _, uid = tree
+    member = await child(tree)
+    cancelling_pid = asyncio.get_running_loop().create_future()
+    monkeypatch.setattr("yuxi.modules.agents.services.turns.publish_cancel_signals", AsyncMock())
+
+    async def cancel():
+        """独立连接等待真实目标 Turn 锁。"""
+        async with factory() as db:
+            cancelling_pid.set_result(await db.scalar(text("SELECT pg_backend_pid()")))
+            return await SessionCooperationService(db, run_id=run_id, uid=uid, worker_id="root-worker").cancel_turn(
+                target=member["session_id"], turn_id=member["turn_id"], call_id="cancel-after-owner-change"
+            )
+
+    cancelling = None
+    async with factory() as blocker:
+        blocker_pid = await blocker.scalar(text("SELECT pg_backend_pid()"))
+        await blocker.scalar(select(AgentTurn).where(AgentTurn.id == member["turn_id"]).with_for_update(key_share=True))
+        try:
+            cancelling = asyncio.create_task(cancel())
+            await _wait_for_database_blocker(factory, await asyncio.wait_for(cancelling_pid, 3), blocker_pid)
+            await asyncio.wait_for(_retry_root_with_new_owner(tree), 5)
+            await blocker.commit()
+            with pytest.raises((ValueError, StateConflictError), match="当前 Worker|来源 Run 已失效"):
+                await asyncio.wait_for(cancelling, 5)
+        finally:
+            await blocker.rollback()
+            await _cancel_pending_tasks(cancelling)
+    async with factory() as db:
+        assert (await db.get(AgentRun, run_id)).worker_id == "retry-worker"
+        assert (await db.get(AgentRun, member["run_id"])).status == "pending"
+        assert (await db.get(AgentTurn, member["turn_id"])).status == "running"
+        assert not (await db.scalar(select(Session).where(Session.thread_id == member["session_id"]))).queue_paused
+        assert not await db.scalar(
+            select(AgentInputReceipt.id).where(
+                AgentInputReceipt.uid == uid, AgentInputReceipt.idempotency_key.endswith(":cancel-after-owner-change")
+            )
+        )
+
+
+async def test_members_cancelling_each_other_use_same_run_lock_order(tree, monkeypatch):
+    """双方均已锁目标 Turn 时互相取消，Run 锁序仍收敛且只接受有效来源。"""
+    from yuxi.modules.agents.models.inputs import AgentInputReceipt
+    from yuxi.modules.agents.repositories.turn import AgentTurnRepository
+
+    factory, run_id, root_id, uid = tree
+    member = await child(tree)
+    async with factory() as db:
+        root_turn_id = (await db.get(AgentRun, run_id)).turn_id
+        _, acquired = await AgentRunRepository(db).mark_running(member["run_id"], worker_id="child-worker", lease_seconds=120)
+        assert acquired
+        await db.commit()
+    locked_turn_ids = set()
+    both_target_turns_locked = asyncio.Event()
+    original_get_turn = AgentTurnRepository.get_for_scope
+
+    async def meet_after_target_turn_lock(repository, **kwargs):
+        """确保双方同时持有相反的目标 Turn 锁，再进入真实 Run 锁阶段。"""
+        turn = await original_get_turn(repository, **kwargs)
+        if kwargs.get("for_update") and turn is not None:
+            locked_turn_ids.add(turn.id)
+            if len(locked_turn_ids) == 2:
+                both_target_turns_locked.set()
+            await both_target_turns_locked.wait()
+        return turn
+
+    async def cancel(source_run_id, worker_id, target_id, target_turn_id, call_id):
+        """各成员通过独立数据库事务执行真实取消。"""
+        async with factory() as db:
+            return await SessionCooperationService(db, run_id=source_run_id, uid=uid, worker_id=worker_id).cancel_turn(
+                target=target_id, turn_id=target_turn_id, call_id=call_id
+            )
+
+    monkeypatch.setattr(AgentTurnRepository, "get_for_scope", meet_after_target_turn_lock)
+    monkeypatch.setattr("yuxi.modules.agents.services.turns.publish_cancel_signals", AsyncMock())
+    cancelling_root = asyncio.create_task(cancel(member["run_id"], "child-worker", root_id, root_turn_id, "child-cancel-root"))
+    cancelling_child = asyncio.create_task(cancel(run_id, "root-worker", member["session_id"], member["turn_id"], "root-cancel-child"))
+    try:
+        results = await asyncio.wait_for(asyncio.gather(cancelling_root, cancelling_child, return_exceptions=True), 6)
+    finally:
+        both_target_turns_locked.set()
+        await _cancel_pending_tasks(cancelling_root, cancelling_child)
+    accepted = [result for result in results if isinstance(result, dict)]
+    rejected = [result for result in results if isinstance(result, Exception)]
+    assert len(accepted) == len(rejected) == 1, results
+    assert isinstance(rejected[0], (ValueError, StateConflictError)), rejected
+    assert "来源 Run 已失效" in str(rejected[0]) or "当前 Worker" in str(rejected[0])
+    async with factory() as db:
+        runs = [await db.get(AgentRun, key) for key in (run_id, member["run_id"])]
+        turns = [await db.get(AgentTurn, key) for key in (root_turn_id, member["turn_id"])]
+        assert sorted(run.status for run in runs) == ["cancel_requested", "running"]
+        assert sorted(turn.status for turn in turns) == ["cancelling", "running"]
+        assert (
+            await db.scalar(
+                select(func.count())
+                .select_from(AgentInputReceipt)
+                .where(
+                    AgentInputReceipt.uid == uid,
+                    AgentInputReceipt.idempotency_key.endswith(":child-cancel-root")
+                    | AgentInputReceipt.idempotency_key.endswith(":root-cancel-child"),
+                )
+            )
+            == 1
+        )
+        assert accepted[0]["run_id"] == next(run.id for run in runs if run.status == "cancel_requested")
+
+
+async def _wait_for_database_blocker(factory, waiting_pid, blocking_pid):
+    """从独立连接确认 PostgreSQL 的真实阻塞边，而非凭协程时序推断。"""
+    from sqlalchemy import text
+
+    try:
+        async with asyncio.timeout(3):
+            async with factory() as db:
+                while not await db.scalar(
+                    text("SELECT :blocking_pid = ANY(pg_blocking_pids(:waiting_pid))"),
+                    {"waiting_pid": waiting_pid, "blocking_pid": blocking_pid},
+                ):
+                    await asyncio.sleep(0.01)
+    except TimeoutError as error:
+        raise AssertionError(f"PostgreSQL 连接 {waiting_pid} 未被持锁连接 {blocking_pid} 阻塞") from error
+
+
+async def _read_run(factory, run_id):
+    """清理入口使用独立回读的已提交 Run。"""
+    async with factory() as db:
+        return await db.get(AgentRun, run_id)
+
+
+async def _cancel_pending_tasks(*tasks):
+    """失败时释放本例后台协程，避免遗留事务阻塞后续清理。"""
+    for task in tasks:
+        if task is not None and not task.done():
+            task.cancel()
+    await asyncio.gather(*(task for task in tasks if task is not None), return_exceptions=True)

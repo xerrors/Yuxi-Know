@@ -5,6 +5,7 @@ import json
 import os
 import sys
 import uuid
+from contextlib import aclosing
 
 import asyncpg
 import pytest
@@ -14,9 +15,11 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from test.e2e.e2e_helpers import (
     archive_public_thread,
     delete_agent,
+    iter_public_thread_events,
     output_text,
     postgres_dsn,
     wait_for_consumed_input,
+    wait_for_terminal_turn,
 )
 from test.e2e.e2e_helpers import (
     create_lifecycle_agent as _agent,
@@ -27,9 +30,9 @@ from test.e2e.e2e_helpers import (
 from test.e2e.e2e_helpers import (
     register_replay_provider as _provider,
 )
-from test.live_api_cleanup import make_test_session_title
-from yuxi.infrastructure.postgres.models import load_models
+from test.live_api_cleanup import make_test_session_title, validate_test_runs_terminal
 from yuxi.infrastructure.postgres.manager import pg_manager
+from yuxi.infrastructure.postgres.models import load_models
 from yuxi.modules.agents.runtime.sandbox import UserSandboxBackend, get_sandbox_provider
 from yuxi.modules.workspace.paths import user_workspace_dir
 
@@ -270,6 +273,178 @@ async def test_sessions_use_public_state_and_shared_sandbox(e2e_client, e2e_head
             await delete_agent(e2e_client, e2e_headers, target_slug)
 
 
+@pytest.mark.self_managed_resources
+async def test_parallel_wait_inputs_keep_both_interrupts_and_resume_exact_results(e2e_client, e2e_headers, cooperation_parallelism_two):
+    """真实 worker 保存两个并行等待，两个子任务释放 gate 后按 ID 恢复同一 Turn。"""
+    me = await e2e_client.get("/api/auth/me", headers=e2e_headers)
+    assert me.status_code == 200, me.text
+    uid = me.json()["uid"]
+    provider_id = f"cooperation-parallel-{uuid.uuid4().hex[:8]}"
+    model = f"{provider_id}:deterministic-chat"
+    slug = root_id = root_turn = None
+    gates = []
+    conn = await asyncpg.connect(postgres_dsn())
+
+    def release_gate(path):
+        """原子发布跨进程解除信号。"""
+        temporary = path.with_name(path.name + ".tmp")
+        temporary.write_text("released")
+        temporary.replace(path)
+
+    try:
+        await _provider(e2e_client, e2e_headers, base_url=os.environ["COOPERATION_REPLAY_URL"], provider_id=provider_id)
+        slug = await _agent(e2e_client, e2e_headers, uid, model_spec=model, summary_prompt=SUMMARY_PROMPT)
+        created = await e2e_client.post(
+            "/api/v1/agents/sessions",
+            headers={**e2e_headers, "Idempotency-Key": str(uuid.uuid4())},
+            json={"agent_id": slug, "title": make_test_session_title("cooperation-parallel-wait"), "tool_approval_mode": "always_trust"},
+        )
+        assert created.status_code == 201, created.text
+        root_id = created.json()["id"]
+        workdir = await conn.fetchval(
+            "SELECT p.workdir_path FROM sessions s JOIN projects p ON p.id=s.project_id WHERE s.thread_id=$1", root_id
+        )
+        gate_name = f"parallel-wait-{uuid.uuid4().hex}"
+        gates = [user_workspace_dir(uid) / workdir / f"{gate_name}-{index}" for index in range(2)]
+        gate_path = f"/home/user/workspace/{workdir}/{gate_name}"
+        accepted = await e2e_client.post(
+            f"/api/v1/agents/sessions/{root_id}/events",
+            headers={**e2e_headers, "Idempotency-Key": str(uuid.uuid4())},
+            json={
+                "events": [
+                    {
+                        "type": "agent.session.input.message",
+                        "input": [_message(f"COOP_PARALLEL_WAIT_ROOT PRIVATE_ROOT_HISTORY WAIT_GATE:{gate_path}")],
+                        "yuxi": {"mode": "follow_up", "tool_approval_mode": "always_trust"},
+                    }
+                ]
+            },
+        )
+        assert accepted.status_code == 202, accepted.text
+        root_turn = (await wait_for_consumed_input(e2e_client, e2e_headers, accepted.json()))["turn_id"]
+        async with asyncio.timeout(60):
+            while True:
+                waiting = await conn.fetchrow("SELECT status,current_run_id,waitpoint FROM agent_turns WHERE id=$1", root_turn)
+                assert waiting["status"] not in {"completed", "failed", "cancelled"}, dict(waiting)
+                if waiting["status"] == "waiting":
+                    waitpoint = json.loads(waiting["waitpoint"])
+                    assert waitpoint["kind"] == "cooperation" and len(waitpoint["waits"]) == 2, waitpoint
+                    if all(path.with_name(path.name + "-started").exists() for path in gates):
+                        break
+                await asyncio.sleep(0.1)
+        entries = waitpoint["waits"]
+        assert len({entry["interrupt_id"] for entry in entries}) == 2
+        children = await conn.fetch(
+            "SELECT s.thread_id,s.cooperation_name,i.id AS input_id,i.turn_id FROM sessions s "
+            "JOIN agent_inputs i ON i.thread_id=s.thread_id WHERE s.parent_thread_id=$1 ORDER BY s.cooperation_name",
+            root_id,
+        )
+        assert [child["cooperation_name"] for child in children] == ["parallel0", "parallel1"]
+        assert {tuple(entry["target_inputs"]) for entry in entries} == {(child["input_id"],) for child in children}
+        assert await conn.fetchval("SELECT status FROM agent_runs WHERE id=$1", waiting["current_run_id"]) == "interrupted"
+        state = await e2e_client.get(f"/api/v1/agents/sessions/{root_id}/state", headers=e2e_headers)
+        assert state.status_code == 200, state.text
+        assert {entry["interrupt_id"]: entry for entry in state.json()["interrupt"]["waits"]} == {
+            entry["interrupt_id"]: entry for entry in entries
+        }
+        async with AsyncPostgresSaver.from_conn_string(postgres_dsn()) as saver:
+            checkpoint = await saver.aget_tuple({"configurable": {"thread_id": root_id, "checkpoint_ns": ""}})
+            pending_ids = {item.id for _, channel, items in checkpoint.pending_writes or [] if channel == "__interrupt__" for item in items}
+            assert pending_ids == {entry["interrupt_id"] for entry in entries}
+
+        release_gate(gates[0])
+        first = await wait_for_terminal_turn(e2e_client, e2e_headers, children[0]["thread_id"], children[0]["turn_id"], timeout=60)
+        assert first["status"] == "completed" and output_text(first["yuxi"]["output"]) == "PARALLEL_CHILD_RESULT_0", first
+        second_entry = next(entry for entry in entries if entry["target_inputs"] == [children[1]["input_id"]])
+        async with asyncio.timeout(90):
+            while True:
+                partial = await conn.fetchrow("SELECT status,current_run_id,waitpoint FROM agent_turns WHERE id=$1", root_turn)
+                assert partial["status"] not in {"completed", "failed", "cancelled"}, dict(partial)
+                if partial["status"] == "waiting" and partial["current_run_id"] != waiting["current_run_id"]:
+                    remaining = json.loads(partial["waitpoint"])["waits"]
+                    assert remaining == [second_entry], remaining
+                    break
+                await asyncio.sleep(0.1)
+        assert not gates[1].exists()
+        release_gate(gates[1])
+        final = await wait_for_terminal_turn(e2e_client, e2e_headers, root_id, root_turn, timeout=120)
+        assert final["status"] == "completed" and output_text(final["yuxi"]["output"]) == OUTPUT, final
+        runs = await conn.fetch(
+            "SELECT id,status,run_type,input_message_id FROM agent_runs WHERE turn_id=$1 ORDER BY created_at", root_turn
+        )
+        assert [(run["run_type"], run["status"]) for run in runs] == [
+            ("chat", "interrupted"),
+            ("resume", "interrupted"),
+            ("resume", "completed"),
+        ]
+        persisted = await conn.fetchrow("SELECT waitpoint,result_run_id FROM agent_turns WHERE id=$1", root_turn)
+        assert json.loads(persisted["waitpoint"] or "null") is None
+        assert persisted["result_run_id"] == runs[-1]["id"]
+        responses = {}
+        for run in runs[1:]:
+            metadata = json.loads(await conn.fetchval("SELECT extra_metadata FROM messages WHERE id=$1", run["input_message_id"]))
+            assert len(metadata["resume"]) == 1 and not responses.keys() & metadata["resume"].keys()
+            responses.update(metadata["resume"])
+        assert set(responses) == {entry["interrupt_id"] for entry in entries}
+        for index, child in enumerate(children):
+            entry = next(entry for entry in entries if entry["target_inputs"] == [child["input_id"]])
+            resumed = responses[entry["interrupt_id"]]
+            assert resumed["wait_timed_out"] is False
+            assert len(resumed["results"]) == 1
+            result = resumed["results"][0]
+            assert result["input_id"] == child["input_id"] and result["terminal"]
+            assert result["output"] == f"PARALLEL_CHILD_RESULT_{index}"
+        async with AsyncPostgresSaver.from_conn_string(postgres_dsn()) as saver:
+            checkpoint = await saver.aget_tuple({"configurable": {"thread_id": root_id, "checkpoint_ns": ""}})
+            assert not any(channel == "__interrupt__" for _, channel, _ in checkpoint.pending_writes or [])
+            completed = {
+                message.tool_call_id for message in checkpoint.checkpoint["channel_values"]["messages"] if isinstance(message, ToolMessage)
+            }
+            assert {"parallel-wait-0", "parallel-wait-1"} <= completed
+        streamed = []
+        async with asyncio.timeout(15), aclosing(iter_public_thread_events(e2e_client, e2e_headers, root_id)) as events:
+            async for event in events:
+                streamed.append(event)
+                if event["type"] == "agent.session.turn.completed" and event["turn_id"] == root_turn:
+                    break
+        assert streamed[-1]["yuxi"]["run_id"] == runs[-1]["id"]
+        assert {
+            event["yuxi"]["run_id"]
+            for event in streamed
+            if event["type"] == "yuxi.session.run.settled" and event["status"] == "interrupted"
+        } == {run["id"] for run in runs[:-1]}
+        await validate_test_runs_terminal({root_id, *(child["thread_id"] for child in children)})
+    finally:
+        body_error = sys.exception()
+        for path in gates:
+            release_gate(path)
+        try:
+            if root_id:
+                members = await conn.fetch(
+                    "SELECT s.thread_id,(SELECT t.id FROM agent_turns t WHERE t.thread_id=s.thread_id "
+                    "ORDER BY t.created_at DESC LIMIT 1) AS turn_id "
+                    "FROM sessions s WHERE s.tree_root_thread_id=$1 ORDER BY length(s.cooperation_path) DESC",
+                    root_id,
+                )
+                for member in members:
+                    await archive_public_thread(e2e_client, e2e_headers, member["thread_id"], turn_id=member["turn_id"])
+                await validate_test_runs_terminal({member["thread_id"] for member in members})
+            if slug:
+                await delete_agent(e2e_client, e2e_headers, slug)
+            removed = await e2e_client.delete(f"/api/system/model-providers/{provider_id}", headers=e2e_headers)
+            assert removed.status_code in {200, 404}, removed.text
+        except Exception as cleanup_error:
+            if body_error is not None:
+                body_error.add_note(f"测试清理另有失败: {cleanup_error}")
+                raise body_error from cleanup_error
+            raise
+        finally:
+            await conn.close()
+            for path in gates:
+                path.unlink(missing_ok=True)
+                path.with_name(path.name + "-started").unlink(missing_ok=True)
+
+
 @pytest.mark.parametrize("stop_tree", [False, True])
 async def test_full_tree_capacity_control_and_sibling_tools(e2e_client, e2e_headers, stop_tree):
     """真实 worker 满槽等待推进；兄弟工具与持久整树控制不串轮次。"""
@@ -475,6 +650,21 @@ async def _assert_thread_activity(client, headers, thread_id, expected):
     assert listed.status_code == 200, listed.text
     thread = next(item for item in listed.json()["data"] if item["id"] == thread_id)
     assert thread["status"] == expected, thread
+
+
+@pytest.fixture
+async def cooperation_parallelism_two(e2e_client, e2e_headers):
+    """为两个阻塞子任务提供明确名额，并恢复管理员原配置。"""
+    current = await e2e_client.get("/api/system/config", headers=e2e_headers)
+    assert current.status_code == 200, current.text
+    previous = current.json()["max_cooperation_concurrency"]
+    try:
+        changed = await e2e_client.post("/api/system/config/update", headers=e2e_headers, json={"max_cooperation_concurrency": 2})
+        assert changed.status_code == 200, changed.text
+        yield
+    finally:
+        restored = await e2e_client.post("/api/system/config/update", headers=e2e_headers, json={"max_cooperation_concurrency": previous})
+        assert restored.status_code == 200, restored.text
 
 
 @pytest.fixture

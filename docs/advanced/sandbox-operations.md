@@ -32,7 +32,7 @@ SANDBOX_IDLE_SECONDS=300
 
 每个用户 VM 只挂载其 Workspace 子目录和授权 Skills 投影，投影只读；平台来源目录、数据库目录、`.env` 和 Docker socket 均不挂载。控制面及数据代理通过私网供 API/worker 访问，不作为公网产品接口开放。VM 默认禁止私网出口，外网包安装可用。
 
-同一用户的不同 Run 复用同一 VM，协作树成员共用 Project Workdir；每棵协作树最多同时执行 4 个 Run。模板构建脚本使用 `--cpu 1000 --memory 1024`，实例资源随实际模板决定，更新模板不会调整已有实例。节点容量需要按活跃用户与命令负载测量，应用连接池预算见[Agent 并发容量](./agent-concurrency-capacity.md)。
+同一用户的不同 Run 复用同一 VM，协作树成员共用 Project Workdir；运行数受当前协作树并发配置约束。模板构建脚本使用 `--cpu 1000 --memory 1024`，实例资源随实际模板决定，更新模板不会调整已有实例。节点容量需要按活跃用户与命令负载测量，执行上限与应用连接池预算见[Agent 并发容量](./agent-concurrency-capacity.md)。
 
 先按本页准备执行节点，再按[快速开始](../intro/quick-start.md)启动应用。更新应用镜像或内置定义时，按[共享内容更新](./deployment.md#共享内容更新与失败重试)停止消费者、执行 app-init 后恢复服务，使用该环境原有的 Compose 与环境文件。
 

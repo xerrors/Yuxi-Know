@@ -110,6 +110,7 @@ async def test_recovery_republishes_owned_child_after_parent_completion(
 
     async def deliver(dispatch):
         delivered.append(dispatch.run_id)
+        return True
 
     monkeypatch.setattr(scheduler.pg_manager, "get_async_session_context", session_context)
     monkeypatch.setattr(scheduler, "AgentRunRepository", RunRepo)
@@ -122,3 +123,50 @@ async def test_recovery_republishes_owned_child_after_parent_completion(
 
     assert delivered == expected_delivery
     assert terminal == expected_terminal
+
+
+@pytest.mark.asyncio
+async def test_delivery_reports_queue_publication_failure_without_rejecting_committed_command(monkeypatch):
+    """队列不可达只返回发布失败，不能覆盖命令已经提交的事实。"""
+    cause = ConnectionError("queue unavailable")
+
+    async def enqueue(_run_id):
+        """在实际发布边界注入队列不可达。"""
+        raise cause
+
+    monkeypatch.setattr("yuxi.modules.agents.services.transport.enqueue_agent_run", enqueue)
+    dispatch = scheduler.Dispatch(run_id="pending-run", binding=SimpleNamespace(materialize_managed=False))
+    assert await scheduler.deliver(dispatch) is False
+
+
+@pytest.mark.asyncio
+async def test_delivery_reports_success_after_publication(monkeypatch):
+    """发布成功结果供恢复扫描确认本轮发布没有失败。"""
+    published = []
+
+    async def enqueue(run_id):
+        """记录实际发布目标。"""
+        published.append(run_id)
+
+    monkeypatch.setattr("yuxi.modules.agents.services.transport.enqueue_agent_run", enqueue)
+    dispatch = scheduler.Dispatch(run_id="pending-run", binding=SimpleNamespace(materialize_managed=False))
+    assert await scheduler.deliver(dispatch) is True
+    assert published == ["pending-run"]
+
+
+@pytest.mark.asyncio
+async def test_delivery_does_not_hide_workdir_validation_as_queue_failure(monkeypatch):
+    """工作目录校验失败仍明确失败，不能被接收方当作可补投故障。"""
+    cause = ValueError("invalid workdir binding")
+
+    def materialize(*_args):
+        """在目录边界拒绝错误绑定。"""
+        raise cause
+
+    monkeypatch.setattr(scheduler, "ensure_bound_user_workdir", materialize)
+    dispatch = scheduler.Dispatch(
+        run_id="pending-run", binding=SimpleNamespace(materialize_managed=True, uid="test-user", workdir_path="projects/test")
+    )
+    with pytest.raises(ValueError, match="invalid workdir binding") as error:
+        await scheduler.deliver(dispatch)
+    assert error.value is cause
