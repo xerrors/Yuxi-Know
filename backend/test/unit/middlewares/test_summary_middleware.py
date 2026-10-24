@@ -344,6 +344,25 @@ def test_compact_messages_writes_large_tool_result_and_limits_preview(
 
 
 @pytest.mark.unit
+def test_compact_messages_without_tool_result_limit_keeps_tool_results() -> None:
+    """tool_result_offload_token_limit 为 None 表示关闭 offload，工具结果保持原样。"""
+    backend = _MemoryBackend()
+    tool_content = "SECRET_RESULT_SHOULD_NOT_BE_OFFLOADED\n" + ("middle\n" * 500)
+    messages = [
+        HumanMessage(content="查资料"),
+        AIMessage(content="", tool_calls=[{"id": "call-1", "name": "query_kb", "args": {}}]),
+        ToolMessage(content=tool_content, tool_call_id="call-1", name="query_kb"),
+    ]
+
+    sanitized = _compact_messages(messages, backend, token_limit=None)
+
+    assert backend.writes == []
+    assert isinstance(sanitized[2], ToolMessage)
+    assert sanitized[2] is messages[2]
+    assert sanitized[2].content == tool_content
+
+
+@pytest.mark.unit
 def test_compaction_does_not_replace_tool_result_when_recoverable_write_fails() -> None:
     backend = _FailingWriteBackend()
     content = "important result" * 100
@@ -628,7 +647,7 @@ async def test_force_summary_reports_persisted_uncompacted_tail_tokens() -> None
                 "expect_full_content_in_summary": True,
                 "expect_history_write": True,
             },
-            id="summary_uses_full_tool_result_preview",
+            id="offload_disabled_sends_raw_result_to_summary_only",
         ),
     ],
 )
@@ -671,7 +690,9 @@ async def test_wrap_model_call_offloads_large_tool_results(scenario: dict) -> No
     assert isinstance(result, ExtendedModelResponse) is scenario["expect_extended"]
     assert len(model.prompts) == scenario["expect_summary_count"]
     assert messages[2].content == large_result
-    assert (_expected_tool_result_path(large_result), large_result) in backend.writes
+    if scenario["tool_result_offload_token_limit"] is not None:
+        # None 场景按新语义关闭 offload，不产生工具结果写入，由专项测试单独覆盖。
+        assert (_expected_tool_result_path(large_result), large_result) in backend.writes
     history_writes = [write_path for write_path, _content in backend.writes if write_path.startswith(VIRTUAL_PATH_CONVERSATION_HISTORY)]
     assert bool(history_writes) is scenario["expect_history_write"]
 
@@ -682,7 +703,7 @@ async def test_wrap_model_call_offloads_large_tool_results(scenario: dict) -> No
     assert "raw result payload" not in formatted
 
     if scenario["expect_summary_count"]:
-        assert "[Tool result saved]" in model.prompts[0]
+        assert ("[Tool result saved]" in model.prompts[0]) is (scenario["tool_result_offload_token_limit"] is not None)
         assert ("END" in model.prompts[0]) is scenario["expect_full_content_in_summary"]
 
 

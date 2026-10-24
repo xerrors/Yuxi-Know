@@ -18,6 +18,64 @@ from yuxi.modules.workspace.runtime_paths import WORKSPACE_PATH
 USER = "user"
 MAX_FRAME_BYTES = 1024 * 1024
 
+# 仅终止带本次执行标识的命令组；由普通账号核对进程组和继承的执行标识，再发送信号。
+# PID 会复用，不能按 PID 直接终止。tombstone 拦截"取消先于启动"的竞态：pgid 来自
+# start 事件、扫描到带执行标识的进程或取得真实 end，都证明 wrapper 已启动，进程组
+# 确认终止后不存在更晚的启动可拦截，此时移除 tombstone；无法证明启动时保留。
+_CANCEL_SCRIPT = """import os,signal,time
+from pathlib import Path
+pgid = int(os.environ["YUXI_PGID"]) if os.environ["YUXI_PGID"] else None
+marker = ("YUXI_EXECUTION_ID=" + os.environ["YUXI_EXECUTION"]).encode()
+matched = False
+fd = os.open("/tmp/.yuxi-cancel-" + os.environ["YUXI_EXECUTION"], os.O_WRONLY|os.O_CREAT|os.O_NOFOLLOW|os.O_NONBLOCK, 0o600)
+os.close(fd)
+verified_groups=set()
+def members():
+    global matched
+    groups=verified_groups
+    pids=[]
+    for path in Path("/proc").iterdir():
+        if not path.name.isdigit(): continue
+        try:
+            pid=int(path.name)
+            group=os.getpgid(pid)
+            if pgid is not None and group!=pgid: continue
+            fields=(path/'stat').read_text().rsplit(')',1)[1].split()
+            if fields[0]=='Z': continue
+            pids.append((pid,group))
+            if marker in (path/'environ').read_bytes().split(b"\\0"):
+                matched = True
+                if group==pid or group==pgid: groups.add(group)
+                elif pgid is None: groups.add(pid)
+        except (OSError,ValueError): continue
+    found=[]
+    for pid,group in pids:
+        if group in groups: found.append((group,True))
+        elif pid in groups: found.append((pid,False))
+        elif pgid is not None and group==pgid:
+            # leader 标识已丢失但组仍有进程，不能把未知归属当成清理成功。
+            raise RuntimeError('process group owner cannot be confirmed')
+    return found
+for target, is_group in set(members()):
+    try:
+        (os.killpg if is_group else os.kill)(target, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+if members():
+    time.sleep(0.3)
+    if members():
+        for target, is_group in set(members()):
+            try:
+                (os.killpg if is_group else os.kill)(target, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        time.sleep(0.1)
+if members():
+    raise SystemExit("目标命令组未终止")
+if os.environ['YUXI_TERMINAL']=='1' or os.environ['YUXI_PGID'] or matched:
+    Path('/tmp/.yuxi-cancel-'+os.environ['YUXI_EXECUTION']).unlink(missing_ok=True)
+"""
+
 
 @dataclass
 class Environment:
@@ -302,63 +360,11 @@ sys.exit(code if code>=0 else 128-code)
 
     def cancel(self, environment: Environment, pgid: int | None, execution_id: str, *, terminal_confirmed: bool = False) -> None:
         """仅终止带本次标识的命令组，保留同用户其他任务。"""
-        # PID 会复用；由普通账号核对进程组和继承的执行标识，再发送信号。
-        script = """import os,signal,time
-from pathlib import Path
-pgid = int(os.environ["YUXI_PGID"]) if os.environ["YUXI_PGID"] else None
-marker = ("YUXI_EXECUTION_ID=" + os.environ["YUXI_EXECUTION"]).encode()
-fd = os.open("/tmp/.yuxi-cancel-" + os.environ["YUXI_EXECUTION"], os.O_WRONLY|os.O_CREAT|os.O_NOFOLLOW|os.O_NONBLOCK, 0o600)
-os.close(fd)
-verified_groups=set()
-def members():
-    groups=verified_groups
-    pids=[]
-    for path in Path("/proc").iterdir():
-        if not path.name.isdigit(): continue
-        try:
-            pid=int(path.name)
-            group=os.getpgid(pid)
-            if pgid is not None and group!=pgid: continue
-            fields=(path/'stat').read_text().rsplit(')',1)[1].split()
-            if fields[0]=='Z': continue
-            pids.append((pid,group))
-            if marker in (path/'environ').read_bytes().split(b"\\0"):
-                if group==pid or group==pgid: groups.add(group)
-                elif pgid is None: groups.add(pid)
-        except (OSError,ValueError): continue
-    found=[]
-    for pid,group in pids:
-        if group in groups: found.append((group,True))
-        elif pid in groups: found.append((pid,False))
-        elif pgid is not None and group==pgid:
-            # leader 标识已丢失但组仍有进程，不能把未知归属当成清理成功。
-            raise RuntimeError('process group owner cannot be confirmed')
-    return found
-for target, is_group in set(members()):
-    try:
-        (os.killpg if is_group else os.kill)(target, signal.SIGTERM)
-    except ProcessLookupError:
-        pass
-if members():
-    time.sleep(0.3)
-    if members():
-        for target, is_group in set(members()):
-            try:
-                (os.killpg if is_group else os.kill)(target, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-        time.sleep(0.1)
-if members():
-    raise SystemExit("目标命令组未终止")
-# 取得真实 end 的命令不再可能晚启动；不确定启动保留 tombstone。
-if os.environ['YUXI_TERMINAL']=='1':
-    Path('/tmp/.yuxi-cancel-'+os.environ['YUXI_EXECUTION']).unlink(missing_ok=True)
-"""
         # 清理不能读取用户 shell 启动配置，否则阻塞的 profile 会阻断取消。
         ended = False
         for event in self.stream(
             environment,
-            script,
+            _CANCEL_SCRIPT,
             "/home/user",
             secrets.token_hex(16),
             {

@@ -219,7 +219,7 @@ async def test_mcp_failure_becomes_safe_tool_result_and_disables_service(monkeyp
     from yuxi.shared.errors import StateConflictError
 
     context.mcps, context.mcp_unavailable, context.run_id = ["remote"], {}, "run"
-    monkeypatch.setattr(authorization, "refresh_execution_authorization", AsyncMock(return_value={"remote": set()}))
+    monkeypatch.setattr(authorization, "_execution_mcp_policy", AsyncMock(return_value={"remote": set()}))
     request = SimpleNamespace(
         runtime=SimpleNamespace(context=context),
         state={},
@@ -316,7 +316,7 @@ async def test_mcp_tool_preserves_execution_control_exceptions(monkeypatch, cont
         "cancelled": asyncio.CancelledError(),
     }[kind]
     context.mcps, context.mcp_unavailable = ["remote"], {}
-    monkeypatch.setattr(authorization, "refresh_execution_authorization", AsyncMock(return_value={"remote": set()}))
+    monkeypatch.setattr(authorization, "_execution_mcp_policy", AsyncMock(return_value={"remote": set()}))
     request = SimpleNamespace(runtime=SimpleNamespace(context=context), state={}, tool_call={"name": "remote_tool", "id": "call"})
     with pytest.raises(type(failure)):
         await authorization.RuntimeAuthorizationMiddleware().awrap_tool_call(request, AsyncMock(side_effect=failure))
@@ -340,7 +340,9 @@ async def test_warning_checkpoint_is_replaced_after_capability_recovers(monkeypa
         yield None
 
     monkeypatch.setattr(authorization.pg_manager, "get_async_session_context", session)
-    monkeypatch.setattr(authorization, "_require_execution_actor", AsyncMock())
+    monkeypatch.setattr(
+        authorization, "_require_execution_actor", AsyncMock(return_value=(SimpleNamespace(id=1), None, None))
+    )
     monkeypatch.setattr(authorization, "_refresh_execution_resources", AsyncMock(return_value={}))
     monkeypatch.setattr(authorization, "sync_agent_context_skills", AsyncMock())
     context.mcp_unavailable = {"remote": "未连接，请重新连接", "github": "连接失败"}
@@ -357,3 +359,44 @@ async def test_warning_checkpoint_is_replaced_after_capability_recovers(monkeypa
     context.mcp_unavailable.clear()
     await graph.ainvoke({"messages": [HumanMessage(content="继续")]}, config, context=context)
     assert (await graph.aget_state(config)).values["warnings"] == []
+
+
+@pytest.mark.asyncio
+async def test_tool_boundary_rechecks_identity_without_rebuilding_resources(monkeypatch, context):
+    """工具边界复查身份与 MCP 策略，但资源重建与投影同步只在模型边界发生。"""
+    from unittest.mock import AsyncMock
+    from yuxi.modules.agents.runtime.middlewares import authorization
+
+    class SessionContext:
+        """为工具边界的身份复查提供异步 session 边界。"""
+
+        async def __aenter__(self):
+            """返回测试查询上下文。"""
+            return None
+
+        async def __aexit__(self, *_):
+            """保持异常传播。"""
+            return False
+
+    context.mcps, context.run_id = ["remote"], "run"
+    actor = AsyncMock(return_value=(SimpleNamespace(id=1), None, None))
+    resources, sync = AsyncMock(return_value={}), AsyncMock()
+    monkeypatch.setattr(authorization.pg_manager, "get_async_session_context", SessionContext)
+    monkeypatch.setattr(authorization, "_require_execution_actor", actor)
+    monkeypatch.setattr(authorization, "refresh_agent_context_resources", resources)
+    monkeypatch.setattr(authorization, "sync_agent_context_skills", sync)
+    monkeypatch.setattr(
+        authorization, "available_mcp_servers", AsyncMock(return_value={"remote": SimpleNamespace(disabled_tools=[])})
+    )
+    request = SimpleNamespace(
+        runtime=SimpleNamespace(context=context),
+        state={"activated_skills": ["skill"]},
+        tool_call={"name": "remote_tool", "id": "call"},
+    )
+    result = await authorization.RuntimeAuthorizationMiddleware().awrap_tool_call(
+        request,
+        AsyncMock(return_value="工具继续执行"),
+    )
+    assert result == "工具继续执行"
+    assert actor.await_count == 1
+    assert resources.await_count == 0 and sync.await_count == 0

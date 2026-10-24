@@ -135,3 +135,51 @@ def test_search_rejects_nonpositive_limit_before_io(backend, path, limit):
     """非法搜索上限在两条路径均明确失败。"""
     result = backend.grep("needle", path, max_count=limit)
     assert result.error and "max_count" in result.error
+
+
+@pytest.mark.parametrize("name", ["_GUEST_FILE_SCRIPT", "_GUEST_SEARCH_SCRIPT"])
+def test_embedded_guest_scripts_compile(name):
+    """内嵌 Guest 脚本的编辑缺陷必须在编译层失败，而不是运行时让文件工具整体失效。"""
+    compile(getattr(backend_module, name), name, "exec")
+
+
+@pytest.mark.parametrize("local", [False, True], ids=["guest", "workspace"])
+def test_search_skips_files_over_per_file_budget(backend, tmp_path, monkeypatch, local):
+    """恢复无大小上限的本地扫描时，两条路径都必须在正确原因上跳过超预算文件。"""
+    import subprocess
+
+    monkeypatch.setattr(backend_module, "_SEARCH_MAX_FILE_BYTES", 16)
+
+    def execute(command):
+        """在独立进程执行 Guest 脚本并回读标准输出。"""
+        result = subprocess.run(command, shell=True, capture_output=True, text=True, check=True)
+        return SimpleNamespace(exit_code=result.returncode, output=result.stdout, truncated=False)
+
+    monkeypatch.setattr(backend, "execute", execute)
+    if local:
+        root = user_workspace_dir("one")
+        (root / "small.txt").write_text("needle\n")
+        (root / "big.txt").write_text("needle\n" + "x" * 32)
+        result = backend.grep("needle", WORKSPACE_PATH, glob="*.txt")
+        assert [match["path"] for match in result.matches] == [f"{WORKSPACE_PATH}/small.txt"]
+    else:
+        (tmp_path / "big.txt").write_text("needle\n" + "x" * 32)
+        result = backend.grep("needle", str(tmp_path), glob="*.txt")
+        assert result.matches == []
+
+
+def test_search_skips_single_file_over_budget(backend, monkeypatch):
+    """恢复单文件回退不核对大小时，直接对超预算文件的搜索必须在正确原因上跳过。"""
+    monkeypatch.setattr(backend_module, "_SEARCH_MAX_FILE_BYTES", 16)
+    (user_workspace_dir("one") / "big.txt").write_text("needle\n" + "x" * 32)
+    assert backend.grep("needle", f"{WORKSPACE_PATH}/big.txt").matches == []
+
+
+def test_transfer_errors_report_actual_cause(backend):
+    """路径校验、缺失与只读失败不再折叠成同一种权限语义。"""
+    results = backend.upload_files([("https://host/a", b"data")])
+    assert results[0].error == "path must start with /"
+    results = backend.download_files([f"{WORKSPACE_PATH}/missing.txt"])
+    assert results[0].error == "file_not_found"
+    results = backend.upload_files([(f"{SHARED_SKILLS_PATH}/demo/SKILL.md", b"modified")])
+    assert results[0].error == "permission_denied"

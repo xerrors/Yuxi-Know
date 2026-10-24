@@ -7,8 +7,8 @@ from deepagents.middleware.filesystem import TOOLS_EXCLUDED_FROM_EVICTION, Files
 # 避免 read_file/offload 循环：该工具自带分页与引用语义。
 _TOOL_RESULT_EVICTION_EXEMPT_TOOLS = frozenset(TOOLS_EXCLUDED_FROM_EVICTION) | {"open_kb_document"}
 
-# 文件工具 allowlist：显式排除 destructive delete。Yuxi backend 未实现 delete，
-# 且删除语义需要审批与审计设计，开放前不应让模型看到该工具。
+# 文件工具 allowlist：显式排除 destructive delete。BaseSandbox 自带的默认 delete 会在
+# VM 内 rm -rf，没有审批与审计语义；allowlist 是唯一的暴露边界，开放删除前需要独立设计。
 _AGENT_FS_TOOLS: tuple[FsToolName, ...] = (
     "ls",
     "read_file",
@@ -24,13 +24,12 @@ def create_agent_filesystem_middleware(
     tool_token_limit_before_evict: int | None = None,
     *,
     backend: CompositeBackend,
-    disabled_tools: frozenset[str] = frozenset(),
 ) -> FilesystemMiddleware:
-    """构造文件系统中间件，在 ToolNode 注册前排除禁用工具。"""
+    """构造文件系统中间件，按 allowlist 注册文件工具。"""
     return YuxiFilesystemMiddleware(
         backend=backend,
         tool_token_limit_before_evict=tool_token_limit_before_evict,
-        tools=[name for name in _AGENT_FS_TOOLS if name not in disabled_tools],
+        tools=list(_AGENT_FS_TOOLS),
     )
 
 

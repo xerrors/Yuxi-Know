@@ -201,6 +201,8 @@ async def test_refresh_preserves_prepared_bound_root_but_reads_current_shared_ro
     assert context.skill_runtime_snapshot["preloaded_skill_contents"]["bound-skill"] == "# PREPARED_BOUND_ROOT\n"
     (bound_source / "SKILL.md").write_text("# UPDATED_BOUND_ROOT\n")
     (fixture.source / "SKILL.md").write_text("# UPDATED_SHARED_ROOT\n")
+    # 模型边界顺序：完整刷新资源与快照发生在 abefore_model，投影同步发生在实际模型请求入口。
+    await RuntimeAuthorizationMiddleware().abefore_model({}, SimpleNamespace(context=context))
     await refresh_execution_authorization(context)
     contents = context.skill_runtime_snapshot["preloaded_skill_contents"]
     assert contents["bound-skill"] == "# PREPARED_BOUND_ROOT\n"
@@ -279,7 +281,13 @@ async def test_prepare_and_refresh_restore_original_selection_after_policy_regra
     """撤销清理投影，重授后按原始选择恢复有效资源。"""
     fixture = authorized_context
     assert fixture.context.skills == ["live-skill"]
-    await refresh_execution_authorization(fixture.context)
+
+    async def refresh_boundary():
+        """按执行边界顺序刷新：资源与快照重建在模型边界，投影同步在实际模型请求入口。"""
+        await RuntimeAuthorizationMiddleware().abefore_model({}, SimpleNamespace(context=fixture.context))
+        await refresh_execution_authorization(fixture.context)
+
+    await refresh_boundary()
     projected = projection.get_user_skills_root_dir("caller") / "live-skill"
     assert (projected / "SKILL.md").is_file()
     async with fixture.sessions() as db:
@@ -287,7 +295,7 @@ async def test_prepare_and_refresh_restore_original_selection_after_policy_regra
         skill.share_config = {"version": 2, "read_scope": None, "manage_scope": None}
         await projection.commit_skill_policy_and_refresh_projections(db, skill.slug)
     assert not projected.exists()
-    await refresh_execution_authorization(fixture.context)
+    await refresh_boundary()
     assert fixture.context.skills == []
     assert fixture.context.preload_skills == []
     assert fixture.context._capability_limited
@@ -296,7 +304,7 @@ async def test_prepare_and_refresh_restore_original_selection_after_policy_regra
         skill = await db.scalar(select(Skill).where(Skill.slug == "live-skill"))
         skill.share_config = SHARED
         await projection.commit_skill_policy_and_refresh_projections(db, skill.slug)
-    await refresh_execution_authorization(fixture.context)
+    await refresh_boundary()
     assert fixture.context.skills == ["live-skill"]
     assert fixture.context.preload_skills == ["live-skill"]
     assert not fixture.context._capability_limited
