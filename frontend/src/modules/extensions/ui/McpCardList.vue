@@ -115,13 +115,16 @@
             <label>描述</label>
             <span>{{ previewServer.description || '暂无描述' }}</span>
           </div>
-          <section class="mcp-authorization-section" aria-label="授权状态">
+          <section
+            v-if="previewServer.auth_mode === 'oauth'"
+            class="mcp-authorization-section"
+            aria-label="授权状态"
+          >
             <div class="mcp-authorization-copy">
-              <h3>{{ previewServer.auth_mode === 'oauth' ? '个人授权' : '共享授权' }}</h3>
-              <p>{{ previewServer.auth_mode === 'oauth' ? '智能体将使用你的个人账号访问此服务。' : '此服务使用管理员配置的共享凭据，无需个人授权。' }}</p>
+              <h3>个人授权</h3>
+              <p>智能体将使用你的个人账号访问此服务。</p>
             </div>
-            <McpConnectionControls v-if="previewServer.auth_mode === 'oauth'" :server="previewServer" @changed="refreshPreview" />
-            <span v-else class="mcp-shared-status">无需个人授权</span>
+            <McpConnectionControls :server="previewServer" @changed="refreshPreview" />
           </section>
         </div>
         <div v-if="previewServer.can_manage" class="mcp-basic-info-footer">
@@ -467,8 +470,6 @@ defineExpose({ fetchServers, loading })
 }
 
 .mcp-authorization-copy { flex: 1 1 240px; min-width: 0; }
-
-.mcp-shared-status { margin-inline-start: auto; color: var(--gray-700); font-size: 13px; }
 
 .mcp-basic-info-footer {
   display: flex;

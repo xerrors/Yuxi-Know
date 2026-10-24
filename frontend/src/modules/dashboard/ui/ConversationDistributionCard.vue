@@ -5,6 +5,7 @@
         <a-select
           v-model:value="timeRange"
           :options="rangeOptions"
+          :dropdown-match-select-width="false"
           size="small"
           aria-label="智能体会话统计范围"
           @change="loadStats"
@@ -116,6 +117,10 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+.distribution-actions :deep(.ant-select) {
+  /* 触发器保持紧凑的同时加宽下拉，避免「近30天」等选项被省略号截断 */
+  min-width: 88px;
 }
 .distribution-refresh {
   display: grid;

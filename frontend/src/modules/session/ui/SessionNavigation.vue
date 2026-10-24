@@ -392,7 +392,7 @@ const handleDeleteProject = async (projectId) => {
   width: 250px;
   pointer-events: auto;
   background: var(--gray-0);
-  border-left: 1px solid var(--gray-150);
+  // 左缘紧贴图标栏的 border-right，不再自绘 border-left，避免出现双层边框
   border-right: 1px solid var(--gray-100);
   transition:
     opacity 0.16s ease,

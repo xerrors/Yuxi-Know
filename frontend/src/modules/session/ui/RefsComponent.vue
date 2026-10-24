@@ -467,6 +467,12 @@ async function rate(rating, event) {
       color: var(--gray-400);
       font-variant-numeric: tabular-nums;
       user-select: none;
+      // 默认隐藏，悬浮 refs 行或所在 Run 分组时才显示
+      opacity: 0;
+      visibility: hidden;
+      transition:
+        opacity 0.2s ease,
+        visibility 0.2s ease;
 
       &.toggleable {
         cursor: pointer;
@@ -476,7 +482,12 @@ async function rate(rating, event) {
         }
       }
     }
+  }
 
+  // 悬浮 refs 行时显示时间
+  &:hover .time-entry {
+    opacity: 1;
+    visibility: visible;
   }
 
   .sources-panel-body {

@@ -135,17 +135,17 @@
   --color-accent-900: #006d75; /* 强前景 */
   --color-accent-1000: #003b40; /* 最强前景 */
 
-  /* Chart Palette - 图表调色板 */
-  --chart-palette-1: var(--main-500);
-  --chart-palette-2: #5ad8a6;
-  --chart-palette-3: #f6bd16;
-  --chart-palette-4: #f27c7c;
-  --chart-palette-5: #9581cc;
-  --chart-palette-6: #6dc8ec;
-  --chart-palette-7: #ff9d4d;
-  --chart-palette-8: #92d050;
-  --chart-palette-9: #e885ba;
-  --chart-palette-10: #8c8c8c;
+  /* Chart Palette - 图表调色板：低饱和柔和色带，色相间隔排列避免相邻冲突 */
+  --chart-palette-1: #70b3c4;
+  --chart-palette-2: #8491c8;
+  --chart-palette-3: #dcbd74;
+  --chart-palette-4: #dd8b88;
+  --chart-palette-5: #9cc68b;
+  --chart-palette-6: #af8dc4;
+  --chart-palette-7: #e0a385;
+  --chart-palette-8: #72b696;
+  --chart-palette-9: #d897c0;
+  --chart-palette-10: #a0a0a0;
 
   --bg-sider: var(--main-5);
 

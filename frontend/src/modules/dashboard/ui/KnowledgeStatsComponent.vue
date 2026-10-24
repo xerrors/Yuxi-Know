@@ -37,10 +37,19 @@
             <strong>{{ totalFiles.toLocaleString() }}</strong>
           </div>
         </div>
-        <ul class="file-type-legend" aria-label="文件类型数量与占比">
-          <li v-for="(item, index) in fileTypeData" :key="item.name">
+        <ul
+          class="file-type-legend"
+          :class="{ 'legend-two-columns': fileTypeData.length >= 5 }"
+          aria-label="文件类型数量与占比"
+        >
+          <li
+            v-for="(item, index) in fileTypeData"
+            :key="item.name"
+            @mouseenter="highlightFileTypeSlice(index)"
+            @mouseleave="downplayFileTypeSlice(index)"
+          >
             <span class="legend-swatch" :style="{ backgroundColor: getColorByIndex(index) }"></span>
-            <span class="legend-name">{{ item.name }}</span>
+            <span class="legend-name" :title="item.name">{{ item.name }}</span>
             <span class="legend-value">{{ item.value.toLocaleString() }}</span>
             <span class="legend-percent">{{
               item.value / totalFiles < 0.001
@@ -82,6 +91,16 @@ const fileTypeData = computed(() =>
 )
 const totalFiles = computed(() => fileTypeData.value.reduce((sum, item) => sum + item.value, 0))
 
+/** 悬停明细行时高亮对应扇区，与图内悬浮保持一致的反馈。 */
+function highlightFileTypeSlice(index) {
+  fileTypeChart?.dispatchAction({ type: 'highlight', seriesIndex: 0, dataIndex: index })
+}
+
+/** 离开明细行后取消扇区高亮。 */
+function downplayFileTypeSlice(index) {
+  fileTypeChart?.dispatchAction({ type: 'downplay', seriesIndex: 0, dataIndex: index })
+}
+
 /** 更新圆环，明细由独立 DOM 展示，避免图例覆盖图形。 */
 async function updateChart() {
   await nextTick()
@@ -90,8 +109,8 @@ async function updateChart() {
   fileTypeChart = null
   if (!fileTypeChartRef.value) return
   fileTypeChart = echarts.init(fileTypeChartRef.value)
+  // 数量与占比由下方明细列表承载，圆环不再悬浮提示，避免遮挡中心总数。
   fileTypeChart.setOption({
-    tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)', renderMode: 'richText' },
     series: [
       {
         name: '文件类型',
@@ -165,6 +184,13 @@ defineExpose({ cleanup })
     border-bottom: 1px solid var(--gray-100);
     font-size: 13px;
   }
+  // 类型较多时拆成两列；用 grid 而非多列分栏，避免分栏布局挤压内部名称列导致折行
+  &.legend-two-columns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 28px;
+    align-items: start;
+  }
 }
 .legend-swatch {
   width: 8px;
@@ -172,7 +198,9 @@ defineExpose({ cleanup })
   border-radius: 2px;
 }
 .legend-name {
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--color-text);
 }
 .legend-value,

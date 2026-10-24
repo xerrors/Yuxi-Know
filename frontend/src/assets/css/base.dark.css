@@ -112,16 +112,17 @@
   --color-accent-900: #5cdbd3; /* 强前景 */
   --color-accent-1000: #87e8de; /* 最强前景 */
 
-  --chart-palette-1: var(--main-300);
-  --chart-palette-2: #3ea896;
-  --chart-palette-3: #d6ad37;
-  --chart-palette-4: #cf6666;
-  --chart-palette-5: #8672b4;
-  --chart-palette-6: #529ab8;
-  --chart-palette-7: #d48242;
-  --chart-palette-8: #82b354;
-  --chart-palette-9: #c46e9e;
-  --chart-palette-10: #7a7a7a;
+  /* Chart Palette - 深色主题整体再提高一档明度，色相与浅色保持一致 */
+  --chart-palette-1: #77b2c1;
+  --chart-palette-2: #9fa9d0;
+  --chart-palette-3: #dbc694;
+  --chart-palette-4: #dda8a6;
+  --chart-palette-5: #aecda2;
+  --chart-palette-6: #bca4cc;
+  --chart-palette-7: #e0b8a3;
+  --chart-palette-8: #90c1a7;
+  --chart-palette-9: #d9abc8;
+  --chart-palette-10: #a8a8a8;
 
   --bg-sider: #141414;
   --color-text: #ffffff;

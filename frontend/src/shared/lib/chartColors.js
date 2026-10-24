@@ -21,36 +21,24 @@ const buildColorPalette = () => {
       return v && v.trim() ? v.trim() : fallback
     }
 
-    // Base chart colors - using new color system
-    const baseVars = [
-      ['--main-500', '#3996ae'],
-      ['--color-success-500', '#52c41a'],
-      ['--color-warning-500', '#faad14'],
-      ['--color-error-500', '#ff4d4f'],
-      ['--color-accent-500', '#13c2c2']
-    ]
-
-    // Extended palette colors
+    // 分类调色板只承载类别区分，不复用成功/警告/错误等状态语义色，
+    // 避免 antd 高饱和状态色混入堆叠图破坏整体协调。
     const paletteVars = [
-      ['--chart-palette-1', '#265C96'],
-      ['--chart-palette-2', '#009485'],
-      ['--chart-palette-3', '#E8A035'],
-      ['--chart-palette-4', '#D64B55'],
-      ['--chart-palette-5', '#7D54C4'],
-      ['--chart-palette-6', '#2D9CDB'],
-      ['--chart-palette-7', '#F28B30'],
-      ['--chart-palette-8', '#65C466'],
-      ['--chart-palette-9', '#C2589E'],
-      ['--chart-palette-10', '#4F4F4F']
+      ['--chart-palette-1', '#70b3c4'],
+      ['--chart-palette-2', '#8491c8'],
+      ['--chart-palette-3', '#dcbd74'],
+      ['--chart-palette-4', '#dd8b88'],
+      ['--chart-palette-5', '#9cc68b'],
+      ['--chart-palette-6', '#af8dc4'],
+      ['--chart-palette-7', '#e0a385'],
+      ['--chart-palette-8', '#72b696'],
+      ['--chart-palette-9', '#d897c0'],
+      ['--chart-palette-10', '#a0a0a0']
     ]
 
-    const baseColors = baseVars.map(([n, f]) => pick(n, f))
     const paletteColors = paletteVars.map(([n, f]) => pick(n, f))
 
-    // Priority: palette first, then base colors
-    const merged = [...paletteColors, ...baseColors]
-      .filter(Boolean)
-      .filter((c, idx, arr) => arr.indexOf(c) === idx) // Remove duplicates
+    const merged = paletteColors.filter(Boolean)
 
     colorPalette = merged
     isInitialized = true
@@ -58,16 +46,16 @@ const buildColorPalette = () => {
     console.warn('Failed to build color palette from CSS variables, using fallback:', e)
     // Fallback palette
     colorPalette = [
-      '#3996ae',
-      '#52c41a',
-      '#faad14',
-      '#ff4d4f',
-      '#13c2c2',
-      '#265C96',
-      '#009485',
-      '#E8A035',
-      '#D64B55',
-      '#7D54C4'
+      '#70b3c4',
+      '#8491c8',
+      '#dcbd74',
+      '#dd8b88',
+      '#9cc68b',
+      '#af8dc4',
+      '#e0a385',
+      '#72b696',
+      '#d897c0',
+      '#a0a0a0'
     ]
     isInitialized = true
   }

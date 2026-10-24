@@ -381,8 +381,8 @@ const deletingPaths = ref(new Set())
 
 // 个人空间（个人 workspace）树：与对话目录相互独立、切换保活。
 const treeScopes = [
-  { key: 'thread', label: '对话目录' },
-  { key: 'workspace', label: '个人空间' }
+  { key: 'workspace', label: '个人空间' },
+  { key: 'thread', label: '对话目录' }
 ]
 const activeTreeScope = ref('workspace')
 const workspaceTreeData = ref([])

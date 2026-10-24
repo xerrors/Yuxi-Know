@@ -416,9 +416,6 @@ provide('settingsModal', {
 @sidebar-collapsed-icon-padding-x: (
   (@sidebar-collapsed-content-width - @sidebar-icon-size - (2 * @sidebar-border-width)) / 2
 );
-@sidebar-collapsed-avatar-padding-x: (
-  (@sidebar-collapsed-content-width - @sidebar-item-height - (2 * @sidebar-border-width)) / 2
-);
 @sidebar-collapsed-brand-padding-x: ((@sidebar-collapsed-content-width - @brand-logo-size) / 2);
 @sidebar-collapsed-brand-icon-padding-x: (
   (@sidebar-collapsed-content-width - @sidebar-icon-size) / 2
@@ -903,12 +900,10 @@ div.header,
       }
 
       &.user-info {
-        padding: 0 @sidebar-collapsed-avatar-padding-x;
-
-        :deep(.user-info-component),
-        :deep(.user-info-dropdown) {
-          justify-content: flex-start;
-        }
+        // 收起时用户卡片收窄居中，与图标导航项一致，避免悬停卡片贴满侧栏两边
+        width: 40px;
+        margin: 0 auto;
+        padding: 0;
 
         :deep(.user-info-dropdown) {
           padding: 0;

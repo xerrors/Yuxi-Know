@@ -532,6 +532,101 @@
               </div>
             </div>
           </div>
+
+          <!-- ==================== TAB 5: 测试用例 ==================== -->
+          <div v-show="state.activeTab === 'testcases'" class="tab-pane testcases-pane">
+            <div class="pane-toolbar">
+              <div class="toolbar-left">
+                <div class="tc-filter-chips">
+                  <div
+                    class="tc-chip"
+                    :class="{ active: state.testCaseCategory === 'all' }"
+                    @click="state.testCaseCategory = 'all'"
+                  >
+                    全部分类
+                  </div>
+                  <div
+                    v-for="cat in testCaseCategories"
+                    :key="cat.key"
+                    class="tc-chip"
+                    :class="{ active: state.testCaseCategory === cat.key }"
+                    @click="state.testCaseCategory = cat.key"
+                  >
+                    {{ cat.label }}
+                  </div>
+                </div>
+
+                <div class="tc-filter-chips">
+                  <div
+                    class="tc-chip"
+                    :class="{ active: state.testCaseDifficulty === 0 }"
+                    @click="state.testCaseDifficulty = 0"
+                  >
+                    任意难度
+                  </div>
+                  <div
+                    v-for="(diffLabel, diff) in difficultyLabels"
+                    :key="diff"
+                    class="tc-chip"
+                    :class="{ active: state.testCaseDifficulty === Number(diff) }"
+                    @click="state.testCaseDifficulty = Number(diff)"
+                  >
+                    {{ diffLabel }}
+                  </div>
+                </div>
+
+                <a-input
+                  v-model:value="state.testCaseSearch"
+                  placeholder="搜索标题 / 标签 / 内容..."
+                  allow-clear
+                  size="small"
+                  class="tc-search-input"
+                >
+                  <template #prefix>
+                    <Search :size="13" class="search-icon" />
+                  </template>
+                </a-input>
+
+                <span class="storage-stats-pill font-mono">
+                  {{ matchedTestCaseCount }} / {{ testCases.length }} 个用例
+                </span>
+              </div>
+            </div>
+
+            <div class="tc-groups-container">
+              <div v-for="group in filteredTestCaseGroups" :key="group.key" class="tc-group">
+                <div class="tc-group-header">
+                  <span class="tc-group-title">{{ group.label }}</span>
+                  <span class="tc-group-count font-mono">{{ group.cases.length }}</span>
+                </div>
+                <div v-for="tc in group.cases" :key="tc.id" class="tc-case-card">
+                  <div class="tc-case-header">
+                    <span class="tc-case-title">{{ tc.title }}</span>
+                    <span class="tc-diff-badge" :class="`diff-${tc.difficulty}`">
+                      {{ getDifficultyLabel(tc.difficulty) }}
+                    </span>
+                    <span v-for="tag in tc.tags" :key="tag" class="tc-tag">{{ tag }}</span>
+                    <button
+                      type="button"
+                      class="tc-copy-btn"
+                      :class="{ copied: state.copiedTestCaseId === tc.id }"
+                      title="复制测试文本"
+                      @click="copyTestCasePrompt(tc)"
+                    >
+                      <Check v-if="state.copiedTestCaseId === tc.id" :size="12" />
+                      <Copy v-else :size="12" />
+                      <span>{{ state.copiedTestCaseId === tc.id ? '已复制' : '复制文本' }}</span>
+                    </button>
+                  </div>
+                  <div class="tc-case-note" :title="tc.note">{{ tc.note }}</div>
+                  <pre class="tc-prompt">{{ tc.prompt }}</pre>
+                </div>
+              </div>
+              <div v-if="filteredTestCaseGroups.length === 0" class="terminal-empty">
+                <span>没有符合条件的测试用例</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -629,7 +724,8 @@ import {
   WrapText,
   Plus,
   Eye,
-  Edit3
+  Edit3,
+  FlaskConical
 } from '@lucide/vue'
 import dayjs from '@/shared/lib/time'
 import { configApi } from '@/apis/system_api'
@@ -637,6 +733,7 @@ import { checkSuperAdminPermission } from '@/modules/identity'
 import FallbackAvatar from '@/shared/ui/FallbackAvatar.vue'
 import { copyTextToClipboard } from '@/shared/lib/clipboard'
 import { isLogContainerAtBottom } from '@/shared/lib/logScroll'
+import { testCases, testCaseCategories, difficultyLabels } from '../model/testCases'
 
 const showModal = defineModel('show')
 
@@ -681,7 +778,12 @@ const state = reactive({
   storageModalVisible: false,
   storageModalMode: 'view', // 'view' | 'edit' | 'add'
   modalStorageKey: '',
-  modalStorageValue: ''
+  modalStorageValue: '',
+  // 测试用例状态
+  testCaseCategory: 'all',
+  testCaseDifficulty: 0, // 0 = 全部难度
+  testCaseSearch: '',
+  copiedTestCaseId: null
 })
 
 const error = ref('')
@@ -731,7 +833,8 @@ const tabs = computed(() => [
     label: '本地存储',
     icon: HardDrive,
     badge: state.localStorageList.length || null
-  }
+  },
+  { key: 'testcases', label: '测试用例', icon: FlaskConical, badge: testCases.length }
 ])
 
 // 格式化时间戳
@@ -1196,6 +1299,46 @@ const reloadAllStores = async () => {
     message.success('所有运行时 Store 数据已重新加载')
   } catch (err) {
     message.error(`重新加载失败: ${err.message}`)
+  }
+}
+
+// ==================== TESTCASES TAB LOGIC ====================
+// 按分类分组返回过滤后的用例，空分组不渲染
+const filteredTestCaseGroups = computed(() => {
+  const q = state.testCaseSearch.trim().toLowerCase()
+  const matched = testCases.filter((tc) => {
+    if (state.testCaseCategory !== 'all' && tc.category !== state.testCaseCategory) return false
+    if (state.testCaseDifficulty && tc.difficulty !== state.testCaseDifficulty) return false
+    if (!q) return true
+    return (
+      tc.title.toLowerCase().includes(q) ||
+      tc.prompt.toLowerCase().includes(q) ||
+      tc.tags.some((tag) => tag.toLowerCase().includes(q))
+    )
+  })
+  return testCaseCategories
+    .map((cat) => ({ ...cat, cases: matched.filter((tc) => tc.category === cat.key) }))
+    .filter((group) => group.cases.length > 0)
+})
+
+const matchedTestCaseCount = computed(() =>
+  filteredTestCaseGroups.value.reduce((acc, group) => acc + group.cases.length, 0)
+)
+
+function getDifficultyLabel(difficulty) {
+  return difficultyLabels[difficulty] || ''
+}
+
+const copyTestCasePrompt = async (tc) => {
+  try {
+    await copyTextToClipboard(tc.prompt)
+    state.copiedTestCaseId = tc.id
+    message.success(`已复制：${tc.title}`)
+    setTimeout(() => {
+      if (state.copiedTestCaseId === tc.id) state.copiedTestCaseId = null
+    }, 2000)
+  } catch {
+    message.error('复制失败')
   }
 }
 </script>
@@ -2062,6 +2205,189 @@ const reloadAllStores = async () => {
         }
       }
     }
+  }
+}
+
+/* ==================== TESTCASES TAB ==================== */
+.tc-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+
+  .tc-chip {
+    display: inline-flex;
+    align-items: center;
+    height: 24px;
+    padding: 0 8px;
+    font-size: 11px;
+    border-radius: 4px;
+    border: 1px solid var(--gray-300);
+    background: var(--gray-0);
+    color: var(--gray-700);
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.12s ease;
+
+    &:hover {
+      border-color: var(--gray-500);
+      color: var(--gray-1000);
+      background: var(--gray-50);
+    }
+
+    &.active {
+      border-color: var(--second-300);
+      color: var(--second-1000);
+      background: var(--second-50);
+      font-weight: 600;
+    }
+  }
+}
+
+.tc-search-input {
+  width: 180px;
+}
+
+.tc-groups-container {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 8px;
+}
+
+.tc-group {
+  .tc-group-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+
+    .tc-group-title {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--gray-1000);
+    }
+
+    .tc-group-count {
+      font-size: 10px;
+      padding: 0 5px;
+      line-height: 16px;
+      border-radius: 8px;
+      background: var(--gray-200);
+      color: var(--gray-800);
+    }
+  }
+}
+
+.tc-case-card {
+  border: 1px solid var(--gray-200);
+  border-radius: 6px;
+  background: var(--gray-0);
+  padding: 9px 12px;
+  margin-bottom: 8px;
+  transition: border-color 0.12s ease;
+
+  &:hover {
+    border-color: var(--gray-300);
+  }
+
+  .tc-case-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+
+    .tc-case-title {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--gray-1000);
+    }
+
+    .tc-diff-badge {
+      font-size: 10px;
+      padding: 0 5px;
+      line-height: 16px;
+      border-radius: 3px;
+      font-weight: 500;
+
+      &.diff-1 {
+        background: var(--color-success-50);
+        color: var(--color-success-700);
+        border: 1px solid var(--color-success-100);
+      }
+
+      &.diff-2 {
+        background: var(--color-warning-50);
+        color: var(--color-warning-700);
+        border: 1px solid var(--color-warning-100);
+      }
+
+      &.diff-3 {
+        background: var(--color-error-50);
+        color: var(--color-error-700);
+        border: 1px solid var(--color-error-100);
+      }
+    }
+
+    .tc-tag {
+      font-size: 10px;
+      padding: 0 5px;
+      line-height: 16px;
+      border-radius: 3px;
+      background: var(--gray-100);
+      color: var(--gray-700);
+    }
+
+    .tc-copy-btn {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      height: 24px;
+      padding: 0 8px;
+      font-size: 11px;
+      border-radius: 4px;
+      border: 1px solid var(--gray-300);
+      background: var(--gray-0);
+      color: var(--gray-700);
+      cursor: pointer;
+      transition: all 0.12s ease;
+
+      &:hover {
+        border-color: var(--gray-500);
+        color: var(--gray-1000);
+        background: var(--gray-50);
+      }
+
+      &.copied {
+        border-color: var(--color-success-100);
+        color: var(--color-success-700);
+        background: var(--color-success-50);
+      }
+    }
+  }
+
+  .tc-case-note {
+    margin: 5px 0 7px;
+    font-size: 11px;
+    color: var(--gray-500);
+  }
+
+  .tc-prompt {
+    margin: 0;
+    padding: 8px 10px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 11.5px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-150);
+    border-radius: 4px;
+    color: var(--gray-900);
+    max-height: 180px;
+    overflow-y: auto;
   }
 }
 

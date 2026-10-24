@@ -163,7 +163,7 @@
                     {{ formatEmptyRunStatus(row.group.run.status) }}
                   </div>
                   <AgentArtifactsCard
-                    v-if="row.artifacts.length"
+                    v-if="row.artifacts.length && shouldShowRefs(row.group)"
                     :artifacts="row.artifacts"
                     :thread-id="currentChatId"
                     @saved="handleArtifactSaved"
@@ -1632,7 +1632,7 @@ const shouldSuppressRefsForApproval = () =>
 const isRunGroupSettled = (group) =>
   isRunGroupExecutionSettled(runGroups.value, group, isProcessing.value || isReplyLoading.value)
 
-// 计算是否显示Refs组件的条件
+// Run 终态投影落定后才展示 Refs 操作栏与交付物卡片
 const shouldShowRefs = computed(() => {
   return (group) => {
     if (!getLastMessage(group) || group.status === 'streaming' || shouldSuppressRefsForApproval()) {
@@ -3560,6 +3560,14 @@ watch(currentChatId, (threadId, oldThreadId) => {
   flex-direction: column;
 }
 
+// 悬浮整个 Run 分组时显示 refs 行中的时间
+.group-box:hover {
+  :deep(.refs .time-entry) {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
 .message-group-time {
   margin: 24px 0 16px;
   color: var(--color-text-secondary);
@@ -4175,6 +4183,11 @@ watch(currentChatId, (threadId, oldThreadId) => {
   flex-direction: column;
   gap: 12px;
   overflow: auto;
+
+  // 子项被 flex 压缩时会溢出贴底、吃掉 padding，空间不足应交给滚动
+  > * {
+    flex-shrink: 0;
+  }
 }
 
 .state-warning {
