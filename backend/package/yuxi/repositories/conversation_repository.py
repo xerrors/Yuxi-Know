@@ -88,12 +88,14 @@ class ConversationRepository:
     def _escape_like_query(self, query: str) -> str:
         return query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
+    def _search_like_pattern(self, query: str) -> str:
+        return f"%{self._escape_like_query(query)}%"
+
     def _message_search_conditions(self, query: str):
-        pattern = f"%{self._escape_like_query(query)}%"
         return [
             Message.role.in_(MESSAGE_SEARCH_ROLES),
             or_(Message.message_type.is_(None), Message.message_type.notin_(MESSAGE_SEARCH_EXCLUDED_TYPES)),
-            Message.content.ilike(pattern, escape="\\"),
+            Message.content.ilike(self._search_like_pattern(query), escape="\\"),
         ]
 
     def _exclude_source_conditions(self, sources: tuple[str, ...]):
@@ -536,7 +538,7 @@ class ConversationRepository:
         )
         return list(result.scalars().all())
 
-    async def search_conversations_by_message_content(
+    async def search_conversations(
         self,
         *,
         uid: str,
@@ -546,6 +548,7 @@ class ConversationRepository:
         offset: int = 0,
         exclude_sources: tuple[str, ...] = (),
     ) -> tuple[list[dict], bool]:
+        """按对话标题或消息正文搜索当前用户可见的对话。"""
         normalized_query = str(query or "").strip()
         if not normalized_query:
             return [], False
@@ -571,10 +574,19 @@ class ConversationRepository:
             .subquery()
         )
 
+        # 标题命中没有对应消息，正文命中必须仍受同一套用户/状态条件约束，因此条件在外层重复施加。
+        matched_by_message = summary.c.conversation_id.is_not(None)
+        matched_by_title = Conversation.title.ilike(self._search_like_pattern(normalized_query), escape="\\")
         result = await self.db.execute(
             select(Conversation, summary.c.matched_count, summary.c.latest_match_at)
-            .join(summary, Conversation.id == summary.c.conversation_id)
-            .order_by(summary.c.latest_match_at.desc(), Conversation.updated_at.desc(), Conversation.id.desc())
+            .options(joinedload(Conversation.project))
+            .outerjoin(summary, Conversation.id == summary.c.conversation_id)
+            .where(*conversation_conditions, or_(matched_by_message, matched_by_title))
+            .order_by(
+                func.coalesce(summary.c.latest_match_at, Conversation.updated_at).desc(),
+                Conversation.updated_at.desc(),
+                Conversation.id.desc(),
+            )
             .limit(limit + 1)
             .offset(offset)
         )
