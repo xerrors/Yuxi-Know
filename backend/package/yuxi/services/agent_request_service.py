@@ -270,6 +270,19 @@ async def _persist_request(
         thread_id=thread_id,
         lock=True,
     )
+    # 复用既有会话时，把本次请求的来源快照补写进会话 extra_metadata：在行锁与
+    # populate_existing 重读之后仅补缺失键、不覆盖既有来源，并发不同入口复用同一会话
+    # 时后到事务基于锁内最新值合并，不会整体覆写丢失先提交者的键。使 agent-eval / call /
+    # channel 等外部入口的会话可被列表与统计的来源排除口径识别（与新建会话写入同口径）。
+    merged = dict(conversation.extra_metadata or {})
+    changed = False
+    for key, value in {**origin_metadata, "source": source, "channel": channel}.items():
+        if merged.get(key) is None:
+            merged[key] = value
+            changed = True
+    if changed:
+        conversation.extra_metadata = merged
+        await db.flush()
     if workdir_binding is None:
         workdir_binding = await resolve_conversation_workdir_binding(
             conversation=conversation,
