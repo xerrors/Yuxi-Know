@@ -283,6 +283,8 @@ watch(
     if (!raw) return
     try {
       await modelDirectory.load()
+      // 目录加载期间本条消息的原始模型名已变化时放弃本次结果，由 watch 重新触发。
+      if (rawModelName.value !== raw) return
       resolvedModelName.value = modelDirectory.resolveDisplayName({ modelId: raw })
     } catch {
       resolvedModelName.value = ''

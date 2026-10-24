@@ -401,6 +401,8 @@ const syncResolvedModelAlias = async () => {
   }
   try {
     await modelDirectory.load()
+    // 目录加载期间 spec 已切换时放弃本次结果，由 watch 重新触发解析。
+    if (props.model_spec !== spec) return
     resolvedModelAlias.value = modelDirectory.resolveDisplayName({ spec })
   } catch {
     resolvedModelAlias.value = ''
@@ -423,7 +425,10 @@ const displayModelText = computed(() => {
   return spec
 })
 
-const displayModelTitle = computed(() => displayModelText.value || props.placeholder)
+// 悬停标题保持完整 spec（别名命中时优先别名），不回退到截取名。
+const displayModelTitle = computed(
+  () => resolvedModelAlias.value || props.model_spec || props.placeholder
+)
 
 // 检查当前模型状态
 const checkCurrentModelStatus = async () => {

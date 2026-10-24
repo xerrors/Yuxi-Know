@@ -5,6 +5,8 @@ import { createSingleFlight } from '@/utils/singleFlight'
 // 模型目录是跨组件共享的只读投影：按 modelType 缓存，别名变更时显式失效。
 const directories = ref({})
 const loaders = new Map()
+// 失效纪元：epoch 守卫让失效前发起的在途响应不回写共享缓存。
+const epochs = new Map()
 
 const loaderFor = (modelType) => {
   if (!loaders.has(modelType)) {
@@ -22,6 +24,7 @@ const loaderFor = (modelType) => {
 
 /** 使指定类型的模型目录缓存失效，下一次加载重新请求后端。 */
 export const invalidateModelDirectory = (modelType = 'chat') => {
+  epochs.set(modelType, (epochs.get(modelType) || 0) + 1)
   const next = { ...directories.value }
   delete next[modelType]
   directories.value = next
@@ -32,7 +35,9 @@ export const invalidateModelDirectory = (modelType = 'chat') => {
 export function useModelDirectory(modelType = 'chat') {
   const load = async () => {
     if (directories.value[modelType]) return directories.value[modelType]
+    const epoch = epochs.get(modelType) || 0
     const data = await loaderFor(modelType)()
+    if ((epochs.get(modelType) || 0) !== epoch) return load()
     directories.value = { ...directories.value, [modelType]: data }
     return data
   }

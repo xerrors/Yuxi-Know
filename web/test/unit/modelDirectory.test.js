@@ -65,3 +65,60 @@ test('模型目录按 spec 与唯一 model_id 解析别名，并支持失效重�
     delete globalThis.__modelDirectoryApi
   }
 })
+
+test('失效后乱序完成的在途旧响应不回写共享目录', async () => {
+  const server = await createServer({
+    server: { middlewareMode: true, hmr: false },
+    appType: 'custom',
+    plugins: [
+      {
+        name: 'model-directory-stale',
+        enforce: 'pre',
+        load(id) {
+          if (id.endsWith('/src/apis/system_api.js')) {
+            return 'export const modelProviderApi = globalThis.__modelDirectoryApi'
+          }
+        }
+      }
+    ]
+  })
+  try {
+    const pendingOld = {}
+    const oldResponse = new Promise((resolve) => {
+      pendingOld.resolve = resolve
+    })
+    let calls = 0
+    globalThis.__modelDirectoryApi = {
+      getV2Models: () => {
+        calls += 1
+        if (calls === 1) return oldResponse
+        return Promise.resolve({
+          success: true,
+          data: { alpha: { models: [{ spec: 'alpha:chat', model_id: 'chat', display_name: '新别名' }] } }
+        })
+      }
+    }
+
+    const { invalidateModelDirectory, useModelDirectory } = await server.ssrLoadModule(
+      '/src/composables/useModelDirectory.js'
+    )
+    const directory = useModelDirectory('chat')
+
+    const firstLoad = directory.load()
+    invalidateModelDirectory('chat')
+    const second = await directory.load()
+    assert.equal(second['alpha'].models[0].display_name, '新别名')
+
+    pendingOld.resolve({
+      success: true,
+      data: { alpha: { models: [{ spec: 'alpha:chat', model_id: 'chat', display_name: '旧别名' }] } }
+    })
+    const staleResolved = await firstLoad
+    assert.equal(staleResolved['alpha'].models[0].display_name, '新别名')
+    assert.equal(directory.resolveDisplayName({ spec: 'alpha:chat' }), '新别名')
+    assert.equal(calls, 2)
+  } finally {
+    await server.close()
+    delete globalThis.__modelDirectoryApi
+  }
+})
